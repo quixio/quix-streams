@@ -72,15 +72,23 @@ logger = logging.getLogger(__name__)
 # that a multi-million-key store should grow a disk-spill census in future.
 _CENSUS_SPILL_WARN_THRESHOLD = 3_000_000
 
-# Bounded flush timeout (seconds) for the backfill / recovery-completion changelog
-# sites. Each stamped chunk must be confirmed on the changelog BEFORE its stamps
-# land in the local DB, or a crash would leave the local store ahead of the
-# changelog (a peer rebuild would then diverge). Flush with this explicit bound
-# rather than the producer's possibly-infinite default so a stuck broker surfaces
-# as a raised ``ChangelogFlushError`` instead of an invisible indefinite hang;
-# kept below the 30 s producer poll interval
+# Progress-based bounded flush for the backfill / recovery-completion changelog
+# sites (spec ttl-changelog-tombstones §3.7). Each stamped chunk must be confirmed
+# on the changelog BEFORE its stamps land in the local DB, or a crash would leave
+# the local store ahead of the changelog (a peer rebuild would then diverge). We
+# flush in repeated slices and fail only when a full slice delivers ZERO messages
+# (no progress) — measuring lack of progress, not total time — so a large chunk
+# that legitimately needs more than one slice to deliver does not trip a spurious
+# ``ChangelogFlushError``. A generous total slice cap bounds a pathological
+# ever-shrinking trickle so the loop always terminates.
+#
+# One slice; kept below the 30 s producer poll interval
 # (``quixstreams.kafka.producer.PRODUCER_POLL_TIMEOUT``).
-_BACKFILL_CHANGELOG_FLUSH_TIMEOUT_S: float = 25.0
+_BACKFILL_CHANGELOG_FLUSH_SLICE_S: float = 25.0
+# Runaway cap: max slices before aborting even if the backlog keeps shrinking
+# (~1000 s at the default slice). Zero-progress is the primary trip; this is the
+# belt-and-braces bound against a broker that only ever delivers a trickle.
+_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES: int = 40
 
 
 class RocksDBStorePartition(StorePartition):
@@ -142,6 +150,12 @@ class RocksDBStorePartition(StorePartition):
         # (see :meth:`backfill_legacy_records`). Only consulted on the single
         # backfilling flush.
         self._legacy_backfill_chunk_size: int = self._options.legacy_backfill_chunk_size
+        # When True (default), TTL evictions are produced to the changelog as
+        # tombstones (via the transaction cache at prepare-time) so compaction
+        # reclaims expired keys in step with the local store; when False, the
+        # eviction stays local-only (the pre-change ``_run_sweep``-in-``write()``
+        # path). Read once at open, immutable thereafter.
+        self._ttl_changelog_tombstones: bool = self._options.ttl_changelog_tombstones
         self._db = self._init_rocksdb()
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
@@ -203,6 +217,17 @@ class RocksDBStorePartition(StorePartition):
         else:
             self.uses_ttl_stamps = False
 
+        # Fix B (shortcut 73191 review): remember whether the partition was
+        # ALREADY flipped on disk at open time, before any changelog replay could
+        # set the runtime flag. ``complete_recovery`` uses this to treat an
+        # offset-caught-up restart (no stamped record replayed this session, so
+        # ``_recovery_saw_stamped`` stays False) of an already-flipped store as
+        # saw-stamped-equivalent: its ``__ttl_backfill_pending__`` census is
+        # genuine leftovers, not orphans, so it must be COMPLETED rather than
+        # discarded. An un-flipped (pure-legacy) store keeps ``False`` and still
+        # discards an orphan census (the Bug-3 regression path).
+        self._persisted_flipped_at_open: bool = self.uses_ttl_stamps
+
         if self.uses_ttl_stamps:
             # Already-flipped store: validate the on-disk format and warm up
             # the TTL bookkeeping (high-water, index CF). For legacy stores
@@ -243,6 +268,16 @@ class RocksDBStorePartition(StorePartition):
     def legacy_backfill_chunk_size(self) -> int:
         """Number of records re-stamped per write-batch during the backfill."""
         return self._legacy_backfill_chunk_size
+
+    @property
+    def ttl_changelog_tombstones(self) -> bool:
+        """
+        Whether TTL evictions are produced to the changelog as tombstones
+        (default ``True``) or kept local-only (``False`` — the pre-change sweep).
+        Consulted by the transaction layer at prepare-time to decide the sweep
+        path (see :meth:`sweep_expired_into_cache`).
+        """
+        return self._ttl_changelog_tombstones
 
     def advance_high_water(self, timestamp: Optional[int]) -> None:
         """
@@ -401,11 +436,22 @@ class RocksDBStorePartition(StorePartition):
                 recovery_now_ms = self._recovery_now_ms
                 expired = stamp <= recovery_now_ms
             if expired:
-                # Already-expired against wallclock-at-recovery; skip both the
-                # main and the index write. Roll the changelog offset forward
-                # so recovery progresses. The __ttl_index__ stays consistent
-                # with survivors — a dropped entry writes neither (§7).
-                pass
+                # Already-expired against wallclock-at-recovery (Fix A —
+                # latest-record-wins). A compacted changelog can carry several
+                # pre-compaction copies of one key; an OLDER copy of ``key``
+                # replayed earlier this session (a verbatim header-absent legacy
+                # value, or an older unexpired stamped copy) may already sit in
+                # the main CF. Skipping (the old bare ``pass``) let that stale
+                # copy survive — and in the MIXED shape its pending census entry
+                # was just deleted above, so ``complete_recovery`` could never
+                # repair it, resurrecting the expired record as a never-expiring
+                # unswept legacy value. Explicitly DELETE the key so this newest
+                # (expired) copy supersedes any older survivor; the index write
+                # is still skipped (a dropped entry indexes nothing). We do NOT
+                # try to delete an older copy's __ttl_index__ pointer — its stamp
+                # is unknown here; the sweep's ghost/orphan handling GCs any index
+                # entry whose main-CF key is gone (§7, _run_sweep).
+                batch.delete(key, cf_handle)
             else:
                 batch.put(key, stamped, cf_handle)
                 if stamp != SENTINEL_NEVER:
@@ -503,17 +549,27 @@ class RocksDBStorePartition(StorePartition):
             # verbatim / §15.2 path (documented residual R2').
             self._adopt_v3240_stamps()
             return
-        if not self._recovery_saw_stamped:
-            # No __ttl_stamped__ record was replayed this session, so there is no
-            # migration to complete: a pure-legacy first-enablement (§8.6, owned
-            # by the live first-``ttl=``-write backfill) or an all-legacy replay
-            # on an already-flipped store. Either way the class-level census gate
-            # may have PUT header-absent legacy keys into __ttl_backfill_pending__
-            # (MIXED detection has to census BEFORE the first stamped record can
+        if not self._recovery_saw_stamped and not self._persisted_flipped_at_open:
+            # No __ttl_stamped__ record was replayed this session AND the store
+            # was not already flipped on disk at open, so there is no migration to
+            # complete: a pure-legacy first-enablement (§8.6, owned by the live
+            # first-``ttl=``-write backfill) or an all-legacy replay on an
+            # un-flipped store. Either way the class-level census gate may have PUT
+            # header-absent legacy keys into __ttl_backfill_pending__ (MIXED
+            # detection has to census BEFORE the first stamped record can
             # distinguish them). Those entries are orphans with no completion pass
             # to drain them, so discard them now — a pure-legacy store then ends
             # recovery with an empty/absent pending CF and no lasting overhead
             # (Bug 3, spec-incomplete-migration-recovery.md §8.8).
+            #
+            # Fix B (shortcut 73191 review): a store that was ALREADY flipped on
+            # disk at open is handled by the ``_persisted_flipped_at_open`` guard
+            # above — it falls through to completion even with
+            # ``_recovery_saw_stamped`` False. That is the offset-caught-up-restart
+            # crash window: the last changelog message was replayed in a prior run
+            # (so this run replays nothing new and never re-sets the latch), but
+            # the durable pending census holds genuine leftovers that MUST be
+            # completed, not discarded. Only an UN-flipped store discards here.
             #
             # Finding-1 loud detection (spec §7.1) runs FIRST, before the census
             # is dropped: no done-flag and no stamped record was seen, yet the
@@ -562,13 +618,26 @@ class RocksDBStorePartition(StorePartition):
                 pending_count,
                 expires_at_ms,
             )
-        elif self._recovery_max_survivor_expiry_ms is not None:
+        elif (
+            survivor_expiry := (
+                self._recovery_max_survivor_expiry_ms
+                if self._recovery_max_survivor_expiry_ms is not None
+                else self._max_index_stamp_ms()
+            )
+        ) is not None:
             # §15.2 survivor-derived default (config absent): align the leftovers
             # with the max surviving future stamp of their backfill cohort. A
             # single uniform value, in the future by construction (Rule 4 already
             # dropped past-dated stamps during replay, so a tracked survivor is
             # always > wallclock-at-rebuild).
-            expires_at_ms = self._recovery_max_survivor_expiry_ms
+            #
+            # Fix B (shortcut 73191 review): on the offset-caught-up restart there
+            # is NO replay, so ``_recovery_max_survivor_expiry_ms`` is unset. Fall
+            # back to the max ON-DISK ``__ttl_index__`` stamp — the surviving
+            # stamped cohort persisted from the interrupted run — so the leftovers
+            # still inherit the cohort's window instead of degrading to
+            # SENTINEL_NEVER.
+            expires_at_ms = survivor_expiry
             logger.warning(
                 "Recovery: completing interrupted legacy-TTL migration at "
                 "path=%s WITHOUT legacy_records_ttl configured; %d leftover "
@@ -648,6 +717,11 @@ class RocksDBStorePartition(StorePartition):
                     CHANGELOG_CF_MESSAGE_HEADER: TTL_SYSTEM_CF_NAME,
                     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
                 },
+                # Fix C: this recovery-completion done-marker is produced with no
+                # open checkpoint transaction, so it MUST use the non-transactional
+                # migration route under exactly-once (a transactional produce
+                # outside a transaction is invalid).
+                migration=True,
             )
             # Confirm the marker is durably on the changelog BEFORE the local
             # write; a stuck broker raises rather than marking the store done
@@ -799,39 +873,150 @@ class RocksDBStorePartition(StorePartition):
             count += 1
         return count
 
+    def _backfill_pending_has_any(self) -> bool:
+        """Cheap "is the pending census non-empty" probe: short-circuits on the
+        first key instead of counting the whole CF (Fix B)."""
+        pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
+        for _ in pending_cf.keys():
+            return True
+        return False
+
+    def _has_local_migration_done_marker(self) -> bool:
+        """Whether the durable "migration done" marker is present on disk in the
+        replicated ``__ttl_system__`` CF (spec §13.1). Its presence means the
+        migration completed, so nothing is left to finish (Fix B)."""
+        system_cf = self.get_or_create_column_family(TTL_SYSTEM_CF_NAME)
+        return system_cf.get(TTL_MIGRATION_DONE_KEY, default=None) is not None
+
+    def has_incomplete_ttl_migration(self) -> bool:
+        """
+        Whether a durably-recorded legacy-TTL migration is flipped-but-unfinished
+        and must be completed by :meth:`complete_recovery` (Fix B, shortcut 73191
+        review). Consulted by ``RecoveryPartition.needs_recovery_check`` so an
+        offset-caught-up restart (``highwater-1 == offset``) still runs the
+        completion pass instead of stranding the leftover legacy records.
+
+        True iff ALL of:
+
+        - the partition is persisted-flipped into TTL mode (``uses_ttl_stamps``
+          loaded True at open — the cheap gate that no-ops the 99% legacy path);
+        - no durable "migration done" marker exists (else the migration is done);
+        - the ``__ttl_backfill_pending__`` census still holds ≥1 leftover key.
+
+        Ordered cheapest-first with short-circuits: a legacy store returns on the
+        first check with no CF scans.
+        """
+        if not self.uses_ttl_stamps:
+            return False
+        if self._has_local_migration_done_marker():
+            return False
+        return self._backfill_pending_has_any()
+
+    def _max_index_stamp_ms(self) -> Optional[int]:
+        """
+        Return the maximum expiry stamp among the on-disk ``__ttl_index__``
+        entries, or ``None`` if the index is empty (Fix B).
+
+        Used to derive a survivor expiry for a config-absent completion that had
+        NO replay this session (the offset-caught-up restart): with nothing
+        replayed, ``_recovery_max_survivor_expiry_ms`` is unset, so the on-disk
+        index — one entry per surviving non-sentinel record — is the only
+        remaining evidence of the cohort's expiry window. Index keys are
+        big-endian-stamp-prefixed, so the LAST key carries the largest stamp; we
+        scan backwards and return the first decodable entry (a bounded walk past
+        any trailing undecodable junk), falling back to a full forward max scan if
+        the backwards seek is unsupported.
+        """
+        index_cf = self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+        try:
+            for raw_key in index_cf.keys(backwards=True):
+                try:
+                    stamp, _ = decode_index_key(cast(bytes, raw_key))
+                except ValueError:
+                    continue
+                return stamp
+            return None
+        except TypeError:
+            # ``keys(backwards=...)`` unsupported on this rocksdict build — fall
+            # back to a forward max scan (correct, just O(n)).
+            last_stamp: Optional[int] = None
+            for raw_key in index_cf.keys():
+                try:
+                    stamp, _ = decode_index_key(cast(bytes, raw_key))
+                except ValueError:
+                    continue
+                if last_stamp is None or stamp > last_stamp:
+                    last_stamp = stamp
+            return last_stamp
+
     def _flush_backfill_changelog(
         self, changelog_producer: Optional[ChangelogProducer]
     ) -> None:
         """
         Flush a backfill / recovery-completion chunk's changelog records with a
-        bounded timeout and fail loudly if any are still undelivered.
+        PROGRESS-based bounded loop and fail loudly only when delivery stalls
+        (spec ttl-changelog-tombstones §3.7).
 
         Callers MUST invoke this AFTER producing a chunk's stamped records and
         BEFORE committing the chunk's local ``WriteBatch``: the stamped chunk has
         to be durably on the changelog before its stamps land locally, else a
         crash would leave the local store ahead of the changelog and a peer
-        rebuild would diverge. A non-zero unproduced count (stuck/slow broker)
-        raises :class:`ChangelogFlushError` instead of proceeding to the local
-        write; the producer's possibly-infinite default timeout is bypassed so a
-        wedged broker surfaces as an error rather than an indefinite hang.
+        rebuild would diverge.
+
+        The loop flushes in ``_BACKFILL_CHANGELOG_FLUSH_SLICE_S`` slices and:
+
+        - returns as soon as a slice reports 0 remaining (fully delivered);
+        - raises :class:`ChangelogFlushError` when a full slice makes NO delivery
+          progress (``remaining >= prev``) — a wedged broker surfaces after ~2
+          slices instead of a single fixed window, while a large-but-progressing
+          chunk (``10 → 6 → 2 → 0``) keeps going because each slice strictly
+          decreases the backlog;
+        - raises at ``_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES`` (runaway cap) so an
+          ever-shrinking trickle still terminates;
+        - returns without blocking on a non-int return (an unconfigured test
+          double), matching the pre-existing "flush and proceed" behavior.
+
+        The timeout thus measures *lack of progress*, not *total time*, so it is
+        robust to a large ``legacy_backfill_chunk_size``. Fix C: the flush routes
+        through the migration path (the dedicated non-transactional producer under
+        exactly-once, else the main producer), so a confirmed flush means durable
+        BEFORE the caller's local commit.
         """
         if changelog_producer is None:
             return
-        unproduced = changelog_producer.flush(
-            timeout=_BACKFILL_CHANGELOG_FLUSH_TIMEOUT_S
-        )
-        # A real ``ChangelogProducer.flush`` returns the count of still-undelivered
-        # messages (0 == fully flushed). Fail loudly only on a concrete positive
-        # backlog; a non-int return (e.g. an unconfigured test double) is treated
-        # as indeterminate and does not block the local commit, matching the
-        # pre-existing "flush and proceed" behavior for such cases.
-        if isinstance(unproduced, int) and unproduced > 0:
-            raise ChangelogFlushError(
-                f"{unproduced} legacy-TTL backfill changelog record(s) still "
-                f"undelivered after {_BACKFILL_CHANGELOG_FLUSH_TIMEOUT_S}s at "
-                f"path={self._path}; aborting before the local commit so the "
-                f"local store never gets ahead of the changelog."
+        prev: Optional[int] = None
+        for slice_no in range(_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES):
+            remaining = changelog_producer.flush(
+                timeout=_BACKFILL_CHANGELOG_FLUSH_SLICE_S, migration=True
             )
+            # A non-int return (e.g. an unconfigured test double) is indeterminate:
+            # do not block the local commit (pre-existing behavior for such cases).
+            if not isinstance(remaining, int):
+                return
+            if remaining == 0:
+                return
+            if prev is not None and remaining >= prev:
+                raise ChangelogFlushError(
+                    f"{remaining} legacy-TTL backfill changelog record(s) made no "
+                    f"delivery progress in a full {_BACKFILL_CHANGELOG_FLUSH_SLICE_S}s "
+                    f"slice at path={self._path}; aborting before the local commit "
+                    f"so the local store never gets ahead of the changelog."
+                )
+            logger.debug(
+                "TTL backfill changelog flush progress: %d remaining after "
+                "slice %d (path=%s)",
+                remaining,
+                slice_no + 1,
+                self._path,
+            )
+            prev = remaining
+        raise ChangelogFlushError(
+            f"legacy-TTL backfill changelog still has {prev} undelivered "
+            f"record(s) after {_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES} × "
+            f"{_BACKFILL_CHANGELOG_FLUSH_SLICE_S}s slices at path={self._path}; "
+            f"aborting before the local commit so the local store never gets "
+            f"ahead of the changelog."
+        )
 
     def _discard_backfill_pending(self) -> None:
         """
@@ -1006,8 +1191,9 @@ class RocksDBStorePartition(StorePartition):
 
             if self._changelog_producer is not None and produce:
                 for key, stamped in produce:
+                    # Fix C: migration route (non-transactional under exactly-once).
                     self._changelog_producer.produce(
-                        key=key, value=stamped, headers=headers
+                        key=key, value=stamped, headers=headers, migration=True
                     )
                 # Confirm the chunk is durably on the changelog BEFORE the local
                 # commit; a stuck broker raises rather than writing local-ahead.
@@ -1101,7 +1287,14 @@ class RocksDBStorePartition(StorePartition):
                 self.get_column_family_handle(METADATA_CF_NAME),
             )
 
-        if self.uses_ttl_stamps:
+        if self.uses_ttl_stamps and not self._ttl_changelog_tombstones:
+            # OFF path (escape hatch): local-only sweep, exactly the pre-change
+            # behavior. On the ON path (default) eviction + index GC were already
+            # staged into the transaction cache at prepare-time
+            # (:meth:`sweep_expired_into_cache`) and are applied by the cache walk
+            # above — main-CF evictions also produced as changelog tombstones —
+            # so no sweep runs here. ``staged_*`` tracking above stays for this
+            # OFF path.
             self._run_sweep(
                 batch=batch,
                 staged_default_keys=staged_default_keys,
@@ -1377,7 +1570,12 @@ class RocksDBStorePartition(StorePartition):
             # bounded across chunks.
             if changelog_producer is not None and produce:
                 for key, stamped in produce:
-                    changelog_producer.produce(key=key, value=stamped, headers=headers)
+                    # Fix C: route via the non-transactional migration producer
+                    # under exactly-once so the per-chunk flush below is durable
+                    # before the local write.
+                    changelog_producer.produce(
+                        key=key, value=stamped, headers=headers, migration=True
+                    )
                 self._flush_backfill_changelog(changelog_producer)
 
             # ADVANCE the observability counter IN THE SAME batch as the chunk's
@@ -1753,6 +1951,125 @@ class RocksDBStorePartition(StorePartition):
         if evicted:
             logger.debug(
                 "TTL sweep evicted %d expired entries on partition path=%s "
+                "now_ms=%d budget=%d",
+                evicted,
+                self._path,
+                now_ms,
+                budget,
+            )
+
+    def sweep_expired_into_cache(
+        self,
+        cache: PartitionTransactionCache,
+        staged_default_keys: set[bytes],
+        staged_ttl_index_keys: set[bytes],
+    ) -> None:
+        """
+        Prepare-time sweep (spec ttl-changelog-tombstones §3.1, the ON path).
+
+        Identical eviction logic to :meth:`_run_sweep`, but stages its deletes
+        into the transaction ``cache`` instead of a ``WriteBatch``, and takes the
+        ``staged_*`` guard sets from the caller (derived from the same cache) so
+        the #1129 same-flush protections are preserved byte-for-byte:
+
+        - a main-CF eviction → ``cache.delete(user_key, cf_name="default")``,
+          which the base ``_prepare`` turns into a changelog tombstone
+          (``value=None`` + ``__ttl_stamped__`` header) AND ``write()`` applies as
+          a local delete — the exact route a user ``state.delete()`` takes, so the
+          changelog physically shrinks under compaction in step with the store;
+        - index-CF GC → ``cache.delete(index_key, cf_name=TTL_INDEX_CF_NAME)``,
+          which is LOCAL-ONLY (``__ttl_index__`` ∈ ``LOCAL_ONLY_CFS``, so
+          ``_prepare`` skips it) and applied only by ``write()``.
+
+        Runs in ``prepare()`` AFTER ``_maybe_flip_or_reject`` (so the runtime flip
+        + freshly-stamped cache writes are visible) and BEFORE ``super().prepare()``
+        (so tombstones ride the same changelog batch as the user writes). It reads
+        committed disk state (``main_cf.get`` / disk index iterator) exactly as the
+        write-time sweep did — this tx has committed nothing yet — so the eviction
+        decisions are byte-identical; only the delete sink changes.
+
+        ``prefix=b""`` is passed for every ``cache.delete``: the cache stores
+        deletes in a flat, prefix-independent set and only uses ``prefix`` to pop a
+        pending update — but the guards below guarantee a staged key is never
+        evicted, so that pop is always a no-op (spec §3.1 prefix note).
+        """
+        if self._high_water_ms is None:
+            # Cold start: no event-time established yet — skip the sweep.
+            return
+
+        budget = self._max_evictions_per_flush
+        if budget <= 0:
+            return
+
+        now_ms = self._high_water_ms
+        index_cf = self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+        main_cf = self.get_or_create_column_family("default")
+
+        def delete_index_if_not_staged(index_key: bytes) -> None:
+            if index_key not in staged_ttl_index_keys:
+                cache.delete(index_key, prefix=b"", cf_name=TTL_INDEX_CF_NAME)
+
+        upper_bound = int_to_bytes(now_ms + 1) if now_ms < (2**64 - 1) else None
+        read_opt = ReadOptions()
+        if upper_bound is not None:
+            read_opt.set_iterate_upper_bound(upper_bound)
+
+        evicted = 0
+        iterator: Iterator[tuple[bytes, bytes]] = cast(
+            Iterator[tuple[bytes, bytes]],
+            index_cf.items(from_key=b"", read_opt=read_opt),
+        )
+        for index_key, _ in iterator:
+            if evicted >= budget:
+                break
+
+            try:
+                idx_expires_at, user_key = decode_index_key(index_key)
+            except ValueError:
+                delete_index_if_not_staged(index_key)
+                continue
+
+            if idx_expires_at > now_ms:
+                # Sorted by expiry — the rest is in the future.
+                break
+
+            main_value = main_cf.get(user_key, default=None)
+            if main_value is None:
+                # Ghost: main entry gone but index still points at it.
+                delete_index_if_not_staged(index_key)
+                continue
+
+            decoded_main = _safe_decode_stamp(cast(bytes, main_value))
+            if decoded_main is None:
+                # Not a plausible stamp: read path treats it as never-expires, so
+                # never evict — drop only the orphan index pointer.
+                delete_index_if_not_staged(index_key)
+                continue
+            main_expires_at, _ = decoded_main
+
+            if main_expires_at == SENTINEL_NEVER:
+                # Ghost: overwritten by a plain set → permanent. Drop the pointer.
+                delete_index_if_not_staged(index_key)
+                continue
+
+            if (
+                main_expires_at == idx_expires_at
+                and user_key not in staged_default_keys
+            ):
+                # Genuine eviction: tombstone the main key (changelog + local) and
+                # GC its index entry.
+                cache.delete(user_key, prefix=b"", cf_name="default")
+                delete_index_if_not_staged(index_key)
+                evicted += 1
+            else:
+                # Ghost: overwritten with a fresh stamp (already committed or
+                # re-written this flush). Drop only the stale index pointer;
+                # deleting the key would clobber the fresh write.
+                delete_index_if_not_staged(index_key)
+
+        if evicted:
+            logger.debug(
+                "TTL sweep tombstoned %d expired entries on partition path=%s "
                 "now_ms=%d budget=%d",
                 evicted,
                 self._path,

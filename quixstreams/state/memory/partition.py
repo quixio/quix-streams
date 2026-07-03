@@ -100,6 +100,7 @@ class MemoryStorePartition(StorePartition):
         changelog_producer: Optional[ChangelogProducer],
         max_evictions_per_flush: int = _DEFAULT_MAX_EVICTIONS_PER_FLUSH,
         legacy_records_ttl: Optional[timedelta] = None,
+        ttl_changelog_tombstones: bool = True,
     ) -> None:
         super().__init__(
             dumps=json_dumps,
@@ -107,6 +108,13 @@ class MemoryStorePartition(StorePartition):
             changelog_producer=changelog_producer,
         )
         self._changelog_offset: Optional[int] = None
+        # Parity with ``RocksDBOptions.ttl_changelog_tombstones`` (default ON):
+        # when True, TTL evictions are staged into the transaction cache at
+        # prepare-time so they are produced to the changelog as tombstones and the
+        # changelog shrinks under compaction; when False, the eviction stays
+        # local-only (the pre-change ``_run_sweep``-in-``write()`` path). Memory
+        # does not consume ``RocksDBOptions``, so it is a direct constructor arg.
+        self._ttl_changelog_tombstones: bool = ttl_changelog_tombstones
         self._state: Dict[str, Dict[bytes, Any]] = {
             "default": {},
             METADATA_CF_NAME: {},
@@ -185,6 +193,15 @@ class MemoryStorePartition(StorePartition):
         """
         return self._legacy_records_ttl
 
+    @property
+    def ttl_changelog_tombstones(self) -> bool:
+        """
+        Whether TTL evictions are produced to the changelog as tombstones
+        (default ``True``) or kept local-only (``False``). Parity with
+        ``RocksDBStorePartition.ttl_changelog_tombstones``.
+        """
+        return self._ttl_changelog_tombstones
+
     def advance_high_water(self, timestamp: Optional[int]) -> None:
         if timestamp is None:
             return
@@ -242,7 +259,12 @@ class MemoryStorePartition(StorePartition):
                     self._high_water_ms
                 )
             self._state.setdefault(TTL_INDEX_CF_NAME, {})
-            self._run_sweep()
+            if not self._ttl_changelog_tombstones:
+                # OFF path only: local-only sweep. On the ON path (default),
+                # eviction + index GC were staged into the cache at prepare-time
+                # (sweep_expired_into_cache) and already applied by the cache walk
+                # above — main-CF evictions also produced as changelog tombstones.
+                self._run_sweep()
 
     # ------------------------------------------------------------------
     # TTL flip / probe helpers (mirror RocksDBStorePartition).
@@ -250,6 +272,18 @@ class MemoryStorePartition(StorePartition):
 
     def main_cf_has_user_data(self) -> bool:
         return bool(self._state.get("default"))
+
+    def has_incomplete_ttl_migration(self) -> bool:
+        """
+        Memory mirror of ``RocksDBStorePartition.has_incomplete_ttl_migration``
+        (Fix B). Always ``False``: the memory backend has no persistent on-disk
+        flip flag or durable pending census — every open re-recovers from the
+        changelog via a FULL replay (its stored offset is always ``None`` →
+        ``OFFSET_BEGINNING``), so the offset-caught-up crash window that this
+        detects on RocksDB cannot arise. A MIXED changelog is therefore always
+        completed by the normal replay-driven :meth:`complete_recovery` path.
+        """
+        return False
 
     def recover_from_changelog_message(
         self,
@@ -360,10 +394,17 @@ class MemoryStorePartition(StorePartition):
                 recovery_now_ms = self._recovery_now_ms
                 expired = stamp <= recovery_now_ms
             if expired:
-                # Already-expired against wallclock-at-recovery; skip both the
-                # main and the index write. The __ttl_index__ stays consistent
-                # with survivors — a dropped entry writes neither (§7).
-                pass
+                # Already-expired against wallclock-at-recovery (Fix A —
+                # latest-record-wins, parity with RocksDB). An OLDER copy of
+                # ``key`` replayed earlier this session (verbatim legacy, or an
+                # older unexpired stamped copy) may already sit in the main dict;
+                # skipping (the old bare ``pass``) let it survive as a
+                # never-expiring leftover the completion pass can no longer repair
+                # (its pending census entry was just popped above). Explicitly
+                # DELETE so this newest (expired) copy supersedes any older
+                # survivor; the index write is still skipped and any stale index
+                # pointer is GC'd by the sweep's ghost handling (main is gone).
+                self._state.setdefault(cf_name, {}).pop(key, None)
             else:
                 self._state.setdefault(cf_name, {})[key] = stamped
                 if stamp != SENTINEL_NEVER:
@@ -458,9 +499,18 @@ class MemoryStorePartition(StorePartition):
                 len(pending),
                 expires_at_ms,
             )
-        elif self._recovery_max_survivor_expiry_ms is not None:
-            # §15.2 survivor-derived default (config absent).
-            expires_at_ms = self._recovery_max_survivor_expiry_ms
+        elif (
+            survivor_expiry := (
+                self._recovery_max_survivor_expiry_ms
+                if self._recovery_max_survivor_expiry_ms is not None
+                else self._max_index_stamp_ms()
+            )
+        ) is not None:
+            # §15.2 survivor-derived default (config absent). Fix B parity with
+            # RocksDB: fall back to the max in-RAM __ttl_index__ stamp when no
+            # replayed survivor was tracked (unreachable for the always-full-
+            # replay memory backend, kept for structural symmetry).
+            expires_at_ms = survivor_expiry
             logger.warning(
                 "Recovery: completing interrupted legacy-TTL migration in memory "
                 "WITHOUT legacy_records_ttl; %d leftover legacy record(s) stamped "
@@ -503,14 +553,17 @@ class MemoryStorePartition(StorePartition):
             if expires_at_ms != SENTINEL_NEVER:
                 index[encode_index_key(expires_at_ms, key)] = b""
             if self._changelog_producer is not None:
+                # Fix C: recovery-completion runs with no open checkpoint
+                # transaction, so use the non-transactional migration route under
+                # exactly-once (parity with RocksDB).
                 self._changelog_producer.produce(
-                    key=key, value=stamped, headers=headers
+                    key=key, value=stamped, headers=headers, migration=True
                 )
                 produced = True
             pending.pop(key, None)
 
         if produced and self._changelog_producer is not None:
-            self._changelog_producer.flush()
+            self._changelog_producer.flush(migration=True)
 
         # Drain the (now-empty) census.
         self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
@@ -541,9 +594,11 @@ class MemoryStorePartition(StorePartition):
                     CHANGELOG_CF_MESSAGE_HEADER: TTL_SYSTEM_CF_NAME,
                     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
                 },
+                # Fix C: non-transactional migration route (parity with RocksDB).
+                migration=True,
             )
             unproduced = self._changelog_producer.flush(
-                timeout=_MIGRATION_MARKER_FLUSH_TIMEOUT_S
+                timeout=_MIGRATION_MARKER_FLUSH_TIMEOUT_S, migration=True
             )
             # Fail loudly only on a concrete positive backlog; a non-int return
             # (e.g. an unconfigured test double) is treated as indeterminate.
@@ -733,6 +788,21 @@ class MemoryStorePartition(StorePartition):
             return True
         return 0 < stamp < 10**15
 
+    def _max_index_stamp_ms(self) -> Optional[int]:
+        """Max expiry stamp among in-RAM ``__ttl_index__`` entries, or ``None``
+        if empty (Fix B parity with RocksDB; see
+        ``RocksDBStorePartition._max_index_stamp_ms``)."""
+        index = self._state.get(TTL_INDEX_CF_NAME, {})
+        last_stamp: Optional[int] = None
+        for index_key in index:
+            try:
+                stamp, _ = decode_index_key(cast(bytes, index_key))
+            except ValueError:
+                continue
+            if last_stamp is None or stamp > last_stamp:
+                last_stamp = stamp
+        return last_stamp
+
     def _run_sweep(self) -> None:
         if self._high_water_ms is None:
             return
@@ -786,6 +856,84 @@ class MemoryStorePartition(StorePartition):
                 evicted += 1
             else:
                 index.pop(index_key, None)
+
+    def sweep_expired_into_cache(
+        self,
+        cache: PartitionTransactionCache,
+        staged_default_keys: set[bytes],
+        staged_ttl_index_keys: set[bytes],
+    ) -> None:
+        """
+        Prepare-time sweep on the ON path (parity with
+        ``RocksDBStorePartition.sweep_expired_into_cache``, spec §3.1).
+
+        Reads committed in-RAM state (``self._state``) and stages its deletes into
+        the transaction ``cache``: a main-CF eviction →
+        ``cache.delete(user_key, cf_name="default")`` (base ``_prepare`` produces a
+        changelog tombstone AND ``write()`` applies the local delete); index-CF GC
+        → ``cache.delete(index_key, cf_name=TTL_INDEX_CF_NAME)`` (local-only).
+
+        Unlike the OFF-path :meth:`_run_sweep` — which runs in ``write()`` AFTER the
+        cache is applied to ``self._state`` and so sees fresh writes — this scan
+        runs at prepare-time against COMMITTED state, so it takes the ``staged_*``
+        guard sets from the caller to preserve the #1129 same-flush protections
+        (never evict / GC a key this transaction just wrote). ``prefix=b""`` is
+        safe for every delete because staged keys are never handed to
+        ``cache.delete`` (§3.1 prefix note).
+        """
+        if self._high_water_ms is None:
+            return
+
+        budget = self._max_evictions_per_flush
+        if budget <= 0:
+            return
+
+        now_ms = self._high_water_ms
+        index = self._state.get(TTL_INDEX_CF_NAME, {})
+        main = self._state.get("default", {})
+
+        def delete_index_if_not_staged(index_key: bytes) -> None:
+            if index_key not in staged_ttl_index_keys:
+                cache.delete(index_key, prefix=b"", cf_name=TTL_INDEX_CF_NAME)
+
+        evicted = 0
+        for index_key in sorted(index.keys()):
+            if evicted >= budget:
+                break
+
+            try:
+                idx_expires_at, user_key = decode_index_key(index_key)
+            except ValueError:
+                delete_index_if_not_staged(index_key)
+                continue
+
+            if idx_expires_at > now_ms:
+                break
+
+            main_value = main.get(user_key)
+            if main_value is None:
+                delete_index_if_not_staged(index_key)
+                continue
+
+            decoded_main = _safe_decode_stamp(cast(bytes, main_value))
+            if decoded_main is None:
+                delete_index_if_not_staged(index_key)
+                continue
+            main_expires_at, _ = decoded_main
+
+            if main_expires_at == SENTINEL_NEVER:
+                delete_index_if_not_staged(index_key)
+                continue
+
+            if (
+                main_expires_at == idx_expires_at
+                and user_key not in staged_default_keys
+            ):
+                cache.delete(user_key, prefix=b"", cf_name="default")
+                delete_index_if_not_staged(index_key)
+                evicted += 1
+            else:
+                delete_index_if_not_staged(index_key)
 
 
 class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
@@ -964,10 +1112,42 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         # than leave the transaction STARTED / reusable.
         try:
             self._maybe_flip_or_reject()
+            self._sweep_expired_into_cache_if_enabled()
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
         super().prepare(processed_offsets=processed_offsets)
+
+    def _sweep_expired_into_cache_if_enabled(self) -> None:
+        """
+        Prepare-time TTL sweep on the ON path (parity with
+        ``RocksDBPartitionTransaction._sweep_expired_into_cache_if_enabled``).
+        Skipped on the OFF escape hatch, on an unflipped partition, or on an empty
+        cache (a read-only tx never swept). The ``staged_*`` guard sets are the
+        cache's own pending writes, read one phase before ``write()`` reads them,
+        so the same-flush protections are byte-identical.
+        """
+        partition = self._partition
+        if not partition.ttl_changelog_tombstones:
+            return
+        if not partition.uses_ttl_stamps:
+            return
+        if self._update_cache.is_empty():
+            return
+
+        staged_default = {
+            key
+            for prefix_map in self._update_cache.get_updates("default").values()
+            for key in prefix_map
+        }
+        staged_ttl_index = {
+            key
+            for prefix_map in self._update_cache.get_updates(TTL_INDEX_CF_NAME).values()
+            for key in prefix_map
+        }
+        partition.sweep_expired_into_cache(
+            self._update_cache, staged_default, staged_ttl_index
+        )
 
     def _maybe_flip_or_reject(self) -> None:
         if not self._batch_has_ttl_writes:

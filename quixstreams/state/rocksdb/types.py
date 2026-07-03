@@ -28,5 +28,6 @@ class RocksDBOptionsType(Protocol):
     max_evictions_per_flush: int
     legacy_records_ttl: Optional[timedelta]
     legacy_backfill_chunk_size: int
+    ttl_changelog_tombstones: bool
 
     def to_options(self) -> rocksdict.Options: ...

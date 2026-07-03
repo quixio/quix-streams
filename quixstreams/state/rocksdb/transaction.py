@@ -531,10 +531,55 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         try:
             self._persist_counter()
             self._maybe_flip_or_reject(processed_offsets=processed_offsets)
+            self._sweep_expired_into_cache_if_enabled()
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
         super().prepare(processed_offsets=processed_offsets)
+
+    def _sweep_expired_into_cache_if_enabled(self) -> None:
+        """
+        Prepare-time TTL sweep on the ON path (spec ttl-changelog-tombstones §3.1).
+
+        Runs AFTER :meth:`_maybe_flip_or_reject` (so a flip's runtime state and
+        freshly-stamped cache writes are visible to the guards) and BEFORE
+        ``super().prepare()`` (so staged tombstones ride the same changelog batch
+        as the user writes). Skipped when:
+
+        - the escape hatch ``ttl_changelog_tombstones=False`` is set (the OFF path
+          runs the local-only :meth:`RocksDBStorePartition._run_sweep` in
+          ``write()`` instead), or
+        - the partition is not flipped into TTL mode (no index to sweep), or
+        - the update cache is empty — a read-only transaction never swept before
+          (the sweep lived in ``write()``, which ``_flush`` skips on an empty
+          cache), and gating here preserves that coupling and the empty-tx no-I/O
+          optimization (§3.3).
+
+        The ``staged_*`` guard sets are the transaction cache's own pending writes
+        — the identical source ``write()`` reads on the OFF path, just one phase
+        earlier — so the #1129 same-flush protections are byte-identical (§3.2).
+        """
+        partition = self._partition
+        if not partition.ttl_changelog_tombstones:
+            return
+        if not partition.uses_ttl_stamps:
+            return
+        if self._update_cache.is_empty():
+            return
+
+        staged_default = {
+            key
+            for prefix_map in self._update_cache.get_updates("default").values()
+            for key in prefix_map
+        }
+        staged_ttl_index = {
+            key
+            for prefix_map in self._update_cache.get_updates(TTL_INDEX_CF_NAME).values()
+            for key in prefix_map
+        }
+        partition.sweep_expired_into_cache(
+            self._update_cache, staged_default, staged_ttl_index
+        )
 
     def _maybe_flip_or_reject(
         self, processed_offsets: Optional[dict[str, int]] = None

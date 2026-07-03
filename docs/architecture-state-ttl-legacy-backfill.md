@@ -137,6 +137,58 @@ that was removed by design to keep the per-write-only contract intact.)
   and `Checkpoint.commit` reads `producer.offsets` after its flush, so the final
   persisted offset already includes the chunk-produced messages — verified
   against `internal_producer.py:206-232`.
+- **Sweep tombstones — changelog shrinks with the store (spec
+  `ttl-changelog-tombstones.md`, `RocksDBOptions.ttl_changelog_tombstones`,
+  default ON).** Previously the TTL sweep (`_run_sweep`, called from
+  `write()`) staged **local-only** deletes, so the changelog kept an expired
+  key's last record forever (only recovery's read-time Rule 4 filter hid it) and
+  `cleanup.policy=compact` alone never physically reclaimed it. The eviction
+  *decision* is now relocated to **prepare-time**: a single bounded scan
+  (`sweep_expired_into_cache`, same eviction logic + #1129 same-flush guards as
+  `_run_sweep`) runs in the transaction's `prepare()` **after**
+  `_maybe_flip_or_reject` and **before** `super().prepare()`, and stages its
+  results **into the transaction cache** — main-CF evictions as
+  `cache.delete(user_key, cf="default")` (base `_prepare` emits a `value=None`
+  changelog **tombstone** carrying the `__ttl_stamped__` header, and `write()`
+  applies the local delete, exactly the route a user `state.delete()` takes) and
+  index-CF GC as `cache.delete(index_key, cf=__ttl_index__)` (**local-only** —
+  the index CF is in `LOCAL_ONLY_CFS`, so `_prepare` skips it). One scan, one
+  delete sink, no bespoke producer, no new wire format. Compaction then reclaims
+  expired keys in step with eviction. The scan reads committed disk state (this
+  tx has committed nothing yet), so its decisions are byte-identical to the old
+  write-time sweep; only the delete sink changed. It is gated on
+  `uses_ttl_stamps` **and** a non-empty update cache (a read-only checkpoint
+  never swept before — the sweep lived in `write()`, which `_flush` skips on an
+  empty cache — and this preserves that coupling and the empty-tx no-I/O
+  optimization) and bounded by `max_evictions_per_flush` (≤ budget
+  tombstones/flush). The `ttl_changelog_tombstones=False` **escape hatch**
+  reverts to the exact pre-change path: `write()` calls `_run_sweep` (local-only)
+  and no tombstones are produced. **No changelog-first inversion:** tombstones
+  ride the normal `prepare()` (produce) → `flush()` (local write, records the
+  changelog offset) order that governs every user write and, under exactly-once,
+  commit atomically inside the checkpoint's producer transaction — so they need
+  **no** bounded flush and do **not** use the backfill migration producer.
+  Recovery is unchanged: a tombstone is a default-CF delete replayed in offset
+  order (`value is None` → main-CF delete); the census branch explicitly does not
+  census tombstones; a dangling local index entry left in the not-yet-compacted
+  window is GC'd by the next sweep's ghost handling.
+- **Progress-based backfill changelog flush (spec `ttl-changelog-tombstones.md`
+  §3.7).** The one-time backfill / recovery-completion path confirms each chunk's
+  changelog delivery before its local commit via `_flush_backfill_changelog`.
+  The former fixed `producer.flush(timeout=25.0)` deadline was **independent of
+  `legacy_backfill_chunk_size`**, so a large chunk legitimately needing >25 s to
+  deliver tripped a spurious `ChangelogFlushError` that aborted the whole
+  checkpoint. It now flushes in repeated `_BACKFILL_CHANGELOG_FLUSH_SLICE_S`
+  (25 s) slices and fails only when a **full slice makes zero delivery progress**
+  (`remaining >= prev`) — measuring lack of progress, not total time — with a
+  runaway cap of `_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES` (40 ≈ 1000 s) so a
+  pathological ever-shrinking trickle still terminates. A slow-but-progressing
+  broker (`10 → 6 → 2 → 0`) now succeeds; a wedged broker surfaces after ~2
+  slices; a non-int return (unconfigured test double) still proceeds. The
+  changelog-first invariant (produced+flushed before the local commit) is
+  preserved. All three call sites (`backfill_legacy_records`,
+  `_complete_pending_backfill`, `_produce_migration_done_marker`) inherit the fix
+  through the single chokepoint.
 
 ## Data flow
 
@@ -244,6 +296,9 @@ Modified:
 - `quixstreams/state/rocksdb/options.py` — `legacy_records_ttl` field +
   docstring; `legacy_backfill_chunk_size: int = 10_000` field + docstring;
   `__post_init__` validation (both: strictly positive or `ValueError`).
+  **`ttl-changelog-tombstones` (2026-07-03):** `ttl_changelog_tombstones: bool =
+  True` field + docstring (plain bool, no validation) — the sweep-tombstone
+  escape hatch (see the sweep-tombstones bullet above).
 - `quixstreams/state/rocksdb/types.py` — `legacy_records_ttl` and
   `legacy_backfill_chunk_size` on the `RocksDBOptionsType` protocol.
 - `quixstreams/state/rocksdb/partition.py` — thread both options into `__init__`

@@ -71,6 +71,9 @@ class TestRecoveryManager:
         changelog_offset = 22
         store_partition = MagicMock(spec_set=StorePartition)
         store_partition.get_changelog_offset.return_value = changelog_offset
+        # No flipped-but-unfinished TTL migration (Fix B): the invalid-offset
+        # branch must be reached, not the forced-recovery migration path.
+        store_partition.has_incomplete_ttl_migration.return_value = False
 
         recovery_manager = recovery_manager_factory(
             consumer=consumer, topic_manager=topic_manager
@@ -569,8 +572,12 @@ class TestRecoveryManager:
 
         recovering_store_partition = MagicMock(spec_set=StorePartition)
         recovering_store_partition.get_changelog_offset.return_value = 5
+        recovering_store_partition.has_incomplete_ttl_migration.return_value = False
         caught_up_store_partition = MagicMock(spec_set=StorePartition)
         caught_up_store_partition.get_changelog_offset.return_value = 9
+        # Caught-up partition has no incomplete TTL migration (Fix B), so it must
+        # NOT be forced into a recovery check.
+        caught_up_store_partition.has_incomplete_ttl_migration.return_value = False
 
         recovery_manager.assign_partition(
             topic=topic_name,

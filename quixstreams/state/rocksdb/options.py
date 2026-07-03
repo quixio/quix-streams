@@ -72,6 +72,18 @@ class RocksDBOptions(RocksDBOptionsType):
         stores. Must be strictly positive; ``<= 0`` raises ``ValueError`` at
         construction.
         Default - ``10_000``.
+    :param ttl_changelog_tombstones: when ``True`` (the default), TTL-driven
+        evictions are also produced to the changelog as tombstones
+        (``value=None``) so log compaction physically reclaims expired keys in
+        step with the local store — ``cleanup.policy=compact`` alone then shrinks
+        the changelog as keys expire (no ``delete`` policy / retention tuning
+        needed to reclaim). When ``False``, evictions are local-only (the
+        pre-change behavior): the changelog keeps each expired key's last record
+        until compacted by other means, and rebuilds rely on the read-time
+        expiry filter. Read-time consistency is identical either way. Only
+        meaningful for TTL-enabled stores; ignored for windowed / timestamped
+        stores and for no-``ttl=`` workloads.
+        Default - ``True``.
 
     Please see `rocksdict.Options` for a complete description of other options.
     """
@@ -95,6 +107,7 @@ class RocksDBOptions(RocksDBOptionsType):
     max_evictions_per_flush: int = 10_000
     legacy_records_ttl: Optional[timedelta] = None
     legacy_backfill_chunk_size: int = 10_000
+    ttl_changelog_tombstones: bool = True
 
     def __post_init__(self) -> None:
         if self.legacy_records_ttl is not None and self.legacy_records_ttl <= timedelta(

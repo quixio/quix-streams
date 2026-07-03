@@ -128,6 +128,26 @@ class StorePartition(ABC):
         """
         return None
 
+    def has_incomplete_ttl_migration(self) -> bool:
+        """
+        Whether this partition has a durably-recorded, not-yet-finished legacy-TTL
+        migration that must be completed via :meth:`complete_recovery` (Fix B,
+        shortcut 73191 review).
+
+        True iff the partition is persisted-flipped into TTL mode AND its
+        ``__ttl_backfill_pending__`` census still holds leftover legacy keys AND
+        no durable "migration done" marker is present. The recovery layer consults
+        this so a restart whose changelog offset is already caught up
+        (``highwater-1 == offset``, so the normal "state behind" check is False)
+        still runs the completion pass instead of stranding the leftovers.
+
+        The default is ``False`` — only the RocksDB backend has the durable
+        pending census + flip flag on disk that this detects. The memory backend
+        re-recovers from the changelog on every open (full replay), so the
+        offset-caught-up crash window does not apply to it.
+        """
+        return False
+
     @abstractmethod
     def begin(self) -> PartitionTransaction:
         """

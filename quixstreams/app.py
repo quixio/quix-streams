@@ -389,6 +389,7 @@ class Application:
         self._topic_manager = topic_manager or self._get_topic_manager()
 
         producer = None
+        migration_producer = None
         recovery_manager = None
         if self._config.use_changelog_topics:
             producer = self._producer
@@ -397,6 +398,18 @@ class Application:
                 topic_manager=self._topic_manager,
                 broker_availability_timeout=self._broker_availability_timeout,
             )
+            if self._config.exactly_once:
+                # Fix C (shortcut 73191 review): under exactly-once the main
+                # changelog producer is transactional, so flush() does not make
+                # records durable until the checkpoint transaction commits. The
+                # legacy-TTL migration/backfill paths write local state right after
+                # producing each chunk (changelog-first), so they need a producer
+                # whose flush()==durable. Create a dedicated NON-transactional
+                # producer used ONLY for those migration records; normal changelog
+                # production stays on the transactional producer. The underlying
+                # librdkafka producer is created lazily on first use, so this is a
+                # no-op object for the common no-migration case.
+                migration_producer = self._get_internal_producer(transactional=False)
 
         self._state_manager = StateStoreManager(
             group_id=self._config.consumer_group,
@@ -404,6 +417,7 @@ class Application:
             rocksdb_options=self._config.rocksdb_options,
             producer=producer,
             recovery_manager=recovery_manager,
+            migration_producer=migration_producer,
         )
 
         self._source_manager = SourceManager()

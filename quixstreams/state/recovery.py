@@ -140,7 +140,20 @@ class RecoveryPartition:
         """
         has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
         state_potentially_behind = self._changelog_highwater - 1 > self.offset
-        return has_consumable_offsets and state_potentially_behind
+        # Fix B (shortcut 73191 review): also force the check when the store has a
+        # flipped-but-unfinished legacy-TTL migration (durable pending census, no
+        # done-marker). Without this, an offset-caught-up restart
+        # (``highwater-1 == offset`` → ``state_potentially_behind`` False) would
+        # skip recovery and never run ``complete_recovery``, permanently stranding
+        # the leftover legacy records. The ``has_consumable_offsets`` guard is
+        # kept so an empty changelog still short-circuits (a flipped store with a
+        # non-empty pending census implies a non-empty changelog by construction,
+        # so the guard is satisfied in the real scenario). ``or`` short-circuits,
+        # so the store scan runs only when the offset check is already False.
+        return has_consumable_offsets and (
+            state_potentially_behind
+            or self._store_partition.has_incomplete_ttl_migration()
+        )
 
     @property
     def has_invalid_offset(self) -> bool:
@@ -317,15 +330,25 @@ class ChangelogProducerFactory:
     Generates ChangelogProducers, which produce changelog messages to a StorePartition.
     """
 
-    def __init__(self, changelog_name: str, producer: InternalProducer):
+    def __init__(
+        self,
+        changelog_name: str,
+        producer: InternalProducer,
+        migration_producer: Optional[InternalProducer] = None,
+    ):
         """
         :param changelog_name: changelog topic name
         :param producer: a InternalProducer (not shared with `Application` instance)
+        :param migration_producer: an optional dedicated NON-transactional
+            InternalProducer for legacy-TTL migration / backfill records only
+            (Fix C, shortcut 73191 review). Supplied only when the app runs
+            exactly-once — see :class:`ChangelogProducer`. ``None`` otherwise.
 
         :return: a ChangelogWriter instance
         """
         self._changelog_name = changelog_name
         self._producer = producer
+        self._migration_producer = migration_producer
 
     def get_partition_producer(self, partition_num) -> "ChangelogProducer":
         """
@@ -338,6 +361,7 @@ class ChangelogProducerFactory:
             changelog_name=self._changelog_name,
             partition=partition_num,
             producer=self._producer,
+            migration_producer=self._migration_producer,
         )
 
 
@@ -352,15 +376,32 @@ class ChangelogProducer:
         changelog_name: str,
         partition: int,
         producer: InternalProducer,
+        migration_producer: Optional[InternalProducer] = None,
     ):
         """
         :param changelog_name: A changelog topic name
         :param partition: source topic partition number
         :param producer: an InternalProducer (not shared with `Application` instance)
+        :param migration_producer: an optional dedicated NON-transactional
+            InternalProducer used ONLY for legacy-TTL migration / backfill records
+            (Fix C, shortcut 73191 review). It is set only when the app runs
+            exactly-once: the main ``producer`` is then transactional, so a
+            ``flush()`` does NOT make records durable until the checkpoint
+            transaction commits — but the migration paths write local RocksDB
+            state immediately after producing each chunk and rely on the
+            changelog-first invariant (produced+flushed == durable BEFORE the
+            local write). Routing migration records through a non-transactional
+            producer restores ``flush()==durable`` so a crash before the
+            transaction commits cannot leave local stamps + resume ledger ahead of
+            an aborted (never-republished) changelog record. When ``None``
+            (non-exactly-once) migration records fall back to the main producer,
+            which is already non-transactional. NORMAL changelog production is
+            never routed here.
         """
         self._changelog_name = changelog_name
         self._partition = partition
         self._producer = producer
+        self._migration_producer = migration_producer
 
     @property
     def changelog_name(self) -> str:
@@ -370,11 +411,20 @@ class ChangelogProducer:
     def partition(self) -> int:
         return self._partition
 
+    def _producer_for(self, migration: bool) -> InternalProducer:
+        """Pick the underlying producer: the dedicated non-transactional
+        migration producer for migration/backfill records when one is configured
+        (exactly-once), else the main producer (Fix C)."""
+        if migration and self._migration_producer is not None:
+            return self._migration_producer
+        return self._producer
+
     def produce(
         self,
         key: bytes,
         value: Optional[bytes] = None,
         headers: Optional[Headers] = None,
+        migration: bool = False,
     ):
         """
         Produce a message to a changelog topic partition.
@@ -382,8 +432,12 @@ class ChangelogProducer:
         :param key: message key (same as state key, including prefixes)
         :param value: message value (same as state value)
         :param headers: message headers (includes column family info)
+        :param migration: route through the dedicated non-transactional migration
+            producer when configured (Fix C). Set only by the legacy-TTL
+            backfill / recovery-completion / done-marker sites; normal changelog
+            production leaves it ``False``.
         """
-        self._producer.produce(
+        self._producer_for(migration).produce(
             key=key,
             value=value,
             headers=headers,
@@ -391,8 +445,8 @@ class ChangelogProducer:
             topic=self._changelog_name,
         )
 
-    def flush(self, timeout: Optional[float] = None) -> int:
-        return self._producer.flush(timeout=timeout)
+    def flush(self, timeout: Optional[float] = None, migration: bool = False) -> int:
+        return self._producer_for(migration).flush(timeout=timeout)
 
 
 class RecoveryManager:

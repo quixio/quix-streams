@@ -47,6 +47,7 @@ class StateStoreManager:
         producer: Optional[InternalProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
         default_store_type: StoreTypes = RocksDBStore,
+        migration_producer: Optional[InternalProducer] = None,
     ):
         if state_dir is not None:
             state_dir = Path(state_dir).absolute()
@@ -58,6 +59,10 @@ class StateStoreManager:
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[Optional[str], Dict[str, Store]] = {}
         self._producer = producer
+        # Optional dedicated NON-transactional producer for legacy-TTL migration /
+        # backfill records only (Fix C, shortcut 73191 review). Set by the app
+        # only under exactly-once; threaded into each changelog producer factory.
+        self._migration_producer = migration_producer
         self._recovery_manager = recovery_manager
         self._default_store_type = default_store_type
 
@@ -161,6 +166,7 @@ class StateStoreManager:
         return ChangelogProducerFactory(
             changelog_name=changelog_topic.name,
             producer=self._producer,
+            migration_producer=self._migration_producer,
         )
 
     def register_store(
