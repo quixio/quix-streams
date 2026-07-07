@@ -487,6 +487,45 @@ At `DEBUG`, the state logger emits per-flush and per-chunk backfill progress lin
 
 The variable scopes its effect to `quixstreams.state` and its children. Non-state subsystems (the Kafka client, the application event loop, etc.) stay at the application log level.
 
+#### What the logs show during a backfill
+
+The migration emits a small set of one-time `INFO` lines you can watch (or grep) to follow its lifecycle. Everything per-record or per-chunk stays at `DEBUG`.
+
+**Live migration** — first `state.set(..., ttl=...)` flush against a populated legacy store:
+
+```
+[INFO] TTL legacy backfill STARTED: <N> records to re-stamp path=<...>
+[DEBUG] TTL legacy backfill progress: <n> / <N> records re-stamped path=<...>   (per chunk)
+[INFO] TTL legacy backfill FINISHED: <N> records re-stamped path=<...>
+[INFO] Backfilled <N> legacy records and flipped state store partition into TTL mode path=<...>
+```
+
+The backfill runs once, before new messages are processed, in chunks of `legacy_backfill_chunk_size` (default 10,000) — memory stays flat regardless of store size. Every chunk is confirmed on the changelog before the local commit, so a crash at any point is safe to resume.
+
+**Cold restore of an already-migrated store** — the first stamped record replayed from the changelog flips the partition:
+
+```
+[INFO] Recovery: __ttl_stamped__ header on default-CF replay; flipping partition path=<...> into TTL mode for the rest of recovery.
+```
+
+**Cold restore of an interrupted migration** — if the process died mid-backfill, the changelog holds a mix of stamped and un-stamped records. Recovery detects the mix, replays everything, then finishes the migration by stamping only the genuine leftovers (records whose latest changelog entry is still un-stamped) — already-stamped records keep their original expiry:
+
+```
+[INFO] Recovery: completing interrupted legacy-TTL migration at path=<...>; <N> leftover legacy record(s) will be stamped with expiry=<...> (wallclock-at-rebuild + legacy_records_ttl).
+[DEBUG] Recovery: legacy-TTL migration completion progress: <n> / <N> leftover record(s) stamped path=<...>   (per chunk)
+[INFO] Recovery: completed legacy-TTL migration at path=<...>; stamped <N> leftover record(s); __ttl_backfill_pending__ is now empty.
+```
+
+The `<N> leftover` count is normally much smaller than the store — it is only the tail the interrupted run never reached. A durable done-flag is written after the last leftover, so subsequent restores skip completion entirely.
+
+**v3.24.0 preview-store adoption** — a store created on the earlier TTL preview is recognized and adopted verbatim during rebuild:
+
+```
+[INFO] Recovery: adopted <N> v3.24.0-stamped record(s) at path=<...> (flipped into TTL mode; values kept verbatim, ...)
+```
+
+If a migration appears stalled, raise `QUIXSTREAMS_STATE_LOG_LEVEL=DEBUG` and watch the per-chunk progress lines; a large store's backfill legitimately takes minutes (roughly 1–2k records/second including changelog confirmation).
+
 
 ### Tuning sweep budget
 
