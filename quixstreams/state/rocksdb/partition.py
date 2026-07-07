@@ -1134,7 +1134,9 @@ class RocksDBStorePartition(StorePartition):
             headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: "default",
                 # Completion runs at recovery with no triggering live message, so
-                # there are no processed offsets to encode (cf. the live backfill).
+                # there are no processed offsets to encode. The live backfill
+                # (:meth:`backfill_legacy_records`) also encodes ``None`` here so its
+                # migration re-stamps are likewise always-apply on a later restore.
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
                 # Completion records are stamped, so they carry the §8.7 bit; a
                 # subsequent restore then sees an all-stamped changelog and never
@@ -1458,9 +1460,11 @@ class RocksDBStorePartition(StorePartition):
         :param changelog_producer: the partition's changelog producer, or
             ``None`` when changelog topics are disabled (chunks still persist
             locally; production is skipped).
-        :param processed_offsets: ``<topic: offset>`` of the latest processed
-            message, encoded into the changelog headers exactly as the base
-            ``_prepare`` path does.
+        :param processed_offsets: accepted for call-signature compatibility but
+            deliberately NOT encoded into the changelog headers — migration
+            re-stamps are always-apply records (see the header build below), so
+            they carry no processed offsets, unlike the base ``_prepare`` path.
+            Retained because callers still pass their triggering offset.
         :param staged_default_keys: serialized default-CF keys present in the
             current transaction's update cache (genuine in-batch user writes).
             They are skipped here and re-stamped with their own true pending
@@ -1483,9 +1487,19 @@ class RocksDBStorePartition(StorePartition):
         if changelog_producer is not None:
             headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: "default",
-                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(
-                    processed_offsets
-                ),
+                # Migration re-stamps are ALWAYS-APPLY: encode NO processed offsets
+                # (``json_dumps(None)``), matching ``_complete_pending_backfill`` and
+                # ``_produce_migration_done_marker``. A re-stamp only adds the
+                # deterministic 8-byte TTL prefix to an ALREADY-committed legacy value,
+                # so its durability must not hinge on the triggering live write's
+                # source offset. Encoding that offset (as ``_prepare`` does for genuine
+                # live writes) let ``RecoveryPartition._should_apply_changelog`` SKIP
+                # these records on a cold restore of an interrupted migration whose
+                # triggering write was never committed; the skipped re-stamp then never
+                # ran its ``__ttl_backfill_pending__`` supersession delete, so the
+                # already-backfilled key was wrongly re-stamped by
+                # ``complete_recovery`` (shortcut 73191 recovery-offset-skip bug).
+                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
                 # Backfill records are always stamped (re-stamped legacy values),
                 # so they unconditionally carry the §8.7 stamped bit. The base
                 # ``_prepare`` cannot set it for these because they are produced

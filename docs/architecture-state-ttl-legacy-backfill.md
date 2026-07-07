@@ -510,6 +510,23 @@ Modified:
     default-CF write. A per-partition `_recovery_saw_stamped` flag is set on the
     first header-true default-CF record. The pending CF (not an in-RAM set) bounds
     peak memory to one chunk and gives interrupt-safety for free.
+  - **Migration re-stamps are always-apply (recovery-offset-skip fix, shortcut
+    73191).** The census supersession `delete` above only runs if the header-true
+    re-stamp is actually *applied* during replay. `backfill_legacy_records` used to
+    tag its bulk re-stamps with the **triggering write's** `processed_offsets`, so on
+    a cold restore of an interrupted migration (whose triggering write was never
+    committed) `RecoveryPartition._should_apply_changelog` **skipped** every re-stamp
+    — its supersession `delete` never ran, the already-backfilled keys stayed in
+    `__ttl_backfill_pending__`, and `complete_recovery()` re-stamped them, clobbering
+    their migration expiry with `legacy_records_ttl` and re-producing them to the
+    changelog (bloat). **Fix:** the re-stamps are produced with
+    `processed_offsets=None` (`json_dumps(None)`), exactly like
+    `_complete_pending_backfill` and the done-marker — a re-stamp only adds a
+    deterministic 8-byte prefix to already-committed data, so it is always-apply and
+    never skipped. The triggering write's *own* record still carries its real offset
+    via `_prepare` (correct exactly-once for a genuine live write). Memory backend
+    has no live backfill (its completion/marker already use `None`), so no parallel
+    change was needed.
   - **Completion (end of recovery).** `complete_recovery()` runs iff
     `_recovery_saw_stamped` AND pending is non-empty (the MIXED shape only). It
     chunk-backfills exactly the pending keys: point-get the current default value,
