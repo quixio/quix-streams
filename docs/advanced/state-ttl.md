@@ -252,6 +252,6 @@ With `ttl_changelog_tombstones=False`, the changelog retains the last record of 
 ## Upgrading an existing store
 
 If your pipeline was already running before TTL was introduced, see
-[Upgrading an existing (legacy) store](stateful-processing.md#upgrading-an-existing-legacy-store--legacy_records_ttl)
+[Upgrading an existing (legacy) store](stateful-processing.md#upgrading-an-existing-legacy-store-legacy_records_ttl)
 for the full guide, including the before/after worked example,
 `legacy_records_ttl` configuration, and what happens during a cold restore.

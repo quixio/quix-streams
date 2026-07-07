@@ -317,13 +317,13 @@ You do not need to declare that a store uses TTL. The framework detects it autom
 
 - **New store (empty).** On the first flush that contains a TTL write, the store switches into TTL mode. The switch is free and transparent.
 - **Store with existing data.** If a store already contains data written without TTL and you deploy a code change that adds `state.set(..., ttl=...)`, the framework auto-migrates at the next flush:
-  - **`RocksDBOptions(legacy_records_ttl=...)` is set** — the framework backfills every pre-existing record with a uniform expiry of `high_water + legacy_records_ttl` and then flips the store into TTL mode in place. No data is deleted. See [Upgrading an existing store](#upgrading-an-existing-legacy-store--legacy_records_ttl) below.
-  - **`legacy_records_ttl` is not set** — the framework still auto-migrates, using the triggering write's own `ttl=` value as the implicit window (`high_water + max(ttl=)` in that batch). A one-time `[WARNING]` names the derived window and how to override it. See [Upgrading an existing store](#upgrading-an-existing-legacy-store--legacy_records_ttl) for details.
+  - **`RocksDBOptions(legacy_records_ttl=...)` is set** — the framework backfills every pre-existing record with a uniform expiry of `high_water + legacy_records_ttl` and then flips the store into TTL mode in place. No data is deleted. See [Upgrading an existing store](#upgrading-an-existing-legacy-store-legacy_records_ttl) below.
+  - **`legacy_records_ttl` is not set** — the framework still auto-migrates, using the triggering write's own `ttl=` value as the implicit window (`high_water + max(ttl=)` in that batch). A one-time `[WARNING]` names the derived window and how to override it. See [Upgrading an existing store](#upgrading-an-existing-legacy-store-legacy_records_ttl) for details.
 
 Once a store has switched into TTL mode, it stays in TTL mode for the life of that store. Plain `state.set(k, v)` calls on a TTL-enabled store still work and write a "never expires" sentinel — they do not turn off TTL for that key.
 
 
-### Upgrading an existing (legacy) store — `legacy_records_ttl`
+### Upgrading an existing (legacy) store - `legacy_records_ttl`
 
 If your pipeline was already running before TTL existed, its state store holds records that were written without any expiry stamp. Deploying a new version that calls `state.set(..., ttl=...)` triggers an automatic in-place migration on the first flush: the framework re-stamps every pre-existing un-stamped record with a uniform expiry and flips the store into TTL mode with no state deletion.
 
@@ -415,7 +415,7 @@ On startup, the log shows the one-time migration:
 
 After the migration has run once, you can remove `legacy_records_ttl` from `RocksDBOptions` on the next deploy. The store remains in TTL mode permanently.
 
-#### Reference clock — when do migrated records expire?
+#### Reference clock - when do migrated records expire?
 
 Legacy records carry no original timestamp, so their true age is unrecoverable. The backfill stamps them to expire `legacy_records_ttl` (or the implicit derived window) after the **event-time high-water mark at the moment of migration** — not after each record's original age. All migrated records therefore drain together once the stream's event time advances by that window past the upgrade point.
 
@@ -456,7 +456,7 @@ app = Application(
 )
 ```
 
-On the next flush the framework backfills every pre-existing record with the chosen (or implicit) expiry and flips the store into TTL mode. A one-time `[INFO]` line confirms completion. See [Upgrading an existing store](#upgrading-an-existing-legacy-store--legacy_records_ttl) for the full explanation and a worked example.
+On the next flush the framework backfills every pre-existing record with the chosen (or implicit) expiry and flips the store into TTL mode. A one-time `[INFO]` line confirms completion. See [Upgrading an existing store](#upgrading-an-existing-legacy-store-legacy_records_ttl) for the full explanation and a worked example.
 
 **Cold-restore completion.** If a rebuilt node replays a changelog whose migration was interrupted mid-backfill (some records already stamped, some not), it auto-completes the leftovers at end of recovery. With `legacy_records_ttl` set, they expire at `wallclock-at-rebuild + legacy_records_ttl`; without it, they inherit the expiry of the surviving stamped cohort (or never-expire, with a `[WARNING]`, in the rare case where no surviving stamp remains to derive from). No data is deleted.
 
@@ -465,7 +465,7 @@ On the next flush the framework backfills every pre-existing record with the cho
 
 ### Semantics and limits
 
-- **Expiry is event-time only in live processing.** A pipeline replaying old Kafka offsets sees entries expire relative to the timestamps in the data, not relative to today's date. During a **rebuild from the changelog** (cold restore), entries whose expiry has already passed by real-world clock at the moment the rebuild runs are not restored — even if the pipeline's event-time clock has not yet advanced past them. This is intentional: a purely event-time recovery filter would restore all uniformly-expiry-stamped records regardless of how much real time has elapsed since the store was written. After the rebuild, live processing is event-time only as normal. See [Reference clock — when do migrated records expire?](#reference-clock--when-do-migrated-records-expire) above for details on how the drop filter works during replay.
+- **Expiry is event-time only in live processing.** A pipeline replaying old Kafka offsets sees entries expire relative to the timestamps in the data, not relative to today's date. During a **rebuild from the changelog** (cold restore), entries whose expiry has already passed by real-world clock at the moment the rebuild runs are not restored — even if the pipeline's event-time clock has not yet advanced past them. This is intentional: a purely event-time recovery filter would restore all uniformly-expiry-stamped records regardless of how much real time has elapsed since the store was written. After the rebuild, live processing is event-time only as normal. See [Reference clock — when do migrated records expire?](#reference-clock-when-do-migrated-records-expire) above for details on how the drop filter works during replay.
 - **Reads are always consistent.** Once an entry's event-time expiry has passed relative to the current record's timestamp, `state.get()` returns `None` — even if the entry has not yet been physically deleted from disk. You will never read a stale expired value.
 - **Physical eviction is approximate.** Expired entries are swept inside each `flush()`, capped at 10,000 evictions per flush by default. Each eviction also writes a tombstone to the store's changelog topic, so under the default `compact` policy the changelog physically shrinks in step with the local store. On a high-throughput partition, physical deletion can lag behind logical expiry — both local disk and changelog storage are bounded by the sweep budget. Space is eventually reclaimed; reads remain correct in the meantime.
 - **No TTL on windowed stores.** Windowed aggregations manage their own retention via `grace_ms`. Passing `ttl=` to `state.set()` inside a windowed aggregation has no effect.
