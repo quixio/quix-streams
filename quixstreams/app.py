@@ -1230,7 +1230,7 @@ class Application:
                 "latest checkpoint will not be committed."
             )
         else:
-            self._processing_context.commit_checkpoint(force=True)
+            self._processing_context.commit_checkpoint(force=True, revoking=True)
 
         self._revoke_state_partitions(topic_partitions=topic_partitions)
         self._consumer.reset_backpressure()

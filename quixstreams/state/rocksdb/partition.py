@@ -1,5 +1,6 @@
 import logging
 import time
+from threading import Event
 from typing import (
     Dict,
     Iterator,
@@ -21,7 +22,11 @@ from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
 
-from .exceptions import IncompatibleStateStoreError, RocksDBCorruptedError
+from .exceptions import (
+    IncompatibleStateStoreError,
+    RocksDBCorruptedError,
+    RocksDBOpenAborted,
+)
 from .metadata import (
     CHANGELOG_OFFSET_KEY,
     STATE_FORMAT_VERSION,
@@ -83,6 +88,7 @@ class RocksDBStorePartition(StorePartition):
         path: str,
         options: Optional[RocksDBOptionsType] = None,
         changelog_producer: Optional[ChangelogProducer] = None,
+        stop_event: Optional[Event] = None,
     ):
         if not options:
             options = RocksDBOptions()
@@ -90,6 +96,7 @@ class RocksDBStorePartition(StorePartition):
         super().__init__(options.dumps, options.loads, changelog_producer)
         self._path = path
         self._options = options
+        self._stop_event = stop_event
         self._rocksdb_options = self._options.to_options()
         self._open_max_retries = self._options.open_max_retries
         self._open_retry_backoff = self._options.open_retry_backoff
@@ -544,13 +551,30 @@ class RocksDBStorePartition(StorePartition):
         """
         Close the underlying RocksDB
         """
+        start = time.monotonic()
         logger.debug(f'Closing rocksdb partition on "{self._path}"')
         # Clean the column family caches to drop references
         # Otherwise the Rocksdb won't close properly
         self._cf_handle_cache = {}
         self._cf_cache = {}
-        self._db.close()
-        logger.debug(f'Closed rocksdb partition on "{self._path}"')
+        # Stop background flush/compaction before closing so that db.close()
+        # does not block waiting for it to wind down. On large DBs this wait
+        # dominates the revoke sequence and is what pushes it past
+        # max.poll.interval.ms during a rebalance handover; cancelling it
+        # releases the OS lock in ~milliseconds. Unflushed memtable data is
+        # preserved by the WAL, and cancelled compaction debt simply resumes
+        # under the next owner.
+        self._db.cancel_all_background(True)
+        try:
+            self._db.close()
+        except Exception as exc:
+            # After cancel_all_background(), RocksDB reports "Shutdown in
+            # progress" from close(). The DB still closes cleanly and the lock
+            # is released, so this status is benign; re-raise anything else.
+            if "shutdown in progress" not in str(exc).lower():
+                raise
+        elapsed = round(time.monotonic() - start, 4)
+        logger.debug(f'Closed rocksdb partition on "{self._path}" in {elapsed}s')
 
     @property
     def path(self) -> str:
@@ -967,7 +991,17 @@ class RocksDBStorePartition(StorePartition):
                 )
 
                 attempt += 1
-                time.sleep(self._open_retry_backoff)
+                # Wait for the backoff, but bail out immediately if the
+                # application is stopping so a lock-waiting instance stays
+                # promptly killable instead of sleeping through every retry.
+                if self._stop_event is not None:
+                    if self._stop_event.wait(self._open_retry_backoff):
+                        raise RocksDBOpenAborted(
+                            f'Aborted opening rocksdb partition on "{self._path}": '
+                            f"the application is stopping"
+                        ) from exc
+                else:
+                    time.sleep(self._open_retry_backoff)
 
     def _update_changelog_offset(self, batch: WriteBatch, offset: int):
         batch.put(

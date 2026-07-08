@@ -241,6 +241,98 @@ class TestCheckpoint:
         # Since no offset recorded yet, an increase of 2 from no offset is 1
         assert store_partition.get_changelog_offset() == 1
 
+    def test_commit_revoking_skips_local_flush_with_changelog(
+        self,
+        checkpoint_factory,
+        internal_producer,
+        internal_consumer,
+        state_manager_factory,
+        recovery_manager_factory,
+        topic_factory,
+    ):
+        """
+        Fast revoke: when committing a checkpoint during a partition revoke and
+        changelogs are enabled, the local state flush must be skipped. The
+        changelog holds the delta and the new owner replays it, so the outgoing
+        instance releases its RocksDB lock as fast as possible.
+        """
+        topic_name, _ = topic_factory()
+        recovery_manager = recovery_manager_factory(consumer=internal_consumer)
+        state_manager = state_manager_factory(
+            producer=internal_producer, recovery_manager=recovery_manager
+        )
+        dataframe_registry = DataFrameRegistry()
+        dataframe_registry.register_stream_id(topic_name, [topic_name])
+
+        checkpoint = checkpoint_factory(
+            consumer_=internal_consumer,
+            state_manager_=state_manager,
+            producer_=internal_producer,
+            dataframe_registry_=dataframe_registry,
+        )
+        value, prefix = "value", b"__key__"
+        state_manager.register_store(
+            topic_name,
+            "default",
+            changelog_config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
+        store = state_manager.get_store(topic_name, "default")
+        store_partition = store.assign_partition(0)
+
+        tx = checkpoint.get_store_transaction(topic_name, 0)
+        tx.set(key="key1", value=value, prefix=prefix)
+        tx.set(key="key2", value=value, prefix=prefix)
+        checkpoint.store_offset(topic_name, 0, 999)
+
+        # Commit the checkpoint as part of a revoke
+        checkpoint.commit(revoking=True)
+
+        # The changelog was produced (prepared) but the local flush was skipped:
+        # nothing was written to disk, so no changelog offset is persisted.
+        assert tx.prepared
+        assert not tx.completed
+        assert not store_partition.get_changelog_offset()
+
+    def test_commit_revoking_still_flushes_without_changelog(
+        self,
+        checkpoint_factory,
+        internal_consumer,
+        state_manager_factory,
+        topic_factory,
+        internal_producer_mock,
+    ):
+        """
+        Fast revoke is only safe when changelogs are enabled. With changelogs
+        disabled, skipping the flush would be state loss, so a revoking commit
+        must fall back to the full local flush.
+        """
+        topic_name, _ = topic_factory()
+
+        dataframe_registry = DataFrameRegistry()
+        dataframe_registry.register_stream_id(topic_name, [topic_name])
+        state_manager = state_manager_factory(producer=internal_producer_mock)
+        checkpoint = checkpoint_factory(
+            consumer_=internal_consumer,
+            state_manager_=state_manager,
+            producer_=internal_producer_mock,
+            dataframe_registry_=dataframe_registry,
+        )
+        key, value, prefix = "key", "value", b"__key__"
+        state_manager.register_store(topic_name, "default")
+        store = state_manager.get_store(topic_name, "default")
+        store.assign_partition(0)
+
+        tx = checkpoint.get_store_transaction(topic_name, 0)
+        tx.set(key=key, value=value, prefix=prefix)
+        checkpoint.store_offset(topic_name, 0, 999)
+
+        checkpoint.commit(revoking=True)
+
+        # No changelog -> full flush must still happen, state is persisted
+        assert tx.completed
+        new_tx = store.start_partition_transaction(0)
+        assert new_tx.get(key=key, prefix=prefix) == value
+
     @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_with_state_and_changelog_no_updates_success(
         self,
@@ -699,3 +791,61 @@ class TestCheckpoint:
         assert not dummy_sink.results
         # Ensure that DummySink dropped the accumulated batch
         assert not dummy_sink.total_batched
+
+
+class TestCheckpointFastRevoke:
+    """
+    Kafka-free unit tests for the "fast revoke" flush-skip logic in
+    Checkpoint.commit(revoking=True). See docs/rocksdb-lock-contention-analysis.md.
+    """
+
+    def _make_checkpoint(self):
+        producer = MagicMock(spec_set=InternalProducer)
+        producer.flush.return_value = 0
+        producer.offsets = {}
+        consumer = MagicMock(spec_set=InternalConsumer)
+        consumer.commit.return_value = []
+        registry = MagicMock(spec_set=DataFrameRegistry)
+        registry.get_topics_for_stream_id.return_value = []
+        return Checkpoint(
+            commit_interval=1,
+            producer=producer,
+            consumer=consumer,
+            state_manager=MagicMock(spec_set=StateStoreManager),
+            sink_manager=SinkManager(),
+            dataframe_registry=registry,
+        )
+
+    def _transaction(self, changelog_tp):
+        tx = MagicMock(spec_set=PartitionTransaction)
+        tx.failed = False
+        tx.changelog_topic_partition = changelog_tp
+        return tx
+
+    def test_revoke_skips_flush_only_for_changelog_backed_transactions(self):
+        checkpoint = self._make_checkpoint()
+        tx_changelog = self._transaction(changelog_tp=("changelog", 0))
+        tx_no_changelog = self._transaction(changelog_tp=None)
+        checkpoint._store_transactions = {
+            ("s1", 0, "default"): tx_changelog,
+            ("s2", 0, "default"): tx_no_changelog,
+        }
+
+        checkpoint.commit(revoking=True)
+
+        # Changelog is always produced (prepared) so the new owner can replay
+        tx_changelog.prepare.assert_called_once()
+        # ...but the slow local flush is skipped while holding the lock
+        tx_changelog.flush.assert_not_called()
+        # Without a changelog, skipping would be state loss -> must still flush
+        tx_no_changelog.flush.assert_called_once()
+
+    def test_normal_commit_flushes_changelog_backed_transactions(self):
+        checkpoint = self._make_checkpoint()
+        tx_changelog = self._transaction(changelog_tp=("changelog", 0))
+        checkpoint._store_transactions = {("s1", 0, "default"): tx_changelog}
+
+        checkpoint.commit(revoking=False)
+
+        # Outside of a revoke, everything flushes as before
+        tx_changelog.flush.assert_called_once()

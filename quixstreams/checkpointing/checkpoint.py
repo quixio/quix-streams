@@ -178,7 +178,7 @@ class Checkpoint(BaseCheckpoint):
         if self._exactly_once:
             self._producer.abort_transaction()
 
-    def commit(self):
+    def commit(self, revoking: bool = False):
         """
         Commit the checkpoint.
 
@@ -188,6 +188,13 @@ class Checkpoint(BaseCheckpoint):
          3. Flush the producer to ensure everything is delivered.
          4. Commit topic offsets.
          5. Flush each state store partition to the disk.
+
+        :param revoking: set to `True` when committing as part of a partition
+            revoke (rebalance handover). Enables "fast revoke": the local state
+            flush (step 5) is skipped for stores that have a changelog, since
+            the changelog already holds the delta and the new owner will replay
+            it. This releases the RocksDB lock much sooner. Stores without a
+            changelog are always flushed to avoid state loss.
         """
 
         # Step 1. Flush sinks
@@ -270,7 +277,7 @@ class Checkpoint(BaseCheckpoint):
             except KafkaException as e:
                 raise CheckpointConsumerCommitError(e.args[0]) from None
 
-            for partition in partitions:
+            for partition in partitions or []:
                 if partition.error:
                     raise CheckpointConsumerCommitError(partition.error)
 
@@ -282,6 +289,18 @@ class Checkpoint(BaseCheckpoint):
             # Get the changelog topic-partition for the given transaction
             # It can be None if changelog topics are disabled in the app config
             changelog_tp = transaction.changelog_topic_partition
+            # Fast revoke: when handing a partition over during a rebalance and
+            # the store has a changelog, skip the local flush entirely. The
+            # changelog already holds the delta (produced in step 2) and the new
+            # owner replays it, so we avoid a slow on-disk write while holding
+            # the RocksDB lock. Skipping is only safe with a changelog - without
+            # one it would be state loss, so those stores still flush.
+            if revoking and changelog_tp is not None:
+                logger.debug(
+                    "Fast revoke: skipping local state flush for changelog "
+                    f"{changelog_tp}"
+                )
+                continue
             # The changelog offset also can be None if no updates happened
             # during transaction
             changelog_offset = (

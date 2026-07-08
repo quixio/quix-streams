@@ -72,7 +72,7 @@ class ProcessingContext:
             exactly_once=self.exactly_once,
         )
 
-    def commit_checkpoint(self, force: bool = False):
+    def commit_checkpoint(self, force: bool = False, revoking: bool = False):
         """
         Attempts finalizing the current Checkpoint only if the Checkpoint is "expired",
         or `force=True` is passed, otherwise do nothing.
@@ -81,6 +81,8 @@ class ProcessingContext:
         else just close it. A new Checkpoint is then created.
 
         :param force: if `True`, commit the Checkpoint before its expiration deadline.
+        :param revoking: if `True`, commit as part of a partition revoke, enabling
+            "fast revoke" (skip the local state flush for changelog-backed stores).
         """
         if self.checkpoint.expired() or force:
             if self.checkpoint.empty():
@@ -88,7 +90,7 @@ class ProcessingContext:
             else:
                 logger.debug(f"Committing a checkpoint; forced={force}")
                 start = time.monotonic()
-                self.checkpoint.commit()
+                self.checkpoint.commit(revoking=revoking)
                 elapsed = round(time.monotonic() - start, 2)
                 logger.debug(
                     f"Committed a checkpoint; forced={force}, time_elapsed={elapsed}s"
