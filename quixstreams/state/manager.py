@@ -2,7 +2,9 @@ import logging
 import shutil
 from pathlib import Path
 from threading import Event
-from typing import Dict, Optional, Type, Union
+from typing import Dict, List, Optional, Type, Union
+
+from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.internal_producer import InternalProducer
 from quixstreams.models.topics import TopicConfig
@@ -327,6 +329,18 @@ class StateStoreManager:
                 store_partitions=store_partitions,
             )
         return store_partitions
+
+    def resume_reassigned_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        """
+        Resume data partitions still paused from a previous recovery generation.
+
+        Delegates to the RecoveryManager; no-op when state recovery is not enabled.
+        See `RecoveryManager.resume_reassigned_data_partitions`.
+        """
+        if self._recovery_manager:
+            self._recovery_manager.resume_reassigned_data_partitions(partitions)
 
     def on_partition_revoke(
         self,

@@ -1223,6 +1223,13 @@ class Application:
                         partition=tp.partition,
                         committed_offsets=committed_offsets[tp.partition],
                     )
+
+        # Resume any data partition left paused by a previous recovery generation
+        # that this rebalance reassigned without (re)triggering a recovery check
+        # (e.g. a consumer that now holds only stateless partitions). Without this,
+        # such a partition can stay paused indefinitely. No-op during active
+        # recovery or when no state recovery is in play.
+        self._state_manager.resume_reassigned_data_partitions(topic_partitions)
         self._run_tracker.timeout_refresh()
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
