@@ -134,7 +134,12 @@ class TestSentinelOnlyAdoption:
             msgs.append((raw_key, stamped, False))
 
         partition = _rocksdb_partition(
-            tmp_path, name="sentinel", changelog_producer=producer
+            tmp_path,
+            name="sentinel",
+            # M1: v3.24.0 adoption is now opt-in; assert the adopt behavior with
+            # the flag set (the no-flag path is covered in test_v3240_adoption_opt_in).
+            options=RocksDBOptions(adopt_v3240_stamps=True),
+            changelog_producer=producer,
         )
         with caplog.at_level(logging.INFO):
             _replay_default(partition, msgs, now_ms=now_ms)

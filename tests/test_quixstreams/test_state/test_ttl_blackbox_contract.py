@@ -978,7 +978,15 @@ class TestContractTargets:
             stamped_value = encode_ttl_value(past_expiry, json_dumps(f"old-{i}"))
             msgs.append((raw_key, stamped_value, False))
 
-        partition = _rocksdb_partition(tmp_path, name="f", changelog_producer=producer)
+        # M1: v3.24.0 stamp adoption is now opt-in — a genuine v3.24.0 upgrader
+        # sets adopt_v3240_stamps=True to self-heal (the no-flag CRITICAL path is
+        # covered in test_v3240_adoption_opt_in.py).
+        partition = _rocksdb_partition(
+            tmp_path,
+            name="f",
+            options=RocksDBOptions(adopt_v3240_stamps=True),
+            changelog_producer=producer,
+        )
 
         caplog.clear()
         with caplog.at_level(logging.INFO):
