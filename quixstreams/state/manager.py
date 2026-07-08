@@ -1,6 +1,7 @@
 import logging
 import shutil
 from pathlib import Path
+from threading import Event
 from typing import Dict, Optional, Type, Union
 
 from quixstreams.internal_producer import InternalProducer
@@ -47,6 +48,7 @@ class StateStoreManager:
         producer: Optional[InternalProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
         default_store_type: StoreTypes = RocksDBStore,
+        stop_event: Optional[Event] = None,
     ):
         if state_dir is not None:
             state_dir = Path(state_dir).absolute()
@@ -60,6 +62,7 @@ class StateStoreManager:
         self._producer = producer
         self._recovery_manager = recovery_manager
         self._default_store_type = default_store_type
+        self._stop_event = stop_event
 
     def _init_state_dir(self) -> None:
         if self._state_dir is None:
@@ -198,6 +201,7 @@ class StateStoreManager:
                 base_dir=str(self._state_dir),
                 changelog_producer_factory=changelog_producer_factory,
                 options=self._rocksdb_options,
+                stop_event=self._stop_event,
             )
         elif store_type == MemoryStore:
             store = MemoryStore(
@@ -235,6 +239,7 @@ class StateStoreManager:
                 topic_config=changelog_config,
             ),
             options=self._rocksdb_options,
+            stop_event=self._stop_event,
         )
         self._stores.setdefault(stream_id, {})[store_name] = store
 
@@ -274,6 +279,7 @@ class StateStoreManager:
                 topic_config=changelog_config,
             ),
             options=self._rocksdb_options,
+            stop_event=self._stop_event,
         )
 
     def clear_stores(self) -> None:

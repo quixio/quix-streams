@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from threading import Event
 from typing import Optional
 
 from quixstreams.state.base import Store
@@ -28,6 +29,7 @@ class RocksDBStore(Store):
         base_dir: str,
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
         options: Optional[RocksDBOptionsType] = None,
+        stop_event: Optional[Event] = None,
     ):
         """
         :param name: a unique store name
@@ -36,6 +38,8 @@ class RocksDBStore(Store):
         :param changelog_producer_factory: a ChangelogProducerFactory instance
             if using changelogs
         :param options: RocksDB options. If `None`, the default options will be used.
+        :param stop_event: an application stop signal shared with the store
+            partitions so their open-retry loop can abort promptly on shutdown.
         """
         super().__init__(name, stream_id)
 
@@ -46,6 +50,7 @@ class RocksDBStore(Store):
         self._partitions_dir = partitions_dir
         self._changelog_producer_factory = changelog_producer_factory
         self._options = options
+        self._stop_event = stop_event
 
     def create_new_partition(
         self,
@@ -60,7 +65,10 @@ class RocksDBStore(Store):
             )
 
         return RocksDBStorePartition(
-            path=path, options=self._options, changelog_producer=changelog_producer
+            path=path,
+            options=self._options,
+            changelog_producer=changelog_producer,
+            stop_event=self._stop_event,
         )
 
     def destroy_partition(self, partition: int) -> bool:

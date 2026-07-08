@@ -1,3 +1,4 @@
+from threading import Event
 from typing import Optional
 
 from ...recovery import ChangelogProducer, ChangelogProducerFactory
@@ -21,6 +22,7 @@ class WindowedRocksDBStore(RocksDBStore):
         base_dir: str,
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
         options: Optional[RocksDBOptionsType] = None,
+        stop_event: Optional[Event] = None,
     ):
         """
         :param name: a unique store name
@@ -29,6 +31,8 @@ class WindowedRocksDBStore(RocksDBStore):
         :param changelog_producer_factory: a ChangelogProducerFactory instance
             if using changelogs
         :param options: RocksDB options. If `None`, the default options will be used.
+        :param stop_event: an application stop signal shared with the store
+            partitions so their open-retry loop can abort promptly on shutdown.
         """
         super().__init__(
             name=name,
@@ -36,6 +40,7 @@ class WindowedRocksDBStore(RocksDBStore):
             base_dir=base_dir,
             changelog_producer_factory=changelog_producer_factory,
             options=options,
+            stop_event=stop_event,
         )
 
     def create_new_partition(self, partition) -> WindowedRocksDBStorePartition:
@@ -48,5 +53,8 @@ class WindowedRocksDBStore(RocksDBStore):
             )
 
         return WindowedRocksDBStorePartition(
-            path=path, options=self._options, changelog_producer=changelog_producer
+            path=path,
+            options=self._options,
+            changelog_producer=changelog_producer,
+            stop_event=self._stop_event,
         )

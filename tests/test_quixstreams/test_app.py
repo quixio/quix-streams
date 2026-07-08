@@ -530,6 +530,21 @@ class TestApplication:
             app = Application(broker_address="my_address", state_dir="/path/to/other")
         assert app.config.state_dir == Path("/path/to/other")
 
+    def test_stop_event_shared_with_state_manager(self):
+        """
+        The application's stop signal is threaded into the StateStoreManager so
+        state partitions can abort their open-retry loop on shutdown. See
+        docs/rocksdb-lock-contention-analysis.md (stage 3).
+        """
+        app = Application(broker_address="my_address", use_changelog_topics=False)
+        assert app._state_manager._stop_event is app._stop_event
+
+    def test_stop_sets_stop_event(self):
+        app = Application(broker_address="my_address", use_changelog_topics=False)
+        assert not app._stop_event.is_set()
+        app.stop()
+        assert app._stop_event.is_set()
+
 
 @pytest.mark.parametrize("number_of_partitions", [1, 2])
 class TestAppGroupBy:

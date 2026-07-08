@@ -8,6 +8,7 @@ import uuid
 import warnings
 from collections import defaultdict
 from pathlib import Path
+from threading import Event
 from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union, cast
 
 from confluent_kafka import TopicPartition
@@ -385,6 +386,11 @@ class Application:
         self._producer = self._get_internal_producer(on_error=on_producer_error)
         self._running = False
         self._failed = False
+        # Signals to state store partitions that the application is stopping, so
+        # a partition stuck in its open-retry loop (e.g. waiting on a RocksDB
+        # lock held by another instance) aborts promptly instead of sleeping
+        # through the whole retry budget.
+        self._stop_event = Event()
 
         self._topic_manager = topic_manager or self._get_topic_manager()
 
@@ -404,6 +410,7 @@ class Application:
             rocksdb_options=self._config.rocksdb_options,
             producer=producer,
             recovery_manager=recovery_manager,
+            stop_event=self._stop_event,
         )
 
         self._source_manager = SourceManager()
@@ -613,6 +620,8 @@ class Application:
         """
 
         self._run_tracker.stop()
+        # Unblock any state partition waiting on its open-retry backoff
+        self._stop_event.set()
         if fail:
             # Update "_failed" only when fail=True to prevent stop(failed=False) from
             # resetting it
@@ -884,6 +893,7 @@ class Application:
                     "a plain Source (no StreamingDataFrame)."
                 )
         self._run_tracker.reset()
+        self._stop_event.clear()
         self._run_tracker.set_stop_condition(timeout=timeout, count=count)
         self._setup_signal_handlers()
 

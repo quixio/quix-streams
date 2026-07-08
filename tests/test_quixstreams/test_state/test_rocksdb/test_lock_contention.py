@@ -88,3 +88,76 @@ class TestRocksDBOpenRetryStopEvent:
             options=RocksDBOptions(open_max_retries=10, open_retry_backoff=1.0),
         )
         partition.close()
+
+
+class TestStopEventWiring:
+    """
+    The stop_event must be threaded from the StateStoreManager down to every
+    RocksDB-family store partition, so the open-retry loop can honour the
+    application's stop signal in production.
+    """
+
+    def test_rocksdb_store_forwards_stop_event_to_partition(self, tmp_path):
+        from quixstreams.state.rocksdb.store import RocksDBStore
+
+        stop_event = Event()
+        store = RocksDBStore(
+            name="default",
+            stream_id="s1",
+            base_dir=str(tmp_path),
+            stop_event=stop_event,
+        )
+        partition = store.create_new_partition(0)
+        try:
+            assert partition._stop_event is stop_event
+        finally:
+            partition.close()
+
+    def test_windowed_store_forwards_stop_event_to_partition(self, tmp_path):
+        from quixstreams.state.rocksdb.windowed.store import WindowedRocksDBStore
+
+        stop_event = Event()
+        store = WindowedRocksDBStore(
+            name="default",
+            stream_id="s1",
+            base_dir=str(tmp_path),
+            stop_event=stop_event,
+        )
+        partition = store.create_new_partition(0)
+        try:
+            assert partition._stop_event is stop_event
+        finally:
+            partition.close()
+
+    def test_timestamped_store_forwards_stop_event_to_partition(self, tmp_path):
+        from quixstreams.state.rocksdb.timestamped import TimestampedStore
+
+        stop_event = Event()
+        store = TimestampedStore(
+            name="default",
+            stream_id="s1",
+            base_dir=str(tmp_path),
+            grace_ms=0,
+            keep_duplicates=False,
+            stop_event=stop_event,
+        )
+        partition = store.create_new_partition(0)
+        try:
+            assert partition._stop_event is stop_event
+        finally:
+            partition.close()
+
+    def test_state_manager_forwards_stop_event_end_to_end(self, tmp_path):
+        from quixstreams.state import StateStoreManager
+
+        stop_event = Event()
+        manager = StateStoreManager(
+            state_dir=str(tmp_path / "state"), stop_event=stop_event
+        )
+        manager.register_store(stream_id="s1", store_name="default")
+        store = manager.get_store(stream_id="s1", store_name="default")
+        partition = store.assign_partition(0)
+        try:
+            assert partition._stop_event is stop_event
+        finally:
+            store.revoke_partition(0)
