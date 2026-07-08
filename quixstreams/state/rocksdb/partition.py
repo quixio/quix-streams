@@ -564,7 +564,12 @@ class RocksDBStorePartition(StorePartition):
         # releases the OS lock in ~milliseconds. Unflushed memtable data is
         # preserved by the WAL, and cancelled compaction debt simply resumes
         # under the next owner.
-        self._db.cancel_all_background(True)
+        # Guarded with getattr because cancel_all_background is not present in
+        # every rocksdict release within our supported range; when it's absent
+        # we simply fall back to the plain (slower) close.
+        cancel_all_background = getattr(self._db, "cancel_all_background", None)
+        if cancel_all_background is not None:
+            cancel_all_background(True)
         try:
             self._db.close()
         except Exception as exc:
