@@ -249,6 +249,31 @@ class RocksDBStorePartition(StorePartition):
             # flipped this store (one-time; no-op once cleaned).
             self._cleanup_completed_backfill_bookkeeping()
 
+        # C1 P0 gate (sc-73191). Snapshot ONCE, at the end of ``__init__`` and
+        # AFTER the open-time ``_cleanup_completed_backfill_bookkeeping`` above,
+        # whether this partition opened with a non-empty live-backfill ledger —
+        # the interrupted-live-backfill signature. Consulted by
+        # :meth:`recover_from_changelog_message` to ledger a replayed crash-window
+        # chunk so the resume census cannot double-wrap it (spec §6/§8.2).
+        #
+        # The ``__ttl_backfill_stamped__`` CF is a ``LOCAL_ONLY_CFS`` member (never
+        # produced to the changelog), so a fresh-volume COLD restore always opens
+        # with the CF absent → snapshot False → replay ledgers nothing → the
+        # adopt / §15.2 / offset-skip cold-restore paths are byte-for-byte
+        # unchanged. Only an interrupted LIVE backfill (whose earlier chunks wrote
+        # real ledger entries on this same volume) opens with the CF non-empty →
+        # snapshot True. The ``list_column_families()`` guard short-circuits so a
+        # pure-legacy store never creates the ledger CF (``_live_backfill_ledger_
+        # has_any`` would ``get_or_create`` it); it is the same ``list_cf`` call
+        # the cleanup paths already make. Snapshot-at-open (not a live re-probe)
+        # is deliberate: a live probe is self-fulfilling — the first ledgered
+        # record would make every subsequent one ledger too, re-introducing the
+        # cold-restore false positive the gate exists to prevent (spec §10).
+        self._ledger_nonempty_at_open: bool = (
+            TTL_BACKFILL_STAMPED_CF_NAME in self.list_column_families()
+            and self._live_backfill_ledger_has_any()
+        )
+
     @property
     def high_water_ms(self) -> Optional[int]:
         """
@@ -393,6 +418,27 @@ class RocksDBStorePartition(StorePartition):
                 # a later stamped write supersedes it (compaction ordering, §4).
                 self._recovery_saw_stamped = True
                 batch.delete(key, pending_handle)
+                if self._ledger_nonempty_at_open:
+                    # C1 P0 fix (sc-73191). This partition opened with a non-empty
+                    # live-backfill ledger (interrupted-live-backfill signature).
+                    # A crash between a chunk's changelog flush-confirm and its
+                    # local write leaves that chunk on the changelog but absent
+                    # from the ledger — so replaying it here would otherwise leave
+                    # the census invariant (``on-disk − staged − ledger``) broken
+                    # and the resume would re-census and DOUBLE-WRAP the (now
+                    # already-stamped) key. Ledger the replayed key in the SAME
+                    # WriteBatch as the value apply + index rebuild + offset
+                    # advance (committed at the end of this method), restoring the
+                    # invariant atomically. Idempotent (re-ledgering an existing
+                    # member is a no-op put); never inspects value content. The
+                    # handle is warm — the open-time ledger probe created/cached
+                    # it whenever this gate is True. Gate False (cold restore on a
+                    # fresh volume) skips this entirely.
+                    batch.put(
+                        key,
+                        b"",
+                        self.get_column_family_handle(TTL_BACKFILL_STAMPED_CF_NAME),
+                    )
             elif value is not None:
                 # A header-absent (legacy) default-CF record. Census the key as a
                 # leftover-legacy candidate; it lands verbatim below. A tombstone
@@ -889,6 +935,16 @@ class RocksDBStorePartition(StorePartition):
         # Step 5 — cleanup (now marker-gated, §7.1): the marker is present, so this
         # drops the ledger + progress counter.
         self._cleanup_completed_backfill_bookkeeping()
+        # Also drop any orphan recovery pending census. Warm-restart recovery
+        # re-replays the stored changelog offset INCLUSIVELY (recovery.py, back-
+        # compat), so a header-absent legacy record on the replay boundary can be
+        # re-censused into ``__ttl_backfill_pending__`` even though the C1 resume
+        # drives its census from the ledger, not from pending. That entry is a
+        # harmless orphan once the migration is done, but leaving it trips census-
+        # based hygiene checks. Draining it here (AFTER the resume has stamped the
+        # ledger complement and produced the done-marker — never before/during the
+        # resume decision) keeps the completed store's pending CF empty.
+        self._discard_backfill_pending()
 
         # Step 6 — RESUME COMPLETED.
         logger.info(

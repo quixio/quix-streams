@@ -43,6 +43,7 @@ from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_TTL_STAMPED_HEADER,
     METADATA_CF_NAME,
+    TTL_BACKFILL_STAMPED_CF_NAME,
 )
 from quixstreams.state.rocksdb import RocksDBOptions
 from quixstreams.state.rocksdb.metadata import (
@@ -326,6 +327,39 @@ class TestStampedRestoreNotMisclassified:
         assert recovered.uses_ttl_stamps is True
         recovered_default = _decode_default_cf(recovered)
         assert recovered_default == source_default
+        recovered.close()
+
+    def test_cold_restore_does_not_ledger_on_replay(
+        self, store_partition_factory, changelog_producer_mock
+    ):
+        """(v) GREEN no-regression (C1 P0, sc-73191): a cold restore on a fresh
+        volume opens with the LOCAL_ONLY ``__ttl_backfill_stamped__`` ledger CF
+        absent, so the replay-ledger gate ``_ledger_nonempty_at_open`` is False and
+        replaying a stamped changelog ledgers NOTHING. This proves the fix cannot
+        misfire on the cold-restore adopt / §15.2 / offset-skip paths — those are
+        byte-for-byte unchanged (spec §7.1 case 1 / §11 case v)."""
+        msgs, source_default, base = self._stamped_changelog(
+            store_partition_factory, changelog_producer_mock
+        )
+
+        recovered = store_partition_factory(
+            name="dst", options=RocksDBOptions(legacy_records_ttl=timedelta(days=99))
+        )
+        # Fresh volume: the ledger CF does not exist at open → the gate is off.
+        assert recovered._ledger_nonempty_at_open is False
+
+        _replay_default(recovered, msgs, now_ms=base)
+        assert recovered.uses_ttl_stamps is True
+
+        recovered.complete_recovery()
+
+        # The gate held through the whole stamped replay: not one replayed record
+        # was ledgered, so the ledger CF is empty (a cold restore has no live
+        # backfill to resume). No spurious interrupted-migration signal.
+        ledger_cf = recovered.get_or_create_column_family(TTL_BACKFILL_STAMPED_CF_NAME)
+        assert set(ledger_cf.keys()) == set()
+        # Stamped records survived unchanged — no double-wrap, no spurious resume.
+        assert _decode_default_cf(recovered) == source_default
         recovered.close()
 
 

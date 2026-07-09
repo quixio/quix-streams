@@ -31,6 +31,7 @@ import pytest
 
 from quixstreams.state.metadata import (
     METADATA_CF_NAME,
+    TTL_BACKFILL_PENDING_CF_NAME,
     TTL_BACKFILL_STAMPED_CF_NAME,
     TTL_MIGRATION_DONE_KEY,
     TTL_SYSTEM_CF_NAME,
@@ -41,6 +42,7 @@ from quixstreams.state.rocksdb.metadata import (
     TTL_BACKFILL_PROGRESS_KEY,
     TTL_INDEX_CF_NAME,
 )
+from quixstreams.state.rocksdb.transaction import _safe_decode_stamp
 from quixstreams.state.rocksdb.ttl_codec import decode_index_key, decode_ttl_value
 
 DAY_MS = 86_400_000
@@ -136,6 +138,23 @@ def _ledger_keys(partition):
     return set(cf.keys())
 
 
+def _pending_keys(partition):
+    """Direct scan of the recovery ``__ttl_backfill_pending__`` census CF."""
+    cf = partition.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
+    return set(cf.keys())
+
+
+def _unstamped_default_records(partition):
+    """Return ``[(raw_key, raw_value)]`` for the un-stamped (legacy) default-CF
+    records still on disk — the leftovers a resume must stamp."""
+    cf = partition.get_or_create_column_family("default")
+    return [
+        (bytes(key), bytes(value))
+        for key, value in cf.items()
+        if _safe_decode_stamp(bytes(value)) is None
+    ]
+
+
 def _progress_counter(partition):
     meta = partition.get_or_create_column_family(METADATA_CF_NAME)
     return meta.get(TTL_BACKFILL_PROGRESS_KEY, default=None)
@@ -187,6 +206,77 @@ def _interrupt_live_backfill_after_first_chunk(
     assert len(captured) == chunk
     assert all(stamped for _, _, stamped in captured)
     return partition, producer, captured
+
+
+def _interrupt_live_backfill_at_chunk_local_write(
+    store_partition_factory, name, ttl, ts, n=5, chunk=2, kill_chunk=2
+):
+    """Construct the P0 changelog-first crash window (spec §5, §11 helper).
+
+    Seed ``n`` legacy records and run the live backfill with a PLAIN (non-raising)
+    producer, but patch ``partition._write`` to raise on chunk ``kill_chunk``'s
+    LOCAL commit — which runs AFTER that chunk's ``produce`` + the changelog-first
+    ``_flush_backfill_changelog`` have already succeeded (``partition.py:1826-1848``).
+    A backfill chunk is the only thing that calls the raw ``_write`` during the
+    triggering transaction (the flip commit goes through the public ``write``
+    path), so the raw-writer call count is exactly the per-chunk commits, in order.
+
+    The result is the divergence the C1 suite's produce-crash helper cannot build:
+    chunks ``1..kill_chunk`` are durably on the changelog (produced + flush-
+    confirmed), but only chunks ``1..kill_chunk-1`` committed locally (stamps +
+    ``__ttl_index__`` + ``__ttl_backfill_stamped__`` ledger). The changelog is ahead
+    of the local ledger by exactly chunk ``kill_chunk``. The flag-last flip never
+    landed, so the store stays legacy.
+
+    Returns ``(open_partition, producer, captured_all)`` where ``captured_all`` is
+    the UNFILTERED default-CF changelog capture (chunks ``1..kill_chunk``, every
+    record stamped) — deliberately NOT filtered by ledger membership, so it carries
+    the crash-window chunk that the local ledger lacks. The caller owns closing the
+    partition.
+    """
+    seed = store_partition_factory(name=name)
+    _seed_legacy_records(seed, [(f"k{i}", f"legacy-value-{i}") for i in range(n)])
+    seed.close()
+
+    producer = _producer()  # plain: produce never raises here
+    partition = store_partition_factory(
+        name=name,
+        options=RocksDBOptions(
+            legacy_records_ttl=ttl, legacy_backfill_chunk_size=chunk
+        ),
+        changelog_producer=producer,
+    )
+
+    real_write = partition._write
+    state = {"n": 0}
+
+    def failing_write(batch):
+        state["n"] += 1
+        if state["n"] == kill_chunk:
+            raise RuntimeError("simulated crash at chunk local write")
+        return real_write(batch)
+
+    partition._write = failing_write  # type: ignore[method-assign]
+    try:
+        with pytest.raises(RuntimeError, match="simulated crash at chunk local write"):
+            with partition.begin() as tx:
+                tx.set(key="knew", value="vnew", prefix=b"pfx", timestamp=ts, ttl=ttl)
+    finally:
+        partition._write = real_write  # type: ignore[method-assign]
+
+    # Flag-last never landed.
+    assert partition.uses_ttl_stamps is False
+    # Divergence constructed: chunks 1..kill_chunk-1 committed locally (ledger),
+    # chunks 1..kill_chunk are on the changelog (produced + flush-confirmed).
+    ledger = _ledger_keys(partition)
+    assert len(ledger) == (kill_chunk - 1) * chunk
+    captured_all = _capture_default_cf_changelog(producer)
+    assert len(captured_all) == kill_chunk * chunk
+    assert all(stamped for _, _, stamped in captured_all)
+    # The crash-window chunk sits on the changelog but NOT in the local ledger.
+    changelog_keys = {k for k, _, _ in captured_all}
+    assert changelog_keys - ledger, "crash-window chunk must be absent from ledger"
+    return partition, producer, captured_all
 
 
 # ---------------------------------------------------------------------------
@@ -449,3 +539,260 @@ class TestWarmRestartResume:
         assert not any("RESUME STARTED" in r.message for r in caplog.records)
         assert _ledger_keys(reopened) == set()
         reopened.close()
+
+
+# ---------------------------------------------------------------------------
+# C1 P0 (sc-73191) — changelog-first crash-window double-wrap.
+#
+# The produce-crash helper above keeps the changelog and the ledger in lock-step
+# (a failing produce never enqueues, so its chunk never commits). This P0 needs
+# the OPPOSITE window: a chunk's produce + flush SUCCEED, but its local write is
+# lost — the changelog ends up ahead of the local ``__ttl_backfill_stamped__``
+# ledger by one chunk. Warm-restart replay applies those stamped chunk records
+# but (on HEAD) never ledgers them, so the resume census re-includes and
+# re-wraps them: ``stamp(stamp(json))``, produced durably to the changelog.
+# ---------------------------------------------------------------------------
+
+
+class TestResumeDoubleWrap:
+    def _opts(self):
+        return RocksDBOptions(
+            legacy_records_ttl=timedelta(days=7), legacy_backfill_chunk_size=2
+        )
+
+    # (i) PRIMARY — crash-window divergence → warm replay → resume single-stamps
+    # every default-CF value (no stamp(stamp(json)) on disk).
+    def test_crash_window_replay_resume_single_stamps(self, store_partition_factory):
+        ttl = timedelta(days=7)
+        ts = 1_000_000_000_000
+        uniform_expiry = ts + 7 * DAY_MS
+
+        # chunks 1 (k0,k1) commit; chunk 2 (k2,k3) produced+flushed, local write
+        # lost; k4 still legacy.
+        p1, _producer1, captured_all = _interrupt_live_backfill_at_chunk_local_write(
+            store_partition_factory,
+            name="db",
+            ttl=ttl,
+            ts=ts,
+            n=5,
+            chunk=2,
+            kill_chunk=2,
+        )
+        assert len(_ledger_keys(p1)) == 2  # only chunk 1 committed locally
+        assert len(captured_all) == 4  # chunks 1+2 on the changelog
+        p1.close()
+
+        # Warm reopen (opens legacy; ledger survives).
+        producer2 = _producer()
+        p2 = store_partition_factory(
+            name="db", options=self._opts(), changelog_producer=producer2
+        )
+        assert p2.uses_ttl_stamps is False
+
+        # Replay the produced tail (k0..k3, all stamped) with a wallclock strictly
+        # before every stamp; this flips the store.
+        _replay_default(p2, captured_all, now_ms=ts)
+        assert p2.uses_ttl_stamps is True
+        assert p2._recovery_saw_stamped is True
+
+        p2.complete_recovery()
+
+        # GREEN: all 5 records single-stamped at the cohort's uniform expiry; the
+        # payload is the original legacy value, NOT a nested stamp.
+        #
+        # RED on HEAD: the resume re-censused k2,k3 (on disk but absent from the
+        # ledger) and re-wrapped them, so their stripped payload begins with a
+        # spurious 8-byte inner stamp instead of b'"legacy-value-'.
+        decoded = _decode_default_cf(p2)
+        assert len(decoded) == 5
+        for _key, (expires_at, payload) in decoded.items():
+            assert expires_at == uniform_expiry
+            assert payload.startswith(b'"legacy-value-')
+            assert _safe_decode_stamp(payload) is None  # residue is not a stamp
+        index = _index_cf(p2)
+        assert len(index) == 5
+        for user_key in decoded:
+            assert index[user_key] == uniform_expiry
+        assert _done_marker_present(p2) is True
+        assert _ledger_keys(p2) == set()
+        assert _progress_counter(p2) is None
+        p2.close()
+
+    # (ii) the resume must not PRODUCE double-wrapped records to the changelog.
+    def test_resume_produces_only_single_stamped_records(self, store_partition_factory):
+        ttl = timedelta(days=7)
+        ts = 1_000_000_000_000
+
+        p1, _producer1, captured_all = _interrupt_live_backfill_at_chunk_local_write(
+            store_partition_factory,
+            name="db",
+            ttl=ttl,
+            ts=ts,
+            n=5,
+            chunk=2,
+            kill_chunk=2,
+        )
+        p1.close()
+
+        producer2 = _producer()
+        p2 = store_partition_factory(
+            name="db", options=self._opts(), changelog_producer=producer2
+        )
+        _replay_default(p2, captured_all, now_ms=ts)
+        # Isolate the resume's OWN changelog output (replay produces nothing).
+        producer2.produce.reset_mock()
+        p2.complete_recovery()
+
+        produced = _capture_default_cf_changelog(producer2)
+        assert produced, "resume must produce the un-stamped complement"
+        # GREEN: every resume-produced value decodes once to a clean JSON payload
+        # whose residue is NOT itself a decodable stamp.
+        #
+        # RED on HEAD: the resume produces stamp(stamp(json)) for k2,k3 — the
+        # residue after one strip is itself a decodable 8-byte stamp.
+        for _key, value, ttl_stamped in produced:
+            assert ttl_stamped is True
+            _expiry, payload = decode_ttl_value(value)
+            assert _safe_decode_stamp(payload) is None
+            assert payload.startswith(b'"legacy-value-')
+        p2.close()
+
+    # (iii) crash mid-RESUME with a resume-side divergence → a second warm restart
+    # converges (single-stamped), never re-wrapping one level deeper.
+    def test_crash_mid_resume_divergence_second_restart_converges(
+        self, store_partition_factory
+    ):
+        ttl = timedelta(days=7)
+        ts = 1_000_000_000_000
+        uniform_expiry = ts + 7 * DAY_MS
+
+        # A larger cohort so the resume itself spans >1 chunk and can be
+        # interrupted mid-way with a fresh divergence.
+        p1, _producer1, captured_all = _interrupt_live_backfill_at_chunk_local_write(
+            store_partition_factory,
+            name="db",
+            ttl=ttl,
+            ts=ts,
+            n=7,
+            chunk=2,
+            kill_chunk=2,
+        )
+        p1.close()
+
+        # First warm restart: replay the crash-window tail (flips the store), then
+        # run the resume but lose the local write of its second chunk (produced +
+        # flushed, not committed) — the same changelog-first window one level in.
+        producer2 = _producer()
+        p2 = store_partition_factory(
+            name="db", options=self._opts(), changelog_producer=producer2
+        )
+        _replay_default(p2, captured_all, now_ms=ts)
+        assert p2.uses_ttl_stamps is True
+        producer2.produce.reset_mock()
+
+        real_write = p2._write
+        state = {"n": 0}
+
+        def failing_write(batch):
+            state["n"] += 1
+            if state["n"] == 2:  # second resume chunk commit
+                raise RuntimeError("simulated crash mid-resume local write")
+            return real_write(batch)
+
+        p2._write = failing_write  # type: ignore[method-assign]
+        try:
+            with pytest.raises(RuntimeError, match="simulated crash mid-resume"):
+                p2.complete_recovery()
+        finally:
+            p2._write = real_write  # type: ignore[method-assign]
+        resume_captured = _capture_default_cf_changelog(producer2)
+        assert resume_captured, "the interrupted resume must have produced records"
+        p2.close()
+
+        # Second warm restart: reopen (flipped, ledger non-empty, no done-marker),
+        # replay the resume's produced tail, complete again.
+        producer3 = _producer()
+        p3 = store_partition_factory(
+            name="db", options=self._opts(), changelog_producer=producer3
+        )
+        _replay_default(p3, resume_captured, now_ms=ts)
+        p3.complete_recovery()
+
+        # GREEN: convergent — every record single-stamped once at the uniform
+        # expiry; done-marker present; bookkeeping cleaned.
+        #
+        # RED on HEAD: records the earlier restart double-wrapped stay
+        # double-wrapped (and the second restart adds more), so a payload check
+        # fails.
+        decoded = _decode_default_cf(p3)
+        assert len(decoded) == 7
+        for _key, (expires_at, payload) in decoded.items():
+            assert expires_at == uniform_expiry
+            assert payload.startswith(b'"legacy-value-')
+            assert _safe_decode_stamp(payload) is None
+        assert _done_marker_present(p3) is True
+        assert _ledger_keys(p3) == set()
+        p3.close()
+
+    # Resume must DRAIN the recovery pending census it did not create. Warm-restart
+    # recovery re-replays the stored offset inclusively, so a header-absent legacy
+    # record can be re-censused into ``__ttl_backfill_pending__``; the ledger-driven
+    # resume stamps the complement but must not leave that orphan census behind.
+    def test_resume_drains_orphan_pending_census(self, store_partition_factory):
+        ttl = timedelta(days=7)
+        ts = 1_000_000_000_000
+        uniform_expiry = ts + 7 * DAY_MS
+
+        p1, _producer1, captured_all = _interrupt_live_backfill_at_chunk_local_write(
+            store_partition_factory,
+            name="db",
+            ttl=ttl,
+            ts=ts,
+            n=5,
+            chunk=2,
+            kill_chunk=2,
+        )
+        # k4 is the genuine leftover (never produced, so absent from the changelog
+        # tail): the record recovery would re-census on the inclusive re-replay.
+        # On disk k2,k3 are still legacy too (their chunk's local write was lost),
+        # but they arrive stamped in the replayed tail; k4 is the true remainder.
+        captured_keys = {k for k, _, _ in captured_all}
+        leftovers = [
+            (k, v) for k, v in _unstamped_default_records(p1) if k not in captured_keys
+        ]
+        assert len(leftovers) == 1
+        legacy_key, legacy_value = leftovers[0]
+        p1.close()
+
+        producer2 = _producer()
+        p2 = store_partition_factory(
+            name="db", options=self._opts(), changelog_producer=producer2
+        )
+        _replay_default(p2, captured_all, now_ms=ts)
+        # Simulate recovery re-replaying the boundary seed record header-absent: it
+        # is censused into the pending CF (and lands verbatim, already present).
+        p2.recover_from_changelog_message(
+            key=legacy_key,
+            value=legacy_value,
+            cf_name="default",
+            offset=99,
+            ttl_stamped=False,
+        )
+        assert _pending_keys(p2) == {legacy_key}  # orphan census constructed
+
+        p2.complete_recovery()
+
+        # GREEN: the completed resume drains the orphan pending census.
+        # RED (before the fix): the resume returns without discarding pending, so
+        # the last-seeded key is left orphaned with the store fully migrated.
+        assert _pending_keys(p2) == set()
+        # And the migration is genuinely complete + single-stamped.
+        decoded = _decode_default_cf(p2)
+        assert len(decoded) == 5
+        for _key, (expires_at, payload) in decoded.items():
+            assert expires_at == uniform_expiry
+            assert payload.startswith(b'"legacy-value-')
+            assert _safe_decode_stamp(payload) is None
+        assert _done_marker_present(p2) is True
+        assert _ledger_keys(p2) == set()
+        p2.close()
