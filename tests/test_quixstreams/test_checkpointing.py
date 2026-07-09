@@ -799,7 +799,7 @@ class TestCheckpointFastRevoke:
     Checkpoint.commit(revoking=True). See docs/rocksdb-lock-contention-analysis.md.
     """
 
-    def _make_checkpoint(self):
+    def _make_checkpoint(self, exactly_once=False):
         producer = MagicMock(spec_set=InternalProducer)
         producer.flush.return_value = 0
         producer.offsets = {}
@@ -814,6 +814,7 @@ class TestCheckpointFastRevoke:
             state_manager=MagicMock(spec_set=StateStoreManager),
             sink_manager=SinkManager(),
             dataframe_registry=registry,
+            exactly_once=exactly_once,
         )
 
     def _transaction(self, changelog_tp):
@@ -849,3 +850,35 @@ class TestCheckpointFastRevoke:
 
         # Outside of a revoke, everything flushes as before
         tx_changelog.flush.assert_called_once()
+
+    def test_exactly_once_revoke_skips_flush_and_commits_transaction(self):
+        """
+        Fast revoke composes with exactly-once: offsets are committed via the
+        producer transaction as usual, while the local state flush is still
+        skipped for changelog-backed stores.
+        """
+        checkpoint = self._make_checkpoint(exactly_once=True)
+        tx_changelog = self._transaction(changelog_tp=("changelog", 0))
+        checkpoint._store_transactions = {("s1", 0, "default"): tx_changelog}
+        checkpoint.store_offset("topic", 0, 10)
+
+        checkpoint.commit(revoking=True)
+
+        tx_changelog.prepare.assert_called_once()
+        tx_changelog.flush.assert_not_called()
+        # Offsets still go through the producer transaction, not the consumer
+        checkpoint._producer.commit_transaction.assert_called_once()
+        checkpoint._consumer.commit.assert_not_called()
+
+    def test_commit_tolerates_none_commit_result(self):
+        """
+        Consumer.commit(asynchronous=False) may return None; iterating the
+        result for per-partition errors must not raise on it.
+        """
+        checkpoint = self._make_checkpoint()
+        checkpoint._consumer.commit.return_value = None
+        checkpoint.store_offset("topic", 0, 10)
+
+        checkpoint.commit()  # must not raise
+
+        checkpoint._consumer.commit.assert_called_once()

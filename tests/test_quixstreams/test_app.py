@@ -545,6 +545,23 @@ class TestApplication:
         app.stop()
         assert app._stop_event.is_set()
 
+    def test_on_revoke_commits_checkpoint_with_revoking(self):
+        """
+        A rebalance revoke must commit the checkpoint in "fast revoke" mode so
+        the local state flush is skipped for changelog-backed stores.
+        """
+        app = Application(broker_address="my_address", use_changelog_topics=False)
+        with (
+            patch.object(
+                app._processing_context, "commit_checkpoint"
+            ) as commit_checkpoint,
+            patch.object(app, "_revoke_state_partitions"),
+            patch.object(InternalConsumer, "reset_backpressure"),
+        ):
+            app._on_revoke(None, [])
+
+        commit_checkpoint.assert_called_once_with(force=True, revoking=True)
+
 
 @pytest.mark.parametrize("number_of_partitions", [1, 2])
 class TestAppGroupBy:

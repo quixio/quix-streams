@@ -37,6 +37,62 @@ class TestRocksDBFastShutdown:
             call.close(),
         ]
 
+    def test_close_falls_back_to_plain_close_without_cancel_all_background(
+        self, store_partition_factory
+    ):
+        """
+        cancel_all_background is not present in every rocksdict release within
+        the supported `>=0.3,<0.4` range. When it's absent, close() must fall
+        back to the plain (slower) close instead of raising.
+        """
+        partition = store_partition_factory("db")
+        real_db = partition._db
+        # A db stub without a cancel_all_background attribute at all
+        partition._db = MagicMock(spec=["close"])
+        try:
+            partition.close()
+        finally:
+            real_db.close()
+
+        partition._db.close.assert_called_once_with()
+
+    def test_close_swallows_shutdown_in_progress_error(self, store_partition_factory):
+        """
+        After cancel_all_background(), RocksDB may report "Shutdown in
+        progress" from close(). The DB still closes cleanly and the lock is
+        released, so close() must treat it as benign.
+        """
+        partition = store_partition_factory("db")
+        real_db = partition._db
+        db_stub = MagicMock()
+        db_stub.close.side_effect = Exception(
+            "IO error: Shutdown in progress: background work is cancelled"
+        )
+        partition._db = db_stub
+        try:
+            partition.close()  # must not raise
+        finally:
+            real_db.close()
+
+        db_stub.cancel_all_background.assert_called_once_with(True)
+        db_stub.close.assert_called_once_with()
+
+    def test_close_reraises_other_close_errors(self, store_partition_factory):
+        """
+        Only the benign "Shutdown in progress" status is swallowed - any other
+        close() failure must propagate.
+        """
+        partition = store_partition_factory("db")
+        real_db = partition._db
+        db_stub = MagicMock()
+        db_stub.close.side_effect = Exception("Corruption: bad block contents")
+        partition._db = db_stub
+        try:
+            with pytest.raises(Exception, match="Corruption"):
+                partition.close()
+        finally:
+            real_db.close()
+
 
 class TestRocksDBOpenRetryStopEvent:
     def test_open_retry_aborts_promptly_on_stop_event(self, tmp_path):
