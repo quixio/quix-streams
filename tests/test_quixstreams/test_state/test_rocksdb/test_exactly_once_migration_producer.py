@@ -1,7 +1,7 @@
 """
-Fix C (shortcut 73191 review) — under exactly-once the legacy-TTL migration /
-backfill records must be produced through a dedicated NON-transactional producer,
-so that a per-chunk ``flush()`` means DURABLE before the local RocksDB write.
+Under exactly-once the legacy-TTL migration / backfill records must be produced
+through a dedicated NON-transactional producer, so that a per-chunk ``flush()``
+means DURABLE before the local RocksDB write.
 
 Under exactly-once the main changelog producer is transactional: ``flush()``
 confirms delivery but records only become durable when the checkpoint transaction
@@ -45,7 +45,7 @@ class TestChangelogProducerRouting:
         main.produce.assert_not_called()
 
         # Normal (non-migration) production stays on the main (transactional)
-        # producer — Fix C must not change normal changelog production.
+        # producer — the fix must not change normal changelog production.
         cp.produce(key=b"k2", value=b"v2")
         main.produce.assert_called_once()
         migration.produce.assert_called_once()  # unchanged

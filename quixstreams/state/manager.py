@@ -60,7 +60,7 @@ class StateStoreManager:
         self._stores: Dict[Optional[str], Dict[str, Store]] = {}
         self._producer = producer
         # Optional dedicated NON-transactional producer for legacy-TTL migration /
-        # backfill records only (Fix C, shortcut 73191 review). Set by the app
+        # backfill records only. Set by the app
         # only under exactly-once; threaded into each changelog producer factory.
         self._migration_producer = migration_producer
         self._recovery_manager = recovery_manager

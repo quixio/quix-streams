@@ -1,7 +1,7 @@
 """
 Regression: an interrupted live legacy-TTL migration must not be RE-stamped on a
 cold restore just because its re-stamp records were skipped by the changelog
-source-offset consistency check (shortcut 73191 follow-up).
+source-offset consistency check.
 
 Root cause. ``backfill_legacy_records`` (the live populated-store backfill) used to
 produce its bulk re-stamp records tagged with the TRIGGERING write's
@@ -26,8 +26,6 @@ The tests drive the REAL backfill to capture the exact changelog records it emit
 (so they are sensitive to the produce-side header), then replay them through the
 real ``RecoveryPartition`` (real header parse + the source-offset skip) with a
 ``committed_offsets`` that skips the migration offset.
-
-See ``dev-planning/state-ttl-legacy-backfill/spec-incomplete-migration-recovery.md``.
 """
 
 from datetime import timedelta

@@ -37,7 +37,7 @@ def _accepts_ttl_stamped(method: Callable) -> bool:
     ``StorePartition.recover_from_changelog_message`` declares ``ttl_stamped``
     (default ``False``), but a third-party subclass may override it with a rigid
     signature that predates the parameter. Introspecting once lets the recovery
-    loop omit the kwarg for such subclasses (spec item f) instead of failing with
+    loop omit the kwarg for such subclasses instead of failing with
     a ``TypeError`` — the dropped bit is a no-op for a non-TTL store. An
     un-introspectable callable (e.g. a C implementation) is assumed to honor the
     base contract and accept it.
@@ -88,8 +88,8 @@ class RecoveryPartition:
         self._initial_offset: Optional[int] = None
         self._invalid_offset_count = 0  # Track consecutive invalid offset attempts
         self._last_valid_position_time: Optional[float] = None
-        # Whether the store partition's recovery hook accepts ``ttl_stamped``
-        # (spec item f). Computed once so per-message dispatch stays cheap and a
+        # Whether the store partition's recovery hook accepts ``ttl_stamped``.
+        # Computed once so per-message dispatch stays cheap and a
         # third-party subclass with a rigid override signature does not raise.
         self._partition_accepts_ttl_stamped = _accepts_ttl_stamped(
             store_partition.recover_from_changelog_message
@@ -140,7 +140,7 @@ class RecoveryPartition:
         """
         has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
         state_potentially_behind = self._changelog_highwater - 1 > self.offset
-        # Fix B (shortcut 73191 review): also force the check when the store has a
+        # Also force the check when the store has a
         # flipped-but-unfinished legacy-TTL migration (durable pending census, no
         # done-marker). Without this, an offset-caught-up restart
         # (``highwater-1 == offset`` → ``state_potentially_behind`` False) would
@@ -235,9 +235,9 @@ class RecoveryPartition:
             headers.get(CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER, b"null")
         )
 
-        # Stamped-vs-legacy bit (spec §8.7). Out-of-band, never inferred from
+        # Stamped-vs-legacy bit. Out-of-band, never inferred from
         # value content. Absent header → legacy / un-stamped (default False, also
-        # covers pre-header changelog messages — see §8.7.4 back-compat option a).
+        # covers pre-header changelog messages for back-compat).
         ttl_stamped = bool(headers.get(CHANGELOG_TTL_STAMPED_HEADER))
 
         if processed_offsets is None or self._should_apply_changelog(
@@ -265,7 +265,7 @@ class RecoveryPartition:
                 )
             else:
                 # Third-party StorePartition subclass whose override predates the
-                # ``ttl_stamped`` parameter (spec item f): omit the kwarg so the
+                # ``ttl_stamped`` parameter: omit the kwarg so the
                 # rigid signature still works. Such stores are non-TTL, so the
                 # dropped stamped bit is a no-op (it would default to False).
                 self._store_partition.recover_from_changelog_message(
@@ -289,7 +289,7 @@ class RecoveryPartition:
         changelog high-watermark and before it is unassigned / handed to live
         processing. Delegates to ``StorePartition.complete_recovery`` (a no-op on
         every backend except RocksDB, which uses it to complete an interrupted
-        legacy-TTL migration — spec §8.8 / spec-incomplete-migration-recovery.md).
+        legacy-TTL migration).
         """
         self._store_partition.complete_recovery()
 
@@ -340,8 +340,8 @@ class ChangelogProducerFactory:
         :param changelog_name: changelog topic name
         :param producer: a InternalProducer (not shared with `Application` instance)
         :param migration_producer: an optional dedicated NON-transactional
-            InternalProducer for legacy-TTL migration / backfill records only
-            (Fix C, shortcut 73191 review). Supplied only when the app runs
+            InternalProducer for legacy-TTL migration / backfill records only.
+            Supplied only when the app runs
             exactly-once — see :class:`ChangelogProducer`. ``None`` otherwise.
 
         :return: a ChangelogWriter instance
@@ -383,8 +383,8 @@ class ChangelogProducer:
         :param partition: source topic partition number
         :param producer: an InternalProducer (not shared with `Application` instance)
         :param migration_producer: an optional dedicated NON-transactional
-            InternalProducer used ONLY for legacy-TTL migration / backfill records
-            (Fix C, shortcut 73191 review). It is set only when the app runs
+            InternalProducer used ONLY for legacy-TTL migration / backfill records.
+            It is set only when the app runs
             exactly-once: the main ``producer`` is then transactional, so a
             ``flush()`` does NOT make records durable until the checkpoint
             transaction commits — but the migration paths write local RocksDB
@@ -414,7 +414,7 @@ class ChangelogProducer:
     def _producer_for(self, migration: bool) -> InternalProducer:
         """Pick the underlying producer: the dedicated non-transactional
         migration producer for migration/backfill records when one is configured
-        (exactly-once), else the main producer (Fix C)."""
+        (exactly-once), else the main producer."""
         if migration and self._migration_producer is not None:
             return self._migration_producer
         return self._producer
@@ -433,7 +433,7 @@ class ChangelogProducer:
         :param value: message value (same as state value)
         :param headers: message headers (includes column family info)
         :param migration: route through the dedicated non-transactional migration
-            producer when configured (Fix C). Set only by the legacy-TTL
+            producer when configured. Set only by the legacy-TTL
             backfill / recovery-completion / done-marker sites; normal changelog
             production leaves it ``False``.
         """
@@ -749,7 +749,7 @@ class RecoveryManager:
 
             rp.set_recovery_consume_position(position)
             if rp.finished_recovery_check:
-                # Recovery-finalize seam (spec §8.8): the partition has reached
+                # Recovery-finalize seam: the partition has reached
                 # its changelog high-watermark. Complete any interrupted legacy-
                 # TTL migration before the partition is unassigned and handed to
                 # live processing. A no-op on every shape except a MIXED changelog

@@ -5,7 +5,7 @@ SEPARATOR_LENGTH = len(SEPARATOR)
 
 CHANGELOG_CF_MESSAGE_HEADER = "__column_family__"
 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER = "__processed_tp_offsets__"
-# Per-record transport header (spec §8.7). Set on every ``default``-CF changelog
+# Per-record transport header. Set on every ``default``-CF changelog
 # record produced while the partition is in TTL mode (``uses_ttl_stamps`` True),
 # i.e. the value carries the 8-byte expiry-stamp prefix. Recovery reads this bit
 # to decide stamped-vs-legacy out-of-band, instead of sniffing value content.
@@ -15,8 +15,7 @@ CHANGELOG_TTL_STAMPED_HEADER = "__ttl_stamped__"
 METADATA_CF_NAME = "__metadata__"
 TTL_INDEX_CF_NAME = "__ttl_index__"
 # Local-only census of leftover legacy keys seen during a cold-restore replay of
-# a MIXED (incomplete-migration) changelog (spec §8.8 / spec-incomplete-migration-
-# recovery.md §4.1). A header-absent default-CF replay PUTs its key here; a
+# a MIXED (incomplete-migration) changelog. A header-absent default-CF replay PUTs its key here; a
 # header-true replay of the same key DELETEs it (supersession). At end of
 # recovery this CF holds exactly the leftover legacy keys, and the completion
 # backfill iterates it (the per-key delete is the durable progress cursor). Never
@@ -24,8 +23,7 @@ TTL_INDEX_CF_NAME = "__ttl_index__"
 TTL_BACKFILL_PENDING_CF_NAME = "__ttl_backfill_pending__"
 # Local-only ledger of pre-existing legacy keys ALREADY STAMPED by the in-place
 # *live* backfill (:meth:`RocksDBStorePartition.backfill_legacy_records`). It is
-# the crash-safe resume cursor for that path (Bug 1 fix, see
-# dev-planning/state-ttl-legacy-backfill/fix-cursor-and-pending-hygiene.md): each
+# the crash-safe resume cursor for that path: each
 # chunk PUTs the keys it stamped into this CF within the SAME WriteBatch as the
 # stamped values, so the ledger and the data commit atomically. On resume the
 # re-derived census excludes ledger members, which makes the backfill insensitive
@@ -37,8 +35,8 @@ TTL_BACKFILL_PENDING_CF_NAME = "__ttl_backfill_pending__"
 # produced to the changelog.
 TTL_BACKFILL_STAMPED_CF_NAME = "__ttl_backfill_stamped__"
 
-# Replicated system CF carrying the durable "migration done" marker (spec §13.1,
-# spec-v3240-upgrade-and-recovery-clock.md). Deliberately NOT in
+# Replicated system CF carrying the durable "migration done" marker.
+# Deliberately NOT in
 # ``LOCAL_ONLY_CFS`` so its single record IS produced to the changelog and
 # therefore survives a cold rebuild onto a fresh volume — unlike the metadata /
 # index / pending / stamped-ledger CFs, whose flip state is local-only and lost
@@ -61,9 +59,9 @@ TTL_MIGRATION_DONE_KEY = b"__ttl_migration_done__"
 # Includes metadata (already excluded by virtue of not being touched from
 # user-facing transactions), the TTL secondary expiry index, the incomplete-
 # migration pending-key census, and the live-backfill stamped-key ledger — all
-# local to RocksDB only — see dev-planning/state-ttl/architecture.md.
+# local to RocksDB only.
 # NOTE: ``TTL_SYSTEM_CF_NAME`` is deliberately NOT here — its done-flag marker
-# must ride the changelog to survive a cold rebuild (spec §13.1).
+# must ride the changelog to survive a cold rebuild.
 LOCAL_ONLY_CFS = frozenset(
     {
         METADATA_CF_NAME,

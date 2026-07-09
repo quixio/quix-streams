@@ -399,7 +399,7 @@ class Application:
                 broker_availability_timeout=self._broker_availability_timeout,
             )
             if self._config.exactly_once:
-                # Fix C (shortcut 73191 review): under exactly-once the main
+                # Under exactly-once the main
                 # changelog producer is transactional, so flush() does not make
                 # records durable until the checkpoint transaction commits. The
                 # legacy-TTL migration/backfill paths write local state right after

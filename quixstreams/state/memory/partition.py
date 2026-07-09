@@ -90,9 +90,9 @@ class MemoryStorePartition(StorePartition):
     """
 
     # Class-level switch (subclasses can hard-disable). The **runtime**
-    # flag is initialized to False in ``__init__`` to mirror the v3 v3.23.6-
-    # compatible default; the partition flips itself into TTL mode on first
-    # detection of a ``state.set(..., ttl=...)`` write at flush time.
+    # flag is initialized to False in ``__init__`` to mirror the
+    # v3.23.6-compatible default; the partition flips itself into TTL mode on
+    # first detection of a ``state.set(..., ttl=...)`` write at flush time.
     uses_ttl_stamps: bool = True
 
     def __init__(
@@ -116,8 +116,8 @@ class MemoryStorePartition(StorePartition):
         # local-only (the pre-change ``_run_sweep``-in-``write()`` path). Memory
         # does not consume ``RocksDBOptions``, so it is a direct constructor arg.
         self._ttl_changelog_tombstones: bool = ttl_changelog_tombstones
-        # Opt-in gate for adopting a store created on the v3.24.0 TTL preview
-        # (M1), mirroring ``RocksDBStorePartition._adopt_v3240_stamps_enabled``.
+        # Opt-in gate for adopting a store created on the v3.24.0 TTL preview,
+        # mirroring ``RocksDBStorePartition._adopt_v3240_stamps_enabled``.
         # Stored under a distinct attribute so it does NOT shadow the private
         # :meth:`_adopt_v3240_stamps` method. When False (default) a 100%-quorum
         # stamp detection logs a CRITICAL and stays legacy; when True it flips +
@@ -133,9 +133,9 @@ class MemoryStorePartition(StorePartition):
         self._closed = False
         self._max_evictions_per_flush = max_evictions_per_flush
         # Optional uniform expiry for leftover legacy records completed during a
-        # MIXED-changelog recovery (spec §15.4 parity with
+        # MIXED-changelog recovery (parity with
         # ``RocksDBOptions.legacy_records_ttl``). ``None`` = auto-finish at the
-        # §15.2 survivor-derived default; a positive ``timedelta`` = complete at
+        # survivor-derived default; a positive ``timedelta`` = complete at
         # ``wallclock_now + legacy_records_ttl``. MemoryStore has no persistent
         # options surface, so this is set only via direct construction.
         self._legacy_records_ttl: Optional[timedelta] = legacy_records_ttl
@@ -144,38 +144,39 @@ class MemoryStorePartition(StorePartition):
         # (lazily, on the first stamped default-CF replay). Mirrors
         # ``RocksDBStorePartition._recovery_now_ms``: used to judge whether a
         # replayed TTL entry is already expired and to seed the post-recovery
-        # high-water (see :meth:`recover_from_changelog_message`,
-        # ``spec-recovery-wallclock.md`` §3.2/§3.3). ``None`` means no stamped
-        # message has been replayed yet in this partition's lifetime.
+        # high-water (see :meth:`recover_from_changelog_message`). ``None`` means
+        # no stamped message has been replayed yet in this partition's lifetime.
         self._recovery_now_ms: Optional[int] = None
         # Count of wallclock-expired stamped records dropped during this
-        # recovery's changelog replay (Rule 4 / latest-record-wins). Surfaced as
+        # recovery's changelog replay by the latest-record-wins recovery-drop
+        # filter. Surfaced as
         # one aggregate INFO at :meth:`complete_recovery` so an operator sees the
         # deletions instead of records silently vanishing. Mirrors
         # ``RocksDBStorePartition._recovery_expired_drops``.
         self._recovery_expired_drops: int = 0
-        # Incomplete-migration detection (spec §8.8 / §15.4), mirroring
+        # Incomplete-migration detection, mirroring
         # ``RocksDBStorePartition``. Set True on the first header-true default-CF
         # replay; combined with a non-empty ``__ttl_backfill_pending__`` census at
         # end of recovery it marks a MIXED changelog whose leftover legacy records
         # :meth:`complete_recovery` must stamp. False (all-legacy replay) never
         # triggers completion.
         self._recovery_saw_stamped: bool = False
-        # §15.2 survivor-derived completion default: max absolute expiry among
+        # Survivor-derived completion default: max absolute expiry among
         # replayed default-CF records that are stamped (header-true), non-SENTINEL,
-        # and NOT dropped by the Rule 4 wallclock filter. Used to complete an
+        # and NOT dropped by the latest-record-wins recovery-drop filter. Used to
+        # complete an
         # incomplete migration when ``legacy_records_ttl`` is absent; ``None`` (no
         # surviving future stamp) falls back to SENTINEL_NEVER + a WARN.
         self._recovery_max_survivor_expiry_ms: Optional[int] = None
-        # Durable done-flag latch (spec §13.1), mirroring
+        # Durable done-flag latch, mirroring
         # ``RocksDBStorePartition``. Set True when the replicated
         # ``__ttl_system__`` marker is replayed; makes :meth:`complete_recovery`
         # flip + discard pending + never re-run completion.
         self._recovery_saw_migration_done: bool = False
-        # Warn-once guard for the populated-legacy live ``ttl=`` write path
-        # (spec §7.3 row I-target); flipped True after the first WARNING.
+        # Warn-once guard for the populated-legacy live ``ttl=`` write path;
+        # flipped True after the first WARNING.
         self._populated_legacy_warned: bool = False
-        # Warn-once guard for the fail-safe degraded TTL read (spec item d),
+        # Warn-once guard for the fail-safe degraded TTL read,
         # scoped to the partition so it fires once per partition lifetime rather
         # than once per checkpoint transaction.
         self._unstamped_read_warned: bool = False
@@ -204,9 +205,9 @@ class MemoryStorePartition(StorePartition):
     def legacy_records_ttl(self) -> Optional[timedelta]:
         """
         Optional uniform expiry for leftover legacy records completed during a
-        MIXED-changelog recovery (spec §15.4). Mirrors
+        MIXED-changelog recovery. Mirrors
         ``RocksDBStorePartition.legacy_records_ttl``. ``None`` = auto-finish at
-        the §15.2 default.
+        the survivor-derived default.
         """
         return self._legacy_records_ttl
 
@@ -222,7 +223,7 @@ class MemoryStorePartition(StorePartition):
     @property
     def adopt_v3240_stamps(self) -> bool:
         """
-        Whether the opt-in v3.24.0 stamp adoption is enabled (M1). When ``False``
+        Whether the opt-in v3.24.0 stamp adoption is enabled. When ``False``
         (default) a 100%-quorum stamp detection on recovery logs a CRITICAL and
         leaves the store legacy; when ``True`` it flips + adopts the stamps in
         place. Parity with ``RocksDBStorePartition.adopt_v3240_stamps``.
@@ -302,8 +303,8 @@ class MemoryStorePartition(StorePartition):
 
     def has_incomplete_ttl_migration(self) -> bool:
         """
-        Memory mirror of ``RocksDBStorePartition.has_incomplete_ttl_migration``
-        (Fix B). Always ``False``: the memory backend has no persistent on-disk
+        Memory mirror of ``RocksDBStorePartition.has_incomplete_ttl_migration``.
+        Always ``False``: the memory backend has no persistent on-disk
         flip flag or durable pending census — every open re-recovers from the
         changelog via a FULL replay (its stored offset is always ``None`` →
         ``OFFSET_BEGINNING``), so the offset-caught-up crash window that this
@@ -320,7 +321,7 @@ class MemoryStorePartition(StorePartition):
         offset: int,
         ttl_stamped: bool = False,
     ) -> None:
-        # Done-flag consumption (spec §13.1), mirroring
+        # Done-flag consumption, mirroring
         # ``RocksDBStorePartition``. The replicated ``__ttl_system__`` marker
         # means the source store completed its migration; latch it so
         # :meth:`complete_recovery` flips, discards any pending census, and never
@@ -333,7 +334,7 @@ class MemoryStorePartition(StorePartition):
         ):
             self._recovery_saw_migration_done = True
 
-        # Recovery flip-discovery (spec §8.7, mirrors
+        # Recovery flip-discovery (mirrors
         # ``RocksDBStorePartition.recover_from_changelog_message``).
         #
         # Every stamped ``default``-CF record produced while the source partition
@@ -342,12 +343,12 @@ class MemoryStorePartition(StorePartition):
         # On the first header-true default-CF record we flip this recovery
         # partition into TTL mode and latch for the rest of the session. This
         # REPLACES the old value-content heuristic (``_looks_like_stamped_value``),
-        # which false-positived on legacy 8-byte epoch-ms values and dropped them
-        # (OP-2 / OP-3). Header absent → the record is legacy / un-stamped and
-        # replays verbatim below, so a purely legacy changelog never latches
-        # (back-compat option (a), §9). The flip is session-local: memory
+        # which false-positived on legacy 8-byte epoch-ms values and dropped them.
+        # Header absent → the record is legacy / un-stamped and
+        # replays verbatim below, so a purely legacy changelog never latches. The
+        # flip is session-local: memory
         # partitions are non-persistent and re-recover from the changelog on every
-        # open, so there is no ``_stamp_flip_metadata`` mirror (§8).
+        # open, so there is no ``_stamp_flip_metadata`` mirror.
         if (
             type(self).uses_ttl_stamps
             and not self.uses_ttl_stamps
@@ -361,7 +362,7 @@ class MemoryStorePartition(StorePartition):
             self.uses_ttl_stamps = True
             self._state.setdefault(TTL_INDEX_CF_NAME, {})
 
-        # Incomplete-migration detection / census (spec §8.8 / §15.4), mirroring
+        # Incomplete-migration detection / census, mirroring
         # ``RocksDBStorePartition``. Gated on the CLASS-level flag (not the
         # instance flag): a MIXED changelog replays header-absent legacy records
         # BEFORE the first stamped record flips the partition, so they must be
@@ -397,7 +398,7 @@ class MemoryStorePartition(StorePartition):
         if value is None:
             self._state.setdefault(cf_name, {}).pop(key, None)
         elif is_main_cf and not ttl_stamped:
-            # §15.4 item 3: a header-absent (legacy) default-CF record replayed on
+            # A header-absent (legacy) default-CF record replayed on
             # a (now-)flipped partition — a leftover of an interrupted migration
             # (MIXED changelog). It MUST land VERBATIM (raw bytes), NOT through
             # ``_normalize_replay_value`` (which would SENTINEL-wrap it, corrupting
@@ -411,13 +412,13 @@ class MemoryStorePartition(StorePartition):
             # Judge expiry against the current wallclock captured once per
             # recovery session, NOT against a stamp-ratcheted pseudo-clock (the
             # old ``recovery_now = self._high_water_ms`` ratchet, advanced by
-            # each entry's stamp, collapsed uniform-expiry backfilled stores;
-            # see spec-recovery-wallclock.md §2/§3). Capture lazily on the first
-            # stamped default-CF replay. Finding 3 (§7.4): the wallclock is the
-            # Rule 4 replay drop clock ONLY; it is NO LONGER seeded into the live
+            # each entry's stamp, collapsed uniform-expiry backfilled stores).
+            # Capture lazily on the first
+            # stamped default-CF replay. The wallclock is the
+            # replay drop clock ONLY; it is NO LONGER seeded into the live
             # ``_high_water_ms`` clock (removed for parity with RocksDB, so an
             # event-time-lagging workload never over-expires its own writes).
-            # Sentinel-stamped entries are never compared and always survive (§7).
+            # Sentinel-stamped entries are never compared and always survive.
             expired = False
             if stamp != SENTINEL_NEVER:
                 if self._recovery_now_ms is None:
@@ -425,8 +426,8 @@ class MemoryStorePartition(StorePartition):
                 recovery_now_ms = self._recovery_now_ms
                 expired = stamp <= recovery_now_ms
             if expired:
-                # Already-expired against wallclock-at-recovery (Fix A —
-                # latest-record-wins, parity with RocksDB). An OLDER copy of
+                # Already-expired against wallclock-at-recovery
+                # (latest-record-wins, parity with RocksDB). An OLDER copy of
                 # ``key`` replayed earlier this session (verbatim legacy, or an
                 # older unexpired stamped copy) may already sit in the main dict;
                 # skipping (the old bare ``pass``) let it survive as a
@@ -443,7 +444,7 @@ class MemoryStorePartition(StorePartition):
                     self._state.setdefault(TTL_INDEX_CF_NAME, {})[
                         encode_index_key(stamp, key)
                     ] = b""
-                    # §15.2: surviving future non-sentinel stamp on a header-true
+                    # Surviving future non-sentinel stamp on a header-true
                     # record — track the max as the config-absent completion
                     # source (mirrors ``RocksDBStorePartition``).
                     if (
@@ -458,10 +459,10 @@ class MemoryStorePartition(StorePartition):
 
     def complete_recovery(self) -> None:
         """
-        Recovery-finalize hook (spec §8.8 / §15.4), mirroring
+        Recovery-finalize hook, mirroring
         :meth:`RocksDBStorePartition.complete_recovery` at the semantics level
         (in-RAM dicts instead of CFs). There is **no reject branch** — the memory
-        backend never had one, and the §15 revision auto-finishes the migration.
+        backend never had one, and the migration is auto-finished.
 
         Completes an interrupted legacy-TTL migration replayed from a MIXED
         changelog: leftover legacy records landed VERBATIM during replay and were
@@ -471,16 +472,16 @@ class MemoryStorePartition(StorePartition):
         completion), and drained from the census.
 
         - NOT ``_recovery_saw_stamped`` → all-legacy replay: discard the orphan
-          pending census and no-op (Bug 3 hygiene parity).
+          pending census and no-op (hygiene parity).
         - pending empty → all-stamped / fully migrated: no-op.
         - else (MIXED) → stamp exactly the pending leftovers with:
             - ``legacy_records_ttl`` set → ``wallclock_now + legacy_records_ttl``
               (parity; explicit config wins);
-            - absent → the §15.2 survivor-derived expiry, or ``SENTINEL_NEVER``
+            - absent → the survivor-derived expiry, or ``SENTINEL_NEVER``
               (never-expire) + a WARN in the all-expired fallback.
         """
         if self._recovery_expired_drops > 0:
-            # #8 (review batch 2): make the Rule-4 wallclock-expired replay drops
+            # Make the wallclock-expired replay drops
             # observable — ONE aggregate INFO per partition per recovery (no
             # per-record logging). Emitted at the once-per-recovery finalize seam
             # before any early return; a non-zero count implies the partition
@@ -495,7 +496,7 @@ class MemoryStorePartition(StorePartition):
         if not type(self).uses_ttl_stamps:
             return
         if self._recovery_saw_migration_done:
-            # Durable done-flag present (spec §13.1, parity with RocksDB): the
+            # Durable done-flag present (parity with RocksDB): the
             # migration is complete and is never redone. Ensure flipped, discard
             # any pending census, run no completion.
             if not self.uses_ttl_stamps:
@@ -504,14 +505,15 @@ class MemoryStorePartition(StorePartition):
             self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
             return
         if self._all_pending_values_are_stamped():
-            # M1 opt-in gate (parity with ``RocksDBStorePartition.complete_recovery``
-            # :meth: gate). This all-stamped census is the exact byte-shape of a
+            # Opt-in gate (parity with ``RocksDBStorePartition.complete_recovery``
+            # gate). This all-stamped census is the exact byte-shape of a
             # stock v3.24.0 cold restore, but it is INDISTINGUISHABLE from a legacy
             # ``set_bytes()`` store whose values begin with plausible-stamp bytes.
             # Adopt ONLY with the explicit opt-in flag; otherwise log a CRITICAL
             # naming the flag and stay legacy (values byte-identical), then discard
-            # the orphan census and return. Fires before the §15.2 disposition so a
-            # MIXED-C census is adopted (with the flag) rather than double-wrapped;
+            # the orphan census and return. Fires before the survivor-derived
+            # disposition so a
+            # MIXED census is adopted (with the flag) rather than double-wrapped;
             # discarding here (no flag) never touches default-CF user data.
             if self._adopt_v3240_stamps_enabled:
                 self._adopt_v3240_stamps()
@@ -540,8 +542,8 @@ class MemoryStorePartition(StorePartition):
         if not self._recovery_saw_stamped:
             # Pure-legacy replay: the class-level census may hold orphan legacy
             # keys with no completion pass to drain them — discard them wholesale
-            # (Bug 3 hygiene parity with RocksDB's _discard_backfill_pending).
-            # Finding-1 loud detection (spec §7.1) runs FIRST: this population is
+            # (hygiene parity with RocksDB's _discard_backfill_pending).
+            # The loud detection runs FIRST: this population is
             # indistinguishable from a stock-v3.24.0 cold restore, so WARN if the
             # censused values mostly look like stamps (detection only — no data
             # is stripped, flipped, or re-routed).
@@ -557,8 +559,8 @@ class MemoryStorePartition(StorePartition):
 
         legacy_records_ttl = self._legacy_records_ttl
         if legacy_records_ttl is not None:
-            # Explicit config wins (parity): wallclock-at-rebuild + ttl. Finding 3
-            # (§7.4): the wallclock derives this completion expiry only; it is NOT
+            # Explicit config wins (parity): wallclock-at-rebuild + ttl.
+            # The wallclock derives this completion expiry only; it is NOT
             # seeded into the live ``_high_water_ms`` clock (removed for parity).
             if self._recovery_now_ms is None:
                 self._recovery_now_ms = self._now_ms()
@@ -577,7 +579,7 @@ class MemoryStorePartition(StorePartition):
                 else self._max_index_stamp_ms()
             )
         ) is not None:
-            # §15.2 survivor-derived default (config absent). Fix B parity with
+            # Survivor-derived default (config absent). Parity with
             # RocksDB: fall back to the max in-RAM __ttl_index__ stamp when no
             # replayed survivor was tracked (unreachable for the always-full-
             # replay memory backend, kept for structural symmetry).
@@ -590,7 +592,7 @@ class MemoryStorePartition(StorePartition):
                 expires_at_ms,
             )
         else:
-            # §15.2 all-expired fallback: never-expire rather than mass-delete.
+            # All-expired fallback: never-expire rather than mass-delete.
             expires_at_ms = SENTINEL_NEVER
             logger.warning(
                 "Recovery: completing interrupted legacy-TTL migration in memory "
@@ -624,7 +626,7 @@ class MemoryStorePartition(StorePartition):
             if expires_at_ms != SENTINEL_NEVER:
                 index[encode_index_key(expires_at_ms, key)] = b""
             if self._changelog_producer is not None:
-                # Fix C: recovery-completion runs with no open checkpoint
+                # Recovery-completion runs with no open checkpoint
                 # transaction, so use the non-transactional migration route under
                 # exactly-once (parity with RocksDB).
                 self._changelog_producer.produce(
@@ -639,13 +641,13 @@ class MemoryStorePartition(StorePartition):
         # Drain the (now-empty) census.
         self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
 
-        # Flag-last (spec §13.1): the migration is complete, so record the
+        # Flag-last: the migration is complete, so record the
         # durable done-flag marker AFTER the last stamped record.
         self._produce_migration_done_marker()
 
     def _produce_migration_done_marker(self) -> None:
         """
-        Record + produce the durable "migration done" marker (spec §13.1),
+        Record + produce the durable "migration done" marker,
         mirroring ``RocksDBStorePartition._produce_migration_done_marker`` with
         the same **changelog-first ordering**: produce the marker and confirm its
         delivery with a bounded flush BEFORE recording it in the in-RAM
@@ -665,7 +667,7 @@ class MemoryStorePartition(StorePartition):
                     CHANGELOG_CF_MESSAGE_HEADER: TTL_SYSTEM_CF_NAME,
                     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
                 },
-                # Fix C: non-transactional migration route (parity with RocksDB).
+                # Non-transactional migration route (parity with RocksDB).
                 migration=True,
             )
             unproduced = self._changelog_producer.flush(
@@ -688,10 +690,10 @@ class MemoryStorePartition(StorePartition):
     def _warn_if_looks_like_v3240_upgrade(self, sample_size: int = 256) -> None:
         """
         Memory mirror of
-        ``RocksDBStorePartition._warn_if_looks_like_v3240_upgrade`` (spec §7.1).
+        ``RocksDBStorePartition._warn_if_looks_like_v3240_upgrade``.
         Sample the censused values; if most decode as plausible 8-byte stamps,
         WARN that this LOOKS like a stock-v3.24.0 cold restore. DETECTION ONLY:
-        the sampled bytes gate the log line, never data (spec §2/§6).
+        the sampled bytes gate the log line, never data.
         """
         pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
         default = self._state.get("default", {})
@@ -718,8 +720,8 @@ class MemoryStorePartition(StorePartition):
 
     def _all_pending_values_are_stamped(self) -> bool:
         """
-        Total-quorum strict stamp validation over the in-RAM pending census
-        (spec §7.1 self-heal), mirroring
+        Total-quorum strict stamp validation over the in-RAM pending census,
+        mirroring
         ``RocksDBStorePartition._all_pending_values_are_stamped``. Require EVERY
         censused value to pass ``_safe_decode_stamp``; short-circuit on the first
         failure. Returns ``False`` on an empty census.
@@ -736,9 +738,9 @@ class MemoryStorePartition(StorePartition):
 
     def _adopt_v3240_stamps(self) -> None:
         """
-        Adopt the pending census as v3.24.0-stamped records (spec §7.1), mirroring
+        Adopt the pending census as v3.24.0-stamped records, mirroring
         ``RocksDBStorePartition._adopt_v3240_stamps``. Flip into TTL mode, keep
-        each default value verbatim (no re-wrap — §13.2 preserves the v3.24.0
+        each default value verbatim (no re-wrap — preserves the v3.24.0
         stamp), rebuild the ``__ttl_index__`` entry from each non-sentinel stamp,
         discard the census, and emit one INFO line. No changelog re-production.
         """
@@ -827,11 +829,11 @@ class MemoryStorePartition(StorePartition):
             logger.warning("Failed to decode persisted TTL high-water; ignoring.")
 
     def _normalize_replay_value(self, value: bytes) -> tuple[bytes, int]:
-        # Route through the same strict validator as the live read path (spec
-        # item c); see RocksDBStorePartition._normalize_replay_value. A value that
+        # Route through the same strict validator as the live read path;
+        # see RocksDBStorePartition._normalize_replay_value. A value that
         # does not validate as a stamp (too short, zero, or out-of-range) is
         # treated as never-expires and sentinel-wrapped so it round-trips on read
-        # and is never dropped by the Rule 4 recovery-drop filter.
+        # and is never dropped by the latest-record-wins recovery-drop filter.
         decoded = _safe_decode_stamp(value)
         if decoded is None:
             return encode_ttl_value(SENTINEL_NEVER, value), SENTINEL_NEVER
@@ -841,7 +843,7 @@ class MemoryStorePartition(StorePartition):
     def _looks_like_stamped_value(self, value: bytes) -> bool:
         """See ``RocksDBStorePartition._looks_like_stamped_value``.
 
-        NOTE: as of the §8.7 header-routing change this is **no longer on the
+        NOTE: as of the header-routing change this is **no longer on the
         recovery path** — ``recover_from_changelog_message`` routes purely on the
         ``__ttl_stamped__`` header. Retained (not deleted) to stay symmetric with
         the RocksDB backend, which keeps its copy because a test patches it; this
@@ -861,7 +863,7 @@ class MemoryStorePartition(StorePartition):
 
     def _max_index_stamp_ms(self) -> Optional[int]:
         """Max expiry stamp among in-RAM ``__ttl_index__`` entries, or ``None``
-        if empty (Fix B parity with RocksDB; see
+        if empty (parity with RocksDB; see
         ``RocksDBStorePartition._max_index_stamp_ms``)."""
         index = self._state.get(TTL_INDEX_CF_NAME, {})
         last_stamp: Optional[int] = None
@@ -889,7 +891,7 @@ class MemoryStorePartition(StorePartition):
         evicted = 0
         visited = 0
         # Iterate in sorted order — index keys are big-endian-stamped so
-        # ascending byte order equals ascending expiry order. #7: the budget
+        # ascending byte order equals ascending expiry order. The budget
         # counts every index-entry VISIT (ghost or genuine), not just evictions,
         # so a store dense with refresh-minted ghost entries cannot pay more than
         # ``budget`` main-CF point-gets per sweep. Convergent — ghosts shrink each
@@ -916,8 +918,8 @@ class MemoryStorePartition(StorePartition):
                 index.pop(index_key, None)
                 continue
 
-            # Decode through the same strict validator as the live read path
-            # (spec item c): a value that does not validate as a stamp (too short,
+            # Decode through the same strict validator as the live read path:
+            # a value that does not validate as a stamp (too short,
             # zero, or out-of-range) reads as never-expires, so the sweep must not
             # evict it — drop the orphan index pointer only.
             decoded_main = _safe_decode_stamp(cast(bytes, main_value))
@@ -945,7 +947,7 @@ class MemoryStorePartition(StorePartition):
     ) -> None:
         """
         Prepare-time sweep on the ON path (parity with
-        ``RocksDBStorePartition.sweep_expired_into_cache``, spec §3.1).
+        ``RocksDBStorePartition.sweep_expired_into_cache``).
 
         Reads committed in-RAM state (``self._state``) and stages its deletes into
         the transaction ``cache``: a main-CF eviction →
@@ -959,7 +961,7 @@ class MemoryStorePartition(StorePartition):
         guard sets from the caller to preserve the #1129 same-flush protections
         (never evict / GC a key this transaction just wrote). ``prefix=b""`` is
         safe for every delete because staged keys are never handed to
-        ``cache.delete`` (§3.1 prefix note).
+        ``cache.delete``.
         """
         if self._high_water_ms is None:
             return
@@ -978,7 +980,7 @@ class MemoryStorePartition(StorePartition):
 
         evicted = 0
         visited = 0
-        # #7: budget counts every index-entry visit (ghost or genuine), bounding
+        # Budget counts every index-entry visit (ghost or genuine), bounding
         # main-CF point-gets to <= budget per sweep (parity with _run_sweep).
         for index_key in sorted(index.keys()):
             if visited >= budget:
@@ -1193,7 +1195,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         the parent's changelog production. See
         ``RocksDBPartitionTransaction.prepare`` for the design notes.
         """
-        # Mirror the base-class contract (spec item b): the flip hook runs before
+        # Mirror the base-class contract: the flip hook runs before
         # ``super().prepare()``, so an exception here must set status=FAILED rather
         # than leave the transaction STARTED / reusable.
         try:
@@ -1241,19 +1243,19 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         if self._partition.uses_ttl_stamps:
             return
         if self._partition.main_cf_has_user_data():
-            # §15.4 open-scope decision: memory parity is recovery-completion
+            # Memory parity is recovery-completion
             # ONLY (no live in-RAM backfill). A populated legacy memory store
             # arises solely from an all-legacy changelog replay; it re-recovers
             # from the changelog on every open, so migrating its pre-existing
             # records is owned by the recovery-completion path
             # (:meth:`MemoryStorePartition.complete_recovery`), not a live flip.
-            # The §15 revision removed the reject, so we neither reject nor flip
+            # There is no reject, so we neither reject nor flip
             # here: staying legacy keeps the pre-existing raw records readable
             # verbatim (flipping without a backfill would mis-strip them). The
             # ttl= write lands as legacy this session; a changelog-driven flip on
             # a later open migrates the store.
             #
-            # Row I-target (spec §7.3): this used to be a fully SILENT no-op. Emit
+            # This used to be a fully SILENT no-op. Emit
             # ONE warn-once WARNING so an operator sees that a ttl= write landed on
             # a populated legacy in-memory store and was stored un-stamped (the
             # migration is owned by the next changelog rebuild, not this write).
@@ -1309,7 +1311,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             prefix=b"",
             cf_name=METADATA_CF_NAME,
         )
-        # Durable done-flag (spec §13.1), staged last so it is produced flag-last.
+        # Durable done-flag, staged last so it is produced flag-last.
         # The replicated ``__ttl_system__`` CF is not local-only, so the base
         # ``_prepare`` produces it to the changelog and ``write()`` lands it in
         # the in-RAM dict — a cold rebuild then learns "done, never redo".
@@ -1351,14 +1353,14 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             return Marker.UNDEFINED
 
         # Fail-safe decode through the strict validator, mirroring
-        # ``RocksDBPartitionTransaction._get_bytes`` (spec item c): only strip the
+        # ``RocksDBPartitionTransaction._get_bytes``: only strip the
         # 8-byte stamp when it robustly looks like one. A value that does not
         # validate (raw legacy value, zero/out-of-range prefix) degrades to raw
         # (never-expires) rather than being mis-stripped or mis-expired, so reads,
         # the sweep, and recovery all agree.
         decoded = _safe_decode_stamp(raw_bytes)
         if decoded is None:
-            # Warn once per PARTITION (spec item d), not per checkpoint tx.
+            # Warn once per PARTITION, not per checkpoint tx.
             if not self._partition._unstamped_read_warned:  # noqa: SLF001
                 self._partition._unstamped_read_warned = True  # noqa: SLF001
                 logger.warning(
@@ -1366,7 +1368,8 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                     "does not decode to a valid stamp (key prefix=%r) at "
                     "path=%s; returning it raw and treating it as never-expires "
                     "rather than stripping 8 bytes. This should be impossible on "
-                    "a fully backfilled store and signals a pre-Fix-A store or "
+                    "a fully backfilled store and signals a store written before "
+                    "the latest-record-wins recovery fix, or "
                     "an externally-mutated value.",
                     prefix[:16],
                     getattr(self._partition, "path", "<memory>"),

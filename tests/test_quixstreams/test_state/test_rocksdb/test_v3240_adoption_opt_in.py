@@ -1,5 +1,5 @@
 """
-M1 (shortcut 73191 review) — v3.24.0 stamp adoption is opt-in.
+v3.24.0 stamp adoption is opt-in.
 
 On a 100%-quorum stamp detection ``complete_recovery`` used to AUTOMATICALLY flip
 a store into TTL mode and rewrite its ``__ttl_index__``. That is unsafe: a genuine
@@ -8,13 +8,11 @@ store whose values happen to begin with 8 plausible big-endian bytes (epoch-ms,
 counters). Auto-flipping the latter turns the first 8 bytes of every value into an
 expiry stamp; the sweep + changelog tombstones then delete the data.
 
-M1 keeps DETECTION automatic but makes the FLIP opt-in via a new
+DETECTION stays automatic but the FLIP is opt-in via a new
 ``RocksDBOptions(adopt_v3240_stamps=...)`` boolean (default ``False``). Without the
 flag a 100%-quorum detection logs a CRITICAL naming the flag and then follows the
 pure-legacy disposition (stay legacy, discard the census, values byte-identical).
 With the flag, adoption proceeds as before but its ``WriteBatch`` is chunked.
-
-See ``dev-planning/state-ttl-m1-adoption-opt-in/spec.md``.
 """
 
 import logging
@@ -116,7 +114,7 @@ def _critical_names_flag(caplog):
 
 
 # ---------------------------------------------------------------------------
-# M1 opt-in adoption suite
+# Opt-in adoption suite
 # ---------------------------------------------------------------------------
 
 

@@ -3,11 +3,10 @@ Black-box acceptance suite for the state-TTL / migration feature.
 
 Two classes partition the tests by current expectation:
 
-- ``TestContractHolds`` -- must be GREEN today. These are the regression gate:
-  passing on every PR is a hard requirement.
-- ``TestContractTargets`` -- expected RED today. Each test demonstrates a real
-  defect whose failure message describes the corruption / mis-behavior clearly.
-  These become green as ArchDev ships the fixes.
+- ``TestContractHolds`` -- the regression gate: passing on every PR is a hard
+  requirement.
+- ``TestContractTargets`` -- each test demonstrates a scenario whose failure
+  message describes the corruption / mis-behavior clearly.
 
 Every test operates through the public partition / transaction surface (values
 read back, expiry outcomes, exceptions, WARNING logs via ``caplog``). The only
@@ -794,10 +793,10 @@ class TestContractHolds:
         """G: After a changelog rebuild, live writes with OLD event-time
         timestamps (hours/days behind wallclock) + their own ttl must be
         readable immediately after writing. The recovery wallclock is used
-        ONLY for the Rule 4 replay drop filter and is NOT seeded into the
-        live high_water_ms clock (spec Finding 3, section 7.4). Post-recovery
-        high_water is the loaded persisted value or None; only live event-time
-        writes advance it."""
+        ONLY for the latest-record-wins replay drop filter and is NOT seeded
+        into the live high_water_ms clock. Post-recovery high_water is the
+        loaded persisted value or None; only live event-time writes advance
+        it."""
         producer = _make_changelog_producer_mock()
         now_ms = 1_780_000_000_000
 
@@ -813,7 +812,7 @@ class TestContractHolds:
         _replay_msgs(partition, msgs, now_ms=now_ms)
         partition.complete_recovery()
 
-        # Post-recovery: high_water is NOT wallclock-seeded (Finding 3 fix).
+        # Post-recovery: high_water is NOT wallclock-seeded.
         # A live write with old event-time (2 days behind wallclock) + 1-day
         # ttl produces an absolute expiry = old_ts + 1d = now_ms - 1d. Since
         # the high_water is NOT seeded to now_ms, this does NOT instantly
@@ -843,9 +842,9 @@ class TestContractHolds:
 
     def test_i_holds_memory_populated_legacy_warning(self, caplog):
         """I-holds: A live ttl= write on a populated legacy MEMORY store emits
-        a WARNING (spec section 7.3 row I-target). The warning tells the
-        operator that the ttl= write landed as legacy (un-stamped) this session
-        and that migration is owned by the next changelog rebuild."""
+        a WARNING. The warning tells the operator that the ttl= write landed as
+        legacy (un-stamped) this session and that migration is owned by the next
+        changelog rebuild."""
         producer = _make_changelog_producer_mock()
         partition = MemoryStorePartition(changelog_producer=producer)
         # Populate with legacy data (direct replay, no TTL header).
@@ -928,9 +927,9 @@ class TestContractHolds:
 
 
 class TestContractTargets:
-    """Scenarios that started RED as the contract loop's work queue and went
-    green as fixes landed (rounds 1-3). Kept in their own class for history;
-    all are now regression gates like TestContractHolds."""
+    """Scenarios that were the contract loop's work queue and now pass as the
+    fixes have landed. Kept in their own class for history; all are now
+    regression gates like TestContractHolds."""
 
     # ---------------------------------------------------------------
     # F: Changelog replay of a stock v3.24.0 store (self-heal)
@@ -949,8 +948,6 @@ class TestContractTargets:
         strip the 8-byte prefix transparently. Customers keep their original
         v3.24.0 TTLs. The __ttl_migration_done__ flag closes this class for
         every store migrated on this branch onward.
-
-        Expected RED until ArchDev round 2 self-heal lands.
         """
         from quixstreams.utils.json import dumps as json_dumps
 
@@ -978,7 +975,7 @@ class TestContractTargets:
             stamped_value = encode_ttl_value(past_expiry, json_dumps(f"old-{i}"))
             msgs.append((raw_key, stamped_value, False))
 
-        # M1: v3.24.0 stamp adoption is now opt-in — a genuine v3.24.0 upgrader
+        # v3.24.0 stamp adoption is opt-in — a genuine v3.24.0 upgrader
         # sets adopt_v3240_stamps=True to self-heal (the no-flag CRITICAL path is
         # covered in test_v3240_adoption_opt_in.py).
         partition = _rocksdb_partition(

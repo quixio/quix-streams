@@ -1,13 +1,11 @@
 """
-Fix A (shortcut 73191 review), memory-backend mirror of
-``test_rocksdb/test_expired_replay_supersession.py``.
+Memory-backend tests: an EXPIRED stamped record replayed during recovery must
+SUPERSEDE any older copy of the same key.
 
-An EXPIRED stamped record replayed during recovery must SUPERSEDE any older copy
-of the same key. Before Fix A the expired branch did a bare ``pass``, leaving an
-older copy (verbatim legacy, or an older unexpired stamped copy) alive in the
-main dict — resurrecting the expired record as a never-expiring leftover the
-completion pass could no longer repair. Fix A pops the key
-(latest-record-wins).
+If the expired branch simply left an older copy (verbatim legacy, or an older
+unexpired stamped copy) alive in the main dict, it would resurrect the expired
+record as a never-expiring leftover that the completion pass could no longer
+repair. The correct behavior pops the key (latest-record-wins).
 """
 
 from datetime import timedelta
@@ -92,12 +90,12 @@ class TestExpiredReplaySupersedesOlderCopy:
 
 
 class TestExpiredReplayDropAggregateInfo:
-    """#8 (review batch 2), memory mirror: wallclock-expired replay drops emit
-    ONE aggregate INFO per partition per recovery (count + clock, no path)."""
+    """Wallclock-expired replay drops emit ONE aggregate INFO per partition per
+    recovery (count + clock, no path)."""
 
     def test_aggregate_info_on_expired_drops(self, changelog_producer_mock, caplog):
-        """RED (HEAD): no INFO mentions dropped/expired records.
-        GREEN: exactly one INFO with count=2 + recovery wallclock."""
+        """Exactly one INFO with count=2 plus the recovery wallclock is emitted
+        when expired stamped records are dropped."""
         import logging
 
         now_ms = 1_780_000_000_000

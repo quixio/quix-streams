@@ -1,9 +1,9 @@
 """
-Memory-backend parity for State-TTL sweep tombstones (spec ttl-changelog-tombstones
-§5.4). The memory store's changelog is Kafka (same ``ChangelogProducer`` via base
-``_prepare``), so a memory-backed store shrinks its changelog identically. Mirrors
-the RocksDB black-box tests 2 (tombstone on eviction), 3 (re-written key not
-tombstoned), and 5 (OFF escape hatch).
+Memory-backend parity for State-TTL sweep tombstones. The memory store's
+changelog is Kafka (same ``ChangelogProducer`` via base ``_prepare``), so a
+memory-backed store shrinks its changelog identically. Mirrors the RocksDB
+black-box tests for tombstone on eviction, a re-written key not being
+tombstoned, and the OFF escape hatch.
 """
 
 from datetime import timedelta
@@ -112,9 +112,8 @@ class TestMemorySweepTombstones:
 
 
 class TestMemorySweepVisitBudget:
-    """#7 (review batch 2), memory parity (§8 open question default = yes): every
-    index-entry visit (ghost or genuine) counts against the eviction budget in
-    both memory sweep methods."""
+    """Memory parity: every index-entry visit (ghost or genuine) counts against
+    the eviction budget in both memory sweep methods."""
 
     def _build_ghosts(self, partition, prefix, n, short, long):
         tx1 = partition.begin()
@@ -130,7 +129,7 @@ class TestMemorySweepVisitBudget:
         tx2.flush(changelog_offset=3)
 
     def test_on_path_ghost_visits_count_against_budget(self, changelog_producer_mock):
-        """RED (HEAD): all N ghosts GC'd in one sweep. GREEN: only B per sweep."""
+        """Only B ghosts are GC'd per sweep (not all N in one sweep)."""
         prefix = b"pfx"
         n, b = 5, 2
         short = timedelta(milliseconds=100)

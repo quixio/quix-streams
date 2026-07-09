@@ -66,14 +66,14 @@ __all__ = ("RocksDBStorePartition",)
 logger = logging.getLogger(__name__)
 
 # Census-size threshold above which the in-memory key list is logged as a
-# future spill-to-disk concern (OP-BC-2, spec-backfill-completeness.md §5).
+# future spill-to-disk concern.
 # At ~80 B per held key, this is ~800 MB — large enough to threaten a small
 # container. The backfill still proceeds in memory; the warning only flags
 # that a multi-million-key store should grow a disk-spill census in future.
 _CENSUS_SPILL_WARN_THRESHOLD = 3_000_000
 
 # Progress-based bounded flush for the backfill / recovery-completion changelog
-# sites (spec ttl-changelog-tombstones §3.7). Each stamped chunk must be confirmed
+# sites. Each stamped chunk must be confirmed
 # on the changelog BEFORE its stamps land in the local DB, or a crash would leave
 # the local store ahead of the changelog (a peer rebuild would then diverge). We
 # flush in repeated slices and fail only when a full slice delivers ZERO messages
@@ -156,8 +156,8 @@ class RocksDBStorePartition(StorePartition):
         # eviction stays local-only (the pre-change ``_run_sweep``-in-``write()``
         # path). Read once at open, immutable thereafter.
         self._ttl_changelog_tombstones: bool = self._options.ttl_changelog_tombstones
-        # Opt-in gate for adopting a store created on the v3.24.0 TTL preview
-        # (M1). Stored under a distinct attribute (NOT ``self._adopt_v3240_stamps``)
+        # Opt-in gate for adopting a store created on the v3.24.0 TTL preview.
+        # Stored under a distinct attribute (NOT ``self._adopt_v3240_stamps``)
         # so it does not shadow the private :meth:`_adopt_v3240_stamps` method that
         # performs the adoption. When False (the default) a 100%-quorum stamp
         # detection logs a CRITICAL and stays legacy; when True it flips + adopts.
@@ -170,18 +170,18 @@ class RocksDBStorePartition(StorePartition):
         # Wallclock reference captured once per changelog-recovery session
         # (lazily, on the first stamped default-CF replay). Used to judge
         # whether a replayed TTL entry is already expired and to seed the
-        # post-recovery high-water (see :meth:`recover_from_changelog_message`,
-        # spec ``spec-recovery-wallclock.md`` §3.2/§3.3). ``None`` means no
+        # post-recovery high-water (see :meth:`recover_from_changelog_message`).
+        # ``None`` means no
         # stamped message has been replayed yet in this partition's lifetime;
         # a fresh partition instance per assignment is a fresh recovery session.
         self._recovery_now_ms: Optional[int] = None
         # Count of wallclock-expired stamped records dropped during this
-        # recovery's changelog replay (Rule 4 / latest-record-wins, :meth:
-        # `recover_from_changelog_message`). Surfaced as one aggregate INFO at
+        # recovery's changelog replay (the latest-record-wins recovery-drop
+        # filter, :meth:`recover_from_changelog_message`). Surfaced as one aggregate INFO at
         # :meth:`complete_recovery` so an operator sees the deletions instead of
         # records silently vanishing across a recovery.
         self._recovery_expired_drops: int = 0
-        # Incomplete-migration detection (spec §8.8). Set True on the first
+        # Incomplete-migration detection. Set True on the first
         # header-true default-CF replay (the same condition that flips the
         # partition into TTL mode). Combined with a non-empty
         # ``__ttl_backfill_pending__`` CF at end of recovery, it marks a MIXED
@@ -189,10 +189,11 @@ class RocksDBStorePartition(StorePartition):
         # completed by :meth:`complete_recovery`. False (the all-legacy first-
         # enablement case) never triggers completion.
         self._recovery_saw_stamped: bool = False
-        # §15.2 survivor-derived completion default. Tracks the MAX absolute
+        # Survivor-derived completion default. Tracks the MAX absolute
         # expiry among replayed default-CF records that are (i) stamped /
-        # header-true, (ii) non-SENTINEL, and (iii) NOT dropped by the Rule 4
-        # wallclock filter (i.e. still in the future at rebuild). When an
+        # header-true, (ii) non-SENTINEL, and (iii) NOT dropped by the
+        # latest-record-wins wallclock filter (i.e. still in the future at
+        # rebuild). When an
         # incomplete migration is completed WITHOUT ``legacy_records_ttl`` in
         # config, the leftover legacy records inherit this expiry — aligning them
         # with the surviving siblings of their own backfill cohort. ``None`` = no
@@ -200,7 +201,7 @@ class RocksDBStorePartition(StorePartition):
         # in which case completion falls back to SENTINEL_NEVER + a WARN rather
         # than deriving a past expiry that would mass-delete on the next sweep.
         self._recovery_max_survivor_expiry_ms: Optional[int] = None
-        # Durable done-flag latch (spec §13.1). Set True when the replicated
+        # Durable done-flag latch. Set True when the replicated
         # ``__ttl_system__`` marker (``TTL_MIGRATION_DONE_KEY``) is replayed this
         # recovery session. It means the source store's migration completed, so
         # :meth:`complete_recovery` flips the partition, discards any pending
@@ -210,7 +211,7 @@ class RocksDBStorePartition(StorePartition):
         # applies unchanged (additive back-compat).
         self._recovery_saw_migration_done: bool = False
 
-        # Warn-once guard for the fail-safe degraded TTL read (spec item d).
+        # Warn-once guard for the fail-safe degraded TTL read.
         # Scoped to the PARTITION, not a single checkpoint transaction, so the
         # warning fires once per partition lifetime instead of once per flush
         # (a transaction-scoped flag re-warned on every checkpoint). Set by the
@@ -230,7 +231,7 @@ class RocksDBStorePartition(StorePartition):
         else:
             self.uses_ttl_stamps = False
 
-        # Fix B (shortcut 73191 review): remember whether the partition was
+        # Remember whether the partition was
         # ALREADY flipped on disk at open time, before any changelog replay could
         # set the runtime flag. ``complete_recovery`` uses this to treat an
         # offset-caught-up restart (no stamped record replayed this session, so
@@ -238,7 +239,7 @@ class RocksDBStorePartition(StorePartition):
         # saw-stamped-equivalent: its ``__ttl_backfill_pending__`` census is
         # genuine leftovers, not orphans, so it must be COMPLETED rather than
         # discarded. An un-flipped (pure-legacy) store keeps ``False`` and still
-        # discards an orphan census (the Bug-3 regression path).
+        # discards an orphan census.
         self._persisted_flipped_at_open: bool = self.uses_ttl_stamps
 
         if self.uses_ttl_stamps:
@@ -255,17 +256,17 @@ class RocksDBStorePartition(StorePartition):
             # flipped this store (one-time; no-op once cleaned).
             self._cleanup_completed_backfill_bookkeeping()
 
-        # C1 P0 gate (sc-73191). Snapshot ONCE, at the end of ``__init__`` and
+        # Snapshot ONCE, at the end of ``__init__`` and
         # AFTER the open-time ``_cleanup_completed_backfill_bookkeeping`` above,
         # whether this partition opened with a non-empty live-backfill ledger —
         # the interrupted-live-backfill signature. Consulted by
         # :meth:`recover_from_changelog_message` to ledger a replayed crash-window
-        # chunk so the resume census cannot double-wrap it (spec §6/§8.2).
+        # chunk so the resume census cannot double-wrap it.
         #
         # The ``__ttl_backfill_stamped__`` CF is a ``LOCAL_ONLY_CFS`` member (never
         # produced to the changelog), so a fresh-volume COLD restore always opens
         # with the CF absent → snapshot False → replay ledgers nothing → the
-        # adopt / §15.2 / offset-skip cold-restore paths are byte-for-byte
+        # adopt / survivor-derived / offset-skip cold-restore paths are byte-for-byte
         # unchanged. Only an interrupted LIVE backfill (whose earlier chunks wrote
         # real ledger entries on this same volume) opens with the CF non-empty →
         # snapshot True. The ``list_column_families()`` guard short-circuits so a
@@ -274,7 +275,7 @@ class RocksDBStorePartition(StorePartition):
         # the cleanup paths already make. Snapshot-at-open (not a live re-probe)
         # is deliberate: a live probe is self-fulfilling — the first ledgered
         # record would make every subsequent one ledger too, re-introducing the
-        # cold-restore false positive the gate exists to prevent (spec §10).
+        # cold-restore false positive the gate exists to prevent.
         self._ledger_nonempty_at_open: bool = (
             TTL_BACKFILL_STAMPED_CF_NAME in self.list_column_families()
             and self._live_backfill_ledger_has_any()
@@ -320,7 +321,7 @@ class RocksDBStorePartition(StorePartition):
     @property
     def adopt_v3240_stamps(self) -> bool:
         """
-        Whether the opt-in v3.24.0 stamp adoption is enabled (M1). When ``False``
+        Whether the opt-in v3.24.0 stamp adoption is enabled. When ``False``
         (default) a 100%-quorum stamp detection on recovery logs a CRITICAL and
         leaves the store legacy; when ``True`` it flips + adopts the stamps in
         place. Read-only mirror of ``RocksDBOptions.adopt_v3240_stamps`` for
@@ -343,7 +344,7 @@ class RocksDBStorePartition(StorePartition):
         """
         Current wallclock time in epoch milliseconds. Isolated behind a method
         purely as a test seam so changelog-recovery determinism cases can
-        inject a fixed ``now`` without sleeping (spec §8, case 6).
+        inject a fixed ``now`` without sleeping.
         """
         return int(time.time() * 1000)
 
@@ -358,7 +359,7 @@ class RocksDBStorePartition(StorePartition):
         cf_handle = self.get_column_family_handle(cf_name)
         batch = WriteBatch(raw_mode=True)
 
-        # Done-flag consumption (spec §13.1). The replicated ``__ttl_system__``
+        # Done-flag consumption. The replicated ``__ttl_system__``
         # CF carries a single reserved marker produced flag-last when a migration
         # completes. Seeing it means the source store was definitively
         # TTL-enabled AND fully migrated: latch it so ``complete_recovery`` flips,
@@ -375,7 +376,7 @@ class RocksDBStorePartition(StorePartition):
         ):
             self._recovery_saw_migration_done = True
 
-        # Recovery flip-discovery (spec §8.7).
+        # Recovery flip-discovery.
         #
         # The ``__ttl_enabled__`` key lives in the metadata CF, which is in
         # ``LOCAL_ONLY_CFS`` and therefore never produced to the changelog
@@ -387,9 +388,10 @@ class RocksDBStorePartition(StorePartition):
         # record we flip this recovery partition into TTL mode and latch for the
         # rest of the session. This REPLACES the old value-content heuristic
         # (``_looks_like_stamped_value``), which false-positived on legacy 8-byte
-        # epoch-ms values and dropped them (OP-3 / §8.6.3). Header absent → the
+        # epoch-ms values and dropped them. Header absent → the
         # record is legacy / un-stamped and replays verbatim below, so a purely
-        # legacy changelog never latches (the §8.6 Option-1 requirement).
+        # legacy changelog never latches (the requirement that a purely legacy
+        # changelog stays legacy).
         if (
             type(self).uses_ttl_stamps
             and not self.uses_ttl_stamps
@@ -407,25 +409,25 @@ class RocksDBStorePartition(StorePartition):
             # process restart picks up TTL mode at open time.
             self._stamp_flip_metadata()
 
-        # Incomplete-migration detection / census (spec §8.8). The
+        # Incomplete-migration detection / census. The
         # stamped-vs-legacy decision is per-record on the ``ttl_stamped`` header,
         # NOT on the latched ``uses_ttl_stamps`` flag: a MIXED changelog replays
         # header-absent legacy records AFTER the partition has flipped, and those
         # must still land verbatim (never re-wrapped) and be censused into
         # ``__ttl_backfill_pending__`` for the completion backfill. The pending
         # bookkeeping rides the SAME WriteBatch as the default-CF write so it is
-        # atomic with the replay (§4.1).
+        # atomic with the replay.
         if type(self).uses_ttl_stamps and cf_name == "default":
             pending_handle = self.get_column_family_handle(TTL_BACKFILL_PENDING_CF_NAME)
             if ttl_stamped:
                 # A header-true default-CF record. Mark that the partition
                 # replayed at least one stamped record (the MIXED-detection
                 # half) and drop any earlier legacy census entry for this key —
-                # a later stamped write supersedes it (compaction ordering, §4).
+                # a later stamped write supersedes it (compaction ordering).
                 self._recovery_saw_stamped = True
                 batch.delete(key, pending_handle)
                 if self._ledger_nonempty_at_open:
-                    # C1 P0 fix (sc-73191). This partition opened with a non-empty
+                    # This partition opened with a non-empty
                     # live-backfill ledger (interrupted-live-backfill signature).
                     # A crash between a chunk's changelog flush-confirm and its
                     # local write leaves that chunk on the changelog but absent
@@ -480,25 +482,27 @@ class RocksDBStorePartition(StorePartition):
         elif is_main_cf and not ttl_stamped:
             # Header-absent default-CF record replayed on a (now-)flipped
             # partition — a leftover legacy record of an interrupted migration
-            # (MIXED changelog, §8.8). It MUST land verbatim (no stamp wrap, no
-            # index entry, no Rule 4 filter): its key was just censused into the
-            # pending CF and the completion backfill (:meth:`complete_recovery`)
-            # will stamp it at end of recovery. Routing here on the per-record
-            # header — not on the latched flag — is the §6.2 fix.
+            # (MIXED changelog). It MUST land verbatim (no stamp wrap, no
+            # index entry, no recovery-drop filter): its key was just censused
+            # into the pending CF and the completion backfill
+            # (:meth:`complete_recovery`) will stamp it at end of recovery.
+            # Routing here on the per-record header — not on the latched flag —
+            # is what keeps the leftover legacy records intact.
             batch.put(key, value, cf_handle)
         elif is_main_cf:
             stamped, stamp = self._normalize_replay_value(value)
             # Judge expiry against the current wallclock captured once per
             # recovery session, NOT against a stamp-ratcheted pseudo-clock
             # (the old ``recovery_now = self._high_water_ms`` ratchet collapsed
-            # uniform-expiry backfilled stores; see spec-recovery-wallclock.md
-            # §2/§3). Capture lazily on the first stamped default-CF replay.
-            # Finding 3 (§7.4): the wallclock is used ONLY as the Rule 4 replay
-            # drop clock; it is NO LONGER seeded into the live ``_high_water_ms``
-            # clock. Post-recovery ``_high_water_ms`` is the loaded value or
+            # uniform-expiry backfilled stores). Capture lazily on the first
+            # stamped default-CF replay.
+            # The recovery wallclock is used ONLY as the latest-record-wins
+            # replay-drop clock; it is NO LONGER seeded into the live
+            # ``_high_water_ms`` clock. Post-recovery ``_high_water_ms`` is the
+            # loaded value or
             # ``None`` and advances only on live event-time writes, so an
             # event-time-lagging workload never over-expires its own writes.
-            # Sentinel-stamped entries are never compared and always survive (§7).
+            # Sentinel-stamped entries are never compared and always survive.
             expired = False
             if stamp != SENTINEL_NEVER:
                 if self._recovery_now_ms is None:
@@ -506,8 +510,8 @@ class RocksDBStorePartition(StorePartition):
                 recovery_now_ms = self._recovery_now_ms
                 expired = stamp <= recovery_now_ms
             if expired:
-                # Already-expired against wallclock-at-recovery (Fix A —
-                # latest-record-wins). A compacted changelog can carry several
+                # Already-expired against wallclock-at-recovery
+                # (latest-record-wins). A compacted changelog can carry several
                 # pre-compaction copies of one key; an OLDER copy of ``key``
                 # replayed earlier this session (a verbatim header-absent legacy
                 # value, or an older unexpired stamped copy) may already sit in
@@ -520,7 +524,7 @@ class RocksDBStorePartition(StorePartition):
                 # is still skipped (a dropped entry indexes nothing). We do NOT
                 # try to delete an older copy's __ttl_index__ pointer — its stamp
                 # is unknown here; the sweep's ghost/orphan handling GCs any index
-                # entry whose main-CF key is gone (§7, _run_sweep).
+                # entry whose main-CF key is gone (see _run_sweep).
                 batch.delete(key, cf_handle)
                 self._recovery_expired_drops += 1
             else:
@@ -528,7 +532,7 @@ class RocksDBStorePartition(StorePartition):
                 if stamp != SENTINEL_NEVER:
                     index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
                     batch.put(encode_index_key(stamp, key), b"", index_handle)
-                    # §15.2: this is a surviving (future, non-sentinel) stamp on
+                    # This is a surviving (future, non-sentinel) stamp on
                     # a header-true record — a candidate source for the leftover
                     # completion expiry when config is absent. Track the max.
                     if (
@@ -544,7 +548,7 @@ class RocksDBStorePartition(StorePartition):
 
     def complete_recovery(self) -> None:
         """
-        Recovery-finalize hook (spec §8.8). Called once by the recovery manager
+        Recovery-finalize hook. Called once by the recovery manager
         after this partition has replayed its changelog up to the high-watermark
         and before it is handed to live processing.
 
@@ -555,25 +559,25 @@ class RocksDBStorePartition(StorePartition):
         legacy records verbatim while censusing their keys into
         ``__ttl_backfill_pending__``. Those leftovers are otherwise stranded as
         never-expiring forever (the live ``ttl=`` write sees an already-flipped
-        partition and the backfill gate short-circuits — OP-4).
+        partition and the backfill gate short-circuits).
 
-        Trigger (only the MIXED shape — §7):
+        Trigger (only the MIXED shape):
 
-        - if NOT ``_recovery_saw_stamped`` → all-legacy first-enablement (§8.6);
+        - if NOT ``_recovery_saw_stamped`` → all-legacy first-enablement;
           the live first-``ttl=``-write backfill owns it. No-op.
-        - if the pending CF is empty → all-stamped / fully-migrated (§8.7);
+        - if the pending CF is empty → all-stamped / fully-migrated;
           nothing to complete. No-op.
         - else (stamped seen AND pending non-empty) → incomplete migration;
-          **auto-finish** (spec §15.2, revised from the removed reject):
+          **auto-finish** (revised from the removed reject):
           chunk-backfill exactly the pending keys, stamping each with a uniform
           ``expires_at_ms``, writing the ``__ttl_index__`` entry, producing a
           header-bearing stamped record to the changelog, and deleting the key
           from the pending CF as the chunk commits (the delete IS the durable
-          progress cursor — §6). The uniform expiry is:
+          progress cursor). The uniform expiry is:
             - ``legacy_records_ttl`` set → ``self._recovery_now_ms +
-              _ttl_to_ms(legacy_records_ttl)`` (wallclock-at-rebuild, §5;
+              _ttl_to_ms(legacy_records_ttl)`` (wallclock-at-rebuild;
               explicit config unchanged and always wins);
-            - ``legacy_records_ttl`` absent → the §15.2 survivor-derived expiry
+            - ``legacy_records_ttl`` absent → the survivor-derived expiry
               ``self._recovery_max_survivor_expiry_ms`` (a future stamp shared
               with the leftovers' backfill cohort), or ``SENTINEL_NEVER`` +
               a WARN in the degenerate all-expired case (no surviving future
@@ -588,7 +592,7 @@ class RocksDBStorePartition(StorePartition):
         stamped) changelog and resumes over exactly the remainder.
         """
         if self._recovery_expired_drops > 0:
-            # #8 (review batch 2): make the Rule-4 wallclock-expired replay drops
+            # Make the latest-record-wins wallclock-expired replay drops
             # observable — ONE aggregate INFO per partition per recovery (no
             # per-record logging). Emitted at the once-per-recovery finalize seam
             # before any early return; a non-zero count implies the partition
@@ -606,21 +610,21 @@ class RocksDBStorePartition(StorePartition):
             # census gate never fired, so there is nothing to complete or clean.
             return
         if self._recovery_saw_migration_done:
-            # Durable done-flag present (spec §13.1): the source store was
+            # Durable done-flag present: the source store was
             # definitively TTL-enabled and its backfill completed, so the
             # migration is NEVER redone. Ensure the partition is flipped (the
             # marker can outlive, via compaction, the stamped records that would
             # otherwise flip it), discard any pending census, and run no
             # backfill/completion. This is the "survives reconstruction"
-            # guarantee that closes the Finding-1 class for post-marker stores.
+            # guarantee for post-marker stores.
             if not self.uses_ttl_stamps:
                 self.uses_ttl_stamps = True
                 self.get_or_create_column_family(TTL_INDEX_CF_NAME)
                 self._stamp_flip_metadata()
-            # nit (review batch 2): the only census-discard path that was silent.
+            # This is the only census-discard path that was otherwise silent.
             # Log a sibling-consistent INFO with the discarded count before the
             # drop (unconditionally — count 0 is a useful "nothing to discard"
-            # signal, matching the M1/pure-legacy/C1 paths that log even at 0).
+            # signal, matching the other discard paths that log even at 0).
             logger.info(
                 "Recovery at path=%s: durable migration done-marker present; "
                 "discarding %d orphan pending-census entry(ies) (store fully "
@@ -631,9 +635,9 @@ class RocksDBStorePartition(StorePartition):
             self._discard_backfill_pending()
             return
         if self.uses_ttl_stamps and self._live_backfill_ledger_has_any():
-            # C1 warm-restart resume — evaluated immediately AFTER the §13.1
-            # done-flag short-circuit and BEFORE the M1 all-stamped byte gate
-            # below (#3, review batch 2: definitive ledger evidence beats the byte
+            # Warm-restart resume — evaluated immediately AFTER the
+            # done-flag short-circuit and BEFORE the all-stamped byte gate
+            # below (definitive ledger evidence beats the byte
             # heuristic). The store is flipped and holds a non-empty
             # ``__ttl_backfill_stamped__`` ledger with NO done-marker (the
             # done-marker case already returned above): the exact signature of an
@@ -643,34 +647,40 @@ class RocksDBStorePartition(StorePartition):
             # the replayed offset range that were never censused. Resume the
             # backfill over the ledger complement and finish the migration.
             #
-            # Ordered ABOVE M1 on purpose: a warm restart re-replays the stored
+            # Ordered ABOVE the all-stamped gate on purpose: a warm restart
+            # re-replays the stored
             # offset INCLUSIVELY, so one boundary header-absent legacy record can
             # be re-censused into ``__ttl_backfill_pending__`` even while the ledger
             # is non-empty — the ledger and the pending census are NOT mutually
             # exclusive on a warm restart. If that lone orphan's value happened to
-            # byte-decode as a plausible stamp, the M1 gate below would fire first
+            # byte-decode as a plausible stamp, the all-stamped gate below would
+            # fire first
             # and permanently strand the interrupted backfill (CRITICAL + discard,
-            # no resume, ledger kept → re-strands on every restart). This C1 branch
+            # no resume, ledger kept → re-strands on every restart). This resume
+            # branch
             # cannot hijack a cold-restore census case: the ledger is a LOCAL_ONLY
-            # CF, absent on a fresh volume (where adopt / §15.2 live), so a
+            # CF, absent on a fresh volume (where adopt / survivor-derived live),
+            # so a
             # non-empty ledger only ever means a live backfill ran on THIS volume.
             self._resume_interrupted_live_backfill()
             return
         if self._all_pending_values_are_stamped():
-            # Total-quorum stamp detection (evaluated AFTER the §13.1 done-flag
-            # short-circuit AND the C1 resume branch above — #3 — and BEFORE the
-            # saw_stamped/§15.2 disposition). A stock-v3.24.0 cold restore has
+            # Total-quorum stamp detection (evaluated AFTER the done-flag
+            # short-circuit AND the warm-restart resume branch above, and BEFORE the
+            # saw_stamped/survivor-derived disposition). A stock-v3.24.0 cold
+            # restore has
             # saw_stamped=False and a full pending census whose values are all
-            # 8B-stamped-but-header-less; a MIXED-C (v3.24.0→this-branch) restore
+            # 8B-stamped-but-header-less; a mixed v3.24.0→this-branch restore
             # leaves the same all-stamped leftovers.
             if self._adopt_v3240_stamps_enabled:
-                # M1 opt-in self-heal. The operator asserted this is a genuine
+                # Opt-in self-heal. The operator asserted this is a genuine
                 # v3.24.0 store: flip + keep values verbatim + rebuild the index +
                 # discard the census (now chunked, see _adopt_v3240_stamps). Fires
-                # before §15.2 so a MIXED-C census is adopted, not double-wrapped.
+                # before the survivor-derived path so a mixed v3.24.0 census is
+                # adopted, not double-wrapped.
                 self._adopt_v3240_stamps()
                 return
-            # M1: detection WITHOUT the opt-in flag. Do NOT flip. This all-stamped
+            # Detection WITHOUT the opt-in flag. Do NOT flip. This all-stamped
             # census is the exact byte-shape of a stock v3.24.0 cold restore, but
             # it is INDISTINGUISHABLE from a legacy set_bytes() store whose values
             # begin with plausible-stamp bytes — auto-flipping the latter would
@@ -678,8 +688,9 @@ class RocksDBStorePartition(StorePartition):
             # the data on the next sweep. Log CRITICAL naming the flag, then take
             # the pure-legacy disposition: discard the orphan census and leave
             # every value verbatim (byte-identical / raw-readable). MUST discard-
-            # and-return here rather than fall through — a MIXED-C census reaching
-            # the completion path would be double-wrapped (§5.3). Discarding the
+            # and-return here rather than fall through — a mixed v3.24.0 census
+            # reaching
+            # the completion path would be double-wrapped. Discarding the
             # census (an O(1) pointer-CF drop) never touches default-CF user data.
             logger.critical(
                 "Recovery at path=%s replayed a header-absent changelog whose %d "
@@ -705,17 +716,16 @@ class RocksDBStorePartition(StorePartition):
         if not self._recovery_saw_stamped and not self._persisted_flipped_at_open:
             # No __ttl_stamped__ record was replayed this session AND the store
             # was not already flipped on disk at open, so there is no migration to
-            # complete: a pure-legacy first-enablement (§8.6, owned by the live
+            # complete: a pure-legacy first-enablement (owned by the live
             # first-``ttl=``-write backfill) or an all-legacy replay on an
             # un-flipped store. Either way the class-level census gate may have PUT
             # header-absent legacy keys into __ttl_backfill_pending__ (MIXED
             # detection has to census BEFORE the first stamped record can
             # distinguish them). Those entries are orphans with no completion pass
             # to drain them, so discard them now — a pure-legacy store then ends
-            # recovery with an empty/absent pending CF and no lasting overhead
-            # (Bug 3, spec-incomplete-migration-recovery.md §8.8).
+            # recovery with an empty/absent pending CF and no lasting overhead.
             #
-            # Fix B (shortcut 73191 review): a store that was ALREADY flipped on
+            # A store that was ALREADY flipped on
             # disk at open is handled by the ``_persisted_flipped_at_open`` guard
             # above — it falls through to completion even with
             # ``_recovery_saw_stamped`` False. That is the offset-caught-up-restart
@@ -724,19 +734,20 @@ class RocksDBStorePartition(StorePartition):
             # the durable pending census holds genuine leftovers that MUST be
             # completed, not discarded. Only an UN-flipped store discards here.
             #
-            # Loud detection (spec §7.1) runs FIRST, before the census is
+            # Loud detection runs FIRST, before the census is
             # dropped: no done-flag and no stamped record was seen, yet the census
             # is non-empty. That is normally a genuine pure-legacy (v3.23.6) store
             # — but it is ALSO the exact shape of a stock-v3.24.0 changelog
             # (8-byte-stamped values, no ``__ttl_stamped__`` header, no index
             # records — no structural discriminator exists). The 100%-quorum case
-            # (EVERY censused value validates) is handled ABOVE at the M1 gate: it
+            # (EVERY censused value validates) is handled ABOVE at the all-stamped
+            # gate: it
             # logs a CRITICAL naming ``adopt_v3240_stamps`` and returns without
             # flipping (or adopts when the flag is set), so it never reaches here.
             # This WARN therefore covers only the sub-100% "looks-like-but-not-all"
             # case: sample the censused values and, if most look like stamps, WARN
             # that this LOOKS like a v3.24.0 cold restore whose values may read
-            # back with a spurious 8-byte prefix. DETECTION ONLY (spec §2/§6): the
+            # back with a spurious 8-byte prefix. DETECTION ONLY: the
             # sampled bytes gate the log line and nothing else — no value is
             # stripped, flipped, or re-routed, and no automatic repair is ever
             # applied without the explicit opt-in flag.
@@ -751,16 +762,16 @@ class RocksDBStorePartition(StorePartition):
 
         pending_count = self._count_backfill_pending()
         if pending_count == 0:
-            # All-stamped / fully-migrated changelog (§8.7): nothing leftover.
+            # All-stamped / fully-migrated changelog: nothing leftover.
             return
 
         legacy_records_ttl = self._legacy_records_ttl
         if legacy_records_ttl is not None:
-            # Explicit config wins (unchanged, §5): wallclock-at-rebuild + ttl.
+            # Explicit config wins (unchanged): wallclock-at-rebuild + ttl.
             # ``_recovery_now_ms`` was captured on the first stamped default-CF
             # replay (exactly when ``_recovery_saw_stamped`` was set), so it is
             # normally populated here; capture defensively if a stamped record was
-            # seen but no non-sentinel stamp ever set it. Finding 3 (§7.4): the
+            # seen but no non-sentinel stamp ever set it. The recovery
             # wallclock is used ONLY to derive this recovery-completion expiry, it
             # is NOT seeded into the live ``_high_water_ms`` clock (that seed is
             # removed so an event-time-lagging workload never over-expires its own
@@ -783,13 +794,14 @@ class RocksDBStorePartition(StorePartition):
                 else self._max_index_stamp_ms()
             )
         ) is not None:
-            # §15.2 survivor-derived default (config absent): align the leftovers
+            # Survivor-derived default (config absent): align the leftovers
             # with the max surviving future stamp of their backfill cohort. A
-            # single uniform value, in the future by construction (Rule 4 already
+            # single uniform value, in the future by construction (the
+            # latest-record-wins filter already
             # dropped past-dated stamps during replay, so a tracked survivor is
             # always > wallclock-at-rebuild).
             #
-            # Fix B (shortcut 73191 review): on the offset-caught-up restart there
+            # On the offset-caught-up restart there
             # is NO replay, so ``_recovery_max_survivor_expiry_ms`` is unset. Fall
             # back to the max ON-DISK ``__ttl_index__`` stamp — the surviving
             # stamped cohort persisted from the interrupted run — so the leftovers
@@ -809,7 +821,7 @@ class RocksDBStorePartition(StorePartition):
                 expires_at_ms,
             )
         else:
-            # §15.2 all-expired fallback (config absent AND no surviving future
+            # All-expired fallback (config absent AND no surviving future
             # stamp): stamping with a past/derived expiry would mass-delete the
             # leftovers on the next sweep (silent data loss — forbidden, Quix
             # Cloud has no state reset). Keep them with SENTINEL_NEVER instead and
@@ -831,7 +843,7 @@ class RocksDBStorePartition(StorePartition):
             chunk_size=self._legacy_backfill_chunk_size,
             total_pending=pending_count,
         )
-        # Flag-last (spec §13.1): the migration is now complete, so produce +
+        # Flag-last: the migration is now complete, so produce +
         # persist the durable done-flag marker AFTER the last stamped record. A
         # crash before this leaves the store re-completable from the (now-more-
         # stamped) changelog; a subsequent restore that sees the marker never
@@ -846,7 +858,7 @@ class RocksDBStorePartition(StorePartition):
 
     def _produce_migration_done_marker(self) -> None:
         """
-        Produce + persist the durable "migration done" marker (spec §13.1).
+        Produce + persist the durable "migration done" marker.
 
         **Changelog-first ordering** — mirroring :meth:`_flush_backfill_changelog`
         and the invariant it enforces everywhere else: the marker is produced to
@@ -875,7 +887,7 @@ class RocksDBStorePartition(StorePartition):
                     CHANGELOG_CF_MESSAGE_HEADER: TTL_SYSTEM_CF_NAME,
                     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
                 },
-                # Fix C: this recovery-completion done-marker is produced with no
+                # This recovery-completion done-marker is produced with no
                 # open checkpoint transaction, so it MUST use the non-transactional
                 # migration route under exactly-once (a transactional produce
                 # outside a transaction is invalid).
@@ -896,8 +908,8 @@ class RocksDBStorePartition(StorePartition):
 
     def _resume_interrupted_live_backfill(self) -> None:
         """
-        Resume an interrupted in-place live legacy backfill after a warm restart
-        (C1). Entered from :meth:`complete_recovery` when the store is flipped, the
+        Resume an interrupted in-place live legacy backfill after a warm restart.
+        Entered from :meth:`complete_recovery` when the store is flipped, the
         ``__ttl_backfill_stamped__`` ledger is non-empty, and no done-marker
         exists — an in-place :meth:`backfill_legacy_records` that committed some
         chunks (stamps + ledger + produced records) but crashed before the
@@ -913,7 +925,7 @@ class RocksDBStorePartition(StorePartition):
         (now-smaller) complement and converges, never double-wrapping an
         already-stamped value.
 
-        Expiry (§7.4): the resumed leftovers inherit the SAME uniform window their
+        Expiry: the resumed leftovers inherit the SAME uniform window their
         already-migrated cohort received, derived from the surviving stamped cohort
         (deterministic, a fixed on-disk value):
 
@@ -937,7 +949,7 @@ class RocksDBStorePartition(StorePartition):
             self.get_or_create_column_family(TTL_INDEX_CF_NAME)
             self._stamp_flip_metadata()
 
-        # Step 2 — derive the uniform expiry (survivor-derived, §7.4).
+        # Step 2 — derive the uniform expiry (survivor-derived).
         if self._recovery_max_survivor_expiry_ms is not None:
             expires_at_ms = self._recovery_max_survivor_expiry_ms
         elif (max_index_stamp := self._max_index_stamp_ms()) is not None:
@@ -972,16 +984,16 @@ class RocksDBStorePartition(StorePartition):
             chunk_size=self._legacy_backfill_chunk_size,
         )
 
-        # Step 4 — done-marker flag-last (Fix C changelog-first, non-transactional).
+        # Step 4 — done-marker flag-last (changelog-first, non-transactional).
         self._produce_migration_done_marker()
 
-        # Step 5 — cleanup (now marker-gated, §7.1): the marker is present, so this
+        # Step 5 — cleanup (now marker-gated): the marker is present, so this
         # drops the ledger + progress counter.
         self._cleanup_completed_backfill_bookkeeping()
         # Also drop any orphan recovery pending census. Warm-restart recovery
         # re-replays the stored changelog offset INCLUSIVELY (recovery.py, back-
         # compat), so a header-absent legacy record on the replay boundary can be
-        # re-censused into ``__ttl_backfill_pending__`` even though the C1 resume
+        # re-censused into ``__ttl_backfill_pending__`` even though the resume
         # drives its census from the ledger, not from pending. That entry is a
         # harmless orphan once the migration is done, but leaving it trips census-
         # based hygiene checks. Draining it here (AFTER the resume has stamped the
@@ -1000,7 +1012,7 @@ class RocksDBStorePartition(StorePartition):
     def _warn_if_looks_like_v3240_upgrade(self, sample_size: int = 256) -> None:
         """
         Emit ONE prominent WARNING when a censused-but-never-flipped population
-        LOOKS like a stock-v3.24.0 cold restore (spec §7.1, Finding 1).
+        LOOKS like a stock-v3.24.0 cold restore.
 
         v3.24.0 wrote 8-byte-stamped values but produced changelog records
         WITHOUT the ``__ttl_stamped__`` header and WITHOUT ``__ttl_index__``
@@ -1016,7 +1028,7 @@ class RocksDBStorePartition(StorePartition):
         and either adopts (flag set) or stays legacy (flag unset) — it returns
         before reaching this WARN.
 
-        HARD CONSTRAINT (spec §2/§6/§7.1): the sampled bytes are used ONLY to
+        HARD CONSTRAINT: the sampled bytes are used ONLY to
         decide whether to log — never to strip, flip, or re-route data. The
         values still land verbatim as legacy. Adoption (the only path that flips +
         rebuilds the index) is an EXPLICIT, operator-requested repair gated on
@@ -1059,15 +1071,15 @@ class RocksDBStorePartition(StorePartition):
 
     def _all_pending_values_are_stamped(self) -> bool:
         """
-        Total-quorum strict stamp validation over the pending census (spec §7.1
-        Finding-1 self-heal). Point-get each pending key's default-CF value and
+        Total-quorum strict stamp validation over the pending census (the
+        self-heal path). Point-get each pending key's default-CF value and
         require EVERY one to pass ``_safe_decode_stamp``; **short-circuit on the
         first failure**, so a pure-legacy store (population 1) typically pays a
         single point-get and the 99% legacy path is not taxed.
 
         This byte inspection makes ONLY the store-level, all-or-nothing adoption
-        decision — never a per-record routing choice (the per-record byte-
-        heuristic ban, spec §2/§6). Returns ``False`` on an empty census (no
+        decision — never a per-record routing choice (per-record byte-heuristics
+        are banned). Returns ``False`` on an empty census (no
         adoption without positive evidence).
         """
         pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
@@ -1082,7 +1094,7 @@ class RocksDBStorePartition(StorePartition):
 
     def _adopt_v3240_stamps(self) -> None:
         """
-        Adopt the pending census as v3.24.0-stamped records (M1 opt-in self-heal,
+        Adopt the pending census as v3.24.0-stamped records (opt-in self-heal,
         gated by ``adopt_v3240_stamps`` at the :meth:`complete_recovery` gate). The
         total quorum has already been proven by
         :meth:`_all_pending_values_are_stamped`.
@@ -1097,7 +1109,7 @@ class RocksDBStorePartition(StorePartition):
         same result). Expired adopted entries are reclaimed lazily by the live
         event-time sweep, never by a wallclock reclaim.
 
-        **Chunked (M1).** The index puts + pending deletes are committed in bounded
+        **Chunked.** The index puts + pending deletes are committed in bounded
         chunks of ``legacy_backfill_chunk_size`` (no new constant), mirroring the
         proven :meth:`_complete_pending_backfill` skeleton minus the changelog
         produce/flush (adoption is changelog-silent). The per-chunk pending DELETE
@@ -1178,14 +1190,14 @@ class RocksDBStorePartition(StorePartition):
 
     def _backfill_pending_has_any(self) -> bool:
         """Cheap "is the pending census non-empty" probe: short-circuits on the
-        first key instead of counting the whole CF (Fix B)."""
+        first key instead of counting the whole CF."""
         pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
         for _ in pending_cf.keys():
             return True
         return False
 
     def _live_backfill_ledger_has_any(self) -> bool:
-        """Cheap "is the live-backfill stamped-ledger non-empty" probe (C1):
+        """Cheap "is the live-backfill stamped-ledger non-empty" probe:
         short-circuits on the first key instead of counting the whole CF. Mirrors
         :meth:`_backfill_pending_has_any` but scans the
         ``__ttl_backfill_stamped__`` ledger — the durable resume cursor of an
@@ -1197,16 +1209,16 @@ class RocksDBStorePartition(StorePartition):
 
     def _has_local_migration_done_marker(self) -> bool:
         """Whether the durable "migration done" marker is present on disk in the
-        replicated ``__ttl_system__`` CF (spec §13.1). Its presence means the
-        migration completed, so nothing is left to finish (Fix B)."""
+        replicated ``__ttl_system__`` CF. Its presence means the
+        migration completed, so nothing is left to finish."""
         system_cf = self.get_or_create_column_family(TTL_SYSTEM_CF_NAME)
         return system_cf.get(TTL_MIGRATION_DONE_KEY, default=None) is not None
 
     def has_incomplete_ttl_migration(self) -> bool:
         """
         Whether a durably-recorded legacy-TTL migration is flipped-but-unfinished
-        and must be completed by :meth:`complete_recovery` (Fix B, shortcut 73191
-        review). Consulted by ``RecoveryPartition.needs_recovery_check`` so an
+        and must be completed by :meth:`complete_recovery`. Consulted by
+        ``RecoveryPartition.needs_recovery_check`` so an
         offset-caught-up restart (``highwater-1 == offset``) still runs the
         completion pass instead of stranding the leftover legacy records.
 
@@ -1217,8 +1229,8 @@ class RocksDBStorePartition(StorePartition):
         - no durable "migration done" marker exists (else the migration is done);
         - AND either completion track still has work:
           - the ``__ttl_backfill_pending__`` census holds ≥1 leftover key (the
-            recovery-completion / MIXED-changelog track, Fix B); OR
-          - the ``__ttl_backfill_stamped__`` ledger holds ≥1 key (C1): an
+            recovery-completion / MIXED-changelog track); OR
+          - the ``__ttl_backfill_stamped__`` ledger holds ≥1 key: an
             interrupted *live* backfill that flipped via changelog replay but
             never wrote its done-marker. Its leftovers live below the replayed
             offset range (never censused), so the pending census can be empty
@@ -1239,7 +1251,7 @@ class RocksDBStorePartition(StorePartition):
     def _max_index_stamp_ms(self) -> Optional[int]:
         """
         Return the maximum expiry stamp among the on-disk ``__ttl_index__``
-        entries, or ``None`` if the index is empty (Fix B).
+        entries, or ``None`` if the index is empty.
 
         Used to derive a survivor expiry for a config-absent completion that had
         NO replay this session (the offset-caught-up restart): with nothing
@@ -1278,8 +1290,7 @@ class RocksDBStorePartition(StorePartition):
     ) -> None:
         """
         Flush a backfill / recovery-completion chunk's changelog records with a
-        PROGRESS-based bounded loop and fail loudly only when delivery stalls
-        (spec ttl-changelog-tombstones §3.7).
+        PROGRESS-based bounded loop and fail loudly only when delivery stalls.
 
         Callers MUST invoke this AFTER producing a chunk's stamped records and
         BEFORE committing the chunk's local ``WriteBatch``: the stamped chunk has
@@ -1301,7 +1312,7 @@ class RocksDBStorePartition(StorePartition):
           double), matching the pre-existing "flush and proceed" behavior.
 
         The timeout thus measures *lack of progress*, not *total time*, so it is
-        robust to a large ``legacy_backfill_chunk_size``. Fix C: the flush routes
+        robust to a large ``legacy_backfill_chunk_size``. The flush routes
         through the migration path (the dedicated non-transactional producer under
         exactly-once, else the main producer), so a confirmed flush means durable
         BEFORE the caller's local commit.
@@ -1344,8 +1355,8 @@ class RocksDBStorePartition(StorePartition):
 
     def _discard_backfill_pending(self) -> None:
         """
-        Drop the ``__ttl_backfill_pending__`` census CF wholesale (Bug 3 hygiene,
-        spec-incomplete-migration-recovery.md §8.8).
+        Drop the ``__ttl_backfill_pending__`` census CF wholesale (a hygiene
+        cleanup).
 
         Called from :meth:`complete_recovery` when no ``__ttl_stamped__`` record
         was replayed this session: the class-level census gate may have PUT
@@ -1389,10 +1400,10 @@ class RocksDBStorePartition(StorePartition):
         ``__ttl_backfill_stamped__`` ledger CF and the ``__ttl_backfill_progress__``
         counter. Once the migration is genuinely done the backfill never re-runs,
         so neither is ever consulted again; drop them so a migrated store carries
-        no lasting overhead (parallels the Bug 3 pending-CF hygiene on the recovery
+        no lasting overhead (parallels the pending-CF hygiene on the recovery
         path).
 
-        Gated FIRST on the durable "migration done" marker (C1): a flipped store
+        Gated FIRST on the durable "migration done" marker: a flipped store
         may be an *interrupted* live backfill whose flip landed via changelog
         replay while un-stamped legacy leftovers remain (no done-marker yet). Such
         a store MUST keep its resume ledger + progress so
@@ -1433,7 +1444,7 @@ class RocksDBStorePartition(StorePartition):
     ) -> int:
         """
         Chunk-backfill the leftover legacy keys censused in
-        ``__ttl_backfill_pending__`` (spec §8.8 §6). Mirrors
+        ``__ttl_backfill_pending__``. Mirrors
         :meth:`backfill_legacy_records` but drives its census from the pending CF
         instead of the full default CF, and uses the pending-CF delete as its
         durable progress cursor (no integer cursor needed — a key leaves pending
@@ -1447,19 +1458,19 @@ class RocksDBStorePartition(StorePartition):
         2. Produce the chunk's stamped + header-bearing default-CF records to the
            changelog, then flush with a bounded timeout and raise
            :class:`ChangelogFlushError` if the chunk is not confirmed delivered —
-           the local commit must never get ahead of the changelog (spec item a).
+           the local commit must never get ahead of the changelog.
         3. Commit the WriteBatch with the raw writer (no sweep — the leftovers
            expire in the future).
 
         The pending CF is scanned ONCE end-to-end via a seek-based continuation
-        cursor (spec item g): after each chunk the scan resumes from the chunk's
+        cursor: after each chunk the scan resumes from the chunk's
         last (now-deleted) key instead of re-reading from the head, so RocksDB
         never re-walks the accumulating tombstones (the old head-rescan was
         O(n^2) in the pending size).
 
         :param total_pending: leftover count already computed by the caller
             (:meth:`complete_recovery`), reused here as the DEBUG progress
-            denominator so the pending CF is not rescanned (spec item h).
+            denominator so the pending CF is not rescanned.
         :return: count of leftover records stamped on this run.
         """
         self.get_or_create_column_family(TTL_INDEX_CF_NAME)
@@ -1478,14 +1489,14 @@ class RocksDBStorePartition(StorePartition):
                 # (:meth:`backfill_legacy_records`) also encodes ``None`` here so its
                 # migration re-stamps are likewise always-apply on a later restore.
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
-                # Completion records are stamped, so they carry the §8.7 bit; a
+                # Completion records are stamped, so they carry the stamped bit; a
                 # subsequent restore then sees an all-stamped changelog and never
-                # re-enters completion (§6).
+                # re-enters completion.
                 CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
             }
 
         stamped_count = 0
-        # Seek-based continuation cursor (spec item g). ``seek_from`` is the last
+        # Seek-based continuation cursor. ``seek_from`` is the last
         # key of the previous chunk; that chunk deleted it from the pending CF, so
         # an inclusive ``from_key`` seek lands on the next live key and the scan
         # never re-walks the tombstones the old head-rescan re-visited each chunk.
@@ -1523,7 +1534,7 @@ class RocksDBStorePartition(StorePartition):
                 stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
                 batch.put(key, stamped, default_handle)
                 # Sentinel-stamped (never-expire) records skip the expiry index,
-                # per the codec invariant (the §15.2 all-expired fallback stamps
+                # per the codec invariant (the all-expired fallback stamps
                 # leftovers with SENTINEL_NEVER); every other expiry is indexed.
                 if expires_at_ms != SENTINEL_NEVER:
                     batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
@@ -1533,7 +1544,7 @@ class RocksDBStorePartition(StorePartition):
 
             if self._changelog_producer is not None and produce:
                 for key, stamped in produce:
-                    # Fix C: migration route (non-transactional under exactly-once).
+                    # Migration route (non-transactional under exactly-once).
                     self._changelog_producer.produce(
                         key=key, value=stamped, headers=headers, migration=True
                     )
@@ -1546,7 +1557,7 @@ class RocksDBStorePartition(StorePartition):
             # leaves the chunk's keys in pending and the next pass redoes them.
             self._write(batch)
 
-            # PROGRESS: one DEBUG line per chunk on the OP-4 recovery-completion
+            # PROGRESS: one DEBUG line per chunk on the recovery-completion
             # path, distinct from the live backfill message so the source is
             # clear in logs. Denominator is the initial leftover census; the
             # caller still emits the final "completed … migration" log at INFO.
@@ -1666,8 +1677,7 @@ class RocksDBStorePartition(StorePartition):
         """
         Return True if the default column family already contains at least one
         entry. Used by the transaction layer at flush time to decide between
-        the empty-store flip path and the populated-store auto-backfill path
-        (spec §15.1).
+        the empty-store flip path and the populated-store auto-backfill path.
 
         ``seek_to_first`` on the default CF runs once per partition lifetime
         (only on the flush that flips), so its cost is irrelevant.
@@ -1714,8 +1724,8 @@ class RocksDBStorePartition(StorePartition):
         chunk_size: int,
     ) -> int:
         """
-        Provably-complete backfill (Fix A, spec ``spec-backfill-completeness.md``
-        §3): census the full default-CF key list FIRST, then chunk over that
+        Provably-complete backfill: census the full default-CF key list FIRST,
+        then chunk over that
         frozen list, point-getting each value fresh and re-stamping it with a
         uniform ``expires_at_ms`` expiry. Persisting and producing each chunk
         before reading the next bounds peak transient memory to one chunk (plus
@@ -1741,10 +1751,9 @@ class RocksDBStorePartition(StorePartition):
 
         **Stamped-key ledger resume (crash-safe against interleaved writes).**
         This **supersedes** the original integer-cursor-over-a-re-sorted-list
-        resume of spec §3.3, which double-wrapped/skipped keys when a legacy
+        resume, which double-wrapped/skipped keys when a legacy
         write landed between a crash and the resume (the sorted census shifted
-        under a stale integer index — shortcut 73191 review; see
-        ``fix-cursor-and-pending-hygiene.md``). Instead, each chunk records the
+        under a stale integer index). Instead, each chunk records the
         keys it stamped in the local-only ``__ttl_backfill_stamped__`` ledger CF,
         PUT in the **same WriteBatch** as the stamped values so ledger and data
         commit atomically. The census then excludes both ``staged_default_keys``
@@ -1759,7 +1768,7 @@ class RocksDBStorePartition(StorePartition):
         **Overwritten-key rule.** A ledger key that is *overwritten by a plain
         (non-``ttl=``) legacy write during the crash→resume gap* is left as that
         raw value (it stays a ledger member and is excluded from the resumed
-        census); Fix B's fail-safe read then treats it as never-expires — which
+        census); the fail-safe read then treats it as never-expires — which
         matches the semantics of the plain write that produced it. An overwrite
         via a ``ttl=`` write cannot happen out-of-band during the gap: the
         partition is still legacy, so such a write itself *resumes* the backfill
@@ -1791,9 +1800,10 @@ class RocksDBStorePartition(StorePartition):
 
         After the last chunk lands the caller writes ``__ttl_enabled__`` / the
         format version **last**, so the flip is durable only once every census
-        key has been stamped (§3.4 flag-last ordering). The ledger + progress
+        key has been stamped (flag-last ordering). The ledger + progress
         counter are dead weight once flipped and are dropped on the next flipped
-        open (:meth:`_cleanup_completed_backfill_bookkeeping`).
+        open (:meth:`_cleanup_completed_backfill_bookkeeping`). The parallel
+        empty-store flip path is :meth:`flip_into_ttl_mode`.
 
         :param expires_at_ms: uniform absolute event-time expiry to stamp on
             every pre-existing record (``high_water + legacy_records_ttl``).
@@ -1838,10 +1848,10 @@ class RocksDBStorePartition(StorePartition):
                 # triggering write was never committed; the skipped re-stamp then never
                 # ran its ``__ttl_backfill_pending__`` supersession delete, so the
                 # already-backfilled key was wrongly re-stamped by
-                # ``complete_recovery`` (shortcut 73191 recovery-offset-skip bug).
+                # ``complete_recovery`` (the recovery-offset-skip bug).
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
                 # Backfill records are always stamped (re-stamped legacy values),
-                # so they unconditionally carry the §8.7 stamped bit. The base
+                # so they unconditionally carry the stamped bit. The base
                 # ``_prepare`` cannot set it for these because they are produced
                 # directly here, before ``uses_ttl_stamps`` is flipped to True.
                 CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
@@ -1869,7 +1879,7 @@ class RocksDBStorePartition(StorePartition):
             logger.warning(
                 "TTL legacy backfill censused %d keys at path=%s; the key list "
                 "is held in memory (~80 B/key). For multi-million-key stores a "
-                "spill-to-disk census will be needed (OP-BC-2); proceeding "
+                "spill-to-disk census will be needed; proceeding "
                 "in memory for now.",
                 total,
                 self._path,
@@ -1890,7 +1900,8 @@ class RocksDBStorePartition(StorePartition):
         # Cumulative count of records stamped by any prior interrupted run, used
         # only to keep ``__ttl_backfill_progress__`` a monotonic observability
         # counter across resumes. Resume CORRECTNESS rides the stamped-ledger
-        # census exclusion above, NOT this integer (that was the §3.3 bug).
+        # census exclusion above, NOT this integer (relying on the integer was
+        # the original resume bug).
         prior_stamped = self._load_backfill_progress()
 
         restamped = 0
@@ -1905,7 +1916,7 @@ class RocksDBStorePartition(StorePartition):
                 raw_value = default_cf.get(key, default=None)
                 if raw_value is None:
                     # Deleted since the census — nothing to stamp, no index
-                    # entry to create, not ledgered. Skip cleanly (§5 / §8).
+                    # entry to create, not ledgered. Skip cleanly.
                     continue
                 stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
                 batch.put(key, stamped, default_handle)
@@ -1920,11 +1931,11 @@ class RocksDBStorePartition(StorePartition):
             # PRODUCE this chunk's re-stamped default-CF records, then flush with
             # a bounded timeout and confirm delivery BEFORE the local commit: a
             # stuck broker raises rather than letting the local store get ahead of
-            # the changelog (spec item a). This also keeps the in-flight queue
+            # the changelog. This also keeps the in-flight queue
             # bounded across chunks.
             if changelog_producer is not None and produce:
                 for key, stamped in produce:
-                    # Fix C: route via the non-transactional migration producer
+                    # Route via the non-transactional migration producer
                     # under exactly-once so the per-chunk flush below is durable
                     # before the local write.
                     changelog_producer.produce(
@@ -1979,11 +1990,11 @@ class RocksDBStorePartition(StorePartition):
         progress yet, or a stale/garbled value from an older build — handled
         gracefully by restarting the count at 0).
 
-        Since the Bug-1 fix this is an **observability counter only** (cumulative
+        This is now an **observability counter only** (cumulative
         records stamped so far); resume correctness rides the
         ``__ttl_backfill_stamped__`` ledger census exclusion, not this integer
         (see :meth:`backfill_legacy_records`). A stale integer left by the old
-        §3.3 integer-cursor build is therefore harmless: it can only make the
+        integer-cursor build is therefore harmless: it can only make the
         counter's starting value wrong, never skip or re-stamp a key.
         """
         metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
@@ -2249,7 +2260,7 @@ class RocksDBStorePartition(StorePartition):
             Iterator[tuple[bytes, bytes]],
             index_cf.items(from_key=b"", read_opt=read_opt),
         )
-        # #7: the budget counts every index-entry VISIT (ghost or genuine), not
+        # The budget counts every index-entry VISIT (ghost or genuine), not
         # just evictions, so a store dense with refresh-minted ghost index entries
         # cannot pay more than ``budget`` main-CF point-gets per sweep. Convergent:
         # ghosts shrink each sweep until none remain and cease consuming budget.
@@ -2278,7 +2289,7 @@ class RocksDBStorePartition(StorePartition):
                 continue
 
             # Decode through the SAME strict validator as the live read path
-            # (spec item c). ``decode_ttl_value`` accepts any 8-byte prefix as a
+            # ``decode_ttl_value`` accepts any 8-byte prefix as a
             # stamp, including ``0`` and implausibly-large values — but the read
             # path (``_safe_decode_stamp``) treats those as never-expires and
             # returns the value raw. Using it here closes the ``stamp==0``
@@ -2327,7 +2338,7 @@ class RocksDBStorePartition(StorePartition):
         staged_ttl_index_keys: set[bytes],
     ) -> None:
         """
-        Prepare-time sweep (spec ttl-changelog-tombstones §3.1, the ON path).
+        Prepare-time sweep (the changelog-tombstone ON path).
 
         Identical eviction logic to :meth:`_run_sweep`, but stages its deletes
         into the transaction ``cache`` instead of a ``WriteBatch``, and takes the
@@ -2353,7 +2364,7 @@ class RocksDBStorePartition(StorePartition):
         ``prefix=b""`` is passed for every ``cache.delete``: the cache stores
         deletes in a flat, prefix-independent set and only uses ``prefix`` to pop a
         pending update — but the guards below guarantee a staged key is never
-        evicted, so that pop is always a no-op (spec §3.1 prefix note).
+        evicted, so that pop is always a no-op.
         """
         if self._high_water_ms is None:
             # Cold start: no event-time established yet — skip the sweep.
@@ -2382,7 +2393,7 @@ class RocksDBStorePartition(StorePartition):
             Iterator[tuple[bytes, bytes]],
             index_cf.items(from_key=b"", read_opt=read_opt),
         )
-        # #7: budget counts every index-entry visit (ghost or genuine), bounding
+        # Budget counts every index-entry visit (ghost or genuine), bounding
         # main-CF point-gets to <= budget per sweep (parity with _run_sweep).
         for index_key, _ in iterator:
             if visited >= budget:
@@ -2516,10 +2527,10 @@ class RocksDBStorePartition(StorePartition):
         """
         Value-content recognizer for a stamped default-CF value.
 
-        NO LONGER ON THE RECOVERY PATH (spec §8.7). Recovery flip-discovery now
+        NO LONGER ON THE RECOVERY PATH. Recovery flip-discovery now
         routes purely on the out-of-band ``__ttl_stamped__`` changelog header
         (see ``recover_from_changelog_message``), because this content heuristic
-        false-positives on legacy 8-byte epoch-ms values (OP-3). Retained because
+        false-positives on legacy 8-byte epoch-ms values. Retained because
         ``test_backfill_completeness`` spies on it to assert the backfill never
         byte-sniffs; it has no remaining live production caller.
 
@@ -2579,14 +2590,14 @@ class RocksDBStorePartition(StorePartition):
         """
         Decode a replayed (header-true, stamped) main-CF value into
         ``(stamped_blob, stamp)`` using the SAME strict validator as the live
-        read path (``_safe_decode_stamp``, spec item c).
+        read path (``_safe_decode_stamp``).
 
         - A value that validates as a real stamp round-trips with its original
           stamp (the common case for a header-bearing stamped record).
         - A value that does NOT validate — too short, or an implausible/zero
           stamp — is treated as never-expires and wrapped with the sentinel, so
-          it round-trips on read and the Rule 4 recovery-drop filter never
-          discards it.
+          it round-trips on read and the latest-record-wins recovery-drop filter
+          never discards it.
 
         Routing through ``_safe_decode_stamp`` (rather than a bare
         ``decode_ttl_value``, which accepted ``stamp==0`` and out-of-range

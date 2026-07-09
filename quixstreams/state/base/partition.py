@@ -110,7 +110,7 @@ class StorePartition(ABC):
         :param cf_name: column family name
         :param offset: changelog message offset
         :param ttl_stamped: True when the changelog record carries the
-            ``__ttl_stamped__`` header (spec §8.7) — i.e. the value is a stamped
+            ``__ttl_stamped__`` header — i.e. the value is a stamped
             default-CF record. Absent/False = legacy / un-stamped.
         """
 
@@ -123,16 +123,14 @@ class StorePartition(ABC):
         The default is a no-op. The RocksDB backend overrides this to complete an
         interrupted legacy-TTL migration whose changelog replayed as MIXED
         (some ``__ttl_stamped__``-header records + some header-absent legacy
-        records) — see ``RocksDBStorePartition.complete_recovery`` and
-        ``spec-incomplete-migration-recovery.md`` (spec §8.8).
+        records) — see ``RocksDBStorePartition.complete_recovery``.
         """
         return None
 
     def has_incomplete_ttl_migration(self) -> bool:
         """
         Whether this partition has a durably-recorded, not-yet-finished legacy-TTL
-        migration that must be completed via :meth:`complete_recovery` (Fix B,
-        shortcut 73191 review).
+        migration that must be completed via :meth:`complete_recovery`.
 
         True iff the partition is persisted-flipped into TTL mode AND its
         ``__ttl_backfill_pending__`` census still holds leftover legacy keys AND

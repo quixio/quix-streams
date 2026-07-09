@@ -33,7 +33,7 @@ class IncompatibleStateStoreError(StateError):
     Raised when a TTL-aware state store cannot be opened or advanced safely.
 
     (The original "reject a populated legacy store on the first ``ttl=`` write"
-    use was removed when the §15 revision replaced it with an automatic legacy
+    use was removed when it was replaced with an automatic legacy
     backfill; two distinct situations remain.)
 
     1. **Format-version incompatibility** (``_enforce_format_version``). A store

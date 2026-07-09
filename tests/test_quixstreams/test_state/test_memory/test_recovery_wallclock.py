@@ -1,21 +1,18 @@
 """
-Recovery wallclock-at-rebuild tests for the in-memory backend (OP-2,
-shortcut 73191).
+Recovery wallclock-at-rebuild tests for the in-memory backend.
 
 Mirrors the RocksDB recovery tests in
 ``test_state/test_rocksdb/test_legacy_backfill.py::TestRecoveryWallclock``.
 
-The old memory recovery filter read ``recovery_now = self._high_water_ms`` per
-message and advanced that high-water by each entry's stamp
+An earlier memory recovery filter read ``recovery_now = self._high_water_ms``
+per message and advanced that high-water by each entry's stamp
 (``advance_high_water(stamp)``). With a uniform-expiry store (every record
 stamped with the same ``E``), the first replay ratcheted the clock to ``E`` and
 every later record was dropped as ``E <= E`` — collapsing the store to ~1
-survivor. The new filter drops iff
+survivor. The current filter drops iff
 ``stamp != SENTINEL_NEVER and stamp <= wallclock_now`` where ``wallclock_now`` is
 captured ONCE per rebuild session, which is order-independent and retains all
 entries rebuilt within their TTL window.
-
-See ``dev-planning/state-ttl-legacy-backfill/spec-recovery-wallclock.md``.
 """
 
 import struct
@@ -81,8 +78,9 @@ def _uniform_expiry_changelog(changelog_producer_mock, n, ts, ttl):
     Build a memory store of ``n`` records all sharing a single uniform expiry
     (same timestamp + same ttl) and return ``(default_msgs, source_default)``.
 
-    This reproduces the uniform-expiry collapse scenario the OP-2 fix targets:
-    the memory backend has no ``legacy_records_ttl`` config, so we synthesize the
+    This reproduces the uniform-expiry collapse scenario the wallclock filter
+    targets: the memory backend has no ``legacy_records_ttl`` config, so we
+    synthesize the
     same on-changelog shape (N identical stamps) via explicit ``ttl=`` writes.
     """
     partition = MemoryStorePartition(changelog_producer=changelog_producer_mock)
@@ -113,7 +111,7 @@ class TestMemoryRecoveryWallclock:
         _replay_default(recovered, msgs, now_ms=uniform_expiry - 1)
 
         recovered_default = _decode_default(recovered)
-        # OP-2: every record survives (the old ratchet collapsed this to ~1).
+        # Every record survives (the old ratchet collapsed this to ~1).
         assert recovered_default == source_default
         assert len(recovered_default) == 5
         # Index rebuilt one entry per non-sentinel survivor.
@@ -198,9 +196,9 @@ class TestMemoryRecoveryWallclock:
         assert set(recovered_default) == sentinel_keys
         recovered.close()
 
-    # Spec §10 case 11 — post-recovery high-water is the loaded persisted
-    # value or None, never wallclock-seeded (Finding 3, spec §7.4). The
-    # recovery wallclock is used ONLY for the Rule 4 drop filter.
+    # Post-recovery high-water is the loaded persisted value or None, never
+    # wallclock-seeded. The recovery wallclock is used ONLY for the
+    # latest-record-wins drop filter.
     def test_high_water_not_wallclock_seeded_after_recovery(
         self, changelog_producer_mock
     ):
@@ -216,10 +214,10 @@ class TestMemoryRecoveryWallclock:
 
         # Post-recovery high-water is NOT seeded to the session wallclock.
         # Memory partitions start fresh (no persisted high-water), so it
-        # remains None after recovery (spec Finding 3, §7.4).
+        # remains None after recovery.
         assert recovered.high_water_ms is None, (
             "Post-recovery high_water_ms must be None (not wallclock-seeded); "
-            "recovery wallclock is Rule 4 only (spec Finding 3, §7.4)"
+            "recovery wallclock is used only for the drop filter"
         )
         # A live event-time write now sets the high-water.
         recovered.advance_high_water(ts)
@@ -232,8 +230,8 @@ class TestMemoryRecoveryWallclock:
         recovered.close()
 
     # Wallclock is captured exactly ONCE per session: a clock that "ticks"
-    # between messages must not change the survivor set. Finding 3 (§7.4):
-    # the wallclock is NOT seeded into the live high_water_ms.
+    # between messages must not change the survivor set. The wallclock is NOT
+    # seeded into the live high_water_ms.
     def test_wallclock_captured_once_per_session(self, changelog_producer_mock):
         ts = 1_000_000_000_000
         ttl = timedelta(days=7)
@@ -258,10 +256,10 @@ class TestMemoryRecoveryWallclock:
 
         # All records survive: the single captured clock governs the session.
         assert _decode_default(recovered) == source_default
-        # Finding 3 (§7.4): high_water is NOT seeded to the wallclock.
+        # high_water is NOT seeded to the wallclock.
         assert recovered.high_water_ms is None, (
             "Post-recovery high_water_ms must be None (not wallclock-seeded); "
-            "recovery wallclock is Rule 4 only (spec Finding 3, §7.4)"
+            "recovery wallclock is used only for the drop filter"
         )
         recovered.close()
 
@@ -292,14 +290,13 @@ class TestMemoryRecoveryWallclock:
 
 
 class TestMemoryRecoveryRoutesOnHeaderOnly:
-    """§8.7 / spec-memory-backend-recovery §6.1 — recovery routes purely on the
-    ``__ttl_stamped__`` header, never on value content; the
-    ``_looks_like_stamped_value`` heuristic is not consulted."""
+    """Recovery routes purely on the ``__ttl_stamped__`` header, never on value
+    content; the ``_looks_like_stamped_value`` heuristic is not consulted."""
 
     def test_header_absent_stamp_shaped_value_stays_legacy(
         self, changelog_producer_mock
     ):
-        # The OP-2/OP-3 false-positive shape: legacy dedup values that are 8-byte
+        # The false-positive shape: legacy dedup values that are 8-byte
         # BE epoch-ms timestamps, with NO __ttl_stamped__ header. Recovery must
         # stay legacy, replay every value verbatim (no 8B strip, none dropped),
         # and must NOT consult the value-content heuristic.
@@ -329,7 +326,8 @@ class TestMemoryRecoveryRoutesOnHeaderOnly:
         recovered.close()
 
     def test_header_true_flips_and_filters(self, changelog_producer_mock):
-        # header-true stamped value -> partition flips, stamped branch + Rule 4.
+        # header-true stamped value -> partition flips, stamped branch +
+        # latest-record-wins drop filter.
         recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
         base = 1_000_000_000_000
         recovered._now_ms = lambda: base  # noqa: E731
@@ -355,9 +353,9 @@ class TestMemoryRecoveryRoutesOnHeaderOnly:
         # ROUTING, however, is on the header: a later HEADER-ABSENT default-CF
         # record is a MIXED-changelog leftover — it lands VERBATIM (no stamp
         # strip, no index write) and is censused into ``__ttl_backfill_pending__``
-        # for completion, mirroring RocksDB (§15.4 item 3; this is the fix for the
-        # memory 8-byte-strip corruption). Was: the memory latch wrongly routed
-        # header-absent records through the stamped branch and indexed them.
+        # for completion, mirroring RocksDB (this avoids the memory 8-byte-strip
+        # corruption where the latch would otherwise route header-absent records
+        # through the stamped branch and index them).
         recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
         base = 1_000_000_000_000
         recovered._now_ms = lambda: base  # noqa: E731
