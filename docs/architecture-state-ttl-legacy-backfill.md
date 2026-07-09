@@ -161,7 +161,12 @@ that was removed by design to keep the per-write-only contract intact.)
   never swept before — the sweep lived in `write()`, which `_flush` skips on an
   empty cache — and this preserves that coupling and the empty-tx no-I/O
   optimization) and bounded by `max_evictions_per_flush` (≤ budget
-  tombstones/flush). The `ttl_changelog_tombstones=False` **escape hatch**
+  tombstones/flush). Index-entry visits — including refresh-minted ghost
+  entries left by TTL key re-stamps (a re-stamp mints a new index entry at the
+  later expiry while the old entry becomes a ghost) — now count against this
+  budget (loop gate: `visited >= budget`), bounding main-CF point-gets to at
+  most `max_evictions_per_flush` per sweep; ghosts are GC'd on each visit and
+  converge to zero over successive sweeps. The `ttl_changelog_tombstones=False` **escape hatch**
   reverts to the exact pre-change path: `write()` calls `_run_sweep` (local-only)
   and no tombstones are produced. **No changelog-first inversion:** tombstones
   ride the normal `prepare()` (produce) → `flush()` (local write, records the
@@ -397,6 +402,91 @@ Modified:
   Application-level change is needed. Operators set
   `rocksdb_options=RocksDBOptions(legacy_records_ttl=timedelta(...))`.
 
+## Warm-restart resume (C1)
+
+An in-place live backfill (`backfill_legacy_records`) commits chunks atomically: each
+chunk's stamped values, ledger entries, and produced changelog records land in a single
+`WriteBatch`, confirmed before the next chunk starts. The flag-last flip, however, lands
+in a **separate** final `WriteBatch` after the last chunk. A crash between the last
+chunk's local commit and that final batch leaves the partition in a split state: some
+(or all) chunks' re-stamps are on disk and in the changelog, but `__ttl_enabled__` is
+not yet set.
+
+On the next start — warm or cold — changelog replay replays the re-stamped records. Each
+carries the `__ttl_stamped__` header, so `recover_from_changelog_message` flips the
+recovering partition into TTL mode. The un-stamped legacy leftovers, however, sit
+**below** the replayed offset range: they were never produced to the changelog and were
+never censused into `__ttl_backfill_pending__`. Without them in the pending census and
+without a done-marker, the standard cold-restore completion path (`complete_recovery()`)
+cannot see them.
+
+C1 detects this exact shape in `complete_recovery()`:
+
+- The partition is flipped into TTL mode (`uses_ttl_stamps = True`).
+- The `__ttl_backfill_stamped__` ledger is non-empty — the interrupted run committed
+  some chunks and recorded their keys in the ledger.
+- No durable done-marker exists.
+
+When all three hold, `_resume_interrupted_live_backfill()` runs: it re-invokes
+`backfill_legacy_records` over the **ledger complement** (the census on any re-run is
+`{keys on disk} − {staged} − {ledger members}`, so already-stamped keys are excluded
+and only the genuine un-stamped remainder is wrapped). After the last chunk, a done-marker
+is written flag-last, bookkeeping is cleaned, and any orphan pending-census entries are
+drained (`_discard_backfill_pending()`).
+
+The resume is idempotent and convergent: interrupting it and restarting again re-derives
+the now-smaller ledger complement and converges. Keys are never double-wrapped.
+
+The two lifecycle log lines emitted by the resume (verbatim from
+`_resume_interrupted_live_backfill`):
+
+```
+[INFO] TTL legacy backfill RESUME STARTED: interrupted live migration detected at path=<...> (flipped, ledger non-empty, no done-marker); resuming over the un-stamped complement with expiry=<...>.
+[INFO] TTL legacy backfill RESUME COMPLETED: stamped <N> leftover record(s) at path=<...>; done-marker produced, backfill bookkeeping cleaned.
+```
+
+`has_incomplete_ttl_migration()` checks both the pending census (`__ttl_backfill_pending__`)
+and the live ledger (`__ttl_backfill_stamped__`), so the recovery manager always forces a
+completion pass on any restart where either is non-empty — a warm restart that skips full
+replay still runs the C1 resume via the offset-caught-up second-pass path.
+
+**Recovery gate order.** `complete_recovery` evaluates the C1 resume gate (non-empty
+`__ttl_backfill_stamped__` ledger) immediately after the done-marker short-circuit and
+**before** the M1 all-stamped byte heuristic. The ledger is a `LOCAL_ONLY_CFS` member —
+it only exists on volumes where a live backfill actually ran — so a non-empty ledger is
+definitive evidence of an interrupted migration, not a byte coincidence. On a warm
+restart, the inclusive changelog replay re-censuses the boundary offset's header-absent
+legacy record into `__ttl_backfill_pending__`; if that record's value happens to
+byte-decode as a plausible stamp, the M1 gate would previously fire on the one-element
+census and permanently strand the un-stamped leftovers. Checking definitive ledger
+evidence first removes this ordering hazard — M1's byte heuristic is never reached when
+a ledger is present.
+
+**Additional lifecycle log lines (review batch 2).** Two `INFO` lines are emitted at the
+top of `complete_recovery` for every recovery where they fire.
+
+The **aggregate expired-drops line** (RocksDB) fires whenever at least one stamped record
+was discarded by the Rule-4 wallclock filter during replay:
+
+```
+[INFO] Recovery at path=<...> dropped <N> already-expired stamped record(s) during changelog replay (expired against recovery wallclock=<ms> ms; latest-record-wins).
+```
+
+The memory backend emits the equivalent (no `path=` argument):
+
+```
+[INFO] Recovery dropped <N> already-expired stamped record(s) from the in-memory changelog replay (expired against recovery wallclock=<ms> ms; latest-record-wins).
+```
+
+The **done-marker census-discard line** (RocksDB) fires unconditionally when the
+done-marker short-circuit fires, logging the orphan pending-census count (0 is a valid
+signal matching sibling paths):
+
+```
+[INFO] Recovery at path=<...>: durable migration done-marker present; discarding <N> orphan pending-census entry(ies) (store fully migrated, no completion needed).
+```
+
+
 ## Caveats / things to sanity-check
 
 - **OP-1 (recovery vs uniform expiry) — RESOLVED (wallclock-at-recovery).** The
@@ -474,23 +564,44 @@ Modified:
     the base `_prepare` for free. `recover_from_changelog_message` routes on the
     `ttl_stamped` header (same as RocksDB — value-content heuristic removed).
 - **Finding-1 / §7.1 (stock v3.24.0 changelog self-heal) — RESOLVED
-  (total-quorum stamp adoption).** A store created on the v3.24.0 TTL preview
-  writes stamped values to its changelog WITHOUT the `__ttl_stamped__` header
-  (the header was introduced later). On a cold restore these land in the
-  `__ttl_backfill_pending__` census as verbatim header-absent records. After
-  replay, `complete_recovery()` runs `_all_pending_values_are_stamped()`: it
-  point-gets every pending key's current default-CF value and requires **every**
-  one to pass `_safe_decode_stamp` (strict 8-byte stamp validation). Short-
-  circuits on the first failure so the pure-legacy path pays a single point-get.
-  If the total quorum holds, `_adopt_v3240_stamps()` fires: flip into TTL mode,
-  keep every default-CF value **verbatim** (no re-wrap — each record's original
-  v3.24.0 stamp is preserved), rebuild the `__ttl_index__` from those stamps,
-  discard the census, emit one `[INFO]`. Adoption is local and idempotent; no
-  changelog re-production is needed (a later cold restore re-derives the same
-  result). Residual R2': any validation failure (a true v3.23.6 never-stamped
-  value, or a MIXED-A changelog) returns `False` from the quorum check and falls
-  through to the verbatim / §15.2 completion path unchanged — the self-heal is
-  all-or-nothing at the store level.
+  (opt-in total-quorum adoption via `adopt_v3240_stamps`).** A store created on
+  the v3.24.0 TTL preview writes stamped values to its changelog WITHOUT the
+  `__ttl_stamped__` header (the header was introduced later). On a cold restore
+  these land in the `__ttl_backfill_pending__` census as verbatim header-absent
+  records. After replay, `complete_recovery()` runs `_all_pending_values_are_stamped()`:
+  it point-gets every pending key's current default-CF value and requires **every**
+  one to pass `_safe_decode_stamp` (strict 8-byte stamp validation). Short-circuits
+  on the first failure so the pure-legacy path pays a single point-get.
+  **If the total quorum holds AND `RocksDBOptions(adopt_v3240_stamps=True)` is set,**
+  `_adopt_v3240_stamps()` fires: flip into TTL mode, keep every default-CF value
+  **verbatim** (no re-wrap — each record's original v3.24.0 stamp is preserved),
+  rebuild the `__ttl_index__` from those stamps, discard the census, emit one
+  `[INFO]`. Adoption is chunked (chunks of `legacy_backfill_chunk_size`), local,
+  and idempotent; no changelog re-production is needed (a later cold restore with
+  the flag still set re-derives the same result). Leaving the flag set after
+  adoption is safe and has no effect on an already-adopted or genuinely-legacy
+  store. **If the flag is not set (the default),** detection logs a `CRITICAL`
+  naming `adopt_v3240_stamps`, discards the orphan census, and returns — the
+  store stays in legacy mode and every value reads back byte-identical. Nothing
+  is changed. This default is deliberate: the total-quorum shape (all pending
+  values decode as plausible 8-byte stamps) is on-disk **indistinguishable** from
+  a pre-TTL store whose values were written via `set_bytes()` with 8-byte numeric
+  values (e.g. epoch-ms or counters); auto-adopting the latter would silently
+  chop the first 8 bytes off every value and delete the data on the next sweep —
+  the false-positive risk is too high for a default. Set the flag **only** if you
+  are certain the store was created on v3.24.0. Residual R2': any validation
+  failure (a true v3.23.6 never-stamped value, or a MIXED-A changelog) returns
+  `False` from the quorum check and falls through to the verbatim / §15.2
+  completion path unchanged — adoption is all-or-nothing at the store level.
+  **Memory backend adoption is also opt-in.** `MemoryStorePartition` mirrors
+  the same contract via a direct constructor argument:
+  `MemoryStorePartition(adopt_v3240_stamps=True)` (default `False`). Production
+  memory partitions are detection-only by default because
+  `MemoryStore.create_new_partition` does not forward the flag — matching how
+  `legacy_records_ttl` and `ttl_changelog_tombstones` work for memory. A memory
+  partition that encounters the all-stamped census without the flag set logs a
+  `CRITICAL` with the same substance as the RocksDB path and leaves every value
+  byte-identical.
 - **OP-4 (cold restore of a MIXED / incomplete-migration changelog strands
   leftover legacy records) — RESOLVED (§8.8 replay-driven completion).** §8.7
   fixed *classification* but not the backfill **gate**: an interrupted backfill
@@ -560,15 +671,18 @@ Modified:
     is False → completion is a no-op even though pending holds every key (the live
     first-`ttl=`-write backfill owns it). All-stamped (§8.7): pending is empty →
     no-op. Only the MIXED case completes.
-  - **Scope / limitation.** Cold restore (full replay) only. A **warm**-stranded
-    store (interrupted backfill, then warm restarts that never trigger a full
-    replay) keeps its leftovers un-stamped: the on-disk stranded records are not in
-    the replayed delta, so the pending CF is never populated for them. The only
-    recovery is a **forced full rebuild** (wipe the local volume → next start is a
-    full cold restore) — which depends on a Quix Cloud wipe/rebuild affordance that
-    may not exist (MEMORY `quix-cloud-no-state-reset`). **Flag to Ludvík.**
-    Memory backend has a full `complete_recovery()` implementation (mirrors
-    RocksDB at the semantics level) — it is not the base no-op.
+  - **Scope / limitation.** Cold restore (full replay) for the MIXED-changelog
+    completion path. **For an interrupted in-place live backfill** (the C1 shape:
+    process crashed mid-`backfill_legacy_records`, un-stamped leftovers below the
+    replayed offset range), the ledger-based warm-restart resume (see
+    `## Warm-restart resume (C1)` above) handles recovery without a full rebuild.
+    The remaining limitation is specific to the cold-restore completion path's own
+    crash-window: if `complete_recovery()` itself is interrupted (and the next
+    restart is warm), `has_incomplete_ttl_migration()` detects the non-empty
+    pending CF or ledger and forces the recovery manager to re-run the completion
+    pass — so this case converges without a forced rebuild as well. Memory backend
+    has a full `complete_recovery()` implementation (mirrors RocksDB at the
+    semantics level) — it is not the base no-op.
 - **Large stores — OOM fixed (chunked backfill).** The single-shot backfill held
   several whole-store-sized copies and was OOM-killed at ~165k records on a
   500 MB Quix Cloud deployment. The backfill is now chunked
@@ -601,6 +715,18 @@ Modified:
   not strictly uniform across the crash boundary — a benign deviation for the
   dedup workload (a small set of legacy keys expire slightly earlier/later than
   the rest). Documented; not worth re-reading already-done keys to "fix".
+- **Crash-window between changelog flush and local commit — healed by
+  replay-ledgering.** A SIGKILL between a chunk's changelog flush and its local
+  `WriteBatch` commit leaves the changelog ahead of the local store: the re-stamped
+  records are durably on the changelog but not yet on disk. On the next start,
+  recovery replays those records; because they were produced with
+  `processed_offsets=None` (always-apply, never skipped by the exactly-once
+  offset filter), they land verbatim. The `__ttl_backfill_stamped__` ledger entry
+  for each key was in the same `WriteBatch` as the local put, so those keys are
+  not in the ledger — C1 re-stamps them, matching their changelog copies exactly.
+  The migration converges in one uninterrupted resume pass. The C1 resume also
+  drains any orphan `__ttl_backfill_pending__` entries via `_discard_backfill_pending()`
+  after finishing, so the completed store has no residual bookkeeping overhead.
 - **No customer-callable repair for stores already corrupted by the buggy
   build (OP-BC-1 / MEMORY `quix-cloud-no-state-reset`).** The buggy build never
   shipped, so no repair pass is built (per the brief). Fix B alone stops the

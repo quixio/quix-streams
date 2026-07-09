@@ -425,7 +425,11 @@ On a **cold restore** (state volume lost, rebuilt from the changelog), the **dro
 
 If a rebuild encounters an interrupted migration (some records already stamped, some not — a "MIXED" changelog), recovery auto-completes the remaining un-stamped records. With `legacy_records_ttl` set, they expire at `wallclock-at-rebuild + legacy_records_ttl`; without it, they inherit the expiry of the already-stamped cohort (or `SENTINEL_NEVER` with a `[WARNING]` in the unlikely case that no stamped record with a future expiry survives). No data is deleted.
 
-A store created on the earlier TTL preview (stock v3.24.0) self-heals automatically during rebuild: its changelog records are already stamped (from v3.24.0's own TTL writes), and recovery recognizes and adopts them verbatim with their original TTLs intact. No config change is needed; the store emerges from recovery fully TTL-enabled and continues normal expiry from each record's original stamp.
+A store created on the earlier TTL preview (stock v3.24.0) has stamped values in its changelog but no `__ttl_stamped__` headers (those were introduced later). Recovery detects this by checking whether every replayed key decodes as a valid 8-byte stamp. If all keys pass **and** you set `RocksDBOptions(adopt_v3240_stamps=True)`, recovery adopts the stamps verbatim: it flips the store into TTL mode, keeps every value as-is (original v3.24.0 stamps are preserved), and rebuilds the expiry index. No data is re-stamped or deleted. The store emerges from recovery fully TTL-enabled and continues normal expiry from each record's original stamp. Leaving `adopt_v3240_stamps=True` set after adoption is safe and has no effect on subsequent restarts.
+
+If `adopt_v3240_stamps` is **not** set (the default), recovery logs a `CRITICAL` naming the flag and does nothing — the store stays in legacy mode and every value reads back unchanged. The default is conservative because a legacy store whose values happen to begin with 8 plausible numeric bytes is on-disk identical to a v3.24.0 store; auto-adopting the wrong store would silently corrupt it.
+
+The memory backend mirrors the same opt-in contract. Pass `adopt_v3240_stamps=True` directly to the `MemoryStorePartition` constructor to enable adoption there. Production memory deployments are detection-only by default — `MemoryStore.create_new_partition` does not forward this flag, matching how `legacy_records_ttl` and `ttl_changelog_tombstones` work for the memory backend. A memory partition that sees the all-stamped census without the flag logs the same `CRITICAL` and leaves every value byte-identical.
 
 
 ### Troubleshooting
@@ -518,10 +522,39 @@ The backfill runs once, before new messages are processed, in chunks of `legacy_
 
 The `<N> leftover` count is normally much smaller than the store — it is only the tail the interrupted run never reached. A durable done-flag is written after the last leftover, so subsequent restores skip completion entirely.
 
-**v3.24.0 preview-store adoption** — a store created on the earlier TTL preview is recognized and adopted verbatim during rebuild:
+**Warm-restart resume (C1)** — if the process crashed after committing some backfill chunks but before the flag-last flip, the changelog already holds the re-stamped records. On any subsequent start (warm or cold), replay flips the partition via the `__ttl_stamped__` headers, and C1 detects the non-empty resume ledger and finishes the backfill:
 
 ```
-[INFO] Recovery: adopted <N> v3.24.0-stamped record(s) at path=<...> (flipped into TTL mode; values kept verbatim, ...)
+[INFO] TTL legacy backfill RESUME STARTED: interrupted live migration detected at path=<...> (flipped, ledger non-empty, no done-marker); resuming over the un-stamped complement with expiry=<...>.
+[INFO] TTL legacy backfill RESUME COMPLETED: stamped <N> leftover record(s) at path=<...>; done-marker produced, backfill bookkeeping cleaned.
+```
+
+The `RESUME STARTED` line names the path and the expiry derived from the surviving stamped cohort. The `RESUME COMPLETED` line confirms how many leftover records were stamped. After both lines, the done-marker is present and subsequent restarts skip the resume entirely.
+
+**v3.24.0 preview-store adoption** — a store created on the earlier TTL preview can be adopted verbatim during rebuild when `RocksDBOptions(adopt_v3240_stamps=True)` is set:
+
+```
+[INFO] Recovery: adopted <N> v3.24.0-stamped record(s) at path=<...> (flipped into TTL mode; values kept verbatim, __ttl_index__ rebuilt from the adopted stamps).
+```
+
+Without the flag, recovery logs a `CRITICAL` naming `adopt_v3240_stamps` instead of this `INFO` line, and the store stays in legacy mode. See [Reference clock — when do migrated records expire?](#reference-clock-when-do-migrated-records-expire) for the adoption rationale.
+
+**Wallclock-expired record drops** — whenever the Rule-4 wallclock filter discards at least one stamped record during replay, recovery logs a single aggregate `INFO` at the end of replay (never per-record). RocksDB:
+
+```
+[INFO] Recovery at path=<...> dropped <N> already-expired stamped record(s) during changelog replay (expired against recovery wallclock=<ms> ms; latest-record-wins).
+```
+
+Memory backend (no path):
+
+```
+[INFO] Recovery dropped <N> already-expired stamped record(s) from the in-memory changelog replay (expired against recovery wallclock=<ms> ms; latest-record-wins).
+```
+
+**Done-marker census discard** (RocksDB) — when a store's done-marker is present and there is an orphan pending-census to clean up, recovery logs one `INFO` before discarding (count 0 is logged too, as a "nothing to discard" signal):
+
+```
+[INFO] Recovery at path=<...>: durable migration done-marker present; discarding <N> orphan pending-census entry(ies) (store fully migrated, no completion needed).
 ```
 
 If a migration appears stalled, raise `QUIXSTREAMS_STATE_LOG_LEVEL=DEBUG` and watch the per-chunk progress lines; a large store's backfill legitimately takes minutes (roughly 1–2k records/second including changelog confirmation).
@@ -529,7 +562,7 @@ If a migration appears stalled, raise `QUIXSTREAMS_STATE_LOG_LEVEL=DEBUG` and wa
 
 ### Tuning sweep budget
 
-On partitions with a very high sustained expiration rate, the default 10,000 evictions per flush may not keep up with expiring entries. Local disk space and changelog storage will both grow even though reads remain correct — the same budget governs tombstone production to the changelog as governs local evictions. To increase the budget:
+On partitions with a very high sustained expiration rate, the default 10,000 evictions per flush may not keep up with expiring entries. Local disk space and changelog storage will both grow even though reads remain correct — the same budget governs tombstone production to the changelog as governs local evictions. Every index-entry visit — including ghost entries left by TTL key re-stamps (a re-stamp mints a new index entry at the later expiry while the old entry becomes a ghost) — counts against this budget, bounding main-CF point-gets per flush to at most `max_evictions_per_flush`; ghosts are GC'd on each visit and converge to zero over successive sweeps. To increase the budget:
 
 ```python
 from quixstreams import Application
