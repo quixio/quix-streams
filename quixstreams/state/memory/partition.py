@@ -101,6 +101,7 @@ class MemoryStorePartition(StorePartition):
         max_evictions_per_flush: int = _DEFAULT_MAX_EVICTIONS_PER_FLUSH,
         legacy_records_ttl: Optional[timedelta] = None,
         ttl_changelog_tombstones: bool = True,
+        adopt_v3240_stamps: bool = False,
     ) -> None:
         super().__init__(
             dumps=json_dumps,
@@ -115,6 +116,16 @@ class MemoryStorePartition(StorePartition):
         # local-only (the pre-change ``_run_sweep``-in-``write()`` path). Memory
         # does not consume ``RocksDBOptions``, so it is a direct constructor arg.
         self._ttl_changelog_tombstones: bool = ttl_changelog_tombstones
+        # Opt-in gate for adopting a store created on the v3.24.0 TTL preview
+        # (M1), mirroring ``RocksDBStorePartition._adopt_v3240_stamps_enabled``.
+        # Stored under a distinct attribute so it does NOT shadow the private
+        # :meth:`_adopt_v3240_stamps` method. When False (default) a 100%-quorum
+        # stamp detection logs a CRITICAL and stays legacy; when True it flips +
+        # adopts in place. MemoryStore has no persistent options surface, so it is
+        # set only via direct construction (``create_new_partition`` does not
+        # forward it, exactly like ``legacy_records_ttl`` /
+        # ``ttl_changelog_tombstones``), so production memory is detection-only.
+        self._adopt_v3240_stamps_enabled: bool = adopt_v3240_stamps
         self._state: Dict[str, Dict[bytes, Any]] = {
             "default": {},
             METADATA_CF_NAME: {},
@@ -137,6 +148,12 @@ class MemoryStorePartition(StorePartition):
         # ``spec-recovery-wallclock.md`` §3.2/§3.3). ``None`` means no stamped
         # message has been replayed yet in this partition's lifetime.
         self._recovery_now_ms: Optional[int] = None
+        # Count of wallclock-expired stamped records dropped during this
+        # recovery's changelog replay (Rule 4 / latest-record-wins). Surfaced as
+        # one aggregate INFO at :meth:`complete_recovery` so an operator sees the
+        # deletions instead of records silently vanishing. Mirrors
+        # ``RocksDBStorePartition._recovery_expired_drops``.
+        self._recovery_expired_drops: int = 0
         # Incomplete-migration detection (spec §8.8 / §15.4), mirroring
         # ``RocksDBStorePartition``. Set True on the first header-true default-CF
         # replay; combined with a non-empty ``__ttl_backfill_pending__`` census at
@@ -201,6 +218,16 @@ class MemoryStorePartition(StorePartition):
         ``RocksDBStorePartition.ttl_changelog_tombstones``.
         """
         return self._ttl_changelog_tombstones
+
+    @property
+    def adopt_v3240_stamps(self) -> bool:
+        """
+        Whether the opt-in v3.24.0 stamp adoption is enabled (M1). When ``False``
+        (default) a 100%-quorum stamp detection on recovery logs a CRITICAL and
+        leaves the store legacy; when ``True`` it flips + adopts the stamps in
+        place. Parity with ``RocksDBStorePartition.adopt_v3240_stamps``.
+        """
+        return self._adopt_v3240_stamps_enabled
 
     def advance_high_water(self, timestamp: Optional[int]) -> None:
         if timestamp is None:
@@ -350,10 +377,14 @@ class MemoryStorePartition(StorePartition):
                 pending[key] = b""
 
         if not self.uses_ttl_stamps:
-            if value:
-                self._state.setdefault(cf_name, {})[key] = value
-            else:
+            # Legacy / non-TTL partitions: replay the raw payload verbatim. Key
+            # off ``is None`` (parity with ``RocksDBStorePartition``): only a
+            # genuine tombstone deletes; a legitimate empty-bytes value (``b""``)
+            # is preserved instead of being dropped as a false tombstone.
+            if value is None:
                 self._state.setdefault(cf_name, {}).pop(key, None)
+            else:
+                self._state.setdefault(cf_name, {})[key] = value
             self._changelog_offset = offset
             return
 
@@ -405,6 +436,7 @@ class MemoryStorePartition(StorePartition):
                 # survivor; the index write is still skipped and any stale index
                 # pointer is GC'd by the sweep's ghost handling (main is gone).
                 self._state.setdefault(cf_name, {}).pop(key, None)
+                self._recovery_expired_drops += 1
             else:
                 self._state.setdefault(cf_name, {})[key] = stamped
                 if stamp != SENTINEL_NEVER:
@@ -447,6 +479,19 @@ class MemoryStorePartition(StorePartition):
             - absent → the §15.2 survivor-derived expiry, or ``SENTINEL_NEVER``
               (never-expire) + a WARN in the all-expired fallback.
         """
+        if self._recovery_expired_drops > 0:
+            # #8 (review batch 2): make the Rule-4 wallclock-expired replay drops
+            # observable — ONE aggregate INFO per partition per recovery (no
+            # per-record logging). Emitted at the once-per-recovery finalize seam
+            # before any early return; a non-zero count implies the partition
+            # flipped, so no early-return branch can skip a non-zero log.
+            logger.info(
+                "Recovery dropped %d already-expired stamped record(s) from the "
+                "in-memory changelog replay (expired against recovery "
+                "wallclock=%d ms; latest-record-wins).",
+                self._recovery_expired_drops,
+                self._recovery_now_ms or 0,
+            )
         if not type(self).uses_ttl_stamps:
             return
         if self._recovery_saw_migration_done:
@@ -459,12 +504,38 @@ class MemoryStorePartition(StorePartition):
             self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
             return
         if self._all_pending_values_are_stamped():
-            # §7.1 Finding-1 SELF-HEAL parity with RocksDB: when every censused
-            # value strictly validates as a stamp, adopt the whole store (flip +
-            # keep values verbatim + rebuild the index + discard the census).
-            # Fires before the §15.2 disposition so a MIXED-C store is adopted
-            # rather than double-wrapped; any failure falls through (residual R2').
-            self._adopt_v3240_stamps()
+            # M1 opt-in gate (parity with ``RocksDBStorePartition.complete_recovery``
+            # :meth: gate). This all-stamped census is the exact byte-shape of a
+            # stock v3.24.0 cold restore, but it is INDISTINGUISHABLE from a legacy
+            # ``set_bytes()`` store whose values begin with plausible-stamp bytes.
+            # Adopt ONLY with the explicit opt-in flag; otherwise log a CRITICAL
+            # naming the flag and stay legacy (values byte-identical), then discard
+            # the orphan census and return. Fires before the §15.2 disposition so a
+            # MIXED-C census is adopted (with the flag) rather than double-wrapped;
+            # discarding here (no flag) never touches default-CF user data.
+            if self._adopt_v3240_stamps_enabled:
+                self._adopt_v3240_stamps()
+                return
+            logger.critical(
+                "Recovery replayed an in-memory header-absent changelog whose %d "
+                "censused value(s) ALL decode as 8-byte TTL stamps. This is the "
+                "exact shape of a store created on the v3.24.0 TTL preview "
+                "(stamped values, no __ttl_stamped__ header) -- BUT it is "
+                "indistinguishable from a pre-TTL legacy store whose values happen "
+                "to begin with 8 plausible big-endian bytes (e.g. epoch-ms or "
+                "counters written via set_bytes()). Automatic adoption is DISABLED "
+                "by default: adopting a legacy store by mistake would turn the "
+                "first 8 bytes of every value into an expiry stamp and delete the "
+                "data on the next sweep. NOTHING has been changed -- the store "
+                "stays in legacy mode and every value reads back byte-identical. "
+                "If you are CERTAIN this store was created on v3.24.0, construct "
+                "the MemoryStorePartition with adopt_v3240_stamps=True and restart "
+                "to adopt the stamps in place (MemoryStore has no RocksDBOptions "
+                "surface). If this is a genuine pre-TTL store, leave the option "
+                "unset -- this message is informational and safe to ignore.",
+                len(self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})),
+            )
+            self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
             return
         if not self._recovery_saw_stamped:
             # Pure-legacy replay: the class-level census may hold orphan legacy
@@ -816,20 +887,29 @@ class MemoryStorePartition(StorePartition):
         main = self._state.setdefault("default", {})
 
         evicted = 0
+        visited = 0
         # Iterate in sorted order — index keys are big-endian-stamped so
-        # ascending byte order equals ascending expiry order.
+        # ascending byte order equals ascending expiry order. #7: the budget
+        # counts every index-entry VISIT (ghost or genuine), not just evictions,
+        # so a store dense with refresh-minted ghost entries cannot pay more than
+        # ``budget`` main-CF point-gets per sweep. Convergent — ghosts shrink each
+        # sweep until none remain and cease consuming budget.
         for index_key in sorted(index.keys()):
-            if evicted >= budget:
+            if visited >= budget:
                 break
 
             try:
                 idx_expires_at, user_key = decode_index_key(index_key)
             except ValueError:
                 index.pop(index_key, None)
+                visited += 1
                 continue
 
             if idx_expires_at > now_ms:
+                # Sorted by expiry — the rest is future (no point-get, so it is
+                # not counted against the visit budget).
                 break
+            visited += 1
 
             main_value = main.get(user_key)
             if main_value is None:
@@ -897,18 +977,24 @@ class MemoryStorePartition(StorePartition):
                 cache.delete(index_key, prefix=b"", cf_name=TTL_INDEX_CF_NAME)
 
         evicted = 0
+        visited = 0
+        # #7: budget counts every index-entry visit (ghost or genuine), bounding
+        # main-CF point-gets to <= budget per sweep (parity with _run_sweep).
         for index_key in sorted(index.keys()):
-            if evicted >= budget:
+            if visited >= budget:
                 break
 
             try:
                 idx_expires_at, user_key = decode_index_key(index_key)
             except ValueError:
                 delete_index_if_not_staged(index_key)
+                visited += 1
                 continue
 
             if idx_expires_at > now_ms:
+                # Sorted by expiry — the rest is future (no point-get, not counted).
                 break
+            visited += 1
 
             main_value = main.get(user_key)
             if main_value is None:

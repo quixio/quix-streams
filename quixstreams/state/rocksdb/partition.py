@@ -175,6 +175,12 @@ class RocksDBStorePartition(StorePartition):
         # stamped message has been replayed yet in this partition's lifetime;
         # a fresh partition instance per assignment is a fresh recovery session.
         self._recovery_now_ms: Optional[int] = None
+        # Count of wallclock-expired stamped records dropped during this
+        # recovery's changelog replay (Rule 4 / latest-record-wins, :meth:
+        # `recover_from_changelog_message`). Surfaced as one aggregate INFO at
+        # :meth:`complete_recovery` so an operator sees the deletions instead of
+        # records silently vanishing across a recovery.
+        self._recovery_expired_drops: int = 0
         # Incomplete-migration detection (spec §8.8). Set True on the first
         # header-true default-CF replay (the same condition that flips the
         # partition into TTL mode). Combined with a non-empty
@@ -516,6 +522,7 @@ class RocksDBStorePartition(StorePartition):
                 # is unknown here; the sweep's ghost/orphan handling GCs any index
                 # entry whose main-CF key is gone (§7, _run_sweep).
                 batch.delete(key, cf_handle)
+                self._recovery_expired_drops += 1
             else:
                 batch.put(key, stamped, cf_handle)
                 if stamp != SENTINEL_NEVER:
@@ -580,6 +587,20 @@ class RocksDBStorePartition(StorePartition):
         keys in the CF; the next cold restore rebuilds pending from the (now-more-
         stamped) changelog and resumes over exactly the remainder.
         """
+        if self._recovery_expired_drops > 0:
+            # #8 (review batch 2): make the Rule-4 wallclock-expired replay drops
+            # observable — ONE aggregate INFO per partition per recovery (no
+            # per-record logging). Emitted at the once-per-recovery finalize seam
+            # before any early return; a non-zero count implies the partition
+            # flipped, so no early-return branch below can skip a non-zero log.
+            logger.info(
+                "Recovery at path=%s dropped %d already-expired stamped record(s) "
+                "during changelog replay (expired against recovery wallclock=%d "
+                "ms; latest-record-wins).",
+                self._path,
+                self._recovery_expired_drops,
+                self._recovery_now_ms or 0,
+            )
         if not type(self).uses_ttl_stamps:
             # A subclass opted out (windowed / timestamped): the class-level
             # census gate never fired, so there is nothing to complete or clean.
@@ -596,15 +617,52 @@ class RocksDBStorePartition(StorePartition):
                 self.uses_ttl_stamps = True
                 self.get_or_create_column_family(TTL_INDEX_CF_NAME)
                 self._stamp_flip_metadata()
+            # nit (review batch 2): the only census-discard path that was silent.
+            # Log a sibling-consistent INFO with the discarded count before the
+            # drop (unconditionally — count 0 is a useful "nothing to discard"
+            # signal, matching the M1/pure-legacy/C1 paths that log even at 0).
+            logger.info(
+                "Recovery at path=%s: durable migration done-marker present; "
+                "discarding %d orphan pending-census entry(ies) (store fully "
+                "migrated, no completion needed).",
+                self._path,
+                self._count_backfill_pending(),
+            )
             self._discard_backfill_pending()
+            return
+        if self.uses_ttl_stamps and self._live_backfill_ledger_has_any():
+            # C1 warm-restart resume — evaluated immediately AFTER the §13.1
+            # done-flag short-circuit and BEFORE the M1 all-stamped byte gate
+            # below (#3, review batch 2: definitive ledger evidence beats the byte
+            # heuristic). The store is flipped and holds a non-empty
+            # ``__ttl_backfill_stamped__`` ledger with NO done-marker (the
+            # done-marker case already returned above): the exact signature of an
+            # in-place live :meth:`backfill_legacy_records` that was interrupted
+            # (some chunks committed + produced) and then flipped via changelog
+            # replay on a warm restart, leaving un-stamped legacy leftovers below
+            # the replayed offset range that were never censused. Resume the
+            # backfill over the ledger complement and finish the migration.
+            #
+            # Ordered ABOVE M1 on purpose: a warm restart re-replays the stored
+            # offset INCLUSIVELY, so one boundary header-absent legacy record can
+            # be re-censused into ``__ttl_backfill_pending__`` even while the ledger
+            # is non-empty — the ledger and the pending census are NOT mutually
+            # exclusive on a warm restart. If that lone orphan's value happened to
+            # byte-decode as a plausible stamp, the M1 gate below would fire first
+            # and permanently strand the interrupted backfill (CRITICAL + discard,
+            # no resume, ledger kept → re-strands on every restart). This C1 branch
+            # cannot hijack a cold-restore census case: the ledger is a LOCAL_ONLY
+            # CF, absent on a fresh volume (where adopt / §15.2 live), so a
+            # non-empty ledger only ever means a live backfill ran on THIS volume.
+            self._resume_interrupted_live_backfill()
             return
         if self._all_pending_values_are_stamped():
             # Total-quorum stamp detection (evaluated AFTER the §13.1 done-flag
-            # short-circuit and BEFORE the saw_stamped/§15.2 disposition and the
-            # C1 resume branch). A stock-v3.24.0 cold restore has saw_stamped=False
-            # and a full pending census whose values are all 8B-stamped-but-header-
-            # less; a MIXED-C (v3.24.0→this-branch) restore leaves the same
-            # all-stamped leftovers.
+            # short-circuit AND the C1 resume branch above — #3 — and BEFORE the
+            # saw_stamped/§15.2 disposition). A stock-v3.24.0 cold restore has
+            # saw_stamped=False and a full pending census whose values are all
+            # 8B-stamped-but-header-less; a MIXED-C (v3.24.0→this-branch) restore
+            # leaves the same all-stamped leftovers.
             if self._adopt_v3240_stamps_enabled:
                 # M1 opt-in self-heal. The operator asserted this is a genuine
                 # v3.24.0 store: flip + keep values verbatim + rebuild the index +
@@ -643,21 +701,6 @@ class RocksDBStorePartition(StorePartition):
                 self._count_backfill_pending(),
             )
             self._discard_backfill_pending()
-            return
-        if self.uses_ttl_stamps and self._live_backfill_ledger_has_any():
-            # C1 warm-restart resume. The store is flipped and holds a non-empty
-            # ``__ttl_backfill_stamped__`` ledger with NO done-marker (the
-            # done-marker case already returned above): the exact signature of an
-            # in-place live :meth:`backfill_legacy_records` that was interrupted
-            # (some chunks committed + produced) and then flipped via changelog
-            # replay on a warm restart, leaving un-stamped legacy leftovers below
-            # the replayed offset range that were never censused. Resume the
-            # backfill over the ledger complement and finish the migration. The
-            # live-backfill ledger and the recovery pending census are mutually
-            # exclusive per partition lifecycle, and the ledger is local-only
-            # (absent on a fresh volume where adopt / §15.2 live), so this branch
-            # never hijacks a cold-restore census case.
-            self._resume_interrupted_live_backfill()
             return
         if not self._recovery_saw_stamped and not self._persisted_flipped_at_open:
             # No __ttl_stamped__ record was replayed this session AND the store
@@ -2201,23 +2244,31 @@ class RocksDBStorePartition(StorePartition):
             read_opt.set_iterate_upper_bound(upper_bound)
 
         evicted = 0
+        visited = 0
         iterator: Iterator[tuple[bytes, bytes]] = cast(
             Iterator[tuple[bytes, bytes]],
             index_cf.items(from_key=b"", read_opt=read_opt),
         )
+        # #7: the budget counts every index-entry VISIT (ghost or genuine), not
+        # just evictions, so a store dense with refresh-minted ghost index entries
+        # cannot pay more than ``budget`` main-CF point-gets per sweep. Convergent:
+        # ghosts shrink each sweep until none remain and cease consuming budget.
         for index_key, _ in iterator:
-            if evicted >= budget:
+            if visited >= budget:
                 break
 
             try:
                 idx_expires_at, user_key = decode_index_key(index_key)
             except ValueError:
                 delete_index_if_not_staged(index_key)
+                visited += 1
                 continue
 
             if idx_expires_at > now_ms:
-                # Sorted by expiry — the rest is in the future.
+                # Sorted by expiry — the rest is in the future (no point-get, so
+                # it is not counted against the visit budget).
                 break
+            visited += 1
 
             main_value = main_cf.get(user_key, default=None)
             if main_value is None:
@@ -2326,23 +2377,29 @@ class RocksDBStorePartition(StorePartition):
             read_opt.set_iterate_upper_bound(upper_bound)
 
         evicted = 0
+        visited = 0
         iterator: Iterator[tuple[bytes, bytes]] = cast(
             Iterator[tuple[bytes, bytes]],
             index_cf.items(from_key=b"", read_opt=read_opt),
         )
+        # #7: budget counts every index-entry visit (ghost or genuine), bounding
+        # main-CF point-gets to <= budget per sweep (parity with _run_sweep).
         for index_key, _ in iterator:
-            if evicted >= budget:
+            if visited >= budget:
                 break
 
             try:
                 idx_expires_at, user_key = decode_index_key(index_key)
             except ValueError:
                 delete_index_if_not_staged(index_key)
+                visited += 1
                 continue
 
             if idx_expires_at > now_ms:
-                # Sorted by expiry — the rest is in the future.
+                # Sorted by expiry — the rest is in the future (no point-get, so
+                # it is not counted against the visit budget).
                 break
+            visited += 1
 
             main_value = main_cf.get(user_key, default=None)
             if main_value is None:

@@ -89,3 +89,63 @@ class TestExpiredReplaySupersedesOlderCopy:
 
         partition.complete_recovery()
         assert key not in _default_keys(partition)
+
+
+class TestExpiredReplayDropAggregateInfo:
+    """#8 (review batch 2), memory mirror: wallclock-expired replay drops emit
+    ONE aggregate INFO per partition per recovery (count + clock, no path)."""
+
+    def test_aggregate_info_on_expired_drops(self, changelog_producer_mock, caplog):
+        """RED (HEAD): no INFO mentions dropped/expired records.
+        GREEN: exactly one INFO with count=2 + recovery wallclock."""
+        import logging
+
+        now_ms = 1_780_000_000_000
+        past = now_ms - DAY_MS
+        msgs = [
+            (b"pfx|k0", encode_ttl_value(past, b"v0"), True),
+            (b"pfx|k1", encode_ttl_value(past, b"v1"), True),
+        ]
+        partition = MemoryStorePartition(
+            changelog_producer=changelog_producer_mock,
+            legacy_records_ttl=timedelta(days=7),
+        )
+        _replay(partition, msgs, now_ms=now_ms)
+        assert _default_keys(partition) == set()
+
+        with caplog.at_level(logging.INFO):
+            partition.complete_recovery()
+
+        drop_logs = [
+            r
+            for r in caplog.records
+            if "already-expired stamped record" in r.message
+            and r.levelno == logging.INFO
+        ]
+        assert len(drop_logs) == 1, (
+            f"expected exactly one aggregate drop INFO, got "
+            f"{[r.message for r in drop_logs]}"
+        )
+        msg = drop_logs[0].getMessage()
+        assert "dropped 2 already-expired stamped record(s)" in msg
+        assert f"wallclock={now_ms}" in msg
+
+    def test_no_info_when_zero_drops(self, changelog_producer_mock, caplog):
+        import logging
+
+        now_ms = 1_780_000_000_000
+        future = now_ms + 30 * DAY_MS
+        msgs = [
+            (b"pfx|k0", encode_ttl_value(future, b"v0"), True),
+            (b"pfx|k1", encode_ttl_value(future, b"v1"), True),
+        ]
+        partition = MemoryStorePartition(
+            changelog_producer=changelog_producer_mock,
+            legacy_records_ttl=timedelta(days=7),
+        )
+        _replay(partition, msgs, now_ms=now_ms)
+        with caplog.at_level(logging.INFO):
+            partition.complete_recovery()
+        assert not any(
+            "already-expired stamped record" in r.message for r in caplog.records
+        )

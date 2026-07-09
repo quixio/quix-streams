@@ -17,9 +17,16 @@ from quixstreams.state.metadata import (
     TTL_INDEX_CF_NAME,
 )
 from quixstreams.state.rocksdb import RocksDBOptions
-from quixstreams.state.rocksdb.ttl_codec import decode_ttl_value
+from quixstreams.state.rocksdb.ttl_codec import decode_index_key, decode_ttl_value
 
 TTL = timedelta(milliseconds=100)
+FAR = timedelta(days=3650)
+
+
+def _index_expiries(partition):
+    """Decoded expiry stamps of every ``__ttl_index__`` entry (with repeats)."""
+    cf = partition.get_or_create_column_family(TTL_INDEX_CF_NAME)
+    return [decode_index_key(bytes(key))[0] for key, _ in cf.items()]
 
 
 def _default_tombstones(mock):
@@ -266,3 +273,98 @@ class TestSweepTombstones:
                 offset += 1
             main_cf = rebuilt.get_or_create_column_family("default")
             assert main_cf.get(user_key, default=None) is None
+
+
+class TestSweepVisitBudget:
+    """#7 (review batch 2): every index-entry visit (ghost or genuine) must
+    count against the eviction budget, so a store dense with refresh-minted
+    ghost index entries cannot pay more than ``budget`` main-CF point-gets per
+    sweep."""
+
+    def _build_ghosts(self, partition, prefix, n, short, long):
+        """Refresh-mint ``n`` ghost index entries: stamp k0..k{n-1} at expiry E1
+        (flush 1), then re-stamp them at a later expiry E2 (flush 2). The write
+        path adds the E2 index entry but never removes the E1 one, so each old
+        E1 entry becomes a ghost (main stamp E2 != idx stamp E1). Both flushes
+        keep high_water at 1000 (< E1) so neither sweeps."""
+        tx1 = partition.begin()
+        for i in range(n):
+            tx1.set(key=f"k{i}", value="v", prefix=prefix, timestamp=1000, ttl=short)
+        tx1.prepare(processed_offsets={"topic": 2})
+        tx1.flush(changelog_offset=2)
+
+        tx2 = partition.begin()
+        for i in range(n):
+            tx2.set(key=f"k{i}", value="v", prefix=prefix, timestamp=1000, ttl=long)
+        tx2.prepare(processed_offsets={"topic": 3})
+        tx2.flush(changelog_offset=3)
+
+    def test_ghost_visits_count_against_budget(
+        self, store_partition_factory, changelog_producer_mock
+    ):
+        """RED (HEAD): all N ghost index entries are GC'd in one sweep (the loop
+        counts only genuine evictions, so ghosts consume no budget → N unbudgeted
+        point-gets).
+        GREEN: exactly B index entries are visited/GC'd this sweep; N-B ghosts
+        remain and are cleaned by later sweeps (convergent)."""
+        prefix = b"pfx"
+        n, b = 5, 2
+        short = timedelta(milliseconds=100)  # E1 = 1100
+        long = timedelta(milliseconds=10_000)  # E2 = 11000
+        e1, e2 = 1100, 11000
+        with store_partition_factory(
+            options=RocksDBOptions(max_evictions_per_flush=b)
+        ) as partition:
+            _flip(partition, prefix)
+            self._build_ghosts(partition, prefix, n, short, long)
+
+            expiries = _index_expiries(partition)
+            assert expiries.count(e1) == n, "precondition: N ghost index entries"
+            assert expiries.count(e2) == n, "precondition: N genuine index entries"
+
+            # One sweep at high_water=5000 (E1 <= 5000 < E2). A far-future advance
+            # write triggers the sweep but is never itself evicted; no genuine
+            # eviction happens (every E1 entry is a ghost).
+            tx = partition.begin()
+            tx.set(key="advance", value="t", prefix=prefix, timestamp=5000, ttl=FAR)
+            tx.prepare(processed_offsets={"topic": 4})
+            tx.flush(changelog_offset=4)
+
+            after = _index_expiries(partition)
+            assert after.count(e1) == n - b, "only B ghost visits allowed per sweep"
+            assert after.count(e2) == n, "genuine (future) entries untouched"
+
+            # Convergence: a second sweep GC's B more ghosts.
+            tx2 = partition.begin()
+            tx2.set(key="advance", value="t", prefix=prefix, timestamp=5001, ttl=FAR)
+            tx2.prepare(processed_offsets={"topic": 5})
+            tx2.flush(changelog_offset=5)
+            assert _index_expiries(partition).count(e1) == n - 2 * b
+
+    def test_off_path_ghost_visits_count_against_budget(
+        self, store_partition_factory, changelog_producer_mock
+    ):
+        """Parity for the OFF path (``_run_sweep`` in ``write()``): same
+        visit-budget bound."""
+        prefix = b"pfx"
+        n, b = 5, 2
+        short = timedelta(milliseconds=100)
+        long = timedelta(milliseconds=10_000)
+        e1, e2 = 1100, 11000
+        with store_partition_factory(
+            options=RocksDBOptions(
+                max_evictions_per_flush=b, ttl_changelog_tombstones=False
+            )
+        ) as partition:
+            _flip(partition, prefix)
+            self._build_ghosts(partition, prefix, n, short, long)
+            assert _index_expiries(partition).count(e1) == n
+
+            tx = partition.begin()
+            tx.set(key="advance", value="t", prefix=prefix, timestamp=5000, ttl=FAR)
+            tx.prepare(processed_offsets={"topic": 4})
+            tx.flush(changelog_offset=4)
+
+            after = _index_expiries(partition)
+            assert after.count(e1) == n - b
+            assert after.count(e2) == n

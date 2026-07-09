@@ -24,6 +24,7 @@ warm restart, with no new user-facing config:
 See ``dev-planning/state-ttl-c1-warm-restart-resume/spec.md``.
 """
 
+import struct
 from datetime import timedelta
 from unittest.mock import MagicMock, PropertyMock
 
@@ -795,4 +796,135 @@ class TestResumeDoubleWrap:
             assert _safe_decode_stamp(payload) is None
         assert _done_marker_present(p2) is True
         assert _ledger_keys(p2) == set()
+        p2.close()
+
+
+# ---------------------------------------------------------------------------
+# #3 (review batch 2, sc-73191) — the C1 resume gate must sit ABOVE the M1
+# all-stamped byte-heuristic gate.
+#
+# Warm-restart recovery re-replays the stored offset INCLUSIVELY, so one
+# boundary header-absent legacy record can be re-censused into
+# ``__ttl_backfill_pending__`` even on a store that also carries a non-empty
+# live-backfill ledger. If that lone census orphan's value happens to
+# byte-decode as a plausible stamp, ``_all_pending_values_are_stamped()`` is
+# True on the single-element census and the M1 gate fires BEFORE the C1 resume:
+# it logs a CRITICAL and discards the census (no flag) — never resuming. The
+# ledger has no done-marker, so the marker-gated cleanup keeps it and every
+# restart re-strands. Reordering C1 above M1 (definitive ledger evidence beats a
+# byte heuristic) makes the interrupted backfill always resume.
+# ---------------------------------------------------------------------------
+
+
+class TestStrandResumeC1AboveM1:
+    def _opts(self):
+        return RocksDBOptions(
+            legacy_records_ttl=timedelta(days=7), legacy_backfill_chunk_size=2
+        )
+
+    def test_stamp_plausible_orphan_census_still_resumes(
+        self, store_partition_factory, caplog
+    ):
+        """A warm-restart interrupted backfill whose single re-censused boundary
+        orphan byte-decodes as a plausible stamp.
+
+        RED (HEAD): the M1 all-stamped gate fires first — a CRITICAL naming
+        ``adopt_v3240_stamps`` is logged, the census is discarded, the C1 resume
+        never runs, the leftover stays un-stamped, and no done-marker is written
+        (permanent strand; every inclusive-replay restart re-strands).
+
+        GREEN: the C1 resume runs first — every default record is single-stamped
+        at the cohort's uniform expiry, the ``__ttl_index__`` is complete, the
+        done-marker is present, the ledger + progress + orphan census are
+        drained, and NO CRITICAL is logged.
+        """
+        import logging
+
+        ttl = timedelta(days=7)
+        ts = 1_000_000_000_000
+        uniform_expiry = ts + 7 * DAY_MS
+
+        # Interrupted live backfill (chunk 1 committed → ledger {k0,k1}; chunk 2
+        # produced+flushed but local-write-lost; k4 the genuine leftover).
+        p1, _producer1, captured_all = _interrupt_live_backfill_at_chunk_local_write(
+            store_partition_factory,
+            name="db",
+            ttl=ttl,
+            ts=ts,
+            n=5,
+            chunk=2,
+            kill_chunk=2,
+        )
+        captured_keys = {k for k, _, _ in captured_all}
+        leftovers = [
+            (k, v) for k, v in _unstamped_default_records(p1) if k not in captured_keys
+        ]
+        assert len(leftovers) == 1, "one genuine boundary leftover expected"
+        boundary_key = leftovers[0][0]
+        p1.close()
+
+        # Warm reopen (legacy; ledger survives) + replay the produced tail (flips
+        # the store; re-ledgers the crash-window chunk → ledger {k0,k1,k2,k3}).
+        producer2 = _producer()
+        p2 = store_partition_factory(
+            name="db", options=self._opts(), changelog_producer=producer2
+        )
+        _replay_default(p2, captured_all, now_ms=ts)
+        assert p2.uses_ttl_stamps is True
+
+        # The inclusive-replay boundary re-censuses the lone leftover header-absent
+        # — and its value coincidentally byte-decodes as a plausible TTL stamp
+        # (the exact set_bytes big-endian false-positive shape). It lands verbatim
+        # and is censused into __ttl_backfill_pending__.
+        stamp_plausible = struct.pack(">Q", ts) + b"legacy-boundary-value"
+        assert _safe_decode_stamp(stamp_plausible) is not None
+        p2.recover_from_changelog_message(
+            key=boundary_key,
+            value=stamp_plausible,
+            cf_name="default",
+            offset=99,
+            ttl_stamped=False,
+        )
+        assert _pending_keys(p2) == {boundary_key}
+        # This is precisely the M1-gate trap: a single stamp-plausible census.
+        assert p2._all_pending_values_are_stamped() is True
+
+        with caplog.at_level(logging.INFO):
+            p2.complete_recovery()
+
+        # No M1 CRITICAL: the definitive ledger evidence won the gate race.
+        critical = [
+            r
+            for r in caplog.records
+            if r.levelno >= logging.CRITICAL and "adopt_v3240_stamps" in r.message
+        ]
+        assert not critical, (
+            f"C1 must resume, not strand via the M1 CRITICAL gate; got: "
+            f"{[r.getMessage() for r in critical]}"
+        )
+        # The C1 resume ran to completion.
+        assert any("RESUME COMPLETED" in r.message for r in caplog.records)
+
+        # Every default record single-stamped at the cohort's uniform expiry.
+        decoded = _decode_default_cf(p2)
+        assert len(decoded) == 5
+        for key, (expires_at, payload) in decoded.items():
+            assert expires_at == uniform_expiry
+            if key == boundary_key:
+                # The stamp-plausible leftover is stamped exactly ONCE; its inner
+                # payload is the verbatim boundary value (its byte-plausibility is
+                # inherent content, not a double-wrap).
+                assert payload == stamp_plausible
+            else:
+                assert payload.startswith(b'"legacy-value-')
+                assert _safe_decode_stamp(payload) is None
+        # Index complete; migration finished; all bookkeeping drained.
+        index = _index_cf(p2)
+        assert len(index) == 5
+        for user_key in decoded:
+            assert index[user_key] == uniform_expiry
+        assert _done_marker_present(p2) is True
+        assert _ledger_keys(p2) == set()
+        assert _progress_counter(p2) is None
+        assert _pending_keys(p2) == set()
         p2.close()
