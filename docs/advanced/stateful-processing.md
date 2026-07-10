@@ -322,6 +322,8 @@ You do not need to declare that a store uses TTL. The framework detects it autom
 
 Once a store has switched into TTL mode, it stays in TTL mode for the life of that store. Plain `state.set(k, v)` calls on a TTL-enabled store still work and write a "never expires" sentinel — they do not turn off TTL for that key.
 
+**Memory backend.** A populated legacy in-memory store follows the same live-migration path as RocksDB. On the first flush that contains a `ttl=` write against a populated legacy in-memory partition, the framework backfills every pre-existing record in RAM — applying the expiry from `legacy_records_ttl` if set, falling back to the triggering write's own `ttl=` value, and falling back to never-expires if neither provides a window — and then flips the partition into TTL mode in place. In earlier versions the in-memory backend logged a warning and left the store in legacy mode; it now migrates unconditionally.
+
 
 ### Upgrading an existing (legacy) store - `legacy_records_ttl`
 
@@ -465,6 +467,16 @@ On the next flush the framework backfills every pre-existing record with the cho
 **Cold-restore completion.** If a rebuilt node replays a changelog whose migration was interrupted mid-backfill (some records already stamped, some not), it auto-completes the leftovers at end of recovery. With `legacy_records_ttl` set, they expire at `wallclock-at-rebuild + legacy_records_ttl`; without it, they inherit the expiry of the surviving stamped cohort (or never-expire, with a `[WARNING]`, in the rare case where no surviving stamp remains to derive from). No data is deleted.
 
 > **Note.** The one hard error left on this path is a framework guard: if a `ttl=` write reaches flush with no event-time timestamp, the backfill raises `IncompatibleStateStoreError` rather than inventing a wall-clock expiry. That signals a bug in how `state.set(..., ttl=...)` was called (the framework injects the timestamp inside stateful callbacks), not a store-migration problem. Your existing state is intact after such an error.
+
+
+#### Mixed-version consumer groups and rollback
+
+Once a store partition flips into TTL mode, every record written to its **default column-family changelog** carries an 8-byte expiry stamp embedded in the value plus a `__ttl_stamped__` Kafka record header. Replicas running **Quix Streams ≤ v3.23.x** do not understand that header: during state recovery they apply those changelog records as bare puts, silently prepending the raw 8-byte stamp as application data. Every key recovered by a ≤ v3.23.x replica is permanently corrupted.
+
+Two rules follow from this:
+
+1. **Upgrade every replica before the first `ttl=` write.** If your consumer group runs multiple instances, all of them must be on ≥ the current version before you deploy any code change that calls `state.set(..., ttl=...)`. A phased rollout where even one replica still runs ≤ v3.23.x after the first TTL flush will corrupt that replica's recovered state.
+2. **Rolling back to ≤ v3.23.x requires a new consumer group.** Once any store partition has flipped into TTL mode its changelog is permanently stamped. You cannot roll back to ≤ v3.23.x and safely recover that store. To roll back: deploy the old version under a **new consumer group name** (and a new `state_dir`) so it begins from a clean, un-stamped store.
 
 
 ### Semantics and limits
