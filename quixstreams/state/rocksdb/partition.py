@@ -218,6 +218,20 @@ class RocksDBStorePartition(StorePartition):
         # not decode to a valid stamp.
         self._unstamped_read_warned: bool = False
 
+        # #5 (review batch 3): per-partition delivery accounting for the
+        # legacy-TTL migration produce sites (live backfill / recovery-completion
+        # / done-marker). ``_backfill_produced`` counts records THIS partition
+        # produced through the migration route; ``_backfill_acked`` is incremented
+        # by the chained delivery callback on successful delivery. The backfill
+        # flush stall detector then compares ``produced - acked`` (this
+        # partition's outstanding) instead of ``Producer.flush()``'s GLOBAL
+        # in-flight count, so another partition's wedged records on the SHARED
+        # migration producer cannot falsely abort this one. Cumulative for the
+        # partition's lifetime; a migration runs at most once per partition so the
+        # running difference is always this migration's own outstanding backlog.
+        self._backfill_produced: int = 0
+        self._backfill_acked: int = 0
+
         # Resolve the **runtime** TTL flag. Subclasses that nail
         # ``uses_ttl_stamps = False`` at the class level (windowed,
         # timestamped) stay opted-out forever. Otherwise we read the
@@ -280,6 +294,20 @@ class RocksDBStorePartition(StorePartition):
             and self._live_backfill_ledger_has_any()
         )
 
+        # #9 (review batch 3): snapshot whether the durable migration done-marker
+        # is already local at open (a warm restart of a fully-migrated store). When
+        # True, changelog replay skips the pending-CF census entirely — the marker
+        # means the migration is complete, so ``complete_recovery`` would discard
+        # any censused entries anyway. Guarded by ``list_column_families()`` so a
+        # legacy store never creates the system CF (parity with the ledger snapshot
+        # above); a fresh-volume COLD restore opens with the CF absent → False and
+        # relies on the ``_recovery_saw_migration_done`` replay latch instead.
+        self._migration_done_at_open: bool = (
+            type(self).uses_ttl_stamps
+            and TTL_SYSTEM_CF_NAME in self.list_column_families()
+            and self._has_local_migration_done_marker()
+        )
+
     @property
     def high_water_ms(self) -> Optional[int]:
         """
@@ -335,6 +363,13 @@ class RocksDBStorePartition(StorePartition):
         timestamp. Late-arriving timestamps never roll the high-water back.
         """
         if timestamp is None:
+            return
+        if timestamp < 0:
+            # #12 (review batch 3): a negative timestamp (Kafka NO_TIMESTAMP = -1
+            # or a pre-epoch event-time) never represents a real event-time
+            # position, so it must not advance — or establish — the high-water.
+            # Left unguarded it set a negative high-water that int_to_bytes (an
+            # unsigned >Q packer) then failed to persist with a raw struct.error.
             return
         if self._high_water_ms is None or timestamp > self._high_water_ms:
             self._high_water_ms = timestamp
@@ -415,7 +450,18 @@ class RocksDBStorePartition(StorePartition):
         # ``__ttl_backfill_pending__`` for the completion backfill. The pending
         # bookkeeping rides the SAME WriteBatch as the default-CF write so it is
         # atomic with the replay (§4.1).
-        if type(self).uses_ttl_stamps and cf_name == "default":
+        if (
+            type(self).uses_ttl_stamps
+            and cf_name == "default"
+            and not (self._migration_done_at_open or self._recovery_saw_migration_done)
+        ):
+            # #9: once the migration done-marker is known — local at open (warm
+            # restart) or latched the moment the flag-last marker record replays —
+            # stop censusing pending-CF entries. ``complete_recovery`` discards /
+            # no-ops the census in that case, so the entries would be dropped
+            # anyway; skipping avoids the wasted per-record census writes. The
+            # gate's else-branch (no marker) is unchanged → byte-identical
+            # classification for stores without the marker.
             pending_handle = self.get_column_family_handle(TTL_BACKFILL_PENDING_CF_NAME)
             if ttl_stamped:
                 # A header-true default-CF record. Mark that the partition
@@ -880,7 +926,10 @@ class RocksDBStorePartition(StorePartition):
                 # migration route under exactly-once (a transactional produce
                 # outside a transaction is invalid).
                 migration=True,
+                # #5: count this record against THIS partition's outstanding.
+                on_delivery=self._on_backfill_delivery,
             )
+            self._backfill_produced += 1
             # Confirm the marker is durably on the changelog BEFORE the local
             # write; a stuck broker raises rather than marking the store done
             # ahead of the changelog (which would defeat the once-only guarantee
@@ -1273,13 +1322,28 @@ class RocksDBStorePartition(StorePartition):
                     last_stamp = stamp
             return last_stamp
 
+    def _on_backfill_delivery(
+        self, err: Optional[object], msg: Optional[object] = None
+    ) -> None:
+        """
+        Chained delivery callback for the legacy-TTL migration produce sites (#5,
+        review batch 3). Increments this partition's acked counter on a successful
+        delivery so :meth:`_flush_backfill_changelog` can measure THIS partition's
+        own outstanding records rather than the shared producer's global queue
+        depth. Delivery errors are surfaced by the producer's internal callback and
+        the flush stall detector (a wedged record simply never acks and trips the
+        no-progress abort), so only successful acks are counted here.
+        """
+        if err is None:
+            self._backfill_acked += 1
+
     def _flush_backfill_changelog(
         self, changelog_producer: Optional[ChangelogProducer]
     ) -> None:
         """
         Flush a backfill / recovery-completion chunk's changelog records with a
         PROGRESS-based bounded loop and fail loudly only when delivery stalls
-        (spec ttl-changelog-tombstones §3.7).
+        (spec ttl-changelog-tombstones §3.7; per-partition accounting #5).
 
         Callers MUST invoke this AFTER producing a chunk's stamped records and
         BEFORE committing the chunk's local ``WriteBatch``: the stamped chunk has
@@ -1287,24 +1351,32 @@ class RocksDBStorePartition(StorePartition):
         crash would leave the local store ahead of the changelog and a peer
         rebuild would diverge.
 
-        The loop flushes in ``_BACKFILL_CHANGELOG_FLUSH_SLICE_S`` slices and:
+        The loop flushes in ``_BACKFILL_CHANGELOG_FLUSH_SLICE_S`` slices (each
+        ``flush`` DRIVES delivery / serves the delivery callbacks) and:
 
-        - returns as soon as a slice reports 0 remaining (fully delivered);
+        - returns as soon as THIS partition's outstanding records reach 0;
         - raises :class:`ChangelogFlushError` when a full slice makes NO delivery
-          progress (``remaining >= prev``) — a wedged broker surfaces after ~2
-          slices instead of a single fixed window, while a large-but-progressing
-          chunk (``10 → 6 → 2 → 0``) keeps going because each slice strictly
-          decreases the backlog;
+          progress (``outstanding >= prev``) — a wedged broker surfaces after ~2
+          slices, while a large-but-progressing chunk keeps going;
         - raises at ``_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES`` (runaway cap) so an
           ever-shrinking trickle still terminates;
-        - returns without blocking on a non-int return (an unconfigured test
+        - returns without blocking on a non-int flush return (an unconfigured test
           double), matching the pre-existing "flush and proceed" behavior.
 
-        The timeout thus measures *lack of progress*, not *total time*, so it is
-        robust to a large ``legacy_backfill_chunk_size``. Fix C: the flush routes
-        through the migration path (the dedicated non-transactional producer under
-        exactly-once, else the main producer), so a confirmed flush means durable
-        BEFORE the caller's local commit.
+        #5 (review batch 3): the stall decision is based on THIS partition's
+        ``produced - acked`` counters — NOT on ``Producer.flush()``'s int return,
+        which is the GLOBAL in-flight count across every topic/partition on the
+        shared migration producer. Under a shared producer, a sibling partition's
+        wedged records would otherwise hold ``flush()``'s count static and falsely
+        abort a partition that has fully delivered its own records. When this
+        partition produced nothing through the counter-tracked route (the direct
+        unit-test doubles that key on the flush return), it falls back to the
+        int-return so those cases keep their exact semantics.
+
+        The timeout thus measures *lack of progress*, not *total time*. Fix C: the
+        flush routes through the migration path (the dedicated non-transactional
+        producer under exactly-once, else the main producer), so a confirmed flush
+        means durable BEFORE the caller's local commit.
         """
         if changelog_producer is None:
             return
@@ -1313,27 +1385,46 @@ class RocksDBStorePartition(StorePartition):
             remaining = changelog_producer.flush(
                 timeout=_BACKFILL_CHANGELOG_FLUSH_SLICE_S, migration=True
             )
-            # A non-int return (e.g. an unconfigured test double) is indeterminate:
-            # do not block the local commit (pre-existing behavior for such cases).
+            # A non-int return (unconfigured test double / a producer with no
+            # delivery accounting): do not block the local commit (pre-existing
+            # "flush and proceed" behavior).
             if not isinstance(remaining, int):
                 return
+            # A 0 global backlog means the SHARED producer's queue is fully
+            # drained — every partition's records (including this one's) are
+            # delivered — so return regardless of the ack counter. This also keeps
+            # a delivery-callback-less test double (flush()==0 but no callbacks
+            # fired) working. The cross-partition false-abort only arises when
+            # flush() reports a POSITIVE backlog from a SIBLING partition's wedged
+            # records, which the per-partition accounting below then discounts.
             if remaining == 0:
                 return
-            if prev is not None and remaining >= prev:
+            # remaining > 0: some backlog exists. Use THIS partition's own
+            # outstanding (produced - acked) when it produced through the
+            # counter-tracked migration route, so a sibling's records do not abort
+            # it; else fall back to the producer's global int return (the
+            # direct-call unit doubles that never produced anything).
+            if self._backfill_produced > 0:
+                outstanding = self._backfill_produced - self._backfill_acked
+            else:
+                outstanding = remaining
+            if outstanding <= 0:
+                return
+            if prev is not None and outstanding >= prev:
                 raise ChangelogFlushError(
-                    f"{remaining} legacy-TTL backfill changelog record(s) made no "
+                    f"{outstanding} legacy-TTL backfill changelog record(s) made no "
                     f"delivery progress in a full {_BACKFILL_CHANGELOG_FLUSH_SLICE_S}s "
                     f"slice at path={self._path}; aborting before the local commit "
                     f"so the local store never gets ahead of the changelog."
                 )
             logger.debug(
-                "TTL backfill changelog flush progress: %d remaining after "
+                "TTL backfill changelog flush progress: %d outstanding after "
                 "slice %d (path=%s)",
-                remaining,
+                outstanding,
                 slice_no + 1,
                 self._path,
             )
-            prev = remaining
+            prev = outstanding
         raise ChangelogFlushError(
             f"legacy-TTL backfill changelog still has {prev} undelivered "
             f"record(s) after {_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES} × "
@@ -1535,8 +1626,14 @@ class RocksDBStorePartition(StorePartition):
                 for key, stamped in produce:
                     # Fix C: migration route (non-transactional under exactly-once).
                     self._changelog_producer.produce(
-                        key=key, value=stamped, headers=headers, migration=True
+                        key=key,
+                        value=stamped,
+                        headers=headers,
+                        migration=True,
+                        # #5: per-partition delivery accounting.
+                        on_delivery=self._on_backfill_delivery,
                     )
+                    self._backfill_produced += 1
                 # Confirm the chunk is durably on the changelog BEFORE the local
                 # commit; a stuck broker raises rather than writing local-ahead.
                 self._flush_backfill_changelog(self._changelog_producer)
@@ -1717,9 +1814,15 @@ class RocksDBStorePartition(StorePartition):
         Provably-complete backfill (Fix A, spec ``spec-backfill-completeness.md``
         §3): census the full default-CF key list FIRST, then chunk over that
         frozen list, point-getting each value fresh and re-stamping it with a
-        uniform ``expires_at_ms`` expiry. Persisting and producing each chunk
-        before reading the next bounds peak transient memory to one chunk (plus
-        the key-list census) regardless of total store size.
+        uniform ``expires_at_ms`` expiry.
+
+        **Peak memory (#10a, review batch 3).** Peak transient memory is
+        **O(census key count)** — the full sorted ``key_list`` is materialized up
+        front (~80 B/key), which is exactly what ``_CENSUS_SPILL_WARN_THRESHOLD``
+        guards. Only the *values* are chunk-bounded: each chunk point-gets and
+        holds one ``chunk_size`` batch of values at a time, persisting and
+        producing it before reading the next. (An earlier docstring incorrectly
+        claimed peak memory ≈ one chunk; the key list dominates.)
 
         Called by the transaction layer from ``prepare()`` when a TTL write is
         detected on a partition whose default CF is **populated** *and*
@@ -1858,12 +1961,25 @@ class RocksDBStorePartition(StorePartition):
         # insensitive to interleaved legacy writes (see the docstring invariant).
         # The ledger membership test is a point-get on the (separate) ledger CF,
         # never on the default CF, and never inspects value content.
-        key_list: list[bytes] = sorted(
-            cast(bytes, key)
-            for key in default_cf.keys()
-            if cast(bytes, key) not in staged_default_keys
-            and cast(bytes, key) not in stamped_ledger
-        )
+        #
+        # #10a (review batch 3): on the common FIRST-flip path the ledger is empty,
+        # so the per-key ``not in stamped_ledger`` point-get would always be a
+        # (bloom) negative. Probe the ledger ONCE up front and drop the per-key
+        # membership term entirely when it is empty — only a resume over a
+        # non-empty ledger pays the per-key check.
+        if self._live_backfill_ledger_has_any():
+            key_list: list[bytes] = sorted(
+                cast(bytes, key)
+                for key in default_cf.keys()
+                if cast(bytes, key) not in staged_default_keys
+                and cast(bytes, key) not in stamped_ledger
+            )
+        else:
+            key_list = sorted(
+                cast(bytes, key)
+                for key in default_cf.keys()
+                if cast(bytes, key) not in staged_default_keys
+            )
         total = len(key_list)
         if total > _CENSUS_SPILL_WARN_THRESHOLD:
             logger.warning(
@@ -1928,8 +2044,14 @@ class RocksDBStorePartition(StorePartition):
                     # under exactly-once so the per-chunk flush below is durable
                     # before the local write.
                     changelog_producer.produce(
-                        key=key, value=stamped, headers=headers, migration=True
+                        key=key,
+                        value=stamped,
+                        headers=headers,
+                        migration=True,
+                        # #5: per-partition delivery accounting.
+                        on_delivery=self._on_backfill_delivery,
                     )
+                    self._backfill_produced += 1
                 self._flush_backfill_changelog(changelog_producer)
 
             # ADVANCE the observability counter IN THE SAME batch as the chunk's

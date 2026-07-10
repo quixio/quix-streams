@@ -187,7 +187,21 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "state.set() outside an apply/update/filter callback (e.g. "
                 "from a custom Source), use as_state(prefix, timestamp=...)."
             )
-        return timestamp + _ttl_to_ms(ttl)
+        expiry = timestamp + _ttl_to_ms(ttl)
+        if expiry < 0:
+            # #12 (review batch 3): a pre-epoch / negative event-time yields a
+            # negative expiry that the unsigned stamp encoder cannot represent.
+            # Reject loudly at the source with a clear ValueError (naming the
+            # offending values) instead of letting a raw struct.error crash-loop
+            # on every replay. Caught by the #14 validate-before-stage + FAILED
+            # handling, so nothing is committed. We reject rather than clamp: a
+            # clamped expiry would silently change the record's TTL semantics.
+            raise ValueError(
+                f"ttl=... produced a negative expiry ({expiry} ms) from "
+                f"timestamp={timestamp} and ttl={ttl!r}; a pre-epoch or negative "
+                "event-time cannot be TTL-stamped."
+            )
+        return expiry
 
     def set(
         self,
@@ -227,20 +241,19 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # un-stamped layout (byte-identical to v3.23.6). If a TTL write
         # *does* land we flip the partition (or reject loudly) and the
         # flush path re-encodes the cache.
-        try:
-            value_serialized = self._serialize_value(value)
-        except Exception:
-            self._status = PartitionTransactionStatus.FAILED
-            raise
-
-        super().set_bytes(
-            key=key, value=value_serialized, prefix=prefix, cf_name="default"
-        )
-
+        #
+        # #14 (review batch 3): compute + validate the stamp BEFORE staging the
+        # value (``super().set_bytes`` below), and fail the transaction on a stamp
+        # ValueError (bad ttl, missing timestamp, negative expiry from #12).
+        # Otherwise a caught ValueError leaves the already-staged value behind to
+        # commit as a stray never-expiring legacy record. The TTL bookkeeping is
+        # grouped with the validated stamp so nothing is staged on failure.
         if ttl is not None:
-            # Validate eagerly so the user gets a clear error at the call
-            # site rather than from inside ``flush()``.
-            stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+            try:
+                stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+            except ValueError:
+                self._status = PartitionTransactionStatus.FAILED
+                raise
             self._batch_has_ttl_writes = True
             self._track_batch_ttl_ms(ttl)
             key_serialized = self._serialize_key(key, prefix=prefix)
@@ -251,6 +264,16 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # marker-free).
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
+
+        try:
+            value_serialized = self._serialize_value(value)
+        except Exception:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
+
+        super().set_bytes(
+            key=key, value=value_serialized, prefix=prefix, cf_name="default"
+        )
 
     def set_bytes(
         self,
@@ -286,16 +309,21 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             )
             return
 
-        super().set_bytes(key=key, value=value, prefix=prefix, cf_name="default")
-
+        # #14: validate the stamp BEFORE staging (see :meth:`set`).
         if ttl is not None:
-            stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+            try:
+                stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+            except ValueError:
+                self._status = PartitionTransactionStatus.FAILED
+                raise
             self._batch_has_ttl_writes = True
             self._track_batch_ttl_ms(ttl)
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._pending_stamps[(prefix, key_serialized)] = stamp
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
+
+        super().set_bytes(key=key, value=value, prefix=prefix, cf_name="default")
 
     def _track_batch_ttl_ms(self, ttl: timedelta) -> None:
         """
@@ -315,6 +343,50 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         if self._max_batch_ttl_ms is None or ttl_ms > self._max_batch_ttl_ms:
             self._max_batch_ttl_ms = ttl_ms
 
+    def _delete_stale_index_entry(
+        self, key_serialized: bytes, prefix: bytes, new_stamp: int
+    ) -> None:
+        """
+        #8 (review batch 3): inline-delete a key's OLD ``__ttl_index__`` entry
+        when it is refreshed with a new stamp, so a refresh-heavy store (dedup
+        sliding window) does not accumulate ghost index entries and grow the
+        below-cutoff index unboundedly. MUST be called BEFORE the new stamped
+        value is staged (it reads the OLD value).
+
+        Fast-path (free): a within-batch prior write of this key is already in the
+        update cache — decode the old stamp from there, no disk read. Otherwise
+        one point-get of the committed main value: a genuinely new key is a
+        bloom-filter negative and a hot refresh key is a block-cache hit. No-op
+        when there is no old value (new key), the old stamp is the sentinel
+        (unindexed), or the stamp is unchanged. The ``__ttl_index__`` CF is
+        LOCAL_ONLY, so the delete never reaches the changelog. The batch-2
+        visit-budget sweep is retained as the backstop for pre-existing ghosts
+        (older code, recovery/backfill re-stamps, externally-mutated entries).
+        """
+        cached = self._update_cache.get(
+            key=key_serialized, prefix=prefix, cf_name="default"
+        )
+        if cached is Marker.DELETED:
+            return
+        if cached is Marker.UNDEFINED:
+            committed = self._partition.get(key_serialized, cf_name="default")
+            if committed is Marker.UNDEFINED:
+                return
+            old_raw = cast(bytes, committed)
+        else:
+            old_raw = cast(bytes, cached)
+        decoded = _safe_decode_stamp(old_raw)
+        if decoded is None:
+            return
+        old_stamp, _ = decoded
+        if old_stamp == SENTINEL_NEVER or old_stamp == new_stamp:
+            return
+        self._update_cache.delete(
+            key=encode_index_key(old_stamp, key_serialized),
+            prefix=b"",
+            cf_name=TTL_INDEX_CF_NAME,
+        )
+
     def _set_default_cf_stamped(
         self,
         key: Any,
@@ -326,16 +398,25 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         """Stamp + cache write path used when the partition is flipped."""
         if timestamp is not None:
             self._partition.advance_high_water(timestamp)
-        stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+        # #14: fail the transaction on a stamp ValueError (parity with the
+        # serialize-error path below and the unflipped write path). The stamp is
+        # computed before any staging, so nothing is committed on failure.
+        try:
+            stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+        except ValueError:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
         try:
             value_serialized = self._serialize_value(value)
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
+        key_serialized = self._serialize_key(key, prefix=prefix)
+        # #8: delete the stale index entry BEFORE staging the new value.
+        self._delete_stale_index_entry(key_serialized, prefix, stamp)
         stamped = encode_ttl_value(stamp, value_serialized)
         super().set_bytes(key=key, value=stamped, prefix=prefix, cf_name="default")
         if stamp != SENTINEL_NEVER:
-            key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
                 key=encode_index_key(stamp, key_serialized),
                 value=b"",
@@ -354,11 +435,16 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         """``set_bytes`` variant of :meth:`_set_default_cf_stamped`."""
         if timestamp is not None:
             self._partition.advance_high_water(timestamp)
-        stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+        try:
+            stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+        except ValueError:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
+        key_serialized = self._serialize_key(key, prefix=prefix)
+        self._delete_stale_index_entry(key_serialized, prefix, stamp)
         stamped = encode_ttl_value(stamp, value)
         super().set_bytes(key=key, value=stamped, prefix=prefix, cf_name="default")
         if stamp != SENTINEL_NEVER:
-            key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
                 key=encode_index_key(stamp, key_serialized),
                 value=b"",
@@ -603,9 +689,11 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         4. Partition is not flipped, the batch has a TTL write, and the
            default CF is **populated** → **auto-finish the migration** (spec
            §15.1): backfill every pre-existing record with a uniform expiry in
-           bounded chunks (each chunk persisted + produced before the next is
-           read; peak memory ≈ one chunk), then write the in-batch stamps and
-           the flip metadata LAST. The uniform expiry source is:
+           bounded chunks (each chunk's VALUES persisted + produced before the
+           next is read; peak memory is O(census key count) for the key list,
+           see :meth:`RocksDBStorePartition.backfill_legacy_records`), then write
+           the in-batch stamps and the flip metadata LAST. The uniform expiry
+           source is:
            - ``legacy_records_ttl`` set → ``high_water + legacy_records_ttl``
              (explicit config always wins, unchanged);
            - ``legacy_records_ttl`` absent → ``high_water + max(ttl=)`` where
@@ -637,7 +725,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         staged_default_keys: set[bytes] = set()
         if populated:
             # Backfill branch: re-stamp every pre-existing on-disk record with a
-            # uniform expiry in bounded chunks (memory ≈ one chunk), producing
+            # uniform expiry in bounded chunks (values chunk-bounded; #10a), producing
             # and committing each chunk before reading the next. The genuine
             # in-batch user writes are skipped here (passed as
             # ``staged_default_keys``) and re-stamped with their own true pending

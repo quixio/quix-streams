@@ -46,10 +46,36 @@ TTL_STAMP_BYTES = _stamp_packer.size
 # ``stamp <= now`` read-time filter for any plausible event-time clock.
 SENTINEL_NEVER: int = 0xFFFFFFFFFFFFFFFF
 
+# Inclusive bounds of the unsigned 8-byte stamp domain. ``_stamp_pack`` is a
+# ``>Q`` (unsigned) packer, so anything outside ``[0, 2**64-1]`` raises a raw
+# ``struct.error``. ``SENTINEL_NEVER`` is the upper bound and stays valid.
+_MIN_STAMP = 0
+_MAX_STAMP = 0xFFFFFFFFFFFFFFFF
+
 
 def is_sentinel(stamp: int) -> bool:
     """Return ``True`` if ``stamp`` is the never-expires sentinel."""
     return stamp == SENTINEL_NEVER
+
+
+def _check_stamp_range(expires_at_ms: int) -> None:
+    """Reject a stamp outside the unsigned 8-byte domain with a descriptive
+    ``ValueError`` BEFORE it reaches the ``>Q`` packer (#12, review batch 3).
+
+    A negative expiry (Kafka ``NO_TIMESTAMP = -1`` / pre-epoch event-time flowing
+    through ``timestamp + ttl``) or an out-of-range value would otherwise raise a
+    bare ``struct.error`` that recurs on every replay of the offending record — a
+    crash-loop with no diagnosable cause. Callers that compute expiries
+    (``_compute_stamp``) reject negatives earlier; this is defense-in-depth so any
+    future caller gets a named, catchable error naming the offending value.
+    """
+    if not (_MIN_STAMP <= expires_at_ms <= _MAX_STAMP):
+        raise ValueError(
+            f"TTL expiry stamp {expires_at_ms} is outside the valid unsigned "
+            f"8-byte range [{_MIN_STAMP}, {_MAX_STAMP}]; a negative expiry "
+            "(e.g. from a pre-epoch event-time or Kafka NO_TIMESTAMP) or an "
+            "out-of-range value cannot be encoded."
+        )
 
 
 def encode_ttl_value(expires_at_ms: int, value: bytes) -> bytes:
@@ -60,7 +86,9 @@ def encode_ttl_value(expires_at_ms: int, value: bytes) -> bytes:
         :data:`SENTINEL_NEVER` for entries that should never expire.
     :param value: already-serialized value bytes.
     :return: stamped blob suitable for writing to the main CF.
+    :raises ValueError: if ``expires_at_ms`` is outside ``[0, 2**64-1]``.
     """
+    _check_stamp_range(expires_at_ms)
     return _stamp_pack(expires_at_ms) + value
 
 
@@ -97,7 +125,9 @@ def encode_index_key(expires_at_ms: int, user_key: bytes) -> bytes:
     :param user_key: serialized user key (already prefix-encoded by the
         transaction layer).
     :return: index-CF key bytes.
+    :raises ValueError: if ``expires_at_ms`` is outside ``[0, 2**64-1]``.
     """
+    _check_stamp_range(expires_at_ms)
     return _stamp_pack(expires_at_ms) + user_key
 
 

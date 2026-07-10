@@ -11,13 +11,19 @@ local-only ``_run_sweep`` path.
 
 from datetime import timedelta
 
+from rocksdict import WriteBatch
+
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_TTL_STAMPED_HEADER,
     TTL_INDEX_CF_NAME,
 )
 from quixstreams.state.rocksdb import RocksDBOptions
-from quixstreams.state.rocksdb.ttl_codec import decode_index_key, decode_ttl_value
+from quixstreams.state.rocksdb.ttl_codec import (
+    decode_index_key,
+    decode_ttl_value,
+    encode_index_key,
+)
 
 TTL = timedelta(milliseconds=100)
 FAR = timedelta(days=3650)
@@ -282,22 +288,27 @@ class TestSweepVisitBudget:
     sweep."""
 
     def _build_ghosts(self, partition, prefix, n, short, long):
-        """Refresh-mint ``n`` ghost index entries: stamp k0..k{n-1} at expiry E1
-        (flush 1), then re-stamp them at a later expiry E2 (flush 2). The write
-        path adds the E2 index entry but never removes the E1 one, so each old
-        E1 entry becomes a ghost (main stamp E2 != idx stamp E1). Both flushes
-        keep high_water at 1000 (< E1) so neither sweeps."""
-        tx1 = partition.begin()
+        """Create ``n`` PRE-EXISTING ghost index entries for the visit-budget
+        backstop. Since #8 (review batch 3) now inline-deletes a refresh-minted
+        stale entry AT THE SOURCE, a genuine ghost — one older code, a crash, or a
+        recovery/backfill re-stamp left behind — is INJECTED out-of-band here:
+        k0..k{n-1} are stamped at expiry E2 (long) in the main CF, then a stale E1
+        (short) ``__ttl_index__`` entry is written directly, so main stamp E2 !=
+        idx stamp E1 (ghost). high_water stays 1000 (< E1) so neither sweeps."""
+        e1 = 1000 + int(short / timedelta(milliseconds=1))
+        tx = partition.begin()
         for i in range(n):
-            tx1.set(key=f"k{i}", value="v", prefix=prefix, timestamp=1000, ttl=short)
-        tx1.prepare(processed_offsets={"topic": 2})
-        tx1.flush(changelog_offset=2)
+            tx.set(key=f"k{i}", value="v", prefix=prefix, timestamp=1000, ttl=long)
+        tx.prepare(processed_offsets={"topic": 2})
+        tx.flush(changelog_offset=2)
 
-        tx2 = partition.begin()
+        serializer = partition.begin()
+        batch = WriteBatch(raw_mode=True)
+        handle = partition.get_column_family_handle(TTL_INDEX_CF_NAME)
         for i in range(n):
-            tx2.set(key=f"k{i}", value="v", prefix=prefix, timestamp=1000, ttl=long)
-        tx2.prepare(processed_offsets={"topic": 3})
-        tx2.flush(changelog_offset=3)
+            key_serialized = serializer._serialize_key(f"k{i}", prefix=prefix)
+            batch.put(encode_index_key(e1, key_serialized), b"", handle)
+        partition._write(batch)
 
     def test_ghost_visits_count_against_budget(
         self, store_partition_factory, changelog_producer_mock

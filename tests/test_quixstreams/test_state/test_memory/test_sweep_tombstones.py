@@ -14,7 +14,11 @@ from quixstreams.state.metadata import (
     CHANGELOG_TTL_STAMPED_HEADER,
     TTL_INDEX_CF_NAME,
 )
-from quixstreams.state.rocksdb.ttl_codec import decode_index_key, decode_ttl_value
+from quixstreams.state.rocksdb.ttl_codec import (
+    decode_index_key,
+    decode_ttl_value,
+    encode_index_key,
+)
 
 TTL = timedelta(milliseconds=100)
 FAR = timedelta(days=3650)
@@ -117,17 +121,23 @@ class TestMemorySweepVisitBudget:
     both memory sweep methods."""
 
     def _build_ghosts(self, partition, prefix, n, short, long):
-        tx1 = partition.begin()
+        """Inject ``n`` PRE-EXISTING ghost index entries out-of-band. #8 (review
+        batch 3) now inline-deletes refresh-minted stale entries at the source, so
+        the retained visit-budget backstop is exercised with genuine injected
+        ghosts: k0..k{n-1} stamped at E2 (long) in the main dict, plus a stale E1
+        (short) ``__ttl_index__`` entry each (main stamp E2 != idx stamp E1)."""
+        e1 = 1000 + int(short / timedelta(milliseconds=1))
+        tx = partition.begin()
         for i in range(n):
-            tx1.set(key=f"k{i}", value="v", prefix=prefix, timestamp=1000, ttl=short)
-        tx1.prepare(processed_offsets={"topic": 2})
-        tx1.flush(changelog_offset=2)
+            tx.set(key=f"k{i}", value="v", prefix=prefix, timestamp=1000, ttl=long)
+        tx.prepare(processed_offsets={"topic": 2})
+        tx.flush(changelog_offset=2)
 
-        tx2 = partition.begin()
+        serializer = partition.begin()
+        index = partition._state.setdefault(TTL_INDEX_CF_NAME, {})
         for i in range(n):
-            tx2.set(key=f"k{i}", value="v", prefix=prefix, timestamp=1000, ttl=long)
-        tx2.prepare(processed_offsets={"topic": 3})
-        tx2.flush(changelog_offset=3)
+            key_serialized = serializer._serialize_key(f"k{i}", prefix=prefix)
+            index[encode_index_key(e1, key_serialized)] = b""
 
     def test_on_path_ghost_visits_count_against_budget(self, changelog_producer_mock):
         """RED (HEAD): all N ghosts GC'd in one sweep. GREEN: only B per sweep."""

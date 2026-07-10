@@ -25,6 +25,7 @@ from quixstreams.state.metadata import (
     Marker,
 )
 from quixstreams.state.recovery import ChangelogProducer
+from quixstreams.state.rocksdb.exceptions import IncompatibleStateStoreError
 from quixstreams.state.rocksdb.metadata import (
     STATE_FORMAT_VERSION,
     STATE_FORMAT_VERSION_KEY,
@@ -172,13 +173,29 @@ class MemoryStorePartition(StorePartition):
         # ``__ttl_system__`` marker is replayed; makes :meth:`complete_recovery`
         # flip + discard pending + never re-run completion.
         self._recovery_saw_migration_done: bool = False
-        # Warn-once guard for the populated-legacy live ``ttl=`` write path
-        # (spec §7.3 row I-target); flipped True after the first WARNING.
-        self._populated_legacy_warned: bool = False
         # Warn-once guard for the fail-safe degraded TTL read (spec item d),
         # scoped to the partition so it fires once per partition lifetime rather
         # than once per checkpoint transaction.
         self._unstamped_read_warned: bool = False
+
+        # #5 (review batch 3): per-partition delivery accounting for the memory
+        # migration produce sites (live populated-legacy backfill, recovery-
+        # completion re-stamps, done-marker). Mirrors ``RocksDBStorePartition``:
+        # the done-marker flush confirmation compares THIS partition's
+        # ``produced - acked`` rather than the shared producer's GLOBAL flush
+        # count, so a sibling partition's wedged records cannot falsely raise on
+        # this partition's marker.
+        self._backfill_produced: int = 0
+        self._backfill_acked: int = 0
+
+        # #9 (review batch 3): parity with ``RocksDBStorePartition``. A memory
+        # partition is non-persistent (fresh ``_state`` every open), so this is
+        # always False at construction — the ``_recovery_saw_migration_done``
+        # replay latch is what stops the census once the flag-last marker replays.
+        # Kept for structural symmetry and to read uniformly in the census gate.
+        self._migration_done_at_open: bool = bool(
+            self._state.get(TTL_SYSTEM_CF_NAME, {}).get(TTL_MIGRATION_DONE_KEY)
+        )
 
         class_uses_ttl_stamps = type(self).uses_ttl_stamps
         if class_uses_ttl_stamps:
@@ -232,6 +249,13 @@ class MemoryStorePartition(StorePartition):
     def advance_high_water(self, timestamp: Optional[int]) -> None:
         if timestamp is None:
             return
+        if timestamp < 0:
+            # #12 (review batch 3): a negative timestamp (Kafka NO_TIMESTAMP = -1
+            # or pre-epoch event-time) never represents a real position, so it must
+            # not advance / establish the high-water — a negative high-water then
+            # fails the unsigned int_to_bytes persist with a raw struct.error.
+            # Mirrors ``RocksDBStorePartition.advance_high_water``.
+            return
         if self._high_water_ms is None or timestamp > self._high_water_ms:
             self._high_water_ms = timestamp
 
@@ -243,6 +267,17 @@ class MemoryStorePartition(StorePartition):
         ``RocksDBStorePartition._now_ms``.
         """
         return int(time.time() * 1000)
+
+    def _on_backfill_delivery(
+        self, err: Optional[object], msg: Optional[object] = None
+    ) -> None:
+        """Chained delivery callback for the memory migration produce sites (#5).
+        Counts a successful delivery so the done-marker flush confirmation can
+        measure THIS partition's own outstanding records instead of the shared
+        producer's global queue depth. Mirrors
+        ``RocksDBStorePartition._on_backfill_delivery``."""
+        if err is None:
+            self._backfill_acked += 1
 
     def close(self) -> None:
         self._closed = True
@@ -368,7 +403,15 @@ class MemoryStorePartition(StorePartition):
         # censused into ``__ttl_backfill_pending__`` now (and land verbatim below).
         # A header-true replay sets the MIXED-detection latch and supersedes any
         # earlier legacy census entry for the same key (compaction ordering).
-        if type(self).uses_ttl_stamps and cf_name == "default":
+        if (
+            type(self).uses_ttl_stamps
+            and cf_name == "default"
+            and not (self._migration_done_at_open or self._recovery_saw_migration_done)
+        ):
+            # #9 (parity with RocksDB): stop censusing once the migration
+            # done-marker is known (latched when the flag-last marker replays).
+            # ``complete_recovery`` discards / no-ops the census in that case, so
+            # skipping the writes is safe; the no-marker else-branch is unchanged.
             pending = self._state.setdefault(TTL_BACKFILL_PENDING_CF_NAME, {})
             if ttl_stamped:
                 self._recovery_saw_stamped = True
@@ -628,8 +671,14 @@ class MemoryStorePartition(StorePartition):
                 # transaction, so use the non-transactional migration route under
                 # exactly-once (parity with RocksDB).
                 self._changelog_producer.produce(
-                    key=key, value=stamped, headers=headers, migration=True
+                    key=key,
+                    value=stamped,
+                    headers=headers,
+                    migration=True,
+                    # #5: per-partition delivery accounting.
+                    on_delivery=self._on_backfill_delivery,
                 )
+                self._backfill_produced += 1
                 produced = True
             pending.pop(key, None)
 
@@ -667,20 +716,36 @@ class MemoryStorePartition(StorePartition):
                 },
                 # Fix C: non-transactional migration route (parity with RocksDB).
                 migration=True,
+                # #5: count this record against THIS partition's outstanding.
+                on_delivery=self._on_backfill_delivery,
             )
+            self._backfill_produced += 1
             unproduced = self._changelog_producer.flush(
                 timeout=_MIGRATION_MARKER_FLUSH_TIMEOUT_S, migration=True
             )
             # Fail loudly only on a concrete positive backlog; a non-int return
-            # (e.g. an unconfigured test double) is treated as indeterminate.
+            # (e.g. an unconfigured test double) is treated as indeterminate. A 0
+            # backlog means the shared producer's queue is drained (marker
+            # delivered), so no raise. #5 (review batch 3): on a POSITIVE global
+            # backlog, base the decision on THIS partition's own outstanding
+            # (produced - acked, driven by the flush above) rather than the shared
+            # producer's GLOBAL count — otherwise a sibling partition's wedged
+            # records would falsely raise on this partition's marker. Fall back to
+            # the int return only when this partition produced nothing through the
+            # counter-tracked route.
             if isinstance(unproduced, int) and unproduced > 0:
-                raise ChangelogFlushError(
-                    f"{unproduced} __ttl_migration_done__ marker record(s) still "
-                    f"undelivered after {_MIGRATION_MARKER_FLUSH_TIMEOUT_S}s; "
-                    "not recording the marker locally so the next completion "
-                    "retries it (the local store must not mark done ahead of the "
-                    "changelog)."
-                )
+                if self._backfill_produced > 0:
+                    outstanding = self._backfill_produced - self._backfill_acked
+                else:
+                    outstanding = unproduced
+                if outstanding > 0:
+                    raise ChangelogFlushError(
+                        f"{outstanding} __ttl_migration_done__ marker record(s) "
+                        f"still undelivered after {_MIGRATION_MARKER_FLUSH_TIMEOUT_S}s; "
+                        "not recording the marker locally so the next completion "
+                        "retries it (the local store must not mark done ahead of "
+                        "the changelog)."
+                    )
         self._state.setdefault(TTL_SYSTEM_CF_NAME, {})[TTL_MIGRATION_DONE_KEY] = (
             marker_value
         )
@@ -1038,9 +1103,25 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         self._partition = cast(MemoryStorePartition, self._partition)
         self._batch_has_ttl_writes: bool = False
         self._pending_stamps: dict[tuple[bytes, bytes], int] = {}
+        # Max ``ttl=`` duration (ms) among default-CF TTL writes staged on a
+        # not-yet-flipped partition (#1, parity with
+        # ``RocksDBPartitionTransaction._max_batch_ttl_ms``). Feeds the implicit
+        # legacy expiry (``high_water + max(ttl=)``) when a POPULATED legacy memory
+        # store flips WITHOUT ``legacy_records_ttl`` configured. ``None`` until the
+        # first ttl= write; only maintained on the unflipped write path.
+        self._max_batch_ttl_ms: Optional[int] = None
 
     def _stamps_enabled(self, cf_name: str) -> bool:
         return cf_name == "default" and self._partition.uses_ttl_stamps
+
+    def _track_batch_ttl_ms(self, ttl: timedelta) -> None:
+        """Record the max ``ttl=`` duration (ms) among unflipped default-CF TTL
+        writes (#1, parity with
+        ``RocksDBPartitionTransaction._track_batch_ttl_ms``). Called only after
+        ``_compute_stamp`` has validated ``ttl > 0``."""
+        ttl_ms = _ttl_to_ms(ttl)
+        if self._max_batch_ttl_ms is None or ttl_ms > self._max_batch_ttl_ms:
+            self._max_batch_ttl_ms = ttl_ms
 
     def _compute_stamp(self, ttl: Optional[timedelta], timestamp: Optional[int]) -> int:
         if ttl is None:
@@ -1055,7 +1136,17 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "state.set() outside an apply/update/filter callback, use "
                 "as_state(prefix, timestamp=...)."
             )
-        return timestamp + _ttl_to_ms(ttl)
+        expiry = timestamp + _ttl_to_ms(ttl)
+        if expiry < 0:
+            # #12: reject a negative expiry loudly (parity with
+            # ``RocksDBPartitionTransaction._compute_stamp``); caught by the #14
+            # validate-before-stage + FAILED handling so nothing is committed.
+            raise ValueError(
+                f"ttl=... produced a negative expiry ({expiry} ms) from "
+                f"timestamp={timestamp} and ttl={ttl!r}; a pre-epoch or negative "
+                "event-time cannot be TTL-stamped."
+            )
+        return expiry
 
     def set(
         self,
@@ -1081,6 +1172,22 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._set_default_cf_stamped(key, value, prefix, timestamp, ttl)
             return
 
+        # #14: validate the stamp BEFORE staging the value, fail on a stamp
+        # ValueError (parity with RocksDB) so a caught error stages nothing. The
+        # TTL bookkeeping is grouped with the validated stamp.
+        if ttl is not None:
+            try:
+                stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+            except ValueError:
+                self._status = PartitionTransactionStatus.FAILED
+                raise
+            self._batch_has_ttl_writes = True
+            self._track_batch_ttl_ms(ttl)
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._pending_stamps[(prefix, key_serialized)] = stamp
+            if timestamp is not None:
+                self._partition.advance_high_water(timestamp)
+
         try:
             value_serialized = self._serialize_value(value)
         except Exception:
@@ -1090,14 +1197,6 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         super().set_bytes(
             key=key, value=value_serialized, prefix=prefix, cf_name="default"
         )
-
-        if ttl is not None:
-            stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
-            self._batch_has_ttl_writes = True
-            key_serialized = self._serialize_key(key, prefix=prefix)
-            self._pending_stamps[(prefix, key_serialized)] = stamp
-            if timestamp is not None:
-                self._partition.advance_high_water(timestamp)
 
     def set_bytes(
         self,
@@ -1127,15 +1226,57 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._set_bytes_default_cf_stamped(key, value, prefix, timestamp, ttl)
             return
 
-        super().set_bytes(key=key, value=value, prefix=prefix, cf_name="default")
-
+        # #14: validate the stamp BEFORE staging (see :meth:`set`).
         if ttl is not None:
-            stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+            try:
+                stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+            except ValueError:
+                self._status = PartitionTransactionStatus.FAILED
+                raise
             self._batch_has_ttl_writes = True
+            self._track_batch_ttl_ms(ttl)
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._pending_stamps[(prefix, key_serialized)] = stamp
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
+
+        super().set_bytes(key=key, value=value, prefix=prefix, cf_name="default")
+
+    def _delete_stale_index_entry(
+        self, key_serialized: bytes, prefix: bytes, new_stamp: int
+    ) -> None:
+        """#8 (review batch 3): inline-delete a key's OLD ``__ttl_index__`` entry
+        on refresh so a refresh-heavy store does not accumulate ghost index
+        entries. Mirror of
+        ``RocksDBPartitionTransaction._delete_stale_index_entry``: update-cache
+        fast-path first (within-batch repeat, no store read), else read the
+        committed in-RAM value; no-op for a new key, a sentinel old stamp, or an
+        unchanged stamp. MUST run BEFORE the new value is staged. The
+        ``__ttl_index__`` CF is LOCAL_ONLY, so the delete never reaches the
+        changelog."""
+        cached = self._update_cache.get(
+            key=key_serialized, prefix=prefix, cf_name="default"
+        )
+        if cached is Marker.DELETED:
+            return
+        if cached is Marker.UNDEFINED:
+            committed = self._partition.get(key_serialized, cf_name="default")
+            if committed is Marker.UNDEFINED:
+                return
+            old_raw = cast(bytes, committed)
+        else:
+            old_raw = cast(bytes, cached)
+        decoded = _safe_decode_stamp(old_raw)
+        if decoded is None:
+            return
+        old_stamp, _ = decoded
+        if old_stamp == SENTINEL_NEVER or old_stamp == new_stamp:
+            return
+        self._update_cache.delete(
+            key=encode_index_key(old_stamp, key_serialized),
+            prefix=b"",
+            cf_name=TTL_INDEX_CF_NAME,
+        )
 
     def _set_default_cf_stamped(
         self,
@@ -1147,16 +1288,21 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
     ) -> None:
         if timestamp is not None:
             self._partition.advance_high_water(timestamp)
-        stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+        try:
+            stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+        except ValueError:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
         try:
             value_serialized = self._serialize_value(value)
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
+        key_serialized = self._serialize_key(key, prefix=prefix)
+        self._delete_stale_index_entry(key_serialized, prefix, stamp)
         stamped = encode_ttl_value(stamp, value_serialized)
         super().set_bytes(key=key, value=stamped, prefix=prefix, cf_name="default")
         if stamp != SENTINEL_NEVER:
-            key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
                 key=encode_index_key(stamp, key_serialized),
                 value=b"",
@@ -1174,11 +1320,16 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
     ) -> None:
         if timestamp is not None:
             self._partition.advance_high_water(timestamp)
-        stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+        try:
+            stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+        except ValueError:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
+        key_serialized = self._serialize_key(key, prefix=prefix)
+        self._delete_stale_index_entry(key_serialized, prefix, stamp)
         stamped = encode_ttl_value(stamp, value)
         super().set_bytes(key=key, value=stamped, prefix=prefix, cf_name="default")
         if stamp != SENTINEL_NEVER:
-            key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
                 key=encode_index_key(stamp, key_serialized),
                 value=b"",
@@ -1235,48 +1386,113 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._update_cache, staged_default, staged_ttl_index
         )
 
+    def _resolve_legacy_expiry(self) -> int:
+        """
+        Resolve the uniform expiry for the #1 live in-RAM backfill via the frozen
+        expiry chain (parity with ``RocksDBPartitionTransaction._legacy_expiry_from_ttl_ms``):
+        ``legacy_records_ttl`` (if configured) → ``high_water + max(batch ttl=)``
+        (the implicit window derived from the triggering batch) → ``SENTINEL_NEVER``
+        (defensive; unreachable on the live path where a ttl= write always set
+        ``_max_batch_ttl_ms``). ``enable_time`` is the event-time high-water; a
+        ``None`` high-water is the same should-be-unreachable framework bug RocksDB
+        hard-errors on (the triggering ttl= write carried no timestamp, which
+        ``_compute_stamp`` already rejects).
+        """
+        enable_time_ms = self._partition.high_water_ms
+        if enable_time_ms is None:
+            raise IncompatibleStateStoreError(
+                "Cannot backfill legacy in-memory records: no event-time "
+                "high-water is available at flip (a ttl= write carried no record "
+                "timestamp). This should have been rejected at the "
+                "state.set(..., ttl=...) call site."
+            )
+        legacy_records_ttl = self._partition.legacy_records_ttl
+        if legacy_records_ttl is not None:
+            return enable_time_ms + _ttl_to_ms(legacy_records_ttl)
+        if self._max_batch_ttl_ms is not None:
+            return enable_time_ms + self._max_batch_ttl_ms
+        return SENTINEL_NEVER
+
+    def _backfill_populated_legacy_in_ram(self, expires_at_ms: int) -> int:
+        """
+        Re-stamp every pre-existing default-CF record in RAM with ``expires_at_ms``
+        (#1). Excludes the in-batch staged keys (they carry their own pending stamp
+        and are re-stamped by the shared cache loop). Each re-stamp is produced to
+        the changelog via the non-transactional migration route with the
+        ``__ttl_stamped__`` header and always-apply (``processed_offsets=None``)
+        semantics — exactly as memory recovery-completion does — then a single
+        trailing ``flush(migration=True)`` (no chunking: the store is RAM-bounded).
+        Returns the number of pre-existing records re-stamped.
+        """
+        partition = self._partition
+        default = partition._state.setdefault("default", {})  # noqa: SLF001
+        index = partition._state.setdefault(TTL_INDEX_CF_NAME, {})  # noqa: SLF001
+        staged_keys = {
+            key
+            for prefix_map in self._update_cache.get_updates("default").values()
+            for key in prefix_map
+        }
+        headers: Optional[HeadersMapping] = None
+        if self._changelog_producer is not None:
+            headers = {
+                CHANGELOG_CF_MESSAGE_HEADER: "default",
+                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
+                CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
+            }
+        restamped = 0
+        produced = False
+        for key in list(default.keys()):
+            if key in staged_keys:
+                # An in-batch write overwrote this pre-existing key: it is stamped
+                # with its own pending stamp by the shared cache loop, not the
+                # uniform legacy expiry.
+                continue
+            stamped = encode_ttl_value(expires_at_ms, cast(bytes, default[key]))
+            default[key] = stamped
+            if expires_at_ms != SENTINEL_NEVER:
+                index[encode_index_key(expires_at_ms, key)] = b""
+            if self._changelog_producer is not None:
+                self._changelog_producer.produce(
+                    key=key,
+                    value=stamped,
+                    headers=headers,
+                    migration=True,
+                    on_delivery=partition._on_backfill_delivery,  # noqa: SLF001
+                )
+                partition._backfill_produced += 1  # noqa: SLF001
+                produced = True
+            restamped += 1
+        if produced and self._changelog_producer is not None:
+            self._changelog_producer.flush(migration=True)
+        return restamped
+
     def _maybe_flip_or_reject(self) -> None:
         if not self._batch_has_ttl_writes:
             return
         if self._partition.uses_ttl_stamps:
             return
-        if self._partition.main_cf_has_user_data():
-            # §15.4 open-scope decision: memory parity is recovery-completion
-            # ONLY (no live in-RAM backfill). A populated legacy memory store
-            # arises solely from an all-legacy changelog replay; it re-recovers
-            # from the changelog on every open, so migrating its pre-existing
-            # records is owned by the recovery-completion path
-            # (:meth:`MemoryStorePartition.complete_recovery`), not a live flip.
-            # The §15 revision removed the reject, so we neither reject nor flip
-            # here: staying legacy keeps the pre-existing raw records readable
-            # verbatim (flipping without a backfill would mis-strip them). The
-            # ttl= write lands as legacy this session; a changelog-driven flip on
-            # a later open migrates the store.
-            #
-            # Row I-target (spec §7.3): this used to be a fully SILENT no-op. Emit
-            # ONE warn-once WARNING so an operator sees that a ttl= write landed on
-            # a populated legacy in-memory store and was stored un-stamped (the
-            # migration is owned by the next changelog rebuild, not this write).
-            if not self._partition._populated_legacy_warned:  # noqa: SLF001
-                self._partition._populated_legacy_warned = True  # noqa: SLF001
-                logger.warning(
-                    "A state.set(..., ttl=...) write landed on a POPULATED LEGACY "
-                    "in-memory store; the ttl= write is stored as a legacy "
-                    "(un-stamped) record this session and no live in-RAM backfill "
-                    "runs. The pre-existing legacy records migrate on the next "
-                    "changelog rebuild via complete_recovery(). To assign a "
-                    "uniform expiry to those legacy records, construct the store "
-                    "with legacy_records_ttl=timedelta(...)."
-                )
-            return
 
-        # Empty-store fast path: re-encode default-CF cache entries.
+        populated = self._partition.main_cf_has_user_data()
+        restamped = 0
+        expires_at_ms: Optional[int] = None
+        if populated:
+            # #1 (review batch 3, HIGH): live in-RAM migration of a POPULATED
+            # legacy memory store on the first ttl= write — mirrors the RocksDB
+            # populated path but on the in-RAM dict (data already in RAM → no
+            # chunking / OOM concern). This REPLACES the old warn-and-defer no-op,
+            # which deadlocked: the deferred changelog rebuild classified the store
+            # as pure-legacy and no-op'd forever, so TTL never engaged.
+            expires_at_ms = self._resolve_legacy_expiry()
+            restamped = self._backfill_populated_legacy_in_ram(expires_at_ms)
+
+        # Shared in-batch cache re-encode (empty-store fast path AND the tail of
+        # the populated path): stamp the genuine in-batch user writes with their
+        # own pending stamps. The pre-existing records were already re-stamped
+        # directly in RAM above and are NOT in the cache.
         cache = self._update_cache
         updates = cache.get_updates(cf_name="default")
-        prefixes = list(updates.keys())
-        for prefix in prefixes:
-            entries = list(updates[prefix].items())
-            for serialized_key, raw_value in entries:
+        for prefix in list(updates.keys()):
+            for serialized_key, raw_value in list(updates[prefix].items()):
                 stamp = self._pending_stamps.get(
                     (prefix, serialized_key), SENTINEL_NEVER
                 )
@@ -1309,10 +1525,12 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             prefix=b"",
             cf_name=METADATA_CF_NAME,
         )
-        # Durable done-flag (spec §13.1), staged last so it is produced flag-last.
-        # The replicated ``__ttl_system__`` CF is not local-only, so the base
-        # ``_prepare`` produces it to the changelog and ``write()`` lands it in
-        # the in-RAM dict — a cold rebuild then learns "done, never redo".
+        # Durable done-flag (spec §13.1), staged last so it is produced flag-last —
+        # identical to the empty-store fast path on BOTH enable paths. The
+        # replicated ``__ttl_system__`` CF is not local-only, so the base
+        # ``_prepare`` produces it to the changelog and ``write()`` lands it in the
+        # in-RAM dict — a cold rebuild then learns "done, never redo" and does not
+        # re-run the migration.
         cache.set(
             key=TTL_MIGRATION_DONE_KEY,
             value=int_to_bytes(STATE_FORMAT_VERSION),
@@ -1321,9 +1539,33 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         )
         self._partition.uses_ttl_stamps = True
         self._partition._state.setdefault(TTL_INDEX_CF_NAME, {})  # noqa: SLF001
-        logger.info(
-            "Flipping memory state partition into TTL mode (empty-store fast path)."
-        )
+
+        if populated:
+            if self._partition.legacy_records_ttl is None:
+                # §15.1 implicit window: derived from the triggering write, not
+                # config. Reuse the RocksDB wording.
+                logger.warning(
+                    "Enabled TTL on a populated legacy in-memory store WITHOUT "
+                    "legacy_records_ttl configured: auto-backfilled %d pre-existing "
+                    "record(s) with an implicit expiry of high_water + %s ms "
+                    "(= %s), derived from the triggering state.set(..., ttl=...) "
+                    "write. To choose a different uniform window for legacy "
+                    "records, construct the store with "
+                    "legacy_records_ttl=timedelta(...).",
+                    restamped,
+                    self._max_batch_ttl_ms,
+                    expires_at_ms,
+                )
+            logger.info(
+                "Backfilled %d legacy records and flipped in-memory state "
+                "partition into TTL mode (populated-store live backfill).",
+                restamped,
+            )
+        else:
+            logger.info(
+                "Flipping memory state partition into TTL mode (empty-store fast "
+                "path)."
+            )
 
     def _get_bytes(
         self,

@@ -425,6 +425,7 @@ class ChangelogProducer:
         value: Optional[bytes] = None,
         headers: Optional[Headers] = None,
         migration: bool = False,
+        on_delivery: Optional[Callable] = None,
     ):
         """
         Produce a message to a changelog topic partition.
@@ -436,6 +437,11 @@ class ChangelogProducer:
             producer when configured (Fix C). Set only by the legacy-TTL
             backfill / recovery-completion / done-marker sites; normal changelog
             production leaves it ``False``.
+        :param on_delivery: optional per-record delivery callback, chained with the
+            producer's internal callback (review batch 3 #5). The legacy-TTL
+            migration sites pass a per-partition ack counter so the backfill flush
+            stall detector measures THIS partition's outstanding records rather
+            than the shared producer's global queue depth.
         """
         self._producer_for(migration).produce(
             key=key,
@@ -443,6 +449,7 @@ class ChangelogProducer:
             headers=headers,
             partition=self._partition,
             topic=self._changelog_name,
+            on_delivery=on_delivery,
         )
 
     def flush(self, timeout: Optional[float] = None, migration: bool = False) -> int:

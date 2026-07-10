@@ -100,6 +100,28 @@ def configure_logging(
     :param pid: if True include the process PID in the logs
     :return: True if logging config has been updated, otherwise False.
     """
+    try:
+        return _configure_root_logger(loglevel, name, pid)
+    finally:
+        # #15 (review batch 3): the QUIXSTREAMS_STATE_LOG_LEVEL override is
+        # independent of the main-logger config (it attaches a dedicated handler to
+        # ``quixstreams.state``), so it must run on EVERY return path — including
+        # ``loglevel is None`` and the "app already owns the quixstreams handlers"
+        # early returns — not only when we (re)configure the default handler. The
+        # ``finally`` guarantees exactly that regardless of which branch is taken;
+        # the override is self-contained and idempotent (the dedicated handler is
+        # created once). An unrecognized value warns once inside the override.
+        _apply_state_log_level_override()
+
+
+def _configure_root_logger(
+    loglevel: Optional[Union[int, LogLevel]],
+    name: str,
+    pid: bool,
+) -> bool:
+    """Configure the ``quixstreams`` root logger/handler. Returns True iff the
+    config was (re)applied. Factored out of :func:`configure_logging` so the
+    ``quixstreams.state`` override can run on every return path (#15)."""
     if loglevel is None:
         # Skipping logging configuration
         return False
@@ -120,7 +142,6 @@ def configure_logging(
             # Reconfigure the formatter in case we are in a subprocess and the logger
             # was configured by mistake by the Application.
             _DEFAULT_HANDLER.setFormatter(logging.Formatter(formatter))
-            _apply_state_log_level_override()
             return True
 
     # Configuring logger
@@ -129,5 +150,4 @@ def configure_logging(
     _DEFAULT_HANDLER.setFormatter(logging.Formatter(formatter))
     _DEFAULT_HANDLER.setLevel(loglevel)
     logger.addHandler(_DEFAULT_HANDLER)
-    _apply_state_log_level_override()
     return True

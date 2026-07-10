@@ -274,12 +274,16 @@ class TestDoneFlagIdempotency:
         producer = _make_producer_mock()
         now_ms = 1_780_000_000_000
 
-        # A done-marker plus one header-absent orphan legacy record (which the
-        # census gate PUTs into the pending CF).
+        # A header-absent orphan legacy record (which the census gate PUTs into the
+        # pending CF) followed by the done-marker. Flag-last ordering is realistic
+        # (the marker is always produced last) AND required after #9 (review batch
+        # 3): the census short-circuit skips any record replayed AFTER the marker,
+        # so the orphan must precede it to be censused (then discarded by
+        # complete_recovery on the done-marker branch).
         orphan_key = b"pfx|" + json_dumps("orphan")
         msgs = [
-            _done_flag_msg(),
             (orphan_key, b"orphan-legacy-value", "default", False),
+            _done_flag_msg(),
         ]
 
         partition = _rocksdb_partition(

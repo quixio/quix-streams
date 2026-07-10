@@ -61,3 +61,64 @@ class TestBackfillFlushProgress:
         with pytest.raises(ChangelogFlushError, match="after 3 ×"):
             store_partition._flush_backfill_changelog(producer)
         assert producer.flush.call_count == 3
+
+
+class _FakeSharedProducer:
+    """A ``ChangelogProducer``-shaped double that shares an underlying producer
+    with sibling partitions (#5). ``flush()`` delivers THIS producer's own queued
+    records (fires their ``on_delivery`` callbacks) but still reports a positive
+    GLOBAL backlog from a sibling partition's wedged records — exactly the shape
+    ``confluent_kafka.Producer.flush()`` returns on a shared producer."""
+
+    changelog_name = "cl"
+    partition = 0
+
+    def __init__(self, global_backlog: int = 0, deliver: bool = True):
+        self._pending: list = []
+        self._global_backlog = global_backlog
+        self._deliver = deliver
+
+    def produce(self, key, value=None, headers=None, migration=False, on_delivery=None):
+        self._pending.append(on_delivery)
+
+    def flush(self, timeout=None, migration=False) -> int:
+        if self._deliver:
+            for cb in self._pending:
+                if cb is not None:
+                    cb(None, None)  # simulate confluent serving the delivery cb
+            self._pending = []
+        return self._global_backlog
+
+
+class TestPerPartitionFlushAccounting:
+    """#5: the stall detector must track THIS partition's delivery, not the shared
+    producer's global queue depth."""
+
+    def _produce(self, partition, producer, n):
+        for i in range(n):
+            producer.produce(
+                key=f"k{i}".encode(),
+                value=b"v",
+                headers=None,
+                migration=True,
+                on_delivery=partition._on_backfill_delivery,
+            )
+            partition._backfill_produced += 1
+
+    def test_sibling_backlog_does_not_abort_delivered_partition(self, store_partition):
+        # A sibling partition holds 7 wedged records in the SHARED producer's
+        # global queue; THIS partition delivered all 3 of its own. HEAD keys on the
+        # global int-return (7, 7, ...) and falsely aborts; the fix returns because
+        # this partition's own outstanding hits 0.
+        producer = _FakeSharedProducer(global_backlog=7, deliver=True)
+        self._produce(store_partition, producer, 3)
+        store_partition._flush_backfill_changelog(producer)  # must NOT raise
+        assert store_partition._backfill_acked == 3
+
+    def test_genuine_per_partition_stall_still_raises(self, store_partition):
+        # THIS partition's own records never deliver → outstanding stays == produced
+        # slice-over-slice → ChangelogFlushError (genuine stall still detected).
+        producer = _FakeSharedProducer(global_backlog=3, deliver=False)
+        self._produce(store_partition, producer, 3)
+        with pytest.raises(ChangelogFlushError, match="no delivery progress"):
+            store_partition._flush_backfill_changelog(producer)

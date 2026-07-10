@@ -188,8 +188,22 @@ class InternalProducer:
         timestamp: Optional[int] = None,
         poll_timeout: float = PRODUCER_POLL_TIMEOUT,
         buffer_error_max_tries: int = PRODUCER_ON_ERROR_RETRIES,
+        on_delivery: Optional[Callable[[Optional[KafkaError], Message], None]] = None,
     ):
         self._raise_for_error()
+
+        # An optional caller-supplied delivery callback (e.g. the legacy-TTL
+        # backfill's per-partition ack counter, review batch 3 #5) is CHAINED with
+        # the internal ``_on_delivery`` — never replaces it — so offset tracking and
+        # error capture keep working. librdkafka invokes exactly one callback per
+        # record, so we combine them here.
+        delivery: Callable[[Optional[KafkaError], Message], None] = self._on_delivery
+        if on_delivery is not None:
+            caller_on_delivery = on_delivery
+
+            def delivery(err: Optional[KafkaError], msg: Message) -> None:
+                self._on_delivery(err, msg)
+                caller_on_delivery(err, msg)
 
         return self._producer.produce(
             topic=topic,
@@ -200,7 +214,7 @@ class InternalProducer:
             timestamp=timestamp,
             poll_timeout=poll_timeout,
             buffer_error_max_tries=buffer_error_max_tries,
-            on_delivery=self._on_delivery,
+            on_delivery=delivery,
         )
 
     def _on_delivery(self, err: Optional[KafkaError], msg: Message):

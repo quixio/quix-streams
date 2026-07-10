@@ -25,6 +25,7 @@ from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_TTL_STAMPED_HEADER,
     TTL_BACKFILL_PENDING_CF_NAME,
+    TTL_MIGRATION_DONE_KEY,
 )
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.rocksdb import RocksDBOptions, RocksDBStorePartition
@@ -838,14 +839,16 @@ class TestContractHolds:
         partition.close()
 
     # ---------------------------------------------------------------
-    # I-target: Memory backend WARNING on populated legacy store
+    # I: Memory backend live in-RAM migration on populated legacy store (#1)
     # ---------------------------------------------------------------
 
-    def test_i_holds_memory_populated_legacy_warning(self, caplog):
-        """I-holds: A live ttl= write on a populated legacy MEMORY store emits
-        a WARNING (spec section 7.3 row I-target). The warning tells the
-        operator that the ttl= write landed as legacy (un-stamped) this session
-        and that migration is owned by the next changelog rebuild."""
+    def test_i_memory_populated_legacy_live_migration(self, caplog):
+        """I (#1, review batch 3): a live ttl= write on a populated legacy MEMORY
+        store MIGRATES the store in RAM — flips it, re-stamps the pre-existing
+        records with the uniform (implicit) expiry, produces changelog re-stamps,
+        and records the done-marker — instead of the old warn-and-defer no-op
+        (which deadlocked: the deferred rebuild classified pure-legacy forever).
+        The no-config path still emits the §15.1 implicit-window WARNING."""
         producer = _make_changelog_producer_mock()
         partition = MemoryStorePartition(changelog_producer=producer)
         # Populate with legacy data (direct replay, no TTL header).
@@ -853,8 +856,10 @@ class TestContractHolds:
             (f"pfx|k{i}".encode(), f'"legacy-{i}"'.encode(), False) for i in range(3)
         ]
         _replay_msgs(partition, msgs)
+        assert partition.uses_ttl_stamps is False
 
         ts = 1_000_000_000_000
+        write_ttl = timedelta(days=1)
         with caplog.at_level(logging.WARNING):
             with partition.begin() as tx:
                 tx.set(
@@ -862,19 +867,50 @@ class TestContractHolds:
                     value="vnew",
                     prefix=b"pfx",
                     timestamp=ts,
-                    ttl=timedelta(days=1),
+                    ttl=write_ttl,
                 )
 
+        # Migrated live: flipped, and the pre-existing records now carry the
+        # implicit uniform expiry (high_water + max batch ttl=) and expire after it.
+        assert partition.uses_ttl_stamps is True
+        expected_expiry = ts + DAY_MS
+        for i in range(3):
+            stamp, payload = decode_ttl_value(
+                partition._state["default"][f"pfx|k{i}".encode()]
+            )
+            assert stamp == expected_expiry
+            assert payload == f'"legacy-{i}"'.encode()
+        assert (
+            partition.begin().get(key=b"k0", prefix=b"pfx", timestamp=ts) == "legacy-0"
+        )
+        assert (
+            partition.begin().get(
+                key=b"k0", prefix=b"pfx", timestamp=expected_expiry + 1
+            )
+            is None
+        )
+
+        # Changelog re-stamps were produced for the pre-existing keys, and the
+        # done-marker was recorded (migration complete → never redo).
+        produced_cfs = [
+            (call.kwargs.get("headers") or {}).get(CHANGELOG_CF_MESSAGE_HEADER)
+            for call in producer.produce.call_args_list
+        ]
+        assert produced_cfs.count("default") >= 3
+        assert any(
+            call.kwargs.get("key") == TTL_MIGRATION_DONE_KEY
+            for call in producer.produce.call_args_list
+        ), "the migration done-marker must be produced"
+
+        # No-config path still flags the implicit window (§15.1).
         warnings = [
             rec
             for rec in caplog.records
-            if rec.levelno == logging.WARNING
-            and ("legacy" in rec.message.lower() or "populated" in rec.message.lower())
+            if rec.levelno == logging.WARNING and "implicit" in rec.message.lower()
         ]
-        assert len(warnings) > 0, (
-            "A WARNING should be emitted when a ttl= write hits a populated "
-            "legacy memory store, but no relevant WARNING was logged."
-        )
+        assert (
+            len(warnings) > 0
+        ), "implicit-window WARNING expected on the no-config path"
         partition.close()
 
     # ---------------------------------------------------------------
