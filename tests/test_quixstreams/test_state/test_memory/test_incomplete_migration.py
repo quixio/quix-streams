@@ -1,7 +1,7 @@
 """
-TDD RED tests for review finding MAJOR #4: ``MemoryStorePartition`` lacks the
-incomplete-migration (MIXED-changelog) completion that ``RocksDBStorePartition``
-implements, leaving legacy records permanently never-expiring after replay.
+Tests that ``MemoryStorePartition`` performs the incomplete-migration
+(MIXED-changelog) completion that ``RocksDBStorePartition`` implements, so that
+legacy records do not remain permanently never-expiring after replay.
 
 After a MIXED replay (>=1 ``__ttl_stamped__``-header record + >=1 legacy record
 without the header), ``complete_recovery()`` must:
@@ -10,27 +10,18 @@ without the header), ``complete_recovery()`` must:
   ``legacy_records_ttl`` is configured (parity with
   ``RocksDBStorePartition.complete_recovery``);
 - stamp leftover legacy records even when ``legacy_records_ttl`` is absent
-  (auto-finish, no rejection -- contract revision 2026-07-02);
+  (auto-finish, no rejection);
 - remain a no-op on a pure-legacy replay (no stamped records seen).
 
-Reference: ``tests/test_quixstreams/test_state/test_rocksdb/
-test_incomplete_migration_recovery.py``.
+The behavior mirrors the RocksDB backend, including:
 
-**Current gaps discovered during investigation:**
-
-1. **Config plumbing:** ``MemoryStorePartition`` has no ``legacy_records_ttl``
-   config surface. ``RocksDBStorePartition`` receives it via
-   ``RocksDBOptions.legacy_records_ttl``. ArchDev must add a constructor kwarg
-   or equivalent.
-2. **Census latch:** ``MemoryStorePartition`` has no ``_recovery_saw_stamped``
-   attribute. The MIXED-detection census half is absent.
-3. **Completion logic:** ``MemoryStorePartition`` does not override
-   ``complete_recovery()`` -- the base-class no-op runs.
-4. **Replay routing:** Legacy records replayed on a flipped memory partition go
-   through ``_normalize_replay_value`` (which can misinterpret the first 8 bytes
-   as a stamp for >= 8-byte payloads, or wrap short payloads as SENTINEL_NEVER),
-   instead of landing verbatim as in the RocksDB backend's
-   ``not ttl_stamped`` branch (line 316-324 of ``rocksdb/partition.py``).
+- the ``legacy_records_ttl`` config surface on the partition;
+- the ``_recovery_saw_stamped`` census latch used to detect a MIXED replay;
+- overriding ``complete_recovery()`` rather than relying on the base-class no-op;
+- routing legacy records on a flipped memory partition so they land verbatim
+  (the RocksDB ``not ttl_stamped`` branch), rather than being misinterpreted by
+  the value-normalization path (which could read the first 8 bytes as a stamp
+  for >= 8-byte payloads, or wrap short payloads as SENTINEL_NEVER).
 """
 
 from datetime import timedelta
@@ -107,17 +98,17 @@ class TestMixedChangelogCompletion:
     def test_leftover_legacy_completed_at_wallclock_expiry(
         self, changelog_producer_mock
     ):
-        """Validates MAJOR #4 / spec section 8.8: after a MIXED replay with
-        ``legacy_records_ttl`` configured, ``complete_recovery()`` must stamp
-        leftover legacy records with ``wallclock_now + legacy_records_ttl``.
+        """After a MIXED replay with ``legacy_records_ttl`` configured,
+        ``complete_recovery()`` must stamp leftover legacy records with
+        ``wallclock_now + legacy_records_ttl``.
 
         Mirrors ``TestMixedChangelogCompletion.
         test_leftover_legacy_completed_at_wallclock_expiry`` in
         ``test_rocksdb/test_incomplete_migration_recovery.py``.
 
-        The ``legacy_records_ttl`` config surface is now wired into
-        ``MemoryStorePartition`` (spec §15.4 item 1), so the config-present
-        completion path stamps leftovers at ``wallclock_now + legacy_records_ttl``.
+        The ``legacy_records_ttl`` config surface is wired into
+        ``MemoryStorePartition``, so the config-present completion path stamps
+        leftovers at ``wallclock_now + legacy_records_ttl``.
         """
         now_ms = 1_780_000_000_000
         legacy_ttl = timedelta(days=7)
@@ -174,21 +165,15 @@ class TestMixedChangelogCompletion:
         recovered.close()
 
     def test_config_absent_auto_completes(self, changelog_producer_mock):
-        """Validates MAJOR #4 / spec section 8.8 (contract revision
-        2026-07-02): after a MIXED replay WITHOUT ``legacy_records_ttl``,
+        """After a MIXED replay WITHOUT ``legacy_records_ttl``,
         ``complete_recovery()`` must still run to completion (auto-finish,
         no rejection). Leftover legacy records must end up properly
         TTL-stamped (stamp-encoded values, not raw legacy bytes).
 
-        Originally the RocksDB path rejected loudly here
-        (``IncompatibleStateStoreError``); the revised contract requires
-        auto-finish instead. The specific expiry value is TBD per spec
-        revision; this test only asserts the completion runs and records
+        An earlier design had the RocksDB path reject loudly here
+        (``IncompatibleStateStoreError``); the current contract requires
+        auto-finish instead. This test asserts the completion runs and records
         are stamp-encoded.
-
-        Expected RED: ``complete_recovery()`` is a no-op (inherited from
-        base ``StorePartition``), so legacy records remain in their
-        un-completed replay state.
         """
         now_ms = 1_780_000_000_000
         stamp_expiry = now_ms + 30 * DAY_MS
@@ -222,7 +207,7 @@ class TestMixedChangelogCompletion:
                 f"Legacy record {key!r}: stamp-encoded payload should be the "
                 f"full original value {raw!r}, but got {payload!r}"
             )
-            # §15.2: config absent → survivor-derived expiry = the max surviving
+            # Config absent → survivor-derived expiry = the max surviving
             # future stamp (here the stamped survivors' own expiry).
             assert expiry == stamp_expiry, (
                 f"Legacy record {key!r} should inherit the survivor-derived "
@@ -239,17 +224,15 @@ class TestUnchangedPaths:
     """Guard tests for paths that should NOT trigger completion."""
 
     def test_all_legacy_does_not_complete(self, changelog_producer_mock):
-        """Validates spec section 8.8 no-op: a pure-legacy replay (no
-        ``__ttl_stamped__``-header records) must NOT trigger completion or
-        error. Records stay raw and unmodified. The live first-``ttl=``-write
-        backfill (section 8.6) owns migration for this case.
+        """A pure-legacy replay (no ``__ttl_stamped__``-header records) must NOT
+        trigger completion or error. Records stay raw and unmodified. The live
+        first-``ttl=``-write backfill owns migration for this case.
 
         Mirrors ``TestUnchangedPaths.test_all_legacy_does_not_complete`` in
         ``test_rocksdb/test_incomplete_migration_recovery.py``.
 
-        Expected GREEN: ``complete_recovery()`` is already a no-op and the
-        partition never flips (no stamped record seen). This test pins the
-        no-op contract.
+        ``complete_recovery()`` is a no-op and the partition never flips (no
+        stamped record seen). This test pins the no-op contract.
         """
         now_ms = 1_780_000_000_000
         msgs = [(f"pfx|l{i}".encode(), f"legacy-{i}".encode(), False) for i in range(5)]

@@ -1,5 +1,5 @@
 """
-Regression test for Bug 3: recovery censuses the ``__ttl_backfill_pending__`` CF
+Regression test for recovery censusing the ``__ttl_backfill_pending__`` CF
 for pure non-TTL stores.
 
 The ``recover_from_changelog_message`` method at partition.py:271 gates the
@@ -17,10 +17,6 @@ confuse future logic.
 
 Expected correct behavior: after replaying a purely legacy changelog and calling
 ``complete_recovery()``, the ``__ttl_backfill_pending__`` CF contains 0 keys.
-
-Reference: shortcut 73191 review, recovery-census gate analysis.
-See ``dev-planning/state-ttl-legacy-backfill/spec-incomplete-migration-recovery.md``
-§8.8.
 """
 
 from datetime import timedelta
@@ -60,7 +56,7 @@ class TestRecoveryPendingCfHygiene:
         self, store_partition_factory, changelog_producer_mock
     ):
         """
-        Bug 3 — recovery censuses the pending CF for pure non-TTL stores.
+        Recovery censuses the pending CF for pure non-TTL stores.
 
         Replays a purely legacy changelog (several default-CF records, NO
         ``__ttl_stamped__`` header on any of them), calls the recovery-completion

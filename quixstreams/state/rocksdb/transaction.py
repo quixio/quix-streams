@@ -40,14 +40,13 @@ MAX_UINT64 = 2**64 - 1  # 18446744073709551615
 # far beyond any realistic event-time clock. Shared bound with
 # ``RocksDBStorePartition._looks_like_stamped_value`` so the read-side strict
 # validator and the recovery flag-discovery heuristic agree on what a stamp can
-# look like (Fix B, spec-backfill-completeness.md §4.2).
+# look like.
 _MAX_PLAUSIBLE_STAMP_MS = 10**15
 
 
 def _safe_decode_stamp(value: bytes) -> Optional[tuple[int, bytes]]:
     """
-    Strict, fail-safe stamp validator for the flipped-partition read path
-    (Fix B, spec-backfill-completeness.md §4.2).
+    Strict, fail-safe stamp validator for the flipped-partition read path.
 
     Returns ``(stamp, payload)`` ONLY when ``value`` robustly looks like a real
     TTL stamp, else ``None`` so the caller can degrade (return the value RAW as
@@ -62,11 +61,12 @@ def _safe_decode_stamp(value: bytes) -> Optional[tuple[int, bytes]]:
 
     A genuine stamp is always accepted: real stamps are ``>= 8`` bytes and carry
     either the sentinel or an expiry well below the plausibility cap, so no
-    genuinely-stamped value is ever mis-read as legacy (§4.3). The residual is
+    genuinely-stamped value is ever mis-read as legacy. The residual is
     the safe-direction one: a legacy value whose first 8 bytes coincidentally
-    decode to a plausible expiry is still mis-treated as stamped — but Fix A's
-    completeness guarantee means a Fix-A-backfilled store has no un-stamped
-    values left to mis-classify, so this only bites pre-Fix-A stores.
+    decode to a plausible expiry is still mis-treated as stamped — but the
+    backfill completeness guarantee means a fully backfilled store has no
+    un-stamped values left to mis-classify, so this only bites stores written
+    before the backfill fix.
     """
     if len(value) < TTL_STAMP_BYTES:
         return None
@@ -131,7 +131,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # Set to True the first time a ``state.set(..., ttl=...)`` lands in
         # this transaction. Used by ``_flush`` to decide whether the batch
         # needs the flush-time detection / flip-or-reject step. Cheap O(1)
-        # boolean OR maintained per ``set`` — the spec's hot-path branch.
+        # boolean OR maintained per ``set`` — the hot-path branch.
         self._batch_has_ttl_writes: bool = False
         # Per-key TTL stamps recorded on a not-yet-flipped partition so the
         # flush path can re-encode default-CF cache entries if the flip
@@ -142,7 +142,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # for the steady-state TTL store).
         self._pending_stamps: dict[tuple[bytes, bytes], int] = {}
         # Max ``ttl=`` duration (ms) among the default-CF TTL writes staged on a
-        # not-yet-flipped partition (spec §15.1). When a populated legacy store
+        # not-yet-flipped partition. When a populated legacy store
         # flips WITHOUT ``legacy_records_ttl`` configured, this is the implicit
         # legacy ttl fed into ``high_water + implicit_ttl`` — the triggering
         # batch's own declared window. ``None`` until the first ``ttl=`` write
@@ -170,10 +170,10 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
     def _compute_stamp(self, ttl: Optional[timedelta], timestamp: Optional[int]) -> int:
         if ttl is None:
             # A ``state.set(...)`` with no explicit ``ttl=`` always writes the
-            # never-expires sentinel — TTL is strictly per-write. This is the
-            # pre-Rule-3 / v3.23.6 semantics: ``legacy_records_ttl`` does NOT
-            # impose a store-wide default on steady-state writes. (Rule 3, the
-            # no-``ttl=`` floor, was removed by design — ``legacy_records_ttl``
+            # never-expires sentinel — TTL is strictly per-write. This matches
+            # the v3.23.6 semantics: ``legacy_records_ttl`` does NOT
+            # impose a store-wide default on steady-state writes. (The
+            # no-``ttl=`` floor was removed by design — ``legacy_records_ttl``
             # remains ONLY a one-time migration knob for pre-existing legacy
             # records, applied via the backfill path, never on new writes.)
             return SENTINEL_NEVER
@@ -328,7 +328,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
     def _track_batch_ttl_ms(self, ttl: timedelta) -> None:
         """
         Record the maximum ``ttl=`` duration (ms) seen among default-CF TTL
-        writes on a not-yet-flipped partition (spec §15.1). Called only from the
+        writes on a not-yet-flipped partition. Called only from the
         unflipped ``ttl is not None`` write branch — after ``_compute_stamp`` has
         already validated ``ttl > 0`` — so it adds no work to the hot non-TTL
         path and no work to a steady-state (already-flipped) TTL store.
@@ -479,11 +479,11 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # cannot carry a stripped payload — preserve the existing
         # ``ValueError → UNDEFINED`` handling (treat as missing) rather than
         # returning a sub-stamp blob raw. This branch is unchanged from before
-        # Fix B (decode_ttl_value raised only for len < 8).
+        # the fail-safe decode (decode_ttl_value raised only for len < 8).
         if len(raw_bytes) < TTL_STAMP_BYTES:
             return Marker.UNDEFINED
 
-        # Fail-safe decode (Fix B, spec-backfill-completeness.md §4.2): only
+        # Fail-safe decode: only
         # strip the 8-byte stamp when a strict validator confirms the prefix is
         # a real stamp. A genuine un-stamped legacy value in a flipped partition
         # (the live-incident corruption: a long JSON value whose first 8 bytes
@@ -491,7 +491,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # returning it RAW (treat as never-expires), log once, never corrupt.
         decoded = _safe_decode_stamp(raw_bytes)
         if decoded is None:
-            # Warn once PER PARTITION (spec item d): the guard lives on the
+            # Warn once PER PARTITION: the guard lives on the
             # partition, not this checkpoint transaction, so a persistently
             # degraded value logs a single WARNING for the partition's lifetime
             # instead of re-warning on every checkpoint.
@@ -502,8 +502,8 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                     "does not decode to a valid stamp (key prefix=%r) at "
                     "path=%s; returning it raw and treating it as never-expires "
                     "rather than stripping 8 bytes. This should be impossible on "
-                    "a fully backfilled store and signals a pre-Fix-A store or "
-                    "an externally-mutated value.",
+                    "a fully backfilled store and signals a store written before "
+                    "the backfill-completeness fix or an externally-mutated value.",
                     prefix[:16],
                     getattr(self._partition, "path", "<memory>"),
                 )
@@ -612,7 +612,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # any exception from ``_prepare``, but a hook raising here would otherwise
         # leave the transaction STARTED — violating the base-class contract that a
         # raised ``prepare()`` transitions to FAILED. Mirror that contract for the
-        # hooks explicitly (spec item b): a failed flip / counter persist must fail
+        # hooks explicitly: a failed flip / counter persist must fail
         # the transaction, not leave it reusable.
         try:
             self._persist_counter()
@@ -625,7 +625,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
     def _sweep_expired_into_cache_if_enabled(self) -> None:
         """
-        Prepare-time TTL sweep on the ON path (spec ttl-changelog-tombstones §3.1).
+        Prepare-time TTL sweep on the ON path.
 
         Runs AFTER :meth:`_maybe_flip_or_reject` (so a flip's runtime state and
         freshly-stamped cache writes are visible to the guards) and BEFORE
@@ -639,11 +639,11 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         - the update cache is empty — a read-only transaction never swept before
           (the sweep lived in ``write()``, which ``_flush`` skips on an empty
           cache), and gating here preserves that coupling and the empty-tx no-I/O
-          optimization (§3.3).
+          optimization.
 
         The ``staged_*`` guard sets are the transaction cache's own pending writes
         — the identical source ``write()`` reads on the OFF path, just one phase
-        earlier — so the #1129 same-flush protections are byte-identical (§3.2).
+        earlier — so the #1129 same-flush protections are byte-identical.
         """
         partition = self._partition
         if not partition.ttl_changelog_tombstones:
@@ -687,8 +687,8 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
            flag writes are added to the cache so the partition's ``write()``
            commits everything atomically.
         4. Partition is not flipped, the batch has a TTL write, and the
-           default CF is **populated** → **auto-finish the migration** (spec
-           §15.1): backfill every pre-existing record with a uniform expiry in
+           default CF is **populated** → **auto-finish the migration**:
+           backfill every pre-existing record with a uniform expiry in
            bounded chunks (each chunk's VALUES persisted + produced before the
            next is read; peak memory is O(census key count) for the key list,
            see :meth:`RocksDBStorePartition.backfill_legacy_records`), then write
@@ -701,9 +701,9 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
              batch (the *implicit* legacy ttl). A WARN precedes the flip to
              flag that the window was implicit and how to override it.
 
-           The populated-no-config path no longer rejects: the §15 revision
+           The populated-no-config path no longer rejects: a later revision
            replaced the ``reject_ttl_on_populated_store`` hard-error with this
-           auto-backfill (user decision "finish the migration, don't error").
+           auto-backfill (finish the migration rather than error).
            The one surviving hard-error is the ``high_water is None`` framework
            guard in :meth:`_legacy_expiry_from_ttl_ms`.
 
@@ -720,7 +720,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
         restamped = 0
         # Set to the implicit ttl (ms) only on the populated-no-config path, so
-        # the post-flip logging can emit the §15.1 WARN with the derived window.
+        # the post-flip logging can emit the WARN with the derived window.
         implicit_ttl_ms: Optional[int] = None
         staged_default_keys: set[bytes] = set()
         if populated:
@@ -730,7 +730,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # in-batch user writes are skipped here (passed as
             # ``staged_default_keys``) and re-stamped with their own true pending
             # stamp by ``_restamp_default_cf_cache_for_flip`` below. The flip
-            # metadata is written LAST (flag-last ordering, spec §3.3): a crash
+            # metadata is written LAST (flag-last ordering): a crash
             # before ``_write_flip_metadata_to_cache`` lands leaves the partition
             # legacy and the backfill re-runs cleanly (re-deriving the implicit
             # ttl from the resuming write — identical for a constant dedup window).
@@ -743,7 +743,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 # Explicit config wins (unchanged): high_water + legacy_records_ttl.
                 expires_at_ms = self._compute_legacy_expiry(legacy_records_ttl)
             else:
-                # §15.1 implicit default: high_water + max(ttl=) in this batch.
+                # Implicit default: high_water + max(ttl=) in this batch.
                 implicit_ttl_ms = self._max_batch_ttl_ms
                 expires_at_ms = self._legacy_expiry_from_ttl_ms(implicit_ttl_ms)
 
@@ -766,7 +766,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # are no pre-existing backfilled keys left in the cache to skip.
         self._restamp_default_cf_cache_for_flip()
         self._write_flip_metadata_to_cache()
-        # Durable done-flag (spec §13.1): staged LAST so it is produced flag-last
+        # Durable done-flag: staged LAST so it is produced flag-last
         # within this flip flush. On both the empty-store and the populated-
         # backfill path the migration is complete once this flush commits, so the
         # marker records "done, never redo" for any future cold rebuild.
@@ -777,7 +777,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         self._partition.get_or_create_column_family(TTL_INDEX_CF_NAME)
         if populated:
             if implicit_ttl_ms is not None:
-                # §15.1: the window was derived from the triggering write, not
+                # The window was derived from the triggering write, not
                 # from config. WARN (downgraded from the removed ERROR) with the
                 # count, the implicit duration, the resulting absolute expiry,
                 # and how to override. Precedes the INFO flip-confirmation line.
@@ -812,7 +812,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         """
         Compute the uniform expiry for backfilled legacy records from the
         **explicit** ``legacy_records_ttl`` config: ``enable_time +
-        legacy_records_ttl`` in event-time milliseconds (spec §8.1). The §15.1
+        legacy_records_ttl`` in event-time milliseconds. The
         implicit path uses :meth:`_legacy_expiry_from_ttl_ms` directly with the
         batch-derived ttl instead.
         """
@@ -821,7 +821,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
     def _legacy_expiry_from_ttl_ms(self, ttl_ms: Optional[int]) -> int:
         """
         Resolve ``enable_time + ttl_ms`` for the legacy backfill, shared by the
-        explicit-config path (:meth:`_compute_legacy_expiry`) and the §15.1
+        explicit-config path (:meth:`_compute_legacy_expiry`) and the
         implicit path (``ttl_ms`` = max ``ttl=`` in the triggering batch).
 
         ``enable_time`` is the partition's event-time high-water. The TTL write
@@ -832,8 +832,8 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         If the high-water is ``None`` here, the triggering TTL write carried no
         record timestamp — which the ``ttl=`` validation in
         :meth:`_compute_stamp` should already have rejected — so we hard-error
-        rather than invent a wall-clock expiry (spec §8.1; this is the one loud
-        error the §15 revision keeps, because it signals a framework bug, not an
+        rather than invent a wall-clock expiry (this is the one loud
+        error kept, because it signals a framework bug, not an
         operator misconfiguration). ``ttl_ms is None`` is the same class of
         should-be-unreachable framework bug: ``_batch_has_ttl_writes`` is True
         here, so at least one ``ttl=`` write set ``_max_batch_ttl_ms``.
@@ -908,8 +908,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         """
         Queue ``__ttl_enabled__`` and ``__ttl_format_version__`` writes into
         the metadata CF cache so they land in the same WriteBatch as the
-        first stamped user writes (atomic flip semantics required by spec
-        §6.4 and §6.6).
+        first stamped user writes (atomic flip semantics).
 
         We import locally to avoid a circular import with ``partition.py``.
         """
@@ -937,7 +936,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
     def _write_migration_done_marker_to_cache(self) -> None:
         """
-        Queue the durable "migration done" marker (spec §13.1) into the
+        Queue the durable "migration done" marker into the
         replicated ``__ttl_system__`` CF cache. Because that CF is NOT in
         ``LOCAL_ONLY_CFS``, the base ``_prepare`` produces it to the changelog
         (so a cold rebuild onto a fresh volume learns "done, never redo"), and

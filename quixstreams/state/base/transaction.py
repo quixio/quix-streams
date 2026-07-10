@@ -625,7 +625,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: source_tp_offset_header,
             }
 
-            # TTL stamped/legacy bit (spec §8.7). Carry an out-of-band per-record
+            # TTL stamped/legacy bit. Carry an out-of-band per-record
             # header on every ``default``-CF record produced while the partition
             # is in TTL mode, so cold-restore recovery can route stamped-vs-legacy
             # reliably without sniffing value content. Read-only attribute probe

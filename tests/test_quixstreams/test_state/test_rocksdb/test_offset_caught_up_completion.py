@@ -1,6 +1,6 @@
 """
-Fix B (shortcut 73191 review) — an interrupted legacy-TTL migration must be
-completed even after an OFFSET-CAUGHT-UP restart.
+An interrupted legacy-TTL migration must be completed even after an
+OFFSET-CAUGHT-UP restart.
 
 Crash window: a MIXED cold restore replayed its LAST changelog message (so the
 persisted changelog offset == highwater-1) and flipped the partition, but crashed
@@ -10,7 +10,7 @@ False, so recovery — and therefore completion — never runs, stranding the
 leftover legacy records as never-expiring forever (the live ``ttl=`` gate
 short-circuits on an already-flipped store).
 
-Fix B, two parts:
+The fix has two parts:
   1. ``StorePartition.has_incomplete_ttl_migration()`` (True iff persisted-flipped
      + pending non-empty + no done-marker); ``RecoveryPartition.needs_recovery_check``
      forces the check when it is True.
@@ -214,9 +214,10 @@ class TestUnflippedOrphanCensusRegression:
     def test_unflipped_store_still_discards_orphan_census(
         self, store_partition_factory, changelog_producer_mock
     ):
-        # Bug-3 regression: a pure-legacy (never-flipped) store that censused
+        # Regression: a pure-legacy (never-flipped) store that censused
         # header-absent keys during replay must DISCARD that orphan census at
-        # completion — Fix B must not turn this into a spurious completion.
+        # completion — the completion fix must not turn this into a spurious
+        # completion.
         now_ms = 1_780_000_000_000
         msgs = [(f"pfx|l{i}".encode(), f"legacy-{i}".encode(), False) for i in range(5)]
         part = store_partition_factory(

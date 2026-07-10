@@ -1,20 +1,18 @@
 """
-Unit tests for the per-write-only TTL contract (shortcut 73191).
+Unit tests for the per-write-only TTL contract.
 
-Rule 3 — the "no never-expires data once active" floor that forced a no-``ttl=``
-write to ``event_time + legacy_records_ttl`` on a flipped partition — was REMOVED
-by design. TTL is strictly per-write: only ``state.set(..., ttl=...)`` ever sets
-an expiry. ``legacy_records_ttl`` is ONLY a one-time migration knob for
-pre-existing legacy records (applied via backfill); it must NOT impose a
-store-wide default on steady-state writes.
+The removed no-``ttl=`` floor (the "no never-expires data once active" rule) that
+forced a no-``ttl=`` write to ``event_time + legacy_records_ttl`` on a flipped
+partition was REMOVED by design. TTL is strictly per-write: only
+``state.set(..., ttl=...)`` ever sets an expiry. ``legacy_records_ttl`` is ONLY a
+one-time migration knob for pre-existing legacy records (applied via backfill); it
+must NOT impose a store-wide default on steady-state writes.
 
 These tests pin that contract:
 - a no-``ttl=`` write on a flipped partition with ``legacy_records_ttl`` set is
   ``SENTINEL_NEVER`` (never-expires), NOT floored;
 - backfill still stamps pre-existing legacy records, and a subsequent no-``ttl=``
   write is never-expires.
-
-See ``dev-planning/state-ttl-legacy-backfill/spec.md`` §0 (Rule 3 REMOVED).
 """
 
 from datetime import timedelta
@@ -65,7 +63,7 @@ def _flip_partition(partition, ttl, timestamp):
 
 class TestNoDefaultTTLFloor:
     # A no-ttl= write on a flipped, legacy_records_ttl-set partition is
-    # never-expires — NOT floored (Rule 3 removed).
+    # never-expires — NOT floored (the floor was removed).
     def test_no_ttl_write_is_never_expires_when_active(self, store_partition_factory):
         legacy_ttl = timedelta(days=7)
         partition = store_partition_factory(

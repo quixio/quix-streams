@@ -1,6 +1,5 @@
 """
-C1 (shortcut 73191 review) — warm-restart resume of an interrupted live legacy
-TTL backfill.
+Warm-restart resume of an interrupted live legacy TTL backfill.
 
 An in-place live backfill (:meth:`RocksDBStorePartition.backfill_legacy_records`)
 re-stamps a populated legacy store one chunk at a time, flag-last. If the process
@@ -10,7 +9,7 @@ store into TTL mode — but the un-stamped legacy leftovers (below the replayed
 offset range) are never censused and never stamped. On HEAD the migration is then
 permanently stranded and the resume ledger is deleted on the next open.
 
-C1 fixes this so an interrupted live backfill ALWAYS resumes and completes after a
+The fix ensures an interrupted live backfill ALWAYS resumes and completes after a
 warm restart, with no new user-facing config:
 
 - Part A: ``_cleanup_completed_backfill_bookkeeping`` drops the resume ledger only
@@ -20,8 +19,6 @@ warm restart, with no new user-facing config:
   (flipped + ``__ttl_backfill_stamped__`` ledger non-empty + no done-marker) and
   resumes by re-invoking ``backfill_legacy_records`` over the ledger complement,
   then produces the done-marker and cleans up.
-
-See ``dev-planning/state-ttl-c1-warm-restart-resume/spec.md``.
 """
 
 import struct
@@ -212,7 +209,7 @@ def _interrupt_live_backfill_after_first_chunk(
 def _interrupt_live_backfill_at_chunk_local_write(
     store_partition_factory, name, ttl, ts, n=5, chunk=2, kill_chunk=2
 ):
-    """Construct the P0 changelog-first crash window (spec §5, §11 helper).
+    """Construct the changelog-first crash window.
 
     Seed ``n`` legacy records and run the live backfill with a PLAIN (non-raising)
     producer, but patch ``partition._write`` to raise on chunk ``kill_chunk``'s
@@ -222,7 +219,7 @@ def _interrupt_live_backfill_at_chunk_local_write(
     triggering transaction (the flip commit goes through the public ``write``
     path), so the raw-writer call count is exactly the per-chunk commits, in order.
 
-    The result is the divergence the C1 suite's produce-crash helper cannot build:
+    The result is the divergence the produce-crash helper above cannot build:
     chunks ``1..kill_chunk`` are durably on the changelog (produced + flush-
     confirmed), but only chunks ``1..kill_chunk-1`` committed locally (stamps +
     ``__ttl_index__`` + ``__ttl_backfill_stamped__`` ledger). The changelog is ahead
@@ -281,7 +278,7 @@ def _interrupt_live_backfill_at_chunk_local_write(
 
 
 # ---------------------------------------------------------------------------
-# C1 warm-restart-resume suite
+# Warm-restart-resume suite
 # ---------------------------------------------------------------------------
 
 
@@ -402,8 +399,8 @@ class TestWarmRestartResume:
 
     # (iii) crash mid-RESUME → second restart completes (convergent, no
     # double-wrap). The second restart is offset-caught-up (no new changelog
-    # tail): the ledger arm of has_incomplete_ttl_migration + the C1 resume
-    # branch complete it with NO replay this session (§7.2 / §7.4 fallback).
+    # tail): the ledger arm of has_incomplete_ttl_migration + the warm-restart
+    # resume branch complete it with NO replay this session.
     def test_crash_mid_resume_second_restart_converges(self, store_partition_factory):
         ttl = timedelta(days=7)
         ts = 1_000_000_000_000
@@ -543,10 +540,10 @@ class TestWarmRestartResume:
 
 
 # ---------------------------------------------------------------------------
-# C1 P0 (sc-73191) — changelog-first crash-window double-wrap.
+# Changelog-first crash-window double-wrap.
 #
 # The produce-crash helper above keeps the changelog and the ledger in lock-step
-# (a failing produce never enqueues, so its chunk never commits). This P0 needs
+# (a failing produce never enqueues, so its chunk never commits). This suite needs
 # the OPPOSITE window: a chunk's produce + flush SUCCEED, but its local write is
 # lost — the changelog ends up ahead of the local ``__ttl_backfill_stamped__``
 # ledger by one chunk. Warm-restart replay applies those stamped chunk records
@@ -800,23 +797,24 @@ class TestResumeDoubleWrap:
 
 
 # ---------------------------------------------------------------------------
-# #3 (review batch 2, sc-73191) — the C1 resume gate must sit ABOVE the M1
-# all-stamped byte-heuristic gate.
+# The warm-restart resume gate must sit ABOVE the all-stamped byte-heuristic
+# adoption gate.
 #
 # Warm-restart recovery re-replays the stored offset INCLUSIVELY, so one
 # boundary header-absent legacy record can be re-censused into
 # ``__ttl_backfill_pending__`` even on a store that also carries a non-empty
 # live-backfill ledger. If that lone census orphan's value happens to
 # byte-decode as a plausible stamp, ``_all_pending_values_are_stamped()`` is
-# True on the single-element census and the M1 gate fires BEFORE the C1 resume:
-# it logs a CRITICAL and discards the census (no flag) — never resuming. The
-# ledger has no done-marker, so the marker-gated cleanup keeps it and every
-# restart re-strands. Reordering C1 above M1 (definitive ledger evidence beats a
-# byte heuristic) makes the interrupted backfill always resume.
+# True on the single-element census and the all-stamped adoption gate fires
+# BEFORE the resume: it logs a CRITICAL and discards the census (no flag) —
+# never resuming. The ledger has no done-marker, so the marker-gated cleanup
+# keeps it and every restart re-strands. Ordering the resume above the adoption
+# gate (definitive ledger evidence beats a byte heuristic) makes the interrupted
+# backfill always resume.
 # ---------------------------------------------------------------------------
 
 
-class TestStrandResumeC1AboveM1:
+class TestResumeGateAboveAdoptionGate:
     def _opts(self):
         return RocksDBOptions(
             legacy_records_ttl=timedelta(days=7), legacy_backfill_chunk_size=2
@@ -828,12 +826,13 @@ class TestStrandResumeC1AboveM1:
         """A warm-restart interrupted backfill whose single re-censused boundary
         orphan byte-decodes as a plausible stamp.
 
-        RED (HEAD): the M1 all-stamped gate fires first — a CRITICAL naming
-        ``adopt_v3240_stamps`` is logged, the census is discarded, the C1 resume
+        RED (HEAD): the all-stamped adoption gate fires first — a CRITICAL naming
+        ``adopt_v3240_stamps`` is logged, the census is discarded, the resume
         never runs, the leftover stays un-stamped, and no done-marker is written
         (permanent strand; every inclusive-replay restart re-strands).
 
-        GREEN: the C1 resume runs first — every default record is single-stamped
+        GREEN: the warm-restart resume runs first — every default record is
+        single-stamped
         at the cohort's uniform expiry, the ``__ttl_index__`` is complete, the
         done-marker is present, the ledger + progress + orphan census are
         drained, and NO CRITICAL is logged.
@@ -886,23 +885,23 @@ class TestStrandResumeC1AboveM1:
             ttl_stamped=False,
         )
         assert _pending_keys(p2) == {boundary_key}
-        # This is precisely the M1-gate trap: a single stamp-plausible census.
+        # This is precisely the adoption-gate trap: a single stamp-plausible census.
         assert p2._all_pending_values_are_stamped() is True
 
         with caplog.at_level(logging.INFO):
             p2.complete_recovery()
 
-        # No M1 CRITICAL: the definitive ledger evidence won the gate race.
+        # No adoption CRITICAL: the definitive ledger evidence won the gate race.
         critical = [
             r
             for r in caplog.records
             if r.levelno >= logging.CRITICAL and "adopt_v3240_stamps" in r.message
         ]
         assert not critical, (
-            f"C1 must resume, not strand via the M1 CRITICAL gate; got: "
-            f"{[r.getMessage() for r in critical]}"
+            f"the resume must run, not strand via the adoption CRITICAL gate; "
+            f"got: {[r.getMessage() for r in critical]}"
         )
-        # The C1 resume ran to completion.
+        # The warm-restart resume ran to completion.
         assert any("RESUME COMPLETED" in r.message for r in caplog.records)
 
         # Every default record single-stamped at the cohort's uniform expiry.

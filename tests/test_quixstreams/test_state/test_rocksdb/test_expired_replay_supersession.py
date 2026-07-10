@@ -1,9 +1,9 @@
 """
-Fix A (shortcut 73191 review) — an EXPIRED stamped record replayed during
-recovery must SUPERSEDE any older copy of the same key.
+An EXPIRED stamped record replayed during recovery must SUPERSEDE any older copy
+of the same key.
 
 A compacted changelog can carry several pre-compaction copies of one key. Before
-Fix A, when a header-true stamped record was judged expired at replay the branch
+the fix, when a header-true stamped record was judged expired at replay the branch
 did a bare ``pass`` (skip both the main and the index write). That let an OLDER
 copy of the key replayed earlier — a verbatim header-absent legacy value, or an
 older *unexpired* stamped copy — survive in the main CF. In the MIXED shape the
@@ -11,7 +11,7 @@ key's pending census entry was already deleted by the stamped record's
 supersession, so ``complete_recovery`` could never repair it, and the expired
 record RESURRECTED as a never-expiring, unswept legacy value.
 
-Fix A: the expired branch now stages ``batch.delete(key, cf_handle)``
+The fix: the expired branch now stages ``batch.delete(key, cf_handle)``
 (latest-record-wins). The older copy's ``__ttl_index__`` pointer (if any) is left
 for the sweep's ghost/orphan GC (its stamp is unknown at replay time).
 
@@ -82,7 +82,7 @@ class TestExpiredReplaySupersedesOlderCopy:
         assert recovered.uses_ttl_stamps is True
         assert recovered._recovery_saw_stamped is True
         assert key not in _pending_keys(recovered)
-        # Fix A: the expired stamped copy deletes the older legacy value.
+        # The expired stamped copy deletes the older legacy value.
         assert key not in _default_keys(recovered)
 
         recovered.complete_recovery()
@@ -115,7 +115,7 @@ class TestExpiredReplaySupersedesOlderCopy:
         _replay(recovered, msgs, now_ms=now_ms)
 
         assert recovered.uses_ttl_stamps is True
-        # Fix A: the newer expired copy supersedes the older unexpired one.
+        # The newer expired copy supersedes the older unexpired one.
         assert key not in _default_keys(recovered)
         assert key not in _pending_keys(recovered)
 
@@ -125,9 +125,8 @@ class TestExpiredReplaySupersedesOlderCopy:
 
 
 class TestExpiredReplayDropAggregateInfo:
-    """#8 (review batch 2): the wallclock-expired replay drops must be visible
-    as ONE aggregate INFO per partition per recovery (count + path + clock), not
-    silent."""
+    """The wallclock-expired replay drops must be visible as ONE aggregate INFO
+    per partition per recovery (count + path + clock), not silent."""
 
     def test_aggregate_info_on_expired_drops(
         self, store_partition_factory, changelog_producer_mock, caplog
@@ -153,7 +152,7 @@ class TestExpiredReplayDropAggregateInfo:
             changelog_producer=changelog_producer_mock,
         )
         _replay(recovered, msgs, now_ms=now_ms)
-        # Both dropped by Rule 4 (latest-record-wins).
+        # Both dropped by the latest-record-wins recovery-drop filter.
         assert _default_keys(recovered) == set()
 
         with caplog.at_level(logging.INFO):

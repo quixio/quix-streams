@@ -1,6 +1,6 @@
 """
-State-TTL changelog reduction via sweep tombstones (spec ttl-changelog-tombstones
-§5.1). With ``ttl_changelog_tombstones=True`` (default) a TTL eviction is staged
+State-TTL changelog reduction via sweep tombstones. With
+``ttl_changelog_tombstones=True`` (default) a TTL eviction is staged
 into the transaction cache at prepare-time, so the base ``_prepare`` produces a
 changelog tombstone (``value=None``) for the evicted key and ``write()`` applies
 the local delete — the changelog physically shrinks under compaction in step with
@@ -232,10 +232,10 @@ class TestSweepTombstones:
     def test_compacted_rebuild_eviction_without_filter(
         self, store_partition_factory, changelog_producer_mock
     ):
-        """The tombstone (not the read-time Rule 4 filter) removes the key on
-        rebuild: replay the captured stream into a fresh partition with a recovery
-        wallclock BELOW the key's expiry, so Rule 4 would keep it — yet it is
-        absent because the tombstone deleted it."""
+        """The tombstone (not the read-time latest-record-wins filter) removes the
+        key on rebuild: replay the captured stream into a fresh partition with a
+        recovery wallclock BELOW the key's expiry, so the filter would keep it — yet
+        it is absent because the tombstone deleted it."""
         prefix = b"pfx"
         with store_partition_factory(name="src") as partition:
             _flip(partition, prefix)
@@ -252,7 +252,7 @@ class TestSweepTombstones:
 
         # Rebuild: replay every captured default-CF record (puts + the tombstone)
         # in offset order into a fresh partition, with the recovery clock pinned
-        # BELOW K's expiry (1100) so the Rule 4 filter would NOT drop K.
+        # BELOW K's expiry (1100) so the latest-record-wins filter would NOT drop K.
         replay = []
         for call in changelog_producer_mock.produce.call_args_list:
             headers = call.kwargs.get("headers") or {}
@@ -282,7 +282,7 @@ class TestSweepTombstones:
 
 
 class TestSweepVisitBudget:
-    """#7 (review batch 2): every index-entry visit (ghost or genuine) must
+    """Every index-entry visit (ghost or genuine) must
     count against the eviction budget, so a store dense with refresh-minted
     ghost index entries cannot pay more than ``budget`` main-CF point-gets per
     sweep."""

@@ -1,30 +1,28 @@
 """
-Unit tests for the backfill-completeness + fail-safe-read data-corruption fix
-(shortcut 73191 follow-up).
+Unit tests for the backfill-completeness + fail-safe-read data-corruption fix.
 
-Covers ``dev-planning/state-ttl-legacy-backfill/spec-backfill-completeness.md``
-§9:
-
-Fix A — provably complete census-then-chunk backfill with a persisted cursor:
+Completeness — provably complete census-then-chunk backfill with a persisted
+cursor:
 1. Multi-chunk backfill stamps EVERY key (zero un-stamped remain), no skips.
 2. Crash-mid-backfill → reopen legacy → cursor resumes → converges, every key
    stamped exactly once, no double-wrap.
 4. ``_looks_like_stamped_value`` is NEVER called by the backfill path.
-5. 200k-scale completeness (chunk-count formula + full 100%-stamped scan at a
+5. Large-scale completeness (chunk-count formula + full 100%-stamped scan at a
    tractable size).
 6. Census excludes ``staged_default_keys``.
 7. Key deleted between census and stamp is skipped cleanly.
 
-Fix B — fail-safe read (degrade, never corrupt):
+Fail-safe read (degrade, never corrupt):
 - A flipped store containing a deliberately un-stamped legacy value returns it
   intact (never-expires) and does NOT raise StateSerializationError (the live
   crash-loop regression test).
 - Genuinely-stamped values still expiry-filter correctly (no regression).
-- The §4.3 residual (legacy value whose first 8 bytes coincidentally decode to a
-  plausible expiry) is documented (it DOES strip — the known, accepted residual).
+- The residual case where a legacy value whose first 8 bytes coincidentally
+  decode to a plausible expiry is documented (it DOES strip — the known,
+  accepted residual).
 
-See the spec for the full rationale (no per-value marker; census order is
-deterministic-sorted; cursor advances atomically per chunk).
+The design uses no per-value marker; census order is deterministic-sorted and
+the cursor advances atomically per chunk.
 """
 
 from datetime import timedelta
@@ -112,12 +110,12 @@ class _CFProxy:
 
 
 # ---------------------------------------------------------------------------
-# Fix A — completeness
+# Completeness
 # ---------------------------------------------------------------------------
 
 
 class TestBackfillCompleteness:
-    # §9.2 — multi-chunk backfill stamps EVERY key, zero un-stamped remain.
+    # Multi-chunk backfill stamps EVERY key, zero un-stamped remain.
     def test_multi_chunk_stamps_every_key(self, store_partition_factory):
         m = 500
         chunk_size = 50
@@ -162,7 +160,7 @@ class TestBackfillCompleteness:
         )
         partition.close()
 
-    # §9.3 — crash mid-backfill → reopen legacy → cursor resumes → converges,
+    # Crash mid-backfill → reopen legacy → cursor resumes → converges,
     # every key stamped exactly once, no double-wrap.
     def test_crash_resumes_via_cursor_no_double_wrap(self, store_partition_factory):
         m = 500
@@ -231,7 +229,7 @@ class TestBackfillCompleteness:
         ):
             with partition.begin() as tx:
                 tx.set(key="knew", value="vnew", prefix=b"pfx", timestamp=ts2, ttl=ttl)
-            # §9.4 — the backfill never byte-sniffs.
+            # The backfill never byte-sniffs.
             looks_spy.assert_not_called()
 
         assert partition.uses_ttl_stamps is True
@@ -254,7 +252,7 @@ class TestBackfillCompleteness:
         assert sum(1 for v in legacy.values() if decode_ttl_value(v)[0] == run2) == 300
         partition.close()
 
-    # §9.5 — chunk-count formula + full 100%-stamped scan at a tractable size.
+    # Chunk-count formula + full 100%-stamped scan at a tractable size.
     def test_chunk_count_and_full_stamp_scan(self, store_partition_factory):
         m = 2000
         chunk_size = 100
@@ -292,7 +290,7 @@ class TestBackfillCompleteness:
             assert stamp != SENTINEL_NEVER or value  # all decode
         partition.close()
 
-    # §9.6 — census excludes staged_default_keys (the triggering in-batch write).
+    # Census excludes staged_default_keys (the triggering in-batch write).
     def test_census_excludes_staged_in_batch_key(self, store_partition_factory):
         partition = store_partition_factory(name="db")
         _seed_legacy_records(partition, [("k1", "v1"), ("k2", "v2")])
@@ -324,7 +322,7 @@ class TestBackfillCompleteness:
                 assert expires_at == legacy_expiry
         partition.close()
 
-    # §9.7 — key deleted between census and stamp is skipped cleanly.
+    # Key deleted between census and stamp is skipped cleanly.
     def test_key_deleted_between_census_and_stamp(self, store_partition_factory):
         partition = store_partition_factory(name="db")
         _seed_legacy_records(partition, [("k1", "v1"), ("k2", "v2"), ("k3", "v3")])
@@ -375,7 +373,7 @@ class TestBackfillCompleteness:
 
 
 # ---------------------------------------------------------------------------
-# Fix B — fail-safe read
+# Fail-safe read
 # ---------------------------------------------------------------------------
 
 
@@ -465,9 +463,10 @@ class TestFailSafeRead:
             assert tx.get(key="kperm", prefix=b"pfx", timestamp=far) == "vperm"
         partition.close()
 
-    # The §4.3 documented residual: a legacy value whose first 8 bytes DO decode
+    # The documented residual: a legacy value whose first 8 bytes DO decode
     # to a plausible expiry IS mis-stripped (the only residual corruption path,
-    # which Fix A empties in practice). This test pins the known behavior.
+    # which the complete backfill empties in practice). This test pins the
+    # known behavior.
     def test_documented_residual_plausible_prefix_is_stripped(
         self, store_partition_factory
     ):
@@ -489,6 +488,6 @@ class TestFailSafeRead:
             result = tx.get_bytes(key="residual", prefix=b"pfx", timestamp=1_000)
 
         # Known residual: it is treated as stamped and the prefix IS stripped.
-        # This is the accepted §4.3 corner; documented, not a common-case bug.
+        # This is the accepted corner case; documented, not a common-case bug.
         assert result == b"REALPAYLOAD"
         partition.close()

@@ -1,9 +1,8 @@
 """
-Progress-based backfill changelog flush loop (spec ttl-changelog-tombstones §3.7,
-§5.3). ``_flush_backfill_changelog`` replaces the fixed 25 s per-chunk deadline
-with a slice-loop that fails only when a full slice makes ZERO delivery progress
-(plus a runaway cap), so a large-but-progressing chunk no longer trips a spurious
-``ChangelogFlushError``.
+Progress-based backfill changelog flush loop. ``_flush_backfill_changelog``
+replaces the fixed 25 s per-chunk deadline with a slice-loop that fails only when
+a full slice makes ZERO delivery progress (plus a runaway cap), so a
+large-but-progressing chunk no longer trips a spurious ``ChangelogFlushError``.
 """
 
 from unittest.mock import MagicMock

@@ -4,7 +4,7 @@ CHANGELOG_OFFSET_KEY = b"__changelog_offset__"
 GLOBAL_COUNTER_CF_NAME = "__global-counter__"
 GLOBAL_COUNTER_KEY = b"__global_counter__"
 
-# TTL feature constants (see dev-planning/state-ttl/architecture.md).
+# TTL feature constants.
 # TTL_INDEX_CF_NAME / TTL_BACKFILL_PENDING_CF_NAME are shared with
 # quixstreams.state.metadata so the base transaction can route writes for them
 # locally, off the changelog.
@@ -37,8 +37,8 @@ STATE_FORMAT_VERSION = 2
 # fresh (empty) default CF; once flipped, it stays flipped.
 TTL_ENABLED_KEY = b"__ttl_enabled__"
 
-# Persisted backfill cursor for the legacy-records backfill (Fix A,
-# spec-backfill-completeness.md §3.3). Holds the integer count ``N`` of keys
+# Persisted backfill cursor for the legacy-records backfill.
+# Holds the integer count ``N`` of keys
 # already stamped from the deterministically-sorted census key list. Advanced
 # in the same ``WriteBatch`` as each chunk's puts so a crash mid-backfill
 # resumes at exactly key index ``N`` (no byte-sniffing). Additive metadata key:

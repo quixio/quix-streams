@@ -1,21 +1,18 @@
 """
-Regression tests for two confirmed bugs in the TTL legacy-backfill resume path:
+Regression tests for two confirmed bugs in the TTL legacy-backfill resume path,
+found by cursor-misalignment analysis:
 
-Bug 1a — Double-wrap corruption on resume after interleaved legacy write.
+Double-wrap corruption on resume after interleaved legacy write.
     The backfill re-sorts the *current* default CF on resume but reuses the old
     integer cursor. A new legacy key inserted between crash and resume shifts the
     already-stamped keys past the cursor. ``encode_ttl_value`` wraps an
     already-stamped value a second time, corrupting it (wrong expiry / garbled
     payload on decode).
 
-Bug 1b — Silently skipped key (new interleaved key never stamped).
+Silently skipped key (new interleaved key never stamped).
     The interleaved key slides into the cursor window that the resume considers
     "already done" and is never stamped. After the backfill completes it remains
     raw (un-stamped) in a flipped partition.
-
-Reference: shortcut 73191 review, cursor-misalignment analysis.
-See ``dev-planning/state-ttl-legacy-backfill/spec-chunked-backfill.md`` §10 and
-``dev-planning/state-ttl-legacy-backfill/spec-backfill-completeness.md`` §3.3.
 """
 
 from datetime import timedelta
@@ -70,11 +67,11 @@ def _decode_index_cf(partition):
 
 class TestInterleavedWriteCorruption:
     """
-    Bug 1a — Double-wrap corruption.
+    Double-wrap corruption.
 
-    Validates spec §3.3 (cursor-based resume) requirement: "Keys stamped by the
+    Validates the cursor-based resume requirement: keys stamped by the
     interrupted run are NOT re-read (cursor-skipped), so they keep that run's
-    expiry." When a new legacy key inserts before already-stamped keys in sorted
+    expiry. When a new legacy key inserts before already-stamped keys in sorted
     order, the cursor-to-key mapping is invalidated and an already-stamped key is
     re-stamped (double-wrapped), corrupting its value.
 
@@ -223,7 +220,7 @@ class TestInterleavedWriteCorruption:
 
     def test_interleaved_key_is_stamped_after_resume(self, store_partition_factory):
         """
-        Bug 1b — Silently skipped key.
+        Silently skipped key.
 
         Validates that a key written between crash and resume is also TTL-stamped
         after the completed backfill. On current code, the interleaved key slides

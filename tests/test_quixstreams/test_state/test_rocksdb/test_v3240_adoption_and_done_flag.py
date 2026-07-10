@@ -1,15 +1,13 @@
 """
-Unit tests for spec-v3240-upgrade-and-recovery-clock.md §10 scenarios not
-already covered by the black-box contract suite or existing unit tests.
+Unit tests for v3.24.0-upgrade-and-recovery-clock scenarios not already covered by
+the black-box contract suite or existing unit tests.
 
 Covers:
-- §10.3: Sentinel-only v3.24.0 store adoption.
-- §10.5: Quorum-fail (one non-validating value blocks adoption).
-- §10.8: Done-flag idempotency (second restore no-ops).
-- §10.9: Done-flag back-compat (marker-absent falls back to header/pending).
-- Memory parity mirrors for §10.2 and §10.5.
-
-See ``dev-planning/state-ttl-legacy-backfill/spec-v3240-upgrade-and-recovery-clock.md``.
+- Sentinel-only v3.24.0 store adoption.
+- Quorum-fail (one non-validating value blocks adoption).
+- Done-flag idempotency (second restore no-ops).
+- Done-flag back-compat (marker-absent falls back to header/pending).
+- Memory parity mirrors.
 """
 
 import logging
@@ -112,13 +110,13 @@ def _pending_keys(partition):
 
 
 # ===========================================================================
-# §10.3 — Sentinel-only v3.24.0 store adoption
+# Sentinel-only v3.24.0 store adoption
 # ===========================================================================
 
 
 class TestSentinelOnlyAdoption:
     def test_sentinel_only_store_adopted_as_never_expire(self, tmp_path, caplog):
-        """§10.3: A v3.24.0 store where every value is SENTINEL|value adopts
+        """A v3.24.0 store where every value is SENTINEL|value adopts
         correctly as never-expire. No index entries are created (sentinel
         records skip the index). Reads return the original payloads."""
         producer = _make_producer_mock()
@@ -136,8 +134,8 @@ class TestSentinelOnlyAdoption:
         partition = _rocksdb_partition(
             tmp_path,
             name="sentinel",
-            # M1: v3.24.0 adoption is now opt-in; assert the adopt behavior with
-            # the flag set (the no-flag path is covered in test_v3240_adoption_opt_in).
+            # v3.24.0 adoption is opt-in; assert the adopt behavior with the flag
+            # set (the no-flag path is covered in test_v3240_adoption_opt_in).
             options=RocksDBOptions(adopt_v3240_stamps=True),
             changelog_producer=producer,
         )
@@ -166,15 +164,15 @@ class TestSentinelOnlyAdoption:
 
 
 # ===========================================================================
-# §10.5 — Quorum-fail: one non-validating value blocks adoption
+# Quorum-fail: one non-validating value blocks adoption
 # ===========================================================================
 
 
 class TestQuorumFail:
     def test_one_non_validating_value_blocks_adoption(self, tmp_path):
-        """§10.5: When one pending value fails strict stamp validation, the
+        """When one pending value fails strict stamp validation, the
         whole store stays verbatim (no adoption, no flip). The v3.24.0 subset
-        remains prefix-corrupt (documented residual R2')."""
+        remains prefix-corrupt (a documented residual)."""
         producer = _make_producer_mock()
         now_ms = 1_780_000_000_000
         expiry = now_ms + 7 * DAY_MS
@@ -205,13 +203,13 @@ class TestQuorumFail:
 
 
 # ===========================================================================
-# §10.8 — Done-flag idempotency: second restore no-ops
+# Done-flag idempotency: second restore no-ops
 # ===========================================================================
 
 
 class TestDoneFlagIdempotency:
     def test_second_restore_after_done_flag_noop(self, tmp_path, caplog):
-        """§10.8: A second cold restore of a changelog that contains the
+        """A second cold restore of a changelog that contains the
         done-flag marker must flip the partition via the marker path and run
         NO backfill/completion (no-op). No adoption, no pending census."""
         producer = _make_producer_mock()
@@ -264,10 +262,10 @@ class TestDoneFlagIdempotency:
         p2.close()
 
     def test_done_marker_discard_logs_info(self, tmp_path, caplog):
-        """nit (review batch 2): the done-marker short-circuit is the only census
-        discard path that was silent. Replay a done-marker plus a header-absent
-        orphan (re-censused into __ttl_backfill_pending__); complete_recovery must
-        log ONE INFO naming the discarded count.
+        """The done-marker short-circuit is the only census discard path that was
+        silent. Replay a done-marker plus a header-absent orphan (re-censused into
+        __ttl_backfill_pending__); complete_recovery must log ONE INFO naming the
+        discarded count.
 
         RED (HEAD): no discard INFO on the done-marker path.
         GREEN: one INFO with the discarded count; store flipped + census empty."""
@@ -313,13 +311,13 @@ class TestDoneFlagIdempotency:
 
 
 # ===========================================================================
-# §10.9 — Done-flag back-compat: marker-absent changelog
+# Done-flag back-compat: marker-absent changelog
 # ===========================================================================
 
 
 class TestDoneFlagBackCompat:
     def test_marker_absent_falls_back_to_header_pending_logic(self, tmp_path):
-        """§10.9: A pre-marker this-branch changelog (stamped + header-true
+        """A pre-marker this-branch changelog (stamped + header-true
         default-CF records, NO done-flag marker) recovers via the existing
         header/pending logic unchanged. The partition flips on the first
         header-true record, completes recovery normally."""
@@ -381,8 +379,8 @@ def _read_memory_tx(partition, key, prefix=b"pfx", timestamp=None):
 
 
 class TestMemoryV3240Adoption:
-    """#2 (review batch 2): memory v3.24.0 adoption is now OPT-IN, mirroring the
-    RocksDB ``adopt_v3240_stamps`` contract. Split from the former single
+    """Memory v3.24.0 adoption is OPT-IN, mirroring the RocksDB
+    ``adopt_v3240_stamps`` contract. Split from the former single
     auto-adopt assertion into (a) no-flag detection-only, (b) flag adopts, and
     (c) a ``set_bytes`` false-positive that must stay untouched."""
 
@@ -507,10 +505,10 @@ class TestMemoryV3240Adoption:
 
 
 class TestMemoryQuorumFail:
-    """Memory parity mirror for §10.5 (quorum-fail blocks adoption)."""
+    """Memory parity mirror for quorum-fail blocking adoption."""
 
     def test_memory_quorum_fail_stays_legacy(self):
-        """§10.5 memory mirror: one non-validating value blocks adoption in
+        """Memory mirror: one non-validating value blocks adoption in
         the memory backend. Store stays legacy, pending discarded."""
         producer = _make_producer_mock()
         now_ms = 1_780_000_000_000
@@ -665,10 +663,10 @@ class TestMarkerFlushFailure:
 
 
 class TestMemoryDoneFlag:
-    """Memory parity mirror for §10.7 (done-flag consumed on recovery)."""
+    """Memory parity mirror for the done-flag being consumed on recovery."""
 
     def test_memory_done_flag_flips_and_noop(self):
-        """§10.7 memory mirror: replaying a changelog with the done-flag
+        """Memory mirror: replaying a changelog with the done-flag
         marker flips the memory partition and complete_recovery is a no-op
         (no backfill/completion runs)."""
         producer = _make_producer_mock()

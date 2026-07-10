@@ -22,7 +22,7 @@ class TestStorePartition:
 
     @pytest.mark.parametrize("store_value", [10, None])
     def test_recover_from_changelog_message_success(self, store_value, store_partition):
-        # v3: a fresh partition replaying an unstamped legacy value stays in
+        # A fresh partition replaying an unstamped legacy value stays in
         # legacy mode (the recovery flag-discovery heuristic only flips on a
         # plausibly-stamped first value). The on-disk payload is the raw
         # value, byte-identical to v3.23.6 — no sentinel wrapping.
@@ -34,7 +34,7 @@ class TestStorePartition:
         assert store_partition.get_changelog_offset() == 1
 
     def test_recover_from_changelog_message_already_stamped(self, store_partition):
-        # A stamped replay value carrying the §8.7 ``__ttl_stamped__`` header
+        # A stamped replay value carrying the ``__ttl_stamped__`` header
         # (surfaced as ``ttl_stamped=True``) flips the recovery partition into
         # TTL mode and is stored verbatim. RocksDB routes purely on the header;
         # the memory backend still flips via the (unchanged) value-content

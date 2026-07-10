@@ -1,12 +1,12 @@
 """
-#6 (shortcut 73191 review batch 2) — memory legacy-replay truthiness.
+Memory legacy-replay truthiness.
 
-``MemoryStorePartition.recover_from_changelog_message`` routed a header-absent
-(legacy) default-CF record through ``if value:`` — which treats a legitimate
-empty-bytes value (``b""``) as falsy and deletes the key, silently losing it.
+If ``MemoryStorePartition.recover_from_changelog_message`` routed a header-absent
+(legacy) default-CF record through ``if value:``, it would treat a legitimate
+empty-bytes value (``b""``) as falsy and delete the key, silently losing it.
 RocksDB's equivalent legacy branch keys off ``if value is None:`` so only a
-genuine tombstone (``None``) deletes. This asserts the memory backend now
-mirrors RocksDB: a real ``b""`` legacy value survives replay.
+genuine tombstone (``None``) deletes. This asserts the memory backend mirrors
+RocksDB: a real ``b""`` legacy value survives replay.
 """
 
 from quixstreams.state.memory import MemoryStorePartition
@@ -18,10 +18,8 @@ class TestLegacyReplayEmptyValue:
         """A header-absent legacy record whose value is ``b""`` must land in the
         default CF as ``b""`` (not be dropped as a tombstone).
 
-        RED (HEAD): ``if value:`` treats ``b""`` as falsy → the key is popped →
-        absent after replay.
-        GREEN: ``if value is None:`` → only a real ``None`` tombstone deletes →
-        the key exists with ``b""``.
+        Only a real ``None`` tombstone deletes; a ``b""`` value must survive
+        replay and remain present.
         """
         key = b"pfx|k0"
         partition = MemoryStorePartition(changelog_producer=None)

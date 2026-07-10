@@ -1,38 +1,34 @@
 """
-Unit tests for §8.6 of the State TTL legacy-backfill spec (shortcut 73191):
-**first-ever TTL enablement on a cold-restored store**.
+Unit tests for **first-ever TTL enablement on a cold-restored store**.
 
 Scenario (live failure, Quix Cloud 2026-06-16): a genuine v3.23.6 seeder wrote
 N **un-stamped legacy** records to the store and its changelog. The TTL build is
 then deployed against a **wiped** local volume, so recovery replays only
 un-stamped legacy messages. The first live ``ttl=`` write must then see a
-**populated legacy** store and run the existing backfill (Option 1) — NOT take
-the empty-store fast path.
+**populated legacy** store and run the existing backfill — NOT take the
+empty-store fast path.
 
-CONFIRMED ROOT CAUSE (OP-3 / spec §8.6.3 Q5): recovery did NOT stay in the
-legacy verbatim branch. The flag-discovery heuristic ``_looks_like_stamped_value``
-(``partition.py``) false-positives on legacy values whose first 8 bytes happen to
-decode as a plausible epoch-ms expiry (the dedup "last-seen timestamp" value is
-exactly an 8-byte big-endian epoch-ms). One such record falsely flips the
-recovery partition into TTL mode; the Rule 4 wallclock filter then drops every
-subsequent legacy record as "already expired", emptying the default CF. The flip
-then sees an empty store and takes the empty-store fast path — the legacy records
-are lost and never stamped.
+CONFIRMED ROOT CAUSE: recovery did NOT stay in the legacy verbatim branch. The
+flag-discovery heuristic ``_looks_like_stamped_value`` (``partition.py``)
+false-positives on legacy values whose first 8 bytes happen to decode as a
+plausible epoch-ms expiry (the dedup "last-seen timestamp" value is exactly an
+8-byte big-endian epoch-ms). One such record falsely flips the recovery partition
+into TTL mode; the wallclock filter then drops every subsequent legacy record as
+"already expired", emptying the default CF. The flip then sees an empty store and
+takes the empty-store fast path — the legacy records are lost and never stamped.
 
-The fix (spec §8.7, OP-3 resolution) is an UNAMBIGUOUS out-of-band flip signal: a
-per-record ``__ttl_stamped__`` changelog header set on every default-CF record
-produced while the partition is in TTL mode. Recovery flip-discovery routes on
-that header (``ttl_stamped`` kwarg), never on value content;
-``_looks_like_stamped_value`` is off the recovery path. The two
-``TestColdRestoreFalseFlipRepro`` tests below — previously ``xfail(strict=True)``
-— now PASS: a header-absent (legacy) replay stays legacy and lands verbatim.
+The fix is an UNAMBIGUOUS out-of-band flip signal: a per-record
+``__ttl_stamped__`` changelog header set on every default-CF record produced while
+the partition is in TTL mode. Recovery flip-discovery routes on that header
+(``ttl_stamped`` kwarg), never on value content; ``_looks_like_stamped_value`` is
+off the recovery path. The two ``TestColdRestoreFalseFlipRepro`` tests below —
+previously ``xfail(strict=True)`` — now PASS: a header-absent (legacy) replay
+stays legacy and lands verbatim.
 
 The remaining tests assert the parts that ARE correct today: when recovery is NOT
 falsely flipped (values that do not resemble stamps), legacy records land
-verbatim and the first ``ttl=`` write backfills them (the Option-1 happy path);
-and a genuinely-stamped restore flag-discovers and is not re-backfilled.
-
-See ``dev-planning/state-ttl-legacy-backfill/spec.md`` §8.6.
+verbatim and the first ``ttl=`` write backfills them (the happy path); and a
+genuinely-stamped restore flag-discovers and is not re-backfilled.
 """
 
 import struct
@@ -61,8 +57,8 @@ DAY_MS = 86_400_000
 
 def _capture_default_cf_changelog(changelog_producer_mock):
     """Return the list of ``(key, value, ttl_stamped)`` default-CF changelog
-    messages, where ``ttl_stamped`` reflects the ``__ttl_stamped__`` header
-    (spec §8.7) the producer set on the record."""
+    messages, where ``ttl_stamped`` reflects the ``__ttl_stamped__`` header the
+    producer set on the record."""
     msgs = []
     for call in changelog_producer_mock.produce.call_args_list:
         headers = call.kwargs["headers"]
@@ -76,7 +72,7 @@ def _replay_default(partition, msgs, now_ms=None):
     """Replay default-CF ``msgs`` into ``partition`` (optionally fixing now).
 
     ``msgs`` carry the captured ``__ttl_stamped__`` bit so recovery routes on the
-    header exactly as the live recovery manager does (spec §8.7)."""
+    header exactly as the live recovery manager does."""
     if now_ms is not None:
         partition._now_ms = lambda: now_ms  # noqa: E731
     offset = 0
@@ -131,10 +127,10 @@ def _seed_unstamped_changelog(
 
 
 # ---------------------------------------------------------------------------
-# Confirmed-bug reproductions (OP-3). xfail(strict) until the flip-signal fix.
-# These directly drive recover_from_changelog_message with legacy values whose
-# 8-byte big-endian prefix decodes as a plausible epoch-ms expiry (the dedup
-# "last-seen timestamp" value layout), reproducing the live false-flip.
+# Confirmed-bug reproductions. These directly drive
+# recover_from_changelog_message with legacy values whose 8-byte big-endian
+# prefix decodes as a plausible epoch-ms expiry (the dedup "last-seen timestamp"
+# value layout), reproducing the live false-flip.
 # ---------------------------------------------------------------------------
 
 
@@ -157,7 +153,7 @@ class TestColdRestoreFalseFlipRepro:
             )
             offset += 1
 
-        # Required (Option 1): the partition stays legacy and every record lands
+        # Required: the partition stays legacy and every record lands
         # verbatim so the first ttl= write can later backfill them.
         assert recovered.uses_ttl_stamps is False
         keys = list(recovered.get_or_create_column_family("default").keys())
@@ -201,14 +197,14 @@ class TestColdRestoreFalseFlipRepro:
 
 
 # ---------------------------------------------------------------------------
-# Option-1 happy path: when recovery is NOT falsely flipped (values that do not
-# resemble stamps), the recovered legacy records land verbatim and the first
-# ttl= write backfills them. These already pass today and guard the landing.
+# Happy path: when recovery is NOT falsely flipped (values that do not resemble
+# stamps), the recovered legacy records land verbatim and the first ttl= write
+# backfills them. These already pass today and guard the landing.
 # ---------------------------------------------------------------------------
 
 
 class TestFirstEnablementColdRestoreHappyPath:
-    # Spec §8.6.7 case 8 — recovered un-stamped legacy records are reachable by
+    # Recovered un-stamped legacy records are reachable by
     # main_cf_has_user_data() on the same instance the transaction later uses.
     def test_recovered_legacy_records_are_visible(
         self, store_partition_factory, changelog_producer_mock
@@ -227,8 +223,8 @@ class TestFirstEnablementColdRestoreHappyPath:
         assert len(keys) == 5
         recovered.close()
 
-    # Spec §8.6.7 case 9 — first ttl= write after a cold restore of un-stamped
-    # legacy records takes the populated/backfill branch, NOT the empty fast path.
+    # First ttl= write after a cold restore of un-stamped legacy records takes
+    # the populated/backfill branch, NOT the empty fast path.
     def test_first_ttl_write_backfills_recovered_records(
         self, store_partition_factory, changelog_producer_mock
     ):
@@ -278,9 +274,9 @@ class TestFirstEnablementColdRestoreHappyPath:
 
 
 class TestStampedRestoreNotMisclassified:
-    """Spec §8.6.5 / case 10 — a genuinely-stamped restore must still flag-
-    discover and must NOT be re-backfilled or double-stamped. This guards that
-    any future flip-signal fix does not regress the stamped-restore path."""
+    """A genuinely-stamped restore must still flag-discover and must NOT be
+    re-backfilled or double-stamped. This guards that any future flip-signal fix
+    does not regress the stamped-restore path."""
 
     def _stamped_changelog(self, store_partition_factory, changelog_producer_mock):
         """Build a flipped store via the empty-store fast path and capture its
@@ -332,12 +328,12 @@ class TestStampedRestoreNotMisclassified:
     def test_cold_restore_does_not_ledger_on_replay(
         self, store_partition_factory, changelog_producer_mock
     ):
-        """(v) GREEN no-regression (C1 P0, sc-73191): a cold restore on a fresh
-        volume opens with the LOCAL_ONLY ``__ttl_backfill_stamped__`` ledger CF
-        absent, so the replay-ledger gate ``_ledger_nonempty_at_open`` is False and
-        replaying a stamped changelog ledgers NOTHING. This proves the fix cannot
-        misfire on the cold-restore adopt / §15.2 / offset-skip paths — those are
-        byte-for-byte unchanged (spec §7.1 case 1 / §11 case v)."""
+        """No-regression: a cold restore on a fresh volume opens with the
+        LOCAL_ONLY ``__ttl_backfill_stamped__`` ledger CF absent, so the
+        replay-ledger gate ``_ledger_nonempty_at_open`` is False and replaying a
+        stamped changelog ledgers NOTHING. This proves the fix cannot misfire on
+        the cold-restore adopt / offset-skip paths — those are byte-for-byte
+        unchanged."""
         msgs, source_default, base = self._stamped_changelog(
             store_partition_factory, changelog_producer_mock
         )
@@ -364,7 +360,7 @@ class TestStampedRestoreNotMisclassified:
 
 
 # ---------------------------------------------------------------------------
-# §8.7 — per-record __ttl_stamped__ changelog header.
+# Per-record __ttl_stamped__ changelog header.
 # Produce-side firing matrix and header-only recovery routing.
 # ---------------------------------------------------------------------------
 
@@ -380,7 +376,7 @@ def _produced_default_cf_headers(changelog_producer_mock):
 
 
 class TestTtlStampedHeaderProduce:
-    """§8.7.2 produce-side matrix."""
+    """Produce-side firing matrix."""
 
     def test_header_absent_on_pre_flip_legacy(
         self, store_partition_factory, changelog_producer_mock
@@ -461,13 +457,13 @@ class TestTtlStampedHeaderProduce:
 
 
 class TestRecoveryRoutesOnHeaderOnly:
-    """§8.7.7 cases 5 & 6 — recovery routes purely on the header, never on
-    value content; _looks_like_stamped_value is not consulted."""
+    """Recovery routes purely on the header, never on value content;
+    _looks_like_stamped_value is not consulted."""
 
     def test_header_absent_stamp_shaped_value_stays_legacy(
         self, store_partition_factory
     ):
-        # The OP-3 false-positive shape: an 8-byte epoch-ms value with NO header.
+        # The false-positive shape: an 8-byte epoch-ms value with NO header.
         # Recovery must stay legacy and replay verbatim (no strip), and must NOT
         # consult the value-content heuristic.
         recovered = store_partition_factory(name="dst")
@@ -495,7 +491,8 @@ class TestRecoveryRoutesOnHeaderOnly:
         recovered.close()
 
     def test_header_true_flips_and_filters(self, store_partition_factory):
-        # header-true stamped value -> partition flips, stamped branch + Rule 4.
+        # header-true stamped value -> partition flips, stamped branch +
+        # wallclock filter.
         recovered = store_partition_factory(name="dst")
         base = 1_000_000_000_000
         recovered._now_ms = lambda: base  # noqa: E731

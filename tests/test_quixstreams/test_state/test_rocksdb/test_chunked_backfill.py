@@ -1,7 +1,5 @@
 """
-Unit tests for the chunked legacy-records backfill (shortcut 73191 follow-up).
-
-Covers ``dev-planning/state-ttl-legacy-backfill/spec-chunked-backfill.md`` §10:
+Unit tests for the chunked legacy-records backfill:
 
 1. Chunked backfill of a store >> chunk size completes fully (every record
    stamped at the uniform expiry, ``__ttl_index__`` populated, flag+format set,
@@ -70,7 +68,7 @@ def _decode_index_cf(partition):
 
 def _capture_default_cf_changelog(changelog_producer_mock):
     """Return ``(key, value, ttl_stamped)`` default-CF changelog messages,
-    carrying the ``__ttl_stamped__`` header bit (spec §8.7)."""
+    carrying the ``__ttl_stamped__`` header bit."""
     from quixstreams.state.metadata import CHANGELOG_TTL_STAMPED_HEADER
 
     msgs = []
@@ -112,7 +110,7 @@ class TestChunkSizeValidation:
 
 
 class TestChunkedBackfill:
-    # Case 1 — store >> chunk size completes fully, one _write per chunk.
+    # Store >> chunk size completes fully, one _write per chunk.
     def test_large_store_backfills_in_chunks(self, store_partition_factory):
         m = 1000
         partition = store_partition_factory(name="db")
@@ -175,7 +173,7 @@ class TestChunkedBackfill:
         )
         partition.close()
 
-    # Case 5 — store smaller than one chunk: single chunk, still converges.
+    # Store smaller than one chunk: single chunk, still converges.
     def test_store_smaller_than_chunk(self, store_partition_factory):
         partition = store_partition_factory(name="db")
         _seed_legacy_records(partition, [("k1", "v1"), ("k2", "v2")])
@@ -205,7 +203,7 @@ class TestChunkedBackfill:
             assert expires_at == ts + 7 * DAY_MS
         partition.close()
 
-    # Case 5 — empty store: no chunks, in-batch flip only.
+    # Empty store: no chunks, in-batch flip only.
     def test_empty_store_small_chunk(self, store_partition_factory):
         partition = store_partition_factory(
             name="db",
@@ -227,10 +225,10 @@ class TestChunkedBackfill:
         assert expires_at == ts + DAY_MS
         partition.close()
 
-    # Case 2 — crash before flag: cursor-resumed re-run converges, no double-wrap.
+    # Crash before flag: cursor-resumed re-run converges, no double-wrap.
     #
-    # Fix A (spec-backfill-completeness.md §3.3): the re-run re-censuses the
-    # identical sorted key list and resumes at the persisted cursor. Keys
+    # The re-run re-censuses the identical sorted key list and resumes at the
+    # persisted cursor. Keys
     # stamped by the interrupted run are NOT re-read (cursor-skipped), so they
     # keep that run's expiry; the remaining keys are stamped by the completing
     # run. Both runs use ``encode_ttl_value`` wrap-whole, so every key is
@@ -320,11 +318,11 @@ class TestChunkedBackfill:
             assert index[key] == expires_at
         partition.close()
 
-    # Case 3 — first-run wrap-whole over a fresh legacy store (no inference).
+    # First-run wrap-whole over a fresh legacy store (no inference).
     #
-    # Fix A retires the byte-sniffing already-stamped recognizer from the
-    # backfill path (spec §3.5): on a first run (cursor=0) every value is
-    # genuine legacy and is wrapped whole exactly once. This drives
+    # The byte-sniffing already-stamped recognizer is retired from the backfill
+    # path: on a first run (cursor=0) every value is genuine legacy and is
+    # wrapped whole exactly once. This drives
     # ``backfill_legacy_records`` directly to assert that contract.
     def test_first_run_wraps_every_value_whole(self, store_partition_factory):
         e_now = 1_000_000_000_000 + 7 * DAY_MS
@@ -365,7 +363,7 @@ class TestChunkedBackfill:
         }
         partition.close()
 
-    # Case 4 — per-chunk changelog production rebuilds an identical store.
+    # Per-chunk changelog production rebuilds an identical store.
     def test_per_chunk_changelog_rebuilds_identical(
         self, store_partition_factory, changelog_producer_mock
     ):

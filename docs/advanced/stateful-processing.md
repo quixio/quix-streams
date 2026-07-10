@@ -534,7 +534,7 @@ The backfill runs once, before new messages are processed, in chunks of `legacy_
 
 The `<N> leftover` count is normally much smaller than the store — it is only the tail the interrupted run never reached. A durable done-flag is written after the last leftover, so subsequent restores skip completion entirely.
 
-**Warm-restart resume (C1)** — if the process crashed after committing some backfill chunks but before the flag-last flip, the changelog already holds the re-stamped records. On any subsequent start (warm or cold), replay flips the partition via the `__ttl_stamped__` headers, and C1 detects the non-empty resume ledger and finishes the backfill:
+**Warm-restart resume** — if the process crashed after committing some backfill chunks but before the flag-last flip, the changelog already holds the re-stamped records. On any subsequent start (warm or cold), replay flips the partition via the `__ttl_stamped__` headers, and recovery detects the non-empty resume ledger and finishes the backfill:
 
 ```
 [INFO] TTL legacy backfill RESUME STARTED: interrupted live migration detected at path=<...> (flipped, ledger non-empty, no done-marker); resuming over the un-stamped complement with expiry=<...>.
@@ -551,7 +551,7 @@ The `RESUME STARTED` line names the path and the expiry derived from the survivi
 
 Without the flag, recovery logs a `CRITICAL` naming `adopt_v3240_stamps` instead of this `INFO` line, and the store stays in legacy mode. See [Reference clock — when do migrated records expire?](#reference-clock-when-do-migrated-records-expire) for the adoption rationale.
 
-**Wallclock-expired record drops** — whenever the Rule-4 wallclock filter discards at least one stamped record during replay, recovery logs a single aggregate `INFO` at the end of replay (never per-record). RocksDB:
+**Wallclock-expired record drops** — whenever the wallclock filter discards at least one stamped record during replay, recovery logs a single aggregate `INFO` at the end of replay (never per-record). RocksDB:
 
 ```
 [INFO] Recovery at path=<...> dropped <N> already-expired stamped record(s) during changelog replay (expired against recovery wallclock=<ms> ms; latest-record-wins).

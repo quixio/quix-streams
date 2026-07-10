@@ -1,7 +1,6 @@
 """
-Unit tests for §8.8 of the State TTL legacy-backfill spec (shortcut 73191):
-**completing an interrupted legacy-TTL migration on cold restore of a MIXED
-changelog** (OP-4).
+Unit tests for completing an interrupted legacy-TTL migration on cold restore of
+a MIXED changelog.
 
 Scenario: a legacy-TTL backfill started (producing stamped, ``__ttl_stamped__``-
 header records to the changelog) but was interrupted before completion. Log
@@ -9,23 +8,22 @@ compaction leaves the changelog MIXED: the stamped keys carry header-true
 records, the un-backfilled keys remain as their original header-absent legacy
 records. A later fresh-volume cold restore replays both shapes.
 
-The §8.7 header fix alone routes the records correctly (stamped → stamped path,
+The header-routing fix alone routes the records correctly (stamped → stamped path,
 legacy → verbatim) but does NOT complete the migration: the partition flips on
 the first stamped record, so the first live ``ttl=`` write sees an already-
 flipped partition and the backfill gate short-circuits — stranding the leftover
 legacy keys as never-expiring forever.
 
-§8.8 fix (this module): during replay census the header-absent leftover keys into
-the local-only ``__ttl_backfill_pending__`` CF (delete on stamped supersession);
-at end of recovery, if a stamped record was seen AND pending is non-empty, run a
-chunked completion backfill that stamps exactly the leftover keys at a uniform
-expiry and produces header-bearing stamped records, leaving the pending CF empty.
-Config-present → ``wallclock_now + legacy_records_ttl`` (Rule 4 wallclock-at-
-rebuild). Config-absent → auto-finish at the §15.2 survivor-derived default (the
-max surviving future stamp; the reject was removed by the 2026-07-02 revision).
-All-legacy / all-stamped changelogs do NOT enter completion.
-
-See ``dev-planning/state-ttl-legacy-backfill/spec-incomplete-migration-recovery.md``.
+Completion fix (this module): during replay census the header-absent leftover keys
+into the local-only ``__ttl_backfill_pending__`` CF (delete on stamped
+supersession); at end of recovery, if a stamped record was seen AND pending is
+non-empty, run a chunked completion backfill that stamps exactly the leftover keys
+at a uniform expiry and produces header-bearing stamped records, leaving the
+pending CF empty. Config-present → ``wallclock_now + legacy_records_ttl`` (the
+latest-record-wins recovery-drop filter, evaluated at rebuild). Config-absent →
+auto-finish at the survivor-derived default (the max surviving future stamp; the
+earlier reject behavior was removed). All-legacy / all-stamped changelogs do NOT
+enter completion.
 """
 
 from datetime import timedelta
@@ -118,7 +116,7 @@ class TestMixedChangelogCompletion:
     ):
         now_ms = 1_780_000_000_000
         legacy_ttl = timedelta(days=7)
-        # Stamped records far in the future so Rule 4 keeps them.
+        # Stamped records far in the future so the recovery-drop filter keeps them.
         stamp_expiry = now_ms + 30 * DAY_MS
         n_stamped, n_legacy = 4, 6
         msgs, legacy_values = _mixed_changelog(n_stamped, n_legacy, stamp_expiry)
@@ -141,13 +139,13 @@ class TestMixedChangelogCompletion:
         expected_expiry = now_ms + 7 * DAY_MS
         decoded = {k: decode_ttl_value(v) for k, v in _default_cf(recovered).items()}
 
-        # N2 leftovers now stamped at wallclock + ttl, with index entries.
+        # Leftovers now stamped at wallclock + ttl, with index entries.
         index = _index_cf(recovered)
         for key, raw in legacy_values.items():
             assert decoded[key] == (expected_expiry, raw)
             assert index[key] == expected_expiry
 
-        # N1 stamped survivors are byte-unchanged (not re-stamped / double-wrapped).
+        # Stamped survivors are byte-unchanged (not re-stamped / double-wrapped).
         for i in range(n_stamped):
             key = f"pfx|s{i}".encode()
             assert decoded[key] == (stamp_expiry, f"stamped-{i}".encode())
@@ -156,7 +154,7 @@ class TestMixedChangelogCompletion:
         assert _pending_keys(recovered) == set()
         assert all(exp != SENTINEL_NEVER for exp, _ in decoded.values())
 
-        # Completion produced exactly the N2 leftovers as stamped + header-bearing.
+        # Completion produced exactly the leftovers as stamped + header-bearing.
         produced = _captured_stamped_produces(changelog_producer_mock)
         assert set(produced.keys()) == set(legacy_values.keys())
         for key, raw in legacy_values.items():
@@ -168,8 +166,8 @@ class TestMixedChangelogCompletion:
         self, store_partition_factory, changelog_producer_mock
     ):
         now_ms = 1_780_000_000_000
-        # Stamped survivors far in the future → Rule 4 keeps them → they become
-        # the §15.2 survivor-derived completion expiry when config is absent.
+        # Stamped survivors far in the future → the recovery-drop filter keeps them
+        # → they become the survivor-derived completion expiry when config is absent.
         stamp_expiry = now_ms + 30 * DAY_MS
         msgs, legacy_values = _mixed_changelog(2, 3, stamp_expiry)
 
@@ -182,8 +180,8 @@ class TestMixedChangelogCompletion:
         assert _pending_keys(recovered) == set(legacy_values.keys())
 
         changelog_producer_mock.produce.reset_mock()
-        # §15 revision: no raise — auto-finish the migration at the survivor-
-        # derived default (the max surviving future stamp).
+        # No raise — auto-finish the migration at the survivor-derived default
+        # (the max surviving future stamp).
         recovered.complete_recovery()
 
         expected_expiry = stamp_expiry  # survivor-derived (max future stamp)
@@ -283,7 +281,7 @@ class TestUnchangedPaths:
         changelog_producer_mock.produce.reset_mock()
         recovered.complete_recovery()
         # No stamping happened; records remain raw legacy and reachable for the
-        # live first-ttl=-write backfill (§8.6).
+        # live first-ttl=-write backfill.
         on_disk = _default_cf(recovered)
         assert len(on_disk) == 5
         for i in range(5):

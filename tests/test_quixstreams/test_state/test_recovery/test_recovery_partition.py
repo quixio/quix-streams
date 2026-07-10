@@ -24,7 +24,7 @@ class TestRecoveryPartition:
     ):
         store_partition = MagicMock(RocksDBStorePartition)
         store_partition.get_changelog_offset.return_value = offset
-        # No flipped-but-unfinished TTL migration in this scenario (Fix B):
+        # No flipped-but-unfinished TTL migration in this scenario:
         # otherwise ``needs_recovery_check`` would be forced True regardless of
         # the offset, which is a separate code path.
         store_partition.has_incomplete_ttl_migration.return_value = False
