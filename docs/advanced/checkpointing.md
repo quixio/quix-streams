@@ -30,6 +30,16 @@ See the [Configuration](../configuration.md#processing-guarantees) page to learn
 - After the checkpoint is fully committed, a new one is created and the processing continues.
 - Besides the regular intervals, the checkpoint is also committed when Kafka partitions are rebalanced.
 
+## Committing During Partition Revocation
+
+When a Kafka rebalance revokes a partition, the application commits the current checkpoint before handing the partition over to the new owner. This revoke commit uses the same five steps as a regular commit, with three differences that keep the revoke sequence short enough to stay within Kafka's `max.poll.interval.ms` deadline.
+
+**Bounded sink and producer flushes.** Steps 1 and 3 each run under a wall-clock timeout equal to `max.poll.interval.ms × 0.2`. At the default `max.poll.interval.ms` of 300,000 ms this gives each step a 60 s budget. If a sink flush times out or raises an unexpected error, the checkpoint aborts without committing offsets (step 4 is skipped). The new owner reprocesses the batch and re-flushes, which is safe under at-least-once semantics. `SinkBackpressureError` still triggers the normal backpressure path. If the producer flush times out, changelog delivery is treated as unconfirmed, which affects the next point.
+
+**Fast-revoke skip of the local state flush.** Step 5 is skipped for stores that have a changelog topic, provided changelog delivery was confirmed in step 3. The changelog already holds the delta; the new owner replays it during recovery. Skipping the on-disk write releases the RocksDB file lock sooner, which is the main mechanism that prevents lock-contention between the outgoing and incoming consumers. Stores without a changelog topic are always flushed — skipping would lose state. When changelog delivery is unconfirmed (producer flush timed out), the skip is also disabled and every store flushes locally to avoid state loss.
+
+**Operator note.** Pipelines with several slow sinks should raise `max.poll.interval.ms` — all per-step budgets scale proportionally. See [RocksDB Lock-Contention / Rebalance Handover Analysis](../rocksdb-lock-contention-analysis.md) for the full problem description and tuning guidance.
+
 ## Recovering the State Stores
 
 In Quix Streams, all state stores are backed up using the changelog topics in Kafka.
