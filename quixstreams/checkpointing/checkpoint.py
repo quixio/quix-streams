@@ -1,6 +1,7 @@
 import logging
 import time
 from abc import abstractmethod
+from threading import Thread
 from typing import Dict, Tuple
 
 from confluent_kafka import KafkaException, TopicPartition
@@ -9,7 +10,7 @@ from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.internal_producer import InternalProducer
 from quixstreams.sinks import SinkManager
-from quixstreams.sinks.base import SinkBackpressureError
+from quixstreams.sinks.base import BaseSink, SinkBackpressureError
 from quixstreams.state import (
     DEFAULT_STATE_STORE_NAME,
     PartitionTransaction,
@@ -129,6 +130,7 @@ class Checkpoint(BaseCheckpoint):
         dataframe_registry: DataFrameRegistry,
         exactly_once: bool = False,
         commit_every: int = 0,
+        revoke_flush_timeout: float = -1.0,
     ):
         super().__init__(
             commit_interval=commit_interval,
@@ -141,6 +143,10 @@ class Checkpoint(BaseCheckpoint):
         self._sink_manager = sink_manager
         self._dataframe_registry = dataframe_registry
         self._exactly_once = exactly_once
+        # Wall-clock budget (seconds) for each bounded flush on the revoke path.
+        # -1.0 is librdkafka "infinite", preserving the pre-existing behavior for
+        # any caller that omits it; the Application always supplies it.
+        self._revoke_flush_timeout = revoke_flush_timeout
         if self._exactly_once:
             self._producer.begin_transaction()
 
@@ -209,7 +215,17 @@ class Checkpoint(BaseCheckpoint):
                 continue
 
             try:
-                sink.flush()
+                if revoking:
+                    # On the revoke path a slow/unreachable sink must not block
+                    # the rebalance callback past max.poll.interval.ms. Bound
+                    # each flush on a wall clock; on timeout or any
+                    # non-backpressure error abort the whole checkpoint (early
+                    # return below, no offset commit) so the new owner
+                    # reprocesses and re-flushes (at-least-once).
+                    if not self._flush_sink_bounded(sink, self._revoke_flush_timeout):
+                        return
+                else:
+                    sink.flush()
             except SinkBackpressureError as exc:
                 logger.warning(
                     f'Backpressure for sink "{sink}" is detected, '
@@ -253,12 +269,31 @@ class Checkpoint(BaseCheckpoint):
         # Step 3. Flush producer to trigger all delivery callbacks and ensure that
         # all messages are produced
         logger.debug("Checkpoint: flushing producer")
-        unproduced_msg_count = self._producer.flush()
-        if unproduced_msg_count > 0:
-            raise CheckpointProducerTimeout(
-                f"'{unproduced_msg_count}' messages failed to be produced before "
-                f"the producer flush timeout"
+        if revoking:
+            # Bound the producer flush so a large undelivered changelog backlog
+            # cannot consume the whole poll budget during a revoke. If it does
+            # not fully drain, changelog delivery is unconfirmed, so we must NOT
+            # take the fast-revoke skip (step 5) - every store flushes locally
+            # instead to avoid state loss.
+            unproduced_msg_count = self._producer.flush(
+                timeout=self._revoke_flush_timeout
             )
+            changelog_confirmed = unproduced_msg_count == 0
+            if not changelog_confirmed:
+                logger.warning(
+                    f"Revoke: producer flush timed out with "
+                    f"'{unproduced_msg_count}' undelivered changelog message(s) after "
+                    f"{self._revoke_flush_timeout}s; falling back to a full local state "
+                    f"flush (no fast-revoke skip) to avoid state loss."
+                )
+        else:
+            unproduced_msg_count = self._producer.flush()
+            if unproduced_msg_count > 0:
+                raise CheckpointProducerTimeout(
+                    f"'{unproduced_msg_count}' messages failed to be produced before "
+                    f"the producer flush timeout"
+                )
+            changelog_confirmed = True
 
         # Step 4. Commit offsets to Kafka
         offsets = [
@@ -295,7 +330,10 @@ class Checkpoint(BaseCheckpoint):
             # owner replays it, so we avoid a slow on-disk write while holding
             # the RocksDB lock. Skipping is only safe with a changelog - without
             # one it would be state loss, so those stores still flush.
-            if revoking and changelog_tp is not None:
+            # changelog_confirmed guards against a timed-out producer flush:
+            # when delivery is unconfirmed we never skip, so the delta is not
+            # lost from committed state.
+            if revoking and changelog_confirmed and changelog_tp is not None:
                 logger.debug(
                     "Fast revoke: skipping local state flush for changelog "
                     f"{changelog_tp}"
@@ -307,3 +345,55 @@ class Checkpoint(BaseCheckpoint):
                 produced_offsets.get(changelog_tp) if changelog_tp is not None else None
             )
             transaction.flush(changelog_offset=changelog_offset)
+
+    def _flush_sink_bounded(self, sink: BaseSink, timeout: float) -> bool:
+        """
+        Flush a sink under a wall-clock bound. Used on the revoke path only.
+
+        The base ``Sink.flush()`` has no timeout parameter, so to bound a
+        truly-blocking flush without changing that contract we run it in a
+        daemon worker thread joined with ``timeout``.
+
+        :return: ``True`` on a clean flush. Raises ``SinkBackpressureError``
+            through to the caller thread so the existing backpressure handling
+            in ``commit()`` still applies. Returns ``False`` (after logging a
+            warning) when the flush times out or raises any other exception,
+            signalling ``commit()`` to abort without committing offsets.
+
+        Caveat: an orphaned flush thread on timeout cannot be force-killed; it
+        may complete its write later, so the reprocessed batch can duplicate in
+        the sink. This is acceptable under at-least-once (sinks are expected to
+        be idempotent).
+        """
+        captured: list[Exception] = []
+
+        def _run() -> None:
+            try:
+                sink.flush()
+            except Exception as exc:  # captured, then re-raised/logged in joiner
+                captured.append(exc)
+
+        worker = Thread(target=_run, daemon=True)
+        worker.start()
+        worker.join(timeout)
+
+        if worker.is_alive():
+            logger.warning(
+                f'Revoke: sink "{sink}" flush timed out after {timeout}s; '
+                f"aborting the checkpoint without committing offsets. The new "
+                f"owner will reprocess and re-flush (at-least-once)."
+            )
+            return False
+
+        if captured:
+            error = captured[0]
+            if isinstance(error, SinkBackpressureError):
+                raise error
+            logger.warning(
+                f'Revoke: sink "{sink}" flush failed ({error!r}); aborting the '
+                f"checkpoint without committing offsets. The new owner will "
+                f"reprocess and re-flush (at-least-once)."
+            )
+            return False
+
+        return True

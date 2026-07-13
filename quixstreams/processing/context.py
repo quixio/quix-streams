@@ -36,6 +36,10 @@ class ProcessingContext:
     commit_every: int = 0
     exactly_once: bool = False
     printer: Printer = Printer()
+    # Wall-clock budget (seconds) for each bounded flush on the revoke path.
+    # -1.0 = librdkafka "infinite" (preserves legacy behavior if unset); the
+    # Application always supplies ApplicationConfig.revoke_flush_timeout.
+    revoke_flush_timeout: float = -1.0
 
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
@@ -70,6 +74,7 @@ class ProcessingContext:
             sink_manager=self.sink_manager,
             dataframe_registry=self.dataframe_registry,
             exactly_once=self.exactly_once,
+            revoke_flush_timeout=self.revoke_flush_timeout,
         )
 
     def commit_checkpoint(self, force: bool = False, revoking: bool = False):

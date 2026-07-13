@@ -1,10 +1,13 @@
 import contextlib
+import time
+from threading import Event
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
 from confluent_kafka import KafkaError, KafkaException, TopicPartition
 
+from quixstreams.app import Application
 from quixstreams.checkpointing import Checkpoint, InvalidStoredOffset
 from quixstreams.checkpointing.exceptions import (
     CheckpointConsumerCommitError,
@@ -37,6 +40,11 @@ def checkpoint_factory(
         sink_manager_: Optional[SinkManager] = None,
         dataframe_registry_: Optional[DataFrameRegistry] = None,
         exactly_once: bool = False,
+        # -1.0 = librdkafka "infinite", matching the Checkpoint default and the
+        # pre-existing bare-flush behavior so real-broker revoke tests confirm
+        # changelog delivery (and the fast-revoke skip fires). Timeout-specific
+        # tests set their own small value (see TestCheckpointFastRevoke).
+        revoke_flush_timeout: float = -1.0,
     ):
         consumer_ = consumer_ or internal_consumer
         sink_manager_ = sink_manager_ or SinkManager()
@@ -52,6 +60,7 @@ def checkpoint_factory(
             sink_manager=sink_manager_,
             dataframe_registry=dataframe_registry_,
             exactly_once=exactly_once,
+            revoke_flush_timeout=revoke_flush_timeout,
         )
 
     return factory
@@ -72,6 +81,19 @@ class BackpressuredSink(BatchingSink):
 class FailingSink(BatchingSink):
     def write(self, batch: SinkBatch):
         raise ValueError("Sink write failed")
+
+
+class BlockingSink(BatchingSink):
+    """A sink whose flush blocks until an external event is set (or times out)."""
+
+    def __init__(self, release: Event):
+        super().__init__()
+        self._release = release
+
+    def write(self, batch: SinkBatch):
+        # Block the flush; the bounded revoke flush should time out well before
+        # this returns. Released by the test in a finally to free the daemon.
+        self._release.wait(30)
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
@@ -799,7 +821,7 @@ class TestCheckpointFastRevoke:
     Checkpoint.commit(revoking=True). See docs/rocksdb-lock-contention-analysis.md.
     """
 
-    def _make_checkpoint(self, exactly_once=False):
+    def _make_checkpoint(self, exactly_once=False, revoke_flush_timeout=0.1):
         producer = MagicMock(spec_set=InternalProducer)
         producer.flush.return_value = 0
         producer.offsets = {}
@@ -815,6 +837,7 @@ class TestCheckpointFastRevoke:
             sink_manager=SinkManager(),
             dataframe_registry=registry,
             exactly_once=exactly_once,
+            revoke_flush_timeout=revoke_flush_timeout,
         )
 
     def _transaction(self, changelog_tp):
@@ -850,6 +873,163 @@ class TestCheckpointFastRevoke:
 
         # Outside of a revoke, everything flushes as before
         tx_changelog.flush.assert_called_once()
+        # Normal-path invariant: the producer is flushed with no timeout arg,
+        # byte-identical to the pre-existing behavior.
+        checkpoint._producer.flush.assert_called_once_with()
+
+    def test_revoke_producer_flush_timeout_falls_back_to_local_flush(self):
+        """
+        Finding 1: when the bounded producer flush times out on revoke
+        (undelivered changelog messages remain), the fast-revoke skip must be
+        suppressed and every store flushed locally instead - and it must NOT
+        raise CheckpointProducerTimeout (that is the normal-path behavior only).
+        """
+        checkpoint = self._make_checkpoint(revoke_flush_timeout=0.1)
+        # One changelog message could not be delivered within the budget
+        checkpoint._producer.flush.return_value = 1
+        tx = self._transaction(changelog_tp=("changelog", 0))
+        checkpoint._store_transactions = {("s1", 0, "default"): tx}
+
+        # Must not raise on the revoke path
+        checkpoint.commit(revoking=True)
+
+        # Producer flushed with the bounded revoke timeout
+        checkpoint._producer.flush.assert_called_once_with(timeout=0.1)
+        # Skip suppressed: the changelog is prepared AND the local flush happened
+        tx.prepare.assert_called_once()
+        tx.flush.assert_called_once()
+
+    def test_revoke_confirmed_delivery_still_skips_local_flush(self):
+        """
+        Finding 1 companion: when the bounded producer flush confirms delivery
+        (0 undelivered), the fast-revoke skip still fires for changelog-backed
+        stores, and the flush used the revoke timeout.
+        """
+        checkpoint = self._make_checkpoint(revoke_flush_timeout=0.1)
+        checkpoint._producer.flush.return_value = 0
+        tx = self._transaction(changelog_tp=("changelog", 0))
+        checkpoint._store_transactions = {("s1", 0, "default"): tx}
+
+        checkpoint.commit(revoking=True)
+
+        checkpoint._producer.flush.assert_called_once_with(timeout=0.1)
+        tx.prepare.assert_called_once()
+        tx.flush.assert_not_called()
+
+    def test_normal_commit_raises_on_producer_flush_timeout(self):
+        """
+        Finding 1 regression: the normal (non-revoke) path still raises
+        CheckpointProducerTimeout when messages remain undelivered, and flushes
+        with no timeout argument.
+        """
+        checkpoint = self._make_checkpoint()
+        checkpoint._producer.flush.return_value = 1
+        tx = self._transaction(changelog_tp=("changelog", 0))
+        checkpoint._store_transactions = {("s1", 0, "default"): tx}
+
+        with pytest.raises(CheckpointProducerTimeout):
+            checkpoint.commit(revoking=False)
+
+        checkpoint._producer.flush.assert_called_once_with()
+
+    def test_revoke_sink_failure_aborts_without_offset_commit(self):
+        """
+        Finding 2: a non-backpressure sink failure on the revoke path aborts the
+        checkpoint via an early return - no producer flush, no offset commit -
+        and does not raise.
+        """
+        checkpoint = self._make_checkpoint(revoke_flush_timeout=0.1)
+        sink = FailingSink()
+        sink.add(
+            value="v", key="k", timestamp=1, headers=[], topic="t", partition=0, offset=5
+        )
+        checkpoint._sink_manager.register(sink)
+        checkpoint.store_offset("t", 0, 5)
+
+        # Must not raise; aborts early
+        checkpoint.commit(revoking=True)
+
+        # Step 3+ never reached: no producer flush, no offset commit
+        checkpoint._producer.flush.assert_not_called()
+        checkpoint._consumer.commit.assert_not_called()
+        checkpoint._producer.commit_transaction.assert_not_called()
+
+    def test_revoke_sink_timeout_aborts_within_budget(self):
+        """
+        Finding 2: a slow/unreachable sink on the revoke path is bounded by
+        revoke_flush_timeout; commit returns promptly (well under the sink's own
+        blocking time) with no offset commit.
+        """
+        checkpoint = self._make_checkpoint(revoke_flush_timeout=0.1)
+        release = Event()
+        sink = BlockingSink(release)
+        sink.add(
+            value="v", key="k", timestamp=1, headers=[], topic="t", partition=0, offset=5
+        )
+        checkpoint._sink_manager.register(sink)
+        checkpoint.store_offset("t", 0, 5)
+
+        try:
+            start = time.monotonic()
+            checkpoint.commit(revoking=True)
+            elapsed = time.monotonic() - start
+
+            # Returned within ~revoke_flush_timeout (+ generous margin), not the
+            # 30s the sink would otherwise block for.
+            assert elapsed < 5.0
+            checkpoint._producer.flush.assert_not_called()
+            checkpoint._consumer.commit.assert_not_called()
+        finally:
+            # Release the orphaned daemon flush thread.
+            release.set()
+
+    def test_revoke_sink_backpressure_still_triggers_backpressure(self):
+        """
+        Finding 2: backpressure on the revoke path is preserved - the bounded
+        helper re-raises SinkBackpressureError to the caller so the existing
+        pause/seek handling runs (no offset commit).
+        """
+        checkpoint = self._make_checkpoint(revoke_flush_timeout=0.5)
+        sink = BackpressuredSink()
+        sink.add(
+            value="v", key="k", timestamp=1, headers=[], topic="t", partition=0, offset=5
+        )
+        checkpoint._sink_manager.register(sink)
+        checkpoint.store_offset("t", 0, 5)
+
+        checkpoint.commit(revoking=True)
+
+        # Backpressure path: consumer paused/seek-ed, nothing committed
+        checkpoint._consumer.trigger_backpressure.assert_called_once()
+        checkpoint._producer.flush.assert_not_called()
+        checkpoint._consumer.commit.assert_not_called()
+
+    def test_exception_handler_suppresses_rocksdb_open_aborted(self):
+        """
+        Finding 8: Application._exception_handler treats RocksDBOpenAborted as a
+        graceful stop - suppresses it (returns True) and keeps _failed False so
+        the consumer close still commits healthy partitions in _on_revoke.
+        A generic exception fails and is not suppressed; SourceException does not
+        fail.
+        """
+        from quixstreams.sources import SourceException
+        from quixstreams.state.rocksdb import RocksDBOpenAborted
+
+        app = MagicMock()
+        # Bind the real method so we exercise the production logic.
+        handler = Application._exception_handler
+
+        app._failed = False
+        assert handler(app, RocksDBOpenAborted, RocksDBOpenAborted("x"), None) is True
+        app.stop.assert_called_once_with(fail=False)
+
+        app.reset_mock()
+        assert handler(app, ValueError, ValueError("boom"), None) is False
+        app.stop.assert_called_once_with(fail=True)
+
+        app.reset_mock()
+        assert handler(app, SourceException, SourceException(MagicMock()), None) is False
+        app.stop.assert_called_once_with(fail=False)
 
     def test_exactly_once_revoke_skips_flush_and_commits_transaction(self):
         """

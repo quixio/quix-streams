@@ -17,7 +17,7 @@ from .exceptions import (
 )
 from .memory import MemoryStore
 from .recovery import ChangelogProducerFactory, RecoveryManager
-from .rocksdb import RocksDBOptionsType, RocksDBStore
+from .rocksdb import OpenDeadline, RocksDBOptionsType, RocksDBStore
 from .rocksdb.timestamped import TimestampedStore
 from .rocksdb.windowed.store import WindowedRocksDBStore
 
@@ -51,6 +51,7 @@ class StateStoreManager:
         recovery_manager: Optional[RecoveryManager] = None,
         default_store_type: StoreTypes = RocksDBStore,
         stop_event: Optional[Event] = None,
+        open_deadline: Optional[OpenDeadline] = None,
     ):
         if state_dir is not None:
             state_dir = Path(state_dir).absolute()
@@ -65,6 +66,7 @@ class StateStoreManager:
         self._recovery_manager = recovery_manager
         self._default_store_type = default_store_type
         self._stop_event = stop_event
+        self._open_deadline = open_deadline
 
     def _init_state_dir(self) -> None:
         if self._state_dir is None:
@@ -204,6 +206,7 @@ class StateStoreManager:
                 changelog_producer_factory=changelog_producer_factory,
                 options=self._rocksdb_options,
                 stop_event=self._stop_event,
+                open_deadline=self._open_deadline,
             )
         elif store_type == MemoryStore:
             store = MemoryStore(
@@ -242,6 +245,7 @@ class StateStoreManager:
             ),
             options=self._rocksdb_options,
             stop_event=self._stop_event,
+            open_deadline=self._open_deadline,
         )
         self._stores.setdefault(stream_id, {})[store_name] = store
 
@@ -282,6 +286,7 @@ class StateStoreManager:
             ),
             options=self._rocksdb_options,
             stop_event=self._stop_event,
+            open_deadline=self._open_deadline,
         )
 
     def clear_stores(self) -> None:

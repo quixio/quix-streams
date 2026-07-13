@@ -35,6 +35,7 @@ from .metadata import (
     TTL_HIGH_WATER_KEY,
     TTL_INDEX_CF_NAME,
 )
+from .open_deadline import OpenDeadline
 from .options import RocksDBOptions
 from .ttl_codec import (
     SENTINEL_NEVER,
@@ -89,6 +90,7 @@ class RocksDBStorePartition(StorePartition):
         options: Optional[RocksDBOptionsType] = None,
         changelog_producer: Optional[ChangelogProducer] = None,
         stop_event: Optional[Event] = None,
+        open_deadline: Optional[OpenDeadline] = None,
     ):
         if not options:
             options = RocksDBOptions()
@@ -97,6 +99,7 @@ class RocksDBStorePartition(StorePartition):
         self._path = path
         self._options = options
         self._stop_event = stop_event
+        self._open_deadline = open_deadline
         self._rocksdb_options = self._options.to_options()
         self._open_max_retries = self._options.open_max_retries
         self._open_retry_backoff = self._options.open_retry_backoff
@@ -568,15 +571,34 @@ class RocksDBStorePartition(StorePartition):
         # every rocksdict release within our supported range; when it's absent
         # we simply fall back to the plain (slower) close.
         cancel_all_background = getattr(self._db, "cancel_all_background", None)
-        if cancel_all_background is not None:
-            cancel_all_background(True)
+        cancelled_background = False
         try:
+            if cancel_all_background is not None:
+                try:
+                    cancel_all_background(True)
+                    cancelled_background = True
+                except Exception as exc:
+                    # Never let a cancel failure skip the close() below - that
+                    # would leak the OS lock (the exact livelock this PR fixes).
+                    logger.warning(
+                        f"Failed to cancel background work before closing rocksdb "
+                        f'partition on "{self._path}"; attempting close anyway. '
+                        f"({exc})"
+                    )
             self._db.close()
         except Exception as exc:
-            # After cancel_all_background(), RocksDB reports "Shutdown in
-            # progress" from close(). The DB still closes cleanly and the lock
-            # is released, so this status is benign; re-raise anything else.
-            if "shutdown in progress" not in str(exc).lower():
+            # "Shutdown in progress" is only expected *after* a successful
+            # cancel_all_background(); there the DB still closes and the lock is
+            # released, so it is benign. On the plain-close fallback (never
+            # cancelled) or for any other text it is a real failure and
+            # propagates.
+            if cancelled_background and "shutdown in progress" in str(exc).lower():
+                logger.debug(
+                    f'Benign "shutdown in progress" closing rocksdb partition on '
+                    f'"{self._path}" after cancelling background work; lock '
+                    f"released. ({exc})"
+                )
+            else:
                 raise
         elapsed = round(time.monotonic() - start, 4)
         logger.debug(f'Closed rocksdb partition on "{self._path}" in {elapsed}s')
@@ -987,15 +1009,45 @@ class RocksDBStorePartition(StorePartition):
                 if not is_locked:
                     raise
 
+                # Shared per-assign open budget: when the acquiring consumer has
+                # spent its total RocksDB-open budget for this _on_assign, stop
+                # retrying and re-raise the underlying lock error (same failure
+                # semantics as retry exhaustion, just triggered by wall-clock).
+                # NOT RocksDBOpenAborted - that is reserved for the graceful-stop
+                # path (finding 8), so a deadline overrun keeps today's restart
+                # behavior, only sooner.
+                if self._open_deadline is not None and self._open_deadline.expired():
+                    logger.warning(
+                        f'Open budget exhausted for rocksdb partition on '
+                        f'"{self._path}"; giving up acquiring the lock after '
+                        f"{attempt} attempt(s)."
+                    )
+                    raise
+
                 if self._open_max_retries <= 0 or attempt >= self._open_max_retries:
                     raise
 
                 logger.warning(
-                    f"Failed to open rocksdb partition , cannot acquire a lock. "
+                    f'Failed to open rocksdb partition on "{self._path}", cannot '
+                    f"acquire a lock (attempt {attempt}/{self._open_max_retries}). "
                     f"Retrying in {self._open_retry_backoff}sec."
                 )
 
                 attempt += 1
+
+                # Bail before sleeping if the next backoff would cross the shared
+                # open deadline, so we don't overrun the budget by a whole
+                # backoff. Re-raise the lock error (not RocksDBOpenAborted).
+                if self._open_deadline is not None:
+                    remaining = self._open_deadline.remaining()
+                    if remaining is not None and remaining <= self._open_retry_backoff:
+                        logger.warning(
+                            f"Open budget for rocksdb partition on "
+                            f'"{self._path}" would be exceeded by the next retry; '
+                            f"giving up acquiring the lock."
+                        )
+                        raise
+
                 # Wait for the backoff, but bail out immediately if the
                 # application is stopping so a lock-waiting instance stays
                 # promptly killable instead of sleeping through every retry.

@@ -1,3 +1,4 @@
+import logging
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -690,6 +691,28 @@ class TestRecoveryManager:
 
         consumer.resume.assert_not_called()
         assert (topic_name, 1) in recovery_manager._recovery_paused_data_tps
+
+    def test_resume_reassigned_data_partitions_logs_resumed_tps(self, caplog):
+        """
+        Finding 4: resuming recovery-paused data partitions emits an INFO log
+        listing the resumed (topic, partition) pairs.
+        """
+        topic_name = str(uuid.uuid4())
+        consumer = MagicMock()
+        recovery_manager = RecoveryManager(
+            consumer=consumer,
+            topic_manager=self._topic_manager_with_data_topic(topic_name),
+        )
+        recovery_manager._recovery_paused_data_tps.add((topic_name, 0))
+
+        with caplog.at_level(logging.INFO):
+            recovery_manager.resume_reassigned_data_partitions(
+                [ConfluentPartition(topic_name, 0)]
+            )
+
+        consumer.resume.assert_called_once()
+        assert "Resuming data partitions paused for recovery" in caplog.text
+        assert f"('{topic_name}', 0)" in caplog.text
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)

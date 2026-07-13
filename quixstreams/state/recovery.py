@@ -487,6 +487,10 @@ class RecoveryManager:
         if not to_resume:
             return
 
+        logger.info(
+            f"Resuming data partitions paused for recovery: "
+            f"{[(tp.topic, tp.partition) for tp in to_resume]}"
+        )
         self._consumer.resume(to_resume)
         self._forget_recovery_paused_data_partitions(to_resume)
 
