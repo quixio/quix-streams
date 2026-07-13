@@ -31,6 +31,7 @@ from quixstreams.state.metadata import (
     DEFAULT_PREFIX,
     LOCAL_ONLY_CFS,
     SEPARATOR,
+    TTL_SYSTEM_CF_NAME,
     Marker,
 )
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, deserialize, serialize
@@ -612,8 +613,22 @@ class PartitionTransaction(ABC, Generic[K, V]):
         )
         source_tp_offset_header = json_dumps(processed_offsets)
         column_families = self._update_cache.get_column_families()
+        # Fix 6 (review re-review #6): deterministic production order with the
+        # ``__ttl_system__`` done-marker CF produced LAST. ``get_column_families``
+        # returns a set, so the raw iteration order is non-deterministic and could
+        # produce the marker before the data it certifies — under at-least-once a
+        # changelog suffix loss would then leave a "migration done" marker ahead
+        # of the records it claims are migrated. Sorting the non-system CFs is not
+        # required for correctness (it only makes the order fully deterministic on
+        # a small set); the load-bearing guarantee is that ``__ttl_system__`` is
+        # produced last. NOTE: a plain ``sorted()`` would put ``__ttl_system__``
+        # BEFORE ``default`` (``_`` 0x5f < ``d`` 0x64) — the exact opposite of what
+        # is needed — so the system CF is appended explicitly, never sorted inline.
+        ordered_cfs = sorted(cf for cf in column_families if cf != TTL_SYSTEM_CF_NAME)
+        if TTL_SYSTEM_CF_NAME in column_families:
+            ordered_cfs.append(TTL_SYSTEM_CF_NAME)
 
-        for cf_name in column_families:
+        for cf_name in ordered_cfs:
             # Local-only column families (e.g. the TTL secondary expiry index)
             # never participate in changelog production; their writes are
             # rebuilt locally on recovery.

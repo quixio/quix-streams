@@ -14,7 +14,7 @@ from .exceptions import (
 )
 from .memory import MemoryStore
 from .recovery import ChangelogProducerFactory, RecoveryManager
-from .rocksdb import RocksDBOptionsType, RocksDBStore
+from .rocksdb import RocksDBOptions, RocksDBOptionsType, RocksDBStore
 from .rocksdb.timestamped import TimestampedStore
 from .rocksdb.windowed.store import WindowedRocksDBStore
 
@@ -206,10 +206,23 @@ class StateStoreManager:
                 options=self._rocksdb_options,
             )
         elif store_type == MemoryStore:
+            # Fix 7 (review re-review): forward the app-wide TTL scalars so the
+            # memory backend honors legacy_records_ttl / adopt_v3240_stamps /
+            # ttl_changelog_tombstones / max_evictions_per_flush — otherwise the
+            # recovery CRITICAL's "set RocksDBOptions(adopt_v3240_stamps=True)"
+            # advice is unreachable via Application on the memory backend.
+            # ``RocksDBOptions`` is the app-wide options dataclass regardless of
+            # backend; this reads its scalar fields (it does not couple MemoryStore
+            # to a RocksDB partition).
+            opts = self._rocksdb_options or RocksDBOptions()
             store = MemoryStore(
                 name=store_name,
                 stream_id=stream_id,
                 changelog_producer_factory=changelog_producer_factory,
+                legacy_records_ttl=opts.legacy_records_ttl,
+                adopt_v3240_stamps=opts.adopt_v3240_stamps,
+                ttl_changelog_tombstones=opts.ttl_changelog_tombstones,
+                max_evictions_per_flush=opts.max_evictions_per_flush,
             )
         else:
             raise ValueError(f"invalid store type: {store_type}")

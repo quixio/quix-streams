@@ -649,9 +649,23 @@ class Application:
         if transactional is None:
             transactional = self._config.exactly_once
 
+        extra_config = self._config.producer_extra_config
+        if not transactional:
+            # A non-transactional InternalProducer (the legacy-TTL migration
+            # producer created under exactly-once at __init__, or a Sources
+            # producer) must NOT inherit the shared ``transactional.id`` injected
+            # into ``producer_extra_config`` under exactly-once (see __init__): a
+            # non-transactional producer carrying a transactional.id corrupts it
+            # for itself and for any transactional producer created afterwards.
+            # Strip it on a deepcopy so the shared config dict is never mutated
+            # (mirrors ``get_producer``). The transactional path keeps the config
+            # verbatim (its id resolves as before).
+            extra_config = copy.deepcopy(extra_config)
+            extra_config.pop("transactional.id", None)
+
         return InternalProducer(
             broker_address=self._config.broker_address,
-            extra_config=self._config.producer_extra_config,
+            extra_config=extra_config,
             flush_timeout=self._config.flush_timeout,
             on_error=on_error,
             transactional=transactional,

@@ -48,6 +48,9 @@ site/
 # memories (local development notes)
 memories/
 
+# Claude Code local config / session data
+.claude/
+
 # dev planning (local specs / planning notes)
 dev-planning/
 

@@ -429,8 +429,10 @@ class TestMemoryV3240Adoption:
         default = partition._state.get("default", {})
         for raw_key, stamped in raw_by_key.items():
             assert default.get(raw_key) == stamped, "values must be byte-identical"
-        # Census discarded.
-        assert not partition._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
+        # Fix 4 (review re-review #4): the census is QUARANTINED (preserved as the
+        # repair vector), NOT discarded, on the unflipped all-stamped Branch-B path.
+        census = partition._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
+        assert set(census.keys()) == set(raw_by_key.keys())
         partition.close()
 
     def test_flag_adopts(self, caplog):

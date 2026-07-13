@@ -20,6 +20,7 @@ from .metadata import (
     TTL_INDEX_CF_NAME,
 )
 from .ttl_codec import (
+    _MAX_PLAUSIBLE_STAMP_MS,
     SENTINEL_NEVER,
     TTL_STAMP_BYTES,
     decode_ttl_value,
@@ -36,12 +37,10 @@ logger = logging.getLogger(__name__)
 
 MAX_UINT64 = 2**64 - 1  # 18446744073709551615
 
-# Upper bound (exclusive) for a "plausible" epoch-ms expiry stamp: ~year 33658,
-# far beyond any realistic event-time clock. Shared bound with
-# ``RocksDBStorePartition._looks_like_stamped_value`` so the read-side strict
-# validator and the recovery flag-discovery heuristic agree on what a stamp can
-# look like.
-_MAX_PLAUSIBLE_STAMP_MS = 10**15
+# ``_MAX_PLAUSIBLE_STAMP_MS`` is the single source of truth for the read-side
+# strict validator and the write-side reject; it lives in ``ttl_codec`` next to
+# the codec and is re-exported here so existing importers of
+# ``quixstreams.state.rocksdb.transaction._MAX_PLAUSIBLE_STAMP_MS`` keep working.
 
 
 def _safe_decode_stamp(value: bytes) -> Optional[tuple[int, bytes]]:
@@ -201,6 +200,21 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 f"timestamp={timestamp} and ttl={ttl!r}; a pre-epoch or negative "
                 "event-time cannot be TTL-stamped."
             )
+        if expiry >= _MAX_PLAUSIBLE_STAMP_MS:
+            # Symmetric upper bound (review re-review #3): a stamp this large
+            # encodes fine (``< 2**64-1``) but the strict read validator
+            # (``_safe_decode_stamp``) refuses it on every read, so the record
+            # would be permanently unreadable (StateSerializationError per key)
+            # and its index entry sweep-stranded. Reject at write time with the
+            # same ValueError class as the negative-expiry / bad-ttl rejects
+            # above (the codec/decode layer keeps StateSerializationError).
+            raise ValueError(
+                f"ttl=... produced an implausible expiry ({expiry} ms >= "
+                f"{_MAX_PLAUSIBLE_STAMP_MS}) from timestamp={timestamp} and "
+                f"ttl={ttl!r}; this exceeds the maximum representable TTL stamp "
+                "and would be unreadable. Check for a nanosecond/second vs "
+                "millisecond timestamp mistake or an unbounded ttl."
+            )
         return expiry
 
     def set(
@@ -264,6 +278,16 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # marker-free).
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
+        elif self._pending_stamps:
+            # Fix 2 (review re-review #2): last-write-wins. A plain (no-ttl) write
+            # of a key that had an earlier ttl= write staged in this same
+            # unflipped batch must clear that key's pending stamp; otherwise the
+            # flip stamps the final never-expires value with the stale finite
+            # expiry and the next sweep deletes a record whose last write asked
+            # for never-expires. Gated on a non-empty map so the pure-legacy hot
+            # path pays no key-serialization cost.
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._pending_stamps.pop((prefix, key_serialized), None)
 
         try:
             value_serialized = self._serialize_value(value)
@@ -322,8 +346,25 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._pending_stamps[(prefix, key_serialized)] = stamp
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
+        elif self._pending_stamps:
+            # Fix 2 (review re-review #2): last-write-wins — clear a stale pending
+            # stamp for this key (see :meth:`set`). Gated on a non-empty map.
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._pending_stamps.pop((prefix, key_serialized), None)
 
         super().set_bytes(key=key, value=value, prefix=prefix, cf_name="default")
+
+    def delete(self, key: Any, prefix: bytes, cf_name: str = "default") -> None:
+        # Fix 2 (review re-review #2): keep ``_pending_stamps`` consistent with
+        # the cache on the unflipped path. A deleted key carries no TTL intent, so
+        # a delete()→set(no-ttl) sequence must not resurrect a stale pending stamp
+        # at flip time; pop it here before delegating. Gated on a non-empty map
+        # (always empty on the flipped inline path, so this is a no-op there).
+        # ``super().delete`` performs the cache mutation and STARTED-status check.
+        if self._pending_stamps:
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._pending_stamps.pop((prefix, key_serialized), None)
+        super().delete(key=key, prefix=prefix, cf_name=cf_name)
 
     def _track_batch_ttl_ms(self, ttl: timedelta) -> None:
         """
@@ -766,10 +807,13 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # are no pre-existing backfilled keys left in the cache to skip.
         self._restamp_default_cf_cache_for_flip()
         self._write_flip_metadata_to_cache()
-        # Durable done-flag: staged LAST so it is produced flag-last
-        # within this flip flush. On both the empty-store and the populated-
-        # backfill path the migration is complete once this flush commits, so the
-        # marker records "done, never redo" for any future cold rebuild.
+        # Durable done-flag: staged into the ``__ttl_system__`` CF here. The base
+        # ``_prepare`` produces that system CF LAST within this flip flush by
+        # EXPLICIT ordering (NOT by staging order — the staged CF set is unordered;
+        # see ``base/transaction.py``), so the marker is the last record produced.
+        # On both the empty-store and the populated-backfill path the migration is
+        # complete once this flush commits, so the marker records "done, never
+        # redo" for any future cold rebuild.
         self._write_migration_done_marker_to_cache()
         # Flip the **runtime** flag now so the partition's write path takes
         # the TTL-aware branch (high-water persist, sweep, index-CF use).
@@ -941,8 +985,10 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         ``LOCAL_ONLY_CFS``, the base ``_prepare`` produces it to the changelog
         (so a cold rebuild onto a fresh volume learns "done, never redo"), and
         the partition's ``write()`` also commits it to disk in the SAME flush as
-        the flip metadata and the first stamped user writes. It is staged after
-        the flip metadata so it is the last record produced in this flush.
+        the flip metadata and the first stamped user writes. The base ``_prepare``
+        produces the ``__ttl_system__`` CF LAST in this flush by explicit ordering
+        (the staged CF set is unordered; see ``base/transaction.py``), so the
+        marker is the last record produced — regardless of staging order.
 
         Local imports mirror :meth:`_write_flip_metadata_to_cache` to avoid a
         circular import with ``partition.py``.

@@ -52,6 +52,16 @@ SENTINEL_NEVER: int = 0xFFFFFFFFFFFFFFFF
 _MIN_STAMP = 0
 _MAX_STAMP = 0xFFFFFFFFFFFFFFFF
 
+# Upper bound (exclusive) for a "plausible" epoch-ms expiry stamp: ~year 33658,
+# far beyond any realistic event-time clock. Single source of truth for the
+# read-side strict validator (``_safe_decode_stamp``), the write-side
+# ``_compute_stamp`` reject (both backends), and ``RocksDBOptions`` validation,
+# so a stamp that encodes fine (``< 2**64-1``) but exceeds this bound can never
+# be written — such a value is refused symmetrically at write time rather than
+# becoming a permanently-unreadable record. Lives here (with the codec) because
+# the read-side validator conceptually belongs with the codec.
+_MAX_PLAUSIBLE_STAMP_MS = 10**15
+
 
 def is_sentinel(stamp: int) -> bool:
     """Return ``True`` if ``stamp`` is the never-expires sentinel."""

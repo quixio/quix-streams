@@ -133,6 +133,28 @@ class RocksDBOptions(RocksDBOptionsType):
                 "legacy_records_ttl must be a strictly positive timedelta or "
                 f"None, got {self.legacy_records_ttl!r}"
             )
+        if self.legacy_records_ttl is not None:
+            # Symmetric upper bound (review re-review #3): the backfill expiry is
+            # ``enable_time + legacy_records_ttl`` and ``enable_time`` is unknown
+            # at config time, so bound the ttl magnitude itself. A ttl of
+            # ~31,600 years would derive a backfill stamp above
+            # ``_MAX_PLAUSIBLE_STAMP_MS`` that the read validator refuses on every
+            # read (permanently unreadable). Reject the ``timedelta.max`` /
+            # unit-mistake config here, before it can produce such a stamp. Local
+            # imports mirror the codebase's circular-import avoidance (options is
+            # imported early by the rocksdb package).
+            from .transaction import _ttl_to_ms
+            from .ttl_codec import _MAX_PLAUSIBLE_STAMP_MS
+
+            if _ttl_to_ms(self.legacy_records_ttl) >= _MAX_PLAUSIBLE_STAMP_MS:
+                raise ValueError(
+                    "legacy_records_ttl is implausibly large "
+                    f"({self.legacy_records_ttl!r}): its millisecond magnitude "
+                    f"({_ttl_to_ms(self.legacy_records_ttl)}) meets or exceeds "
+                    f"the maximum representable TTL stamp ({_MAX_PLAUSIBLE_STAMP_MS}"
+                    "), so the derived backfill expiry would be unreadable. Use a "
+                    "ttl below ~31,600 years (check for a unit mistake)."
+                )
         if self.legacy_backfill_chunk_size <= 0:
             raise ValueError(
                 "legacy_backfill_chunk_size must be a strictly positive int, "

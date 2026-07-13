@@ -142,9 +142,13 @@ class TestV3240AdoptionOptIn:
             raw_key = b"pfx|" + json_dumps(f"k{i}")
             expected = encode_ttl_value(expiry, json_dumps(f"v{i}"))
             assert _raw_default_get(partition, raw_key) == expected
-        # No index built and the orphan census is discarded.
+        # No index built. Fix 4 (review re-review #4): the census is now
+        # QUARANTINED (preserved as the repair vector for a later opt-in
+        # adoption), NOT discarded, on the unflipped all-stamped Branch-B path.
         assert _index_count(partition) == 0
-        assert _pending_keys(partition) == set()
+        assert _pending_keys(partition) == {
+            b"pfx|" + json_dumps(f"k{i}") for i in range(4)
+        }
         partition.close()
 
     # (ii) same store, flag SET → adopts (flip + verbatim values + index +

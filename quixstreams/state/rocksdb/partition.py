@@ -395,8 +395,11 @@ class RocksDBStorePartition(StorePartition):
         batch = WriteBatch(raw_mode=True)
 
         # Done-flag consumption. The replicated ``__ttl_system__``
-        # CF carries a single reserved marker produced flag-last when a migration
-        # completes. Seeing it means the source store was definitively
+        # CF carries a single reserved marker produced LAST when a migration
+        # completes — base ``_prepare`` orders the system CF after all others on
+        # the live flip path, and the recovery-completion / backfill paths sequence
+        # the marker produce after the last stamped record. Seeing it means the
+        # source store was definitively
         # TTL-enabled AND fully migrated: latch it so ``complete_recovery`` flips,
         # discards any pending census, and NEVER re-runs the backfill (idempotent
         # "never redo"). This is the clean structural signal that closes the
@@ -458,7 +461,8 @@ class RocksDBStorePartition(StorePartition):
             and not (self._migration_done_at_open or self._recovery_saw_migration_done)
         ):
             # Once the migration done-marker is known — local at open (warm
-            # restart) or latched the moment the flag-last marker record replays —
+            # restart) or latched the moment the marker record replays (produced
+            # last, so it arrives after every record it certifies) —
             # stop censusing pending-CF entries. ``complete_recovery`` discards /
             # no-ops the census in that case, so the entries would be dropped
             # anyway; skipping avoids the wasted per-record census writes. The
@@ -710,96 +714,72 @@ class RocksDBStorePartition(StorePartition):
             # non-empty ledger only ever means a live backfill ran on THIS volume.
             self._resume_interrupted_live_backfill()
             return
-        if self._all_pending_values_are_stamped():
-            # Total-quorum stamp detection (evaluated AFTER the done-flag
-            # short-circuit AND the warm-restart resume branch above, and BEFORE the
-            # saw_stamped/survivor-derived disposition). A stock-v3.24.0 cold
-            # restore has
-            # saw_stamped=False and a full pending census whose values are all
-            # 8B-stamped-but-header-less; a mixed v3.24.0→this-branch restore
-            # leaves the same all-stamped leftovers.
-            if self._adopt_v3240_stamps_enabled:
-                # Opt-in self-heal. The operator asserted this is a genuine
-                # v3.24.0 store: flip + keep values verbatim + rebuild the index +
-                # discard the census (now chunked, see _adopt_v3240_stamps). Fires
-                # before the survivor-derived path so a mixed v3.24.0 census is
-                # adopted, not double-wrapped.
-                self._adopt_v3240_stamps()
+        # Fix 4 (review re-review #4): discriminate an interrupted THIS-BRANCH
+        # completion from opt-in v3.24.0 adoption using the flip latches plus the
+        # one store-level all-past heuristic. Per-record byte routing stays banned.
+        if not (self._recovery_saw_stamped or self._persisted_flipped_at_open):
+            # BRANCH B — no this-branch evidence: the store is genuinely unflipped,
+            # so it is pure-legacy (v3.23.6) OR stock v3.24.0. Consolidates the old
+            # all-stamped gate and the old legacy-discard block.
+            if self._all_pending_values_are_stamped():
+                if self._adopt_v3240_stamps_enabled:
+                    if self._pending_all_stamps_in_past():
+                        # REFUSE adopt: every censused stamp is in the past, so
+                        # adopting would rebuild the index with past stamps and the
+                        # next sweep would DELETE every record — the exact shape of a
+                        # legacy set_bytes() store (past epoch-ms) misidentified as
+                        # v3.24.0. QUARANTINE the census (do NOT discard — preserves
+                        # the repair vector), leave the store UNFLIPPED.
+                        logger.critical(
+                            "Recovery at path=%s: adopt_v3240_stamps=True but the %d "
+                            "censused value(s) ALL decode as stamps ALREADY in the "
+                            "past relative to the recovery clock. Adopting them would "
+                            "rebuild the expiry index with past stamps and the next "
+                            "sweep would DELETE every record. This is the exact shape "
+                            "of a legacy set_bytes() store (past epoch-ms values) "
+                            "misidentified as v3.24.0, so adoption is REFUSED. NOTHING "
+                            "has been changed -- the store stays in legacy mode and "
+                            "every value reads back byte-identical; the pending census "
+                            "is preserved for repair.",
+                            self._path,
+                            self._count_backfill_pending(),
+                        )
+                        return
+                    self._adopt_v3240_stamps()
+                    return
+                # Flag unset. The store is unflipped here, so the message MAY
+                # truthfully say it stays legacy / byte-identical. QUARANTINE the
+                # census (do NOT discard) and return WITHOUT flipping — a later
+                # opt-in adoption still needs the census as its repair vector.
+                logger.critical(
+                    "Recovery at path=%s replayed a header-absent changelog whose %d "
+                    "censused value(s) ALL decode as 8-byte TTL stamps. This is the "
+                    "exact on-disk shape of a store created on the v3.24.0 TTL preview "
+                    "(stamped values, no __ttl_stamped__ header) -- BUT it is "
+                    "indistinguishable from a pre-TTL legacy store whose values happen "
+                    "to begin with 8 plausible big-endian bytes (e.g. epoch-ms or "
+                    "counters written via set_bytes()). Automatic adoption is DISABLED "
+                    "by default: adopting a legacy store by mistake would turn the "
+                    "first 8 bytes of every value into an expiry stamp and delete the "
+                    "data on the next sweep. NOTHING has been changed -- the store "
+                    "stays in legacy mode and every value reads back byte-identical. "
+                    "If you are CERTAIN this store was created on v3.24.0, set "
+                    "RocksDBOptions(adopt_v3240_stamps=True) and restart to adopt the "
+                    "stamps in place. If this is a genuine pre-TTL store, leave the "
+                    "option unset -- this message is informational and safe to ignore.",
+                    self._path,
+                    self._count_backfill_pending(),
+                )
                 return
-            # Detection WITHOUT the opt-in flag. Do NOT flip. This all-stamped
-            # census is the exact byte-shape of a stock v3.24.0 cold restore, but
-            # it is INDISTINGUISHABLE from a legacy set_bytes() store whose values
-            # begin with plausible-stamp bytes — auto-flipping the latter would
-            # turn the first 8 bytes of every value into an expiry stamp and delete
-            # the data on the next sweep. Log CRITICAL naming the flag, then take
-            # the pure-legacy disposition: discard the orphan census and leave
-            # every value verbatim (byte-identical / raw-readable). MUST discard-
-            # and-return here rather than fall through — a mixed v3.24.0 census
-            # reaching
-            # the completion path would be double-wrapped. Discarding the
-            # census (an O(1) pointer-CF drop) never touches default-CF user data.
-            logger.critical(
-                "Recovery at path=%s replayed a header-absent changelog whose %d "
-                "censused value(s) ALL decode as 8-byte TTL stamps. This is the "
-                "exact on-disk shape of a store created on the v3.24.0 TTL preview "
-                "(stamped values, no __ttl_stamped__ header) -- BUT it is "
-                "indistinguishable from a pre-TTL legacy store whose values happen "
-                "to begin with 8 plausible big-endian bytes (e.g. epoch-ms or "
-                "counters written via set_bytes()). Automatic adoption is DISABLED "
-                "by default: adopting a legacy store by mistake would turn the "
-                "first 8 bytes of every value into an expiry stamp and delete the "
-                "data on the next sweep. NOTHING has been changed -- the store "
-                "stays in legacy mode and every value reads back byte-identical. "
-                "If you are CERTAIN this store was created on v3.24.0, set "
-                "RocksDBOptions(adopt_v3240_stamps=True) and restart to adopt the "
-                "stamps in place. If this is a genuine pre-TTL store, leave the "
-                "option unset -- this message is informational and safe to ignore.",
-                self._path,
-                self._count_backfill_pending(),
-            )
-            self._discard_backfill_pending()
-            return
-        if not self._recovery_saw_stamped and not self._persisted_flipped_at_open:
-            # No __ttl_stamped__ record was replayed this session AND the store
-            # was not already flipped on disk at open, so there is no migration to
-            # complete: a pure-legacy first-enablement (owned by the live
-            # first-``ttl=``-write backfill) or an all-legacy replay on an
-            # un-flipped store. Either way the class-level census gate may have PUT
-            # header-absent legacy keys into __ttl_backfill_pending__ (MIXED
-            # detection has to census BEFORE the first stamped record can
-            # distinguish them). Those entries are orphans with no completion pass
-            # to drain them, so discard them now — a pure-legacy store then ends
-            # recovery with an empty/absent pending CF and no lasting overhead.
-            #
-            # A store that was ALREADY flipped on
-            # disk at open is handled by the ``_persisted_flipped_at_open`` guard
-            # above — it falls through to completion even with
-            # ``_recovery_saw_stamped`` False. That is the offset-caught-up-restart
-            # crash window: the last changelog message was replayed in a prior run
-            # (so this run replays nothing new and never re-sets the latch), but
-            # the durable pending census holds genuine leftovers that MUST be
-            # completed, not discarded. Only an UN-flipped store discards here.
-            #
-            # Loud detection runs FIRST, before the census is
-            # dropped: no done-flag and no stamped record was seen, yet the census
-            # is non-empty. That is normally a genuine pure-legacy (v3.23.6) store
-            # — but it is ALSO the exact shape of a stock-v3.24.0 changelog
-            # (8-byte-stamped values, no ``__ttl_stamped__`` header, no index
-            # records — no structural discriminator exists). The 100%-quorum case
-            # (EVERY censused value validates) is handled ABOVE at the all-stamped
-            # gate: it
-            # logs a CRITICAL naming ``adopt_v3240_stamps`` and returns without
-            # flipping (or adopts when the flag is set), so it never reaches here.
-            # This WARN therefore covers only the sub-100% "looks-like-but-not-all"
-            # case: sample the censused values and, if most look like stamps, WARN
-            # that this LOOKS like a v3.24.0 cold restore whose values may read
-            # back with a spurious 8-byte prefix. DETECTION ONLY: the
-            # sampled bytes gate the log line and nothing else — no value is
-            # stripped, flipped, or re-routed, and no automatic repair is ever
-            # applied without the explicit opt-in flag.
+            # Sub-100% "looks-like": a v3.24.0 store would be 100% stamped, so a
+            # sub-100% census is genuine legacy and must not leave a persistent
+            # census burdening a pure-legacy store. Discard after the heuristic WARN.
             self._warn_if_looks_like_v3240_upgrade()
             self._discard_backfill_pending()
             return
+
+        # BRANCH A — this-branch evidence present (saw_stamped or persisted-flipped
+        # at open): the census is interrupted-migration leftovers → completion.
         if not self.uses_ttl_stamps:
             # Defensive: a stamped record was seen but the partition is somehow
             # not flipped (the same header flips it, so this is unreachable in
@@ -808,8 +788,61 @@ class RocksDBStorePartition(StorePartition):
 
         pending_count = self._count_backfill_pending()
         if pending_count == 0:
-            # All-stamped / fully-migrated changelog: nothing leftover.
+            # Fully-migrated MIXED changelog: the census drained to empty during
+            # replay. The migration IS complete but no done-marker was ever
+            # produced, so every future cold restore would re-walk the census.
+            # Produce the marker now to record "done, never redo" (Fix 6 part 2).
+            # Best-effort: this session stamped nothing, so a failed marker flush
+            # must NOT fail recovery — it only forgoes the optimization (the next
+            # restart re-derives the same empty census and retries the marker).
+            try:
+                self._produce_migration_done_marker()
+            except ChangelogFlushError:
+                logger.warning(
+                    "Recovery at path=%s: state fully migrated (empty pending "
+                    "census) but the done-marker changelog flush failed; leaving "
+                    "the store unmarked. Recovery continues; the marker will be "
+                    "retried on the next restart.",
+                    self._path,
+                )
             return
+
+        if (
+            self._all_pending_values_are_stamped()
+            and not self._pending_all_stamps_in_past()
+        ):
+            # Future-stamped ambiguous census on an ALREADY-FLIPPED store: the
+            # header-absent all-8-byte leftovers are either genuine legacy that
+            # completion should wrap once OR already-stamped v3.24.0 that completion
+            # would DOUBLE-WRAP — byte-indistinguishable.
+            if self._legacy_records_ttl is None and self._adopt_v3240_stamps_enabled:
+                # Operator chose keep-verbatim: adopt (no re-wrap).
+                self._adopt_v3240_stamps()
+                return
+            if self._legacy_records_ttl is None:
+                # Neither flag set: refuse to serve ambiguous reads. QUARANTINE the
+                # census (do NOT discard) and HALT with dual-flag instructions.
+                logger.critical(
+                    "Recovery at path=%s: the store is flipped into TTL mode and its "
+                    "%d header-absent leftover value(s) ALL decode as 8-byte stamps "
+                    "still in the FUTURE. They are either genuine legacy records this "
+                    "migration should wrap once, OR already-stamped v3.24.0 records "
+                    "that wrapping would DOUBLE-WRAP -- and the two are "
+                    "indistinguishable. Recovery is HALTED rather than risk "
+                    "corrupting either. To finish as a legacy migration (wrap once), "
+                    "set RocksDBOptions(legacy_records_ttl=timedelta(...)); to keep "
+                    "the existing v3.24.0 stamps verbatim, set "
+                    "RocksDBOptions(adopt_v3240_stamps=True). Then restart.",
+                    self._path,
+                    self._count_backfill_pending(),
+                )
+                raise IncompatibleStateStoreError(
+                    f"Ambiguous flipped all-stamped census at path={self._path}: set "
+                    "legacy_records_ttl (complete as legacy) or adopt_v3240_stamps "
+                    "(keep v3.24.0 stamps) to proceed."
+                )
+            # else: legacy_records_ttl is set -> the operator asserted legacy-
+            # migration intent; fall through to the completion derivation below.
 
         legacy_records_ttl = self._legacy_records_ttl
         if legacy_records_ttl is not None:
@@ -833,57 +866,71 @@ class RocksDBStorePartition(StorePartition):
                 pending_count,
                 expires_at_ms,
             )
-        elif (
-            survivor_expiry := (
+        else:
+            # Config absent: derive a uniform expiry from the surviving stamped
+            # cohort, CLAMPED against the recovery clock. Fix 5 (review re-review
+            # #5): the survivor-derived value can be in the PAST — on an
+            # offset-caught-up warm restart after downtime longer than the TTL
+            # window there is NO replay, so ``_recovery_max_survivor_expiry_ms`` is
+            # unset and the fallback is the max ON-DISK ``__ttl_index__`` stamp,
+            # which the downtime may have carried into the past. Stamping the
+            # leftovers with a past expiry would mass-delete them on the next sweep
+            # (forbidden — Quix Cloud has no state reset), while the SAME changelog
+            # cold-restored yields SENTINEL_NEVER (kept forever) — nondeterministic
+            # opposite outcomes. The reference clock is the recovery wallclock, the
+            # same clock the replay latest-record-wins drop filter used, so warm
+            # and cold restores of one changelog converge; over-clamping to
+            # SENTINEL_NEVER only ever over-keeps (safe), never deletes.
+            now = (
+                self._recovery_now_ms
+                if self._recovery_now_ms is not None
+                else self._now_ms()
+            )
+            survivor_expiry = (
                 self._recovery_max_survivor_expiry_ms
                 if self._recovery_max_survivor_expiry_ms is not None
                 else self._max_index_stamp_ms()
             )
-        ) is not None:
-            # Survivor-derived default (config absent): align the leftovers
-            # with the max surviving future stamp of their backfill cohort. A
-            # single uniform value, in the future by construction (the
-            # latest-record-wins filter already
-            # dropped past-dated stamps during replay, so a tracked survivor is
-            # always > wallclock-at-rebuild).
-            #
-            # On the offset-caught-up restart there
-            # is NO replay, so ``_recovery_max_survivor_expiry_ms`` is unset. Fall
-            # back to the max ON-DISK ``__ttl_index__`` stamp — the surviving
-            # stamped cohort persisted from the interrupted run — so the leftovers
-            # still inherit the cohort's window instead of degrading to
-            # SENTINEL_NEVER.
-            expires_at_ms = survivor_expiry
-            logger.warning(
-                "Recovery: completing interrupted legacy-TTL migration at "
-                "path=%s WITHOUT legacy_records_ttl configured; %d leftover "
-                "legacy record(s) will be stamped with expiry=%d, derived from "
-                "the max surviving stamped record (the original flip ttl is not "
-                "recoverable on a cold restore). To pin a different uniform "
-                "window, set RocksDBOptions(legacy_records_ttl=timedelta(...)) "
-                "and redeploy.",
-                self._path,
-                pending_count,
-                expires_at_ms,
-            )
-        else:
-            # All-expired fallback (config absent AND no surviving future
-            # stamp): stamping with a past/derived expiry would mass-delete the
-            # leftovers on the next sweep (silent data loss — forbidden, Quix
-            # Cloud has no state reset). Keep them with SENTINEL_NEVER instead and
-            # WARN loudly. Rare corner: interrupted backfill + config removed +
-            # cold restore + every stamp already expired.
-            expires_at_ms = SENTINEL_NEVER
-            logger.warning(
-                "Recovery: completing interrupted legacy-TTL migration at "
-                "path=%s WITHOUT legacy_records_ttl configured and with NO "
-                "surviving future stamp to derive from; %d leftover legacy "
-                "record(s) will be stamped as never-expiring (SENTINEL_NEVER) "
-                "to avoid silently deleting them. To assign a finite expiry, set "
-                "RocksDBOptions(legacy_records_ttl=timedelta(...)) and redeploy.",
-                self._path,
-                pending_count,
-            )
+            if survivor_expiry is not None and survivor_expiry > now:
+                # A genuine FUTURE survivor stamp: align the leftovers with the
+                # max surviving future stamp of their backfill cohort.
+                expires_at_ms = survivor_expiry
+                logger.warning(
+                    "Recovery: completing interrupted legacy-TTL migration at "
+                    "path=%s WITHOUT legacy_records_ttl configured; %d leftover "
+                    "legacy record(s) will be stamped with expiry=%d, derived "
+                    "from the max surviving future stamp of their backfill cohort "
+                    "(the original flip ttl is not recoverable on a cold "
+                    "restore). This completion produces the migration-done marker "
+                    "at the end, which blocks re-entry, so the derived window "
+                    "cannot be changed after the fact.",
+                    self._path,
+                    pending_count,
+                    expires_at_ms,
+                )
+            else:
+                # No surviving stamp, OR the only derivable expiry (a past
+                # ``_max_index_stamp_ms()`` on a warm restart after downtime, or
+                # an all-expired cohort) is already <= the recovery clock. Keep
+                # the leftovers never-expiring rather than stamping a past expiry
+                # the next sweep would delete.
+                expires_at_ms = SENTINEL_NEVER
+                logger.warning(
+                    "Recovery: completing interrupted legacy-TTL migration at "
+                    "path=%s WITHOUT legacy_records_ttl configured; the only "
+                    "available expiry to derive from is already in the past "
+                    "relative to the recovery clock (%d), so stamping the %d "
+                    "leftover legacy record(s) with it would delete them on the "
+                    "next sweep. Retaining them as never-expiring (SENTINEL_NEVER) "
+                    "to honor the never-mass-delete guarantee. NOTE: these records "
+                    "cannot be retroactively re-stamped — the migration-done "
+                    "marker produced at the end of this completion blocks "
+                    "re-entry — so they next carry a finite expiry only when the "
+                    "application overwrites those keys with an explicit ttl=.",
+                    self._path,
+                    now,
+                    pending_count,
+                )
         completed = self._complete_pending_backfill(
             expires_at_ms=expires_at_ms,
             chunk_size=self._legacy_backfill_chunk_size,
@@ -982,10 +1029,13 @@ class RocksDBStorePartition(StorePartition):
           happened this session; else
         - ``_max_index_stamp_ms()`` (max on-disk ``__ttl_index__`` stamp — the
           persisted survivor cohort) on an offset-caught-up second restart with no
-          replay; else
-        - ``SENTINEL_NEVER`` + a WARN in the degenerate case (ledger present but no
-          surviving future stamp and an empty index) — never a past/derived expiry
-          that would mass-delete the leftovers on the next sweep.
+          replay, but ONLY while it is still in the future relative to the recovery
+          clock; else
+        - ``SENTINEL_NEVER`` + a WARN when there is no surviving future stamp —
+          the index is empty OR its max stamp is already in the PAST after
+          downtime (Fix 5, clamped against the recovery clock) — never a
+          past/derived expiry that would mass-delete the leftovers on the next
+          sweep.
 
         ``legacy_records_ttl`` config is deliberately NOT preferred here (unlike the
         cold-restore completion path): the survivors on this same volume were
@@ -998,22 +1048,42 @@ class RocksDBStorePartition(StorePartition):
             self.get_or_create_column_family(TTL_INDEX_CF_NAME)
             self._stamp_flip_metadata()
 
-        # Step 2 — derive the uniform expiry (survivor-derived).
+        # Step 2 — derive the uniform expiry (survivor-derived), CLAMPED against
+        # the recovery clock (Fix 5, review re-review #5).
+        now = (
+            self._recovery_now_ms
+            if self._recovery_now_ms is not None
+            else self._now_ms()
+        )
         if self._recovery_max_survivor_expiry_ms is not None:
+            # A replayed survivor: the latest-record-wins drop filter already
+            # dropped past-dated stamps this session, so this is future by
+            # construction — no clamp needed.
             expires_at_ms = self._recovery_max_survivor_expiry_ms
-        elif (max_index_stamp := self._max_index_stamp_ms()) is not None:
+        elif (
+            max_index_stamp := self._max_index_stamp_ms()
+        ) is not None and max_index_stamp > now:
+            # Offset-caught-up second restart (no replay): the max ON-DISK index
+            # stamp is the persisted survivor cohort — but only usable while it is
+            # still in the future relative to the recovery clock.
             expires_at_ms = max_index_stamp
         else:
+            # No replayed survivor AND the max on-disk index stamp is absent OR
+            # already in the past relative to the recovery clock (a warm restart
+            # after downtime past the window). Stamp the complement never-expiring
+            # rather than deleting it on the next sweep.
             expires_at_ms = SENTINEL_NEVER
             logger.warning(
-                "TTL legacy backfill RESUME at path=%s found an interrupted live "
-                "migration (flipped, ledger non-empty, no done-marker) but NO "
-                "surviving future stamp to derive the cohort's expiry from; "
+                "TTL legacy backfill RESUME at path=%s: no surviving future stamp "
+                "to derive the cohort expiry from (the max on-disk index stamp is "
+                "absent or already in the past relative to the recovery clock %d); "
                 "stamping the un-stamped complement as never-expiring "
-                "(SENTINEL_NEVER) to avoid silently deleting it on the next sweep. "
-                "To assign a finite expiry, set "
-                "RocksDBOptions(legacy_records_ttl=timedelta(...)) and redeploy.",
+                "(SENTINEL_NEVER) rather than deleting it on the next sweep. NOTE: "
+                "the resume path deliberately does not consult legacy_records_ttl; "
+                "these records next carry a finite expiry only when overwritten "
+                "with an explicit ttl=.",
                 self._path,
+                now,
             )
 
         # Step 3 — RESUME STARTED, then re-run the existing backfill over the
@@ -1140,6 +1210,48 @@ class RocksDBStorePartition(StorePartition):
             if value is None or _safe_decode_stamp(cast(bytes, value)) is None:
                 return False
         return saw_any
+
+    def _pending_all_stamps_in_past(self) -> bool:
+        """
+        Precondition: :meth:`_all_pending_values_are_stamped` is True. Decode the
+        MAX plausible stamp across the pending census and return True iff it is
+        ``<= the recovery clock`` (EVERY censused stamp is in the past). A
+        ``SENTINEL_NEVER`` stamp counts as future (never past), so a census
+        containing any never-expire record is NOT all-past.
+
+        Fix 4 (review re-review #4): the store-level, all-or-nothing heuristic that
+        separates the dangerous auto-actions from the safe ones. Raw dedup epoch-ms
+        ``set_bytes`` leftovers are ALL in the past relative to the recovery clock,
+        whereas a live v3.24.0 store has at least one future (or sentinel) surviving
+        stamp. This is one store-wide decision, never a per-record routing choice
+        (per-record byte routing stays banned). The recovery clock is shared with
+        Fix 5: ``_recovery_now_ms`` when a stamped record was replayed this session,
+        else the current wallclock.
+        """
+        now = (
+            self._recovery_now_ms
+            if self._recovery_now_ms is not None
+            else self._now_ms()
+        )
+        pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
+        default_cf = self.get_or_create_column_family("default")
+        max_stamp: Optional[int] = None
+        for raw_key in pending_cf.keys():
+            value = default_cf.get(cast(bytes, raw_key), default=None)
+            if value is None:
+                continue
+            decoded = _safe_decode_stamp(cast(bytes, value))
+            if decoded is None:
+                continue
+            stamp, _ = decoded
+            if stamp == SENTINEL_NEVER:
+                # A never-expire stamp is future — the census is not all-past.
+                return False
+            if max_stamp is None or stamp > max_stamp:
+                max_stamp = stamp
+        if max_stamp is None:
+            return False
+        return max_stamp <= now
 
     def _adopt_v3240_stamps(self) -> None:
         """

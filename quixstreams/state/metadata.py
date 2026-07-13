@@ -40,9 +40,13 @@ TTL_BACKFILL_STAMPED_CF_NAME = "__ttl_backfill_stamped__"
 # ``LOCAL_ONLY_CFS`` so its single record IS produced to the changelog and
 # therefore survives a cold rebuild onto a fresh volume — unlike the metadata /
 # index / pending / stamped-ledger CFs, whose flip state is local-only and lost
-# on a fresh volume. Produced flag-last when a legacy→TTL migration completes on
-# ANY enable path (empty-store flip, live populated backfill, recovery
-# completion). On recovery, seeing the marker latches
+# on a fresh volume. Produced LAST when a legacy→TTL migration completes on ANY
+# enable path (empty-store flip, live populated backfill, recovery completion):
+# on the live flip path the base ``_prepare`` orders this system CF after every
+# other CF by explicit ordering (NOT by staging order — the staged CF set is
+# unordered; see ``quixstreams/state/base/transaction.py``); the
+# recovery-completion / live-backfill paths produce the marker in a dedicated call
+# sequenced after the last stamped record. On recovery, seeing the marker latches
 # ``_recovery_saw_migration_done`` so the store is flipped and the backfill is
 # NEVER re-run (idempotent "never redo"); it is also the clean structural signal
 # that closes the stock-v3.24.0 mis-classification class for every store written

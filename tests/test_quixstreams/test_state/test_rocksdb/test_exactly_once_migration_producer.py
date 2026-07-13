@@ -21,6 +21,7 @@ producer with the per-chunk flush ordered BEFORE the local write.
 from datetime import timedelta
 from unittest.mock import MagicMock
 
+from quixstreams import Application
 from quixstreams.internal_producer import InternalProducer
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.rocksdb import RocksDBOptions, RocksDBStorePartition
@@ -144,3 +145,60 @@ class TestCompletionUsesMigrationProducer:
         # chunk (flush, write) then the done-marker (flush, write).
         assert order == ["flush", "write", "flush", "write"]
         part.close()
+
+
+class TestEOSInternalProducerStripsTransactionalId:
+    """Fix 1 (review re-review #1): under exactly-once the shared
+    ``producer_extra_config`` carries a ``transactional.id``. A NON-transactional
+    InternalProducer (the migration producer, or a Sources producer) must NOT
+    inherit it — that would corrupt the id for itself and any later transactional
+    producer. ``_get_internal_producer(transactional=False)`` must strip it on a
+    deepcopy without mutating the shared config. Construction-level (no broker)."""
+
+    def _eos_app(self, tmp_path) -> Application:
+        # A dummy broker address: Application construction does not connect
+        # (librdkafka producers are lazy), so this stays offline.
+        return Application(
+            broker_address="localhost:9092",
+            consumer_group="fix1-eos",
+            processing_guarantee="exactly-once",
+            state_dir=(tmp_path / "state").as_posix(),
+        )
+
+    def test_migration_producer_has_no_transactional_id(self, tmp_path):
+        app = self._eos_app(tmp_path)
+        # Under EOS the shared config carries a transactional.id (app __init__).
+        assert "transactional.id" in app._config.producer_extra_config
+
+        # The dedicated migration producer (created in __init__ under EOS) is
+        # NON-transactional and must NOT carry the id.
+        migration = app._state_manager._migration_producer
+        assert migration is not None
+        assert "transactional.id" not in migration._producer._producer_config
+
+        # The same code path via _get_internal_producer(transactional=False)
+        # (also the Sources producer path, app.add_source) strips it too.
+        non_tx = app._get_internal_producer(transactional=False)
+        assert "transactional.id" not in non_tx._producer._producer_config
+
+    def test_transactional_producer_still_has_id(self, tmp_path):
+        app = self._eos_app(tmp_path)
+        # A transactional producer created AFTER still resolves/keeps its id.
+        # Inspect _producer_config only (set at construction); do NOT enter the
+        # producer context / flush, which would instantiate the real
+        # ConfluentProducer and block on the absent broker.
+        tx_internal = app._get_internal_producer(transactional=True)
+        assert "transactional.id" in tx_internal._producer._producer_config
+        # get_producer(transactional=True) likewise.
+        prod = app.get_producer(transactional=True)
+        assert "transactional.id" in prod._producer_config
+
+    def test_shared_config_not_mutated(self, tmp_path):
+        app = self._eos_app(tmp_path)
+        before = dict(app._config.producer_extra_config)
+        # Building non-transactional producers must not mutate the shared config
+        # (Fix 1 uses copy.deepcopy + pop).
+        app._get_internal_producer(transactional=False)
+        app._get_internal_producer(transactional=False)
+        assert app._config.producer_extra_config == before
+        assert "transactional.id" in app._config.producer_extra_config
