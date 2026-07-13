@@ -941,7 +941,13 @@ class TestCheckpointFastRevoke:
         checkpoint = self._make_checkpoint(revoke_flush_timeout=0.1)
         sink = FailingSink()
         sink.add(
-            value="v", key="k", timestamp=1, headers=[], topic="t", partition=0, offset=5
+            value="v",
+            key="k",
+            timestamp=1,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=5,
         )
         checkpoint._sink_manager.register(sink)
         checkpoint.store_offset("t", 0, 5)
@@ -964,7 +970,13 @@ class TestCheckpointFastRevoke:
         release = Event()
         sink = BlockingSink(release)
         sink.add(
-            value="v", key="k", timestamp=1, headers=[], topic="t", partition=0, offset=5
+            value="v",
+            key="k",
+            timestamp=1,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=5,
         )
         checkpoint._sink_manager.register(sink)
         checkpoint.store_offset("t", 0, 5)
@@ -992,7 +1004,13 @@ class TestCheckpointFastRevoke:
         checkpoint = self._make_checkpoint(revoke_flush_timeout=0.5)
         sink = BackpressuredSink()
         sink.add(
-            value="v", key="k", timestamp=1, headers=[], topic="t", partition=0, offset=5
+            value="v",
+            key="k",
+            timestamp=1,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=5,
         )
         checkpoint._sink_manager.register(sink)
         checkpoint.store_offset("t", 0, 5)
@@ -1028,7 +1046,9 @@ class TestCheckpointFastRevoke:
         app.stop.assert_called_once_with(fail=True)
 
         app.reset_mock()
-        assert handler(app, SourceException, SourceException(MagicMock()), None) is False
+        assert (
+            handler(app, SourceException, SourceException(MagicMock()), None) is False
+        )
         app.stop.assert_called_once_with(fail=False)
 
     def test_exactly_once_revoke_skips_flush_and_commits_transaction(self):

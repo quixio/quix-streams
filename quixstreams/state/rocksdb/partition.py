@@ -1018,7 +1018,7 @@ class RocksDBStorePartition(StorePartition):
                 # behavior, only sooner.
                 if self._open_deadline is not None and self._open_deadline.expired():
                     logger.warning(
-                        f'Open budget exhausted for rocksdb partition on '
+                        f"Open budget exhausted for rocksdb partition on "
                         f'"{self._path}"; giving up acquiring the lock after '
                         f"{attempt} attempt(s)."
                     )
