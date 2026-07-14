@@ -9,6 +9,7 @@ from confluent_kafka import KafkaException, TopicPartition
 from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.internal_producer import InternalProducer
+from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
 from quixstreams.sinks import SinkManager
 from quixstreams.sinks.base import BaseSink, SinkBackpressureError
 from quixstreams.state import (
@@ -179,10 +180,11 @@ class Checkpoint(BaseCheckpoint):
         """
         Perform cleanup (when the checkpoint is empty) instead of committing.
 
-        Needed for exactly-once, as Kafka transactions are timeboxed.
+        Needed for exactly-once, as Kafka transactions are timeboxed. Delegates
+        to the shared bounded abort; on this empty-checkpoint path the
+        transaction holds no messages, so the abort is a fast EndTxn.
         """
-        if self._exactly_once:
-            self._producer.abort_transaction()
+        self._abort_transaction_if_eos()
 
     def commit(self, revoking: bool = False):
         """
@@ -216,13 +218,11 @@ class Checkpoint(BaseCheckpoint):
 
             try:
                 if revoking:
-                    # On the revoke path a slow/unreachable sink must not block
-                    # the rebalance callback past max.poll.interval.ms. Bound
-                    # each flush on a wall clock; on timeout or any
-                    # non-backpressure error abort the whole checkpoint (early
-                    # return below, no offset commit) so the new owner
-                    # reprocesses and re-flushes (at-least-once).
+                    # A slow/unreachable sink must not block the rebalance
+                    # callback past max.poll.interval.ms.
                     if not self._flush_sink_bounded(sink, self._revoke_flush_timeout):
+                        # Abort the open EOS transaction before the early return.
+                        self._abort_transaction_if_eos()
                         return
                 else:
                     sink.flush()
@@ -242,7 +242,8 @@ class Checkpoint(BaseCheckpoint):
                 )
                 backpressured = True
         if backpressured:
-            # Exit early if backpressure is detected
+            # Abort the open EOS transaction before the early return.
+            self._abort_transaction_if_eos()
             return
 
         # Step 2. Produce the changelogs
@@ -271,21 +272,40 @@ class Checkpoint(BaseCheckpoint):
         logger.debug("Checkpoint: flushing producer")
         if revoking:
             # Bound the producer flush so a large undelivered changelog backlog
-            # cannot consume the whole poll budget during a revoke. If it does
-            # not fully drain, changelog delivery is unconfirmed, so we must NOT
-            # take the fast-revoke skip (step 5) - every store flushes locally
-            # instead to avoid state loss.
-            unproduced_msg_count = self._producer.flush(
-                timeout=self._revoke_flush_timeout
-            )
-            changelog_confirmed = unproduced_msg_count == 0
-            if not changelog_confirmed:
+            # cannot consume the whole poll budget during a revoke.
+            try:
+                unproduced_msg_count = self._producer.flush(
+                    timeout=self._revoke_flush_timeout
+                )
+            except KafkaProducerDeliveryError:
+                # A delivery callback recorded a failure (surfaced here by the
+                # flush's _raise_for_error) before we could read the undelivered
+                # count. Treat it exactly like an unconfirmed flush: the changelog
+                # delta is not durably delivered, so abort the checkpoint without
+                # committing offsets and let the new owner reprocess.
+                logger.warning(
+                    "Revoke: delivery failed during the producer flush; aborting "
+                    "the checkpoint without committing offsets. The new owner will "
+                    "reprocess (at-least-once)."
+                )
+                self._abort_or_purge_on_revoke()
+                return
+            if unproduced_msg_count > 0:
+                # Changelog delivery is unconfirmed. Committing offsets now (step
+                # 4) would lose the delta for a new owner that recovers from the
+                # changelog on a different volume, and the still-queued messages
+                # would keep delivering in the background (zombie writes) after
+                # the handover. Abort without committing offsets and let the new
+                # owner reprocess (at-least-once).
                 logger.warning(
                     f"Revoke: producer flush timed out with "
                     f"'{unproduced_msg_count}' undelivered changelog message(s) after "
-                    f"{self._revoke_flush_timeout}s; falling back to a full local state "
-                    f"flush (no fast-revoke skip) to avoid state loss."
+                    f"{self._revoke_flush_timeout}s; aborting the checkpoint without "
+                    f"committing offsets. The new owner will reprocess "
+                    f"(at-least-once)."
                 )
+                self._abort_or_purge_on_revoke()
+                return
         else:
             unproduced_msg_count = self._producer.flush()
             if unproduced_msg_count > 0:
@@ -293,7 +313,6 @@ class Checkpoint(BaseCheckpoint):
                     f"'{unproduced_msg_count}' messages failed to be produced before "
                     f"the producer flush timeout"
                 )
-            changelog_confirmed = True
 
         # Step 4. Commit offsets to Kafka
         offsets = [
@@ -326,14 +345,13 @@ class Checkpoint(BaseCheckpoint):
             changelog_tp = transaction.changelog_topic_partition
             # Fast revoke: when handing a partition over during a rebalance and
             # the store has a changelog, skip the local flush entirely. The
-            # changelog already holds the delta (produced in step 2) and the new
-            # owner replays it, so we avoid a slow on-disk write while holding
-            # the RocksDB lock. Skipping is only safe with a changelog - without
-            # one it would be state loss, so those stores still flush.
-            # changelog_confirmed guards against a timed-out producer flush:
-            # when delivery is unconfirmed we never skip, so the delta is not
-            # lost from committed state.
-            if revoking and changelog_confirmed and changelog_tp is not None:
+            # changelog already holds the delta (produced in step 2, its delivery
+            # confirmed by the bounded flush in step 3 - an unconfirmed flush
+            # aborts the checkpoint above and never reaches this point) and the
+            # new owner replays it, so we avoid a slow on-disk write while
+            # holding the RocksDB lock. Skipping is only safe with a changelog -
+            # without one it would be state loss, so those stores still flush.
+            if revoking and changelog_tp is not None:
                 logger.debug(
                     "Fast revoke: skipping local state flush for changelog "
                     f"{changelog_tp}"
@@ -345,6 +363,50 @@ class Checkpoint(BaseCheckpoint):
                 produced_offsets.get(changelog_tp) if changelog_tp is not None else None
             )
             transaction.flush(changelog_offset=changelog_offset)
+
+    def _abort_transaction_if_eos(self) -> None:
+        """
+        Abort the open Kafka transaction when running under exactly-once.
+
+        Every early ``return`` from ``commit()`` (bounded sink-flush
+        timeout/failure, backpressure, or unconfirmed changelog delivery), and
+        ``close()`` on the empty-checkpoint path, leaves the transaction opened
+        in ``__init__`` still active. Aborting it here restores the invariant
+        that the next ``Checkpoint`` can ``begin_transaction()`` again; without
+        it librdkafka raises ``KafkaException(_STATE)`` on the next checkpoint.
+        A no-op under at-least-once.
+
+        The abort is bounded: with no timeout librdkafka blocks up to the
+        remaining ``transaction.timeout.ms``, which could stall the rebalance
+        callback past ``max.poll.interval.ms``. Derive a finite budget from the
+        revoke flush timeout instead, falling back to 5.0s when it is unset (the
+        -1.0 sentinel), matching ``ProcessingContext.__exit__``'s
+        ``abort_transaction(5)``.
+        """
+        if self._exactly_once:
+            timeout = (
+                self._revoke_flush_timeout if self._revoke_flush_timeout > 0 else 5.0
+            )
+            self._producer.abort_transaction(timeout)
+
+    def _abort_or_purge_on_revoke(self) -> None:
+        """
+        Discard the current checkpoint's buffered work on the revoke path so it
+        cannot leak past the partition handover. Shared exit for both revoke
+        abort triggers in ``commit()`` step 3: an unconfirmed bounded flush and a
+        delivery error raised by that flush.
+
+        Under exactly-once the open transaction is aborted (bounded), which drops
+        its buffered messages and offsets atomically. Under at-least-once there
+        is no transaction, so the queued changelog/output messages are purged
+        directly: those still queued cannot deliver after the new owner takes
+        over, though already-transmitted in-flight requests may still be appended
+        by the broker (acks voided locally). Either way no offsets are committed,
+        so the new owner reprocesses from the last committed offset.
+        """
+        self._abort_transaction_if_eos()
+        if not self._exactly_once:
+            self._producer.purge()
 
     def _flush_sink_bounded(self, sink: BaseSink, timeout: float) -> bool:
         """

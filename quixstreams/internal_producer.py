@@ -73,6 +73,12 @@ def _retriable_transaction_op(attempts: int, backoff_seconds: float):
 class KafkaProducerTransactionCommitFailed(QuixException): ...
 
 
+class KafkaProducerTransactionAlreadyActive(QuixException):
+    """Raised when ``begin_transaction()`` hits librdkafka's ``_STATE`` error
+    because a transaction is already open: a previous checkpoint left its
+    transaction dangling (neither committed nor aborted)."""
+
+
 class InternalProducer:
     """
     A producer class that is capable of serializing Rows to bytes and send them to Kafka.
@@ -227,12 +233,52 @@ class InternalProducer:
         self._raise_for_error()
         return result
 
+    def purge(self):
+        """
+        Purge all messages currently queued or in-flight in the producer.
+
+        Used on the revoke path when a bounded flush could not confirm changelog
+        delivery: the still-queued changelog/output messages cannot deliver after
+        the partition is handed to the new owner. Already-transmitted in-flight
+        requests may still be appended by the broker (their acknowledgements are
+        only voided locally), so this reduces but does not fully eliminate zombie
+        writes landing behind the new owner's own writes.
+
+        Swallowing the purge-induced delivery errors is safe here: offsets were
+        NOT committed, so the new owner reprocesses these messages from the last
+        committed offset (at-least-once). A genuine delivery error recorded
+        before the purge is snapshotted and restored so the next checkpoint
+        still surfaces it.
+        """
+        # Snapshot any genuine prior delivery error before purging.
+        error = self._error
+        self._producer.purge()
+        # Drain the _PURGE delivery callbacks that purge() just enqueued.
+        self._producer.poll(0)
+        # Discard the purge-induced errors, restoring only the real prior one.
+        self._error = error
+
     @property
     def offsets(self) -> Dict[Tuple[str, int], int]:
         return self._tp_offsets
 
     def begin_transaction(self):
-        self._producer.begin_transaction()
+        try:
+            self._producer.begin_transaction()
+        except KafkaException as exc:
+            # Only the opaque _STATE case (a transaction is already open) gets
+            # the named invariant error. A fatal error like _FENCED leaves
+            # _active_transaction legitimately True, and its truthful librdkafka
+            # code must still propagate unwrapped.
+            if (
+                self._active_transaction and exc.args[0].code() == KafkaError._STATE  # noqa: SLF001
+            ):
+                raise KafkaProducerTransactionAlreadyActive(
+                    "begin_transaction() called while a transaction is already "
+                    "active: a previous checkpoint left its transaction dangling "
+                    "(not committed or aborted)."
+                ) from exc
+            raise
         self._active_transaction = True
 
     def abort_transaction(self, timeout: Optional[float] = None):
@@ -254,7 +300,18 @@ class InternalProducer:
                 # Only log here to avoid polluting logging with empty checkpoint aborts
                 logger.debug("Aborting Kafka transaction and clearing producer offsets")
                 self._tp_offsets = {}
+            # librdkafka's abort internally purges the queued messages and flushes
+            # the in-flight ones, firing their _PURGE_QUEUE/_PURGE_INFLIGHT delivery
+            # reports through _on_delivery on this thread. Swallow those exactly as
+            # purge() does: snapshot any genuine prior error, run the abort, drain
+            # the purge-induced callbacks, then restore the snapshot. Safe because
+            # the abort is intentional and nothing from the aborted transaction was
+            # committed, so a _PURGE error is not a real delivery failure that the
+            # next produce()/flush() should raise.
+            error = self._error
             self._producer.abort_transaction(timeout)
+            self._producer.poll(0)
+            self._error = error
             self._active_transaction = False
         else:
             logger.debug("No Kafka transaction to abort")

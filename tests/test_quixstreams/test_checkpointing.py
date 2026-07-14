@@ -17,6 +17,7 @@ from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.internal_producer import InternalProducer
 from quixstreams.kafka import Consumer
+from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
 from quixstreams.models import TopicConfig
 from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkManager
 from quixstreams.sinks.base import SinkBatch
@@ -877,12 +878,14 @@ class TestCheckpointFastRevoke:
         # byte-identical to the pre-existing behavior.
         checkpoint._producer.flush.assert_called_once_with()
 
-    def test_revoke_producer_flush_timeout_falls_back_to_local_flush(self):
+    def test_revoke_producer_flush_timeout_aborts_without_offset_commit(self):
         """
-        Finding 1: when the bounded producer flush times out on revoke
-        (undelivered changelog messages remain), the fast-revoke skip must be
-        suppressed and every store flushed locally instead - and it must NOT
-        raise CheckpointProducerTimeout (that is the normal-path behavior only).
+        Finding 1 (revised): when the bounded producer flush times out on revoke
+        (undelivered changelog messages remain), changelog delivery is
+        unconfirmed, so the checkpoint aborts without committing offsets. It must
+        NOT raise CheckpointProducerTimeout (that is the normal-path behavior
+        only). The queued messages are purged so they cannot deliver after the
+        handover, and no local state flush happens (step 5 is not reached).
         """
         checkpoint = self._make_checkpoint(revoke_flush_timeout=0.1)
         # One changelog message could not be delivered within the budget
@@ -895,9 +898,14 @@ class TestCheckpointFastRevoke:
 
         # Producer flushed with the bounded revoke timeout
         checkpoint._producer.flush.assert_called_once_with(timeout=0.1)
-        # Skip suppressed: the changelog is prepared AND the local flush happened
+        # The changelog was prepared (step 2), but the checkpoint then aborted:
         tx.prepare.assert_called_once()
-        tx.flush.assert_called_once()
+        # No offset commit (step 4 skipped)
+        checkpoint._consumer.commit.assert_not_called()
+        # No local state flush (step 5 skipped)
+        tx.flush.assert_not_called()
+        # Queued messages purged so they cannot deliver after the handover
+        checkpoint._producer.purge.assert_called_once()
 
     def test_revoke_confirmed_delivery_still_skips_local_flush(self):
         """
@@ -995,6 +1003,37 @@ class TestCheckpointFastRevoke:
             # Release the orphaned daemon flush thread.
             release.set()
 
+    def test_revoke_sink_timeout_under_eos_must_abort_transaction(self):
+        """
+        Finding 2 under exactly-once: when a slow sink times out on the revoke
+        path, the early return aborts the open Kafka transaction (so the next
+        Checkpoint can begin one) and never commits it.
+        """
+        checkpoint = self._make_checkpoint(exactly_once=True, revoke_flush_timeout=0.1)
+        release = Event()
+        sink = BlockingSink(release)
+        sink.add(
+            value="v",
+            key="k",
+            timestamp=1,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=5,
+        )
+        checkpoint._sink_manager.register(sink)
+        checkpoint.store_offset("t", 0, 5)
+
+        try:
+            checkpoint.commit(revoking=True)
+
+            # The open EOS transaction is aborted, never committed.
+            checkpoint._producer.abort_transaction.assert_called()
+            checkpoint._producer.commit_transaction.assert_not_called()
+        finally:
+            # Release the orphaned daemon flush thread.
+            release.set()
+
     def test_revoke_sink_backpressure_still_triggers_backpressure(self):
         """
         Finding 2: backpressure on the revoke path is preserved - the bounded
@@ -1082,3 +1121,108 @@ class TestCheckpointFastRevoke:
         checkpoint.commit()  # must not raise
 
         checkpoint._consumer.commit.assert_called_once()
+
+    def test_revoke_flush_delivery_error_still_purges_and_does_not_raise(self):
+        """
+        Contract: a KafkaProducerDeliveryError raised by flush() during a
+        revoking commit (step 3) must be caught and routed into the
+        abort-or-purge path. Under ALOS the queued messages are purged, no
+        offset is committed, and no exception propagates out of commit().
+        Validates review finding B (delivery error bypasses abort/purge branch).
+        """
+        checkpoint = self._make_checkpoint(exactly_once=False, revoke_flush_timeout=0.1)
+        tx = self._transaction(changelog_tp=("changelog", 0))
+        checkpoint._store_transactions = {("s1", 0, "default"): tx}
+        checkpoint.store_offset("topic", 0, 10)
+
+        # Simulate a delivery error raised by _raise_for_error inside flush()
+        checkpoint._producer.flush.side_effect = KafkaProducerDeliveryError(
+            KafkaError(KafkaError._MSG_TIMED_OUT)
+        )
+
+        # Must NOT raise — the error must be caught and the checkpoint aborted
+        checkpoint.commit(revoking=True)
+
+        # ALOS: queued messages should be purged (zombie-write prevention)
+        checkpoint._producer.purge.assert_called_once()
+        # No offset commit (at-least-once: new owner reprocesses)
+        checkpoint._consumer.commit.assert_not_called()
+
+    def test_revoke_eos_abort_uses_bounded_timeout(self):
+        """
+        Contract: _abort_transaction_if_eos on the revoke path must pass a
+        bounded positive timeout to abort_transaction so it cannot block
+        indefinitely inside the rebalance callback. ProcessingContext.__exit__
+        uses abort_transaction(5) as precedent; any finite positive value
+        derived from the revoke budget is acceptable.
+        Validates review finding C (unbudgeted abort).
+        """
+        checkpoint = self._make_checkpoint(exactly_once=True, revoke_flush_timeout=0.1)
+        # Trigger the undelivered-message abort branch (EOS path)
+        checkpoint._producer.flush.return_value = 1
+        tx = self._transaction(changelog_tp=("changelog", 0))
+        checkpoint._store_transactions = {("s1", 0, "default"): tx}
+        checkpoint.store_offset("topic", 0, 10)
+
+        checkpoint.commit(revoking=True)
+
+        # abort_transaction must have been called with a bounded positive timeout
+        checkpoint._producer.abort_transaction.assert_called_once()
+        args, kwargs = checkpoint._producer.abort_transaction.call_args
+        timeout = kwargs.get("timeout", args[0] if args else None)
+        assert timeout is not None, (
+            "abort_transaction called with no timeout argument "
+            "(would block indefinitely inside rebalance callback)"
+        )
+        assert 0 < timeout < 60, (
+            f"abort_transaction timeout must be bounded and positive, got {timeout}"
+        )
+
+
+class TestInternalProducerAbortPurge:
+    """
+    Contract: InternalProducer.abort_transaction must not leave purge-induced
+    delivery errors in _error. librdkafka's abort purges undelivered messages
+    and fires their delivery callbacks with _PURGE_QUEUE/_PURGE_INFLIGHT
+    errors; the next produce()/flush() must not see those as real failures.
+    Validates review finding A (EOS _error poisoning on abort).
+    """
+
+    def test_abort_transaction_swallows_purge_induced_delivery_errors(self):
+        """
+        Contract: after abort_transaction, _error must be None even when
+        librdkafka fires _PURGE_QUEUE delivery callbacks during the abort.
+        A subsequent _raise_for_error() must be a no-op.
+        """
+        # Build a real InternalProducer with the underlying Producer mocked out
+        with patch("quixstreams.internal_producer.Producer"):
+            producer = InternalProducer(broker_address="localhost:9092")
+
+        # Replace the inner wrapper with a mock we control
+        mock_inner = MagicMock()
+        producer._producer = mock_inner
+        producer._active_transaction = True
+
+        # Simulate: librdkafka abort purges queued messages and fires delivery
+        # callbacks with _PURGE_QUEUE errors
+        purge_error = KafkaError(KafkaError._PURGE_QUEUE)
+        mock_msg = MagicMock()
+        mock_msg.topic.return_value = "test-topic"
+        mock_msg.partition.return_value = 0
+        mock_msg.offset.return_value = 42
+
+        def abort_side_effect(timeout=None):
+            # Simulate librdkafka firing delivery callbacks during abort
+            producer._on_delivery(purge_error, mock_msg)
+
+        mock_inner.abort_transaction.side_effect = abort_side_effect
+
+        # Call abort_transaction
+        producer.abort_transaction()
+
+        # Contract: purge-induced errors must NOT remain in _error
+        assert producer._error is None, (
+            f"abort_transaction left purge-induced error in _error: {producer._error}"
+        )
+        # Equivalently: _raise_for_error must be a no-op
+        producer._raise_for_error()  # must not raise
