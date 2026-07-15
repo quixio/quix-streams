@@ -38,7 +38,7 @@ When a Kafka rebalance revokes a partition, the application commits the current 
 
 **Fast-revoke skip of the local state flush.** Step 5 is skipped for stores that have a changelog topic, provided changelog delivery was confirmed in step 3. The changelog already holds the delta; the new owner replays it during recovery. Skipping the on-disk write releases the RocksDB file lock sooner, which is the main mechanism that prevents lock-contention between the outgoing and incoming consumers. Stores without a changelog topic are always flushed — skipping would lose state. When changelog delivery is unconfirmed (producer flush timed out), the checkpoint has already aborted in step 3, so step 5 never runs and no offsets are committed.
 
-**Operator note.** Pipelines with several slow sinks should raise `max.poll.interval.ms` — all per-step budgets scale proportionally. See [RocksDB Lock-Contention / Rebalance Handover Analysis](../rocksdb-lock-contention-analysis.md) for the full problem description and tuning guidance.
+**Operator note.** Pipelines with several slow sinks should raise `max.poll.interval.ms` — all per-step budgets scale proportionally. The revoke sequence shares a single wall-clock budget across the sink flush, producer flush, and transaction abort/commit, so the whole callback stays bounded by that budget rather than a multiple of it.
 
 ## Recovering the State Stores
 

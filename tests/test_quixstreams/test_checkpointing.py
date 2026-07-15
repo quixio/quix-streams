@@ -9,6 +9,7 @@ from confluent_kafka import KafkaError, KafkaException, TopicPartition
 
 from quixstreams.app import Application
 from quixstreams.checkpointing import Checkpoint, InvalidStoredOffset
+from quixstreams.checkpointing.checkpoint import _REVOKE_FLUSH_FLOOR
 from quixstreams.checkpointing.exceptions import (
     CheckpointConsumerCommitError,
     CheckpointProducerTimeout,
@@ -17,15 +18,17 @@ from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.internal_producer import InternalProducer
 from quixstreams.kafka import Consumer
+from quixstreams.kafka.consumer import BaseConsumer
 from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
 from quixstreams.models import TopicConfig
 from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkManager
 from quixstreams.sinks.base import SinkBatch
+from quixstreams.sources.core.kafka.checkpoint import Checkpoint as SourceCheckpoint
 from quixstreams.state import StateStoreManager
 from quixstreams.state.base import PartitionTransaction
 from quixstreams.state.exceptions import StoreNotRegisteredError, StoreTransactionFailed
 from quixstreams.state.manager import SUPPORTED_STORES
-from tests.utils import DummySink
+from tests.utils import DummySink, make_kafka_exception
 
 
 @pytest.fixture()
@@ -896,8 +899,15 @@ class TestCheckpointFastRevoke:
         # Must not raise on the revoke path
         checkpoint.commit(revoking=True)
 
-        # Producer flushed with the bounded revoke timeout
-        checkpoint._producer.flush.assert_called_once_with(timeout=0.1)
+        # Producer flushed with the floored revoke budget: revoke_flush_timeout
+        # (0.1s) is below _REVOKE_FLUSH_FLOOR, so the EOS-critical changelog flush
+        # is guaranteed at least the floor (a slow sink must not starve it). It
+        # still reports undelivered here (mocked return 1) -> the checkpoint aborts.
+        checkpoint._producer.flush.assert_called_once()
+        assert (
+            checkpoint._producer.flush.call_args.kwargs["timeout"]
+            >= _REVOKE_FLUSH_FLOOR
+        )
         # The changelog was prepared (step 2), but the checkpoint then aborted:
         tx.prepare.assert_called_once()
         # No offset commit (step 4 skipped)
@@ -920,7 +930,13 @@ class TestCheckpointFastRevoke:
 
         checkpoint.commit(revoking=True)
 
-        checkpoint._producer.flush.assert_called_once_with(timeout=0.1)
+        checkpoint._producer.flush.assert_called_once()
+        # revoke_flush_timeout (0.1s) is below _REVOKE_FLUSH_FLOOR, so the
+        # changelog flush is floored to the reserved minimum.
+        assert (
+            checkpoint._producer.flush.call_args.kwargs["timeout"]
+            >= _REVOKE_FLUSH_FLOOR
+        )
         tx.prepare.assert_called_once()
         tx.flush.assert_not_called()
 
@@ -1157,7 +1173,7 @@ class TestCheckpointFastRevoke:
         derived from the revoke budget is acceptable.
         Validates review finding C (unbudgeted abort).
         """
-        checkpoint = self._make_checkpoint(exactly_once=True, revoke_flush_timeout=0.1)
+        checkpoint = self._make_checkpoint(exactly_once=True, revoke_flush_timeout=30)
         # Trigger the undelivered-message abort branch (EOS path)
         checkpoint._producer.flush.return_value = 1
         tx = self._transaction(changelog_tp=("changelog", 0))
@@ -1174,55 +1190,278 @@ class TestCheckpointFastRevoke:
             "abort_transaction called with no timeout argument "
             "(would block indefinitely inside rebalance callback)"
         )
-        assert 0 < timeout < 60, (
-            f"abort_transaction timeout must be bounded and positive, got {timeout}"
+        assert (
+            0 < timeout <= 30
+        ), f"abort_transaction timeout must be bounded and positive, got {timeout}"
+
+    def test_revoke_eos_abort_retries_retriable_error_and_does_not_escape(self):
+        """
+        On the revoke path a transient retriable abort error (e.g. _TIMED_OUT
+        during a coordinator blip) must be retried per confluent-kafka's abort
+        contract instead of propagating on the first timeout. If it escaped
+        commit(revoking=True), _on_revoke would skip _revoke_state_partitions and
+        leak the RocksDB lock (the livelock this branch fixes). Uses a real
+        InternalProducer (inner Producer mocked) so the retry loop is exercised
+        end-to-end through the revoke path.
+
+        A large revoke_flush_timeout (with sleep patched) keeps the shared budget
+        from being exhausted by real wall-clock time between attempts, so the
+        retry is deterministic (no monotonic-clock CI flake).
+        """
+        with (
+            patch("quixstreams.internal_producer.Producer") as producer_cls,
+            patch("quixstreams.internal_producer.sleep"),
+        ):
+            inner = producer_cls.return_value
+            # Undelivered changelog on the bounded flush -> revoke abort branch.
+            inner.flush.return_value = 1
+            # Abort fails once with a retriable error, then succeeds on retry.
+            inner.abort_transaction.side_effect = [
+                make_kafka_exception(retriable=True),
+                None,
+            ]
+            producer = InternalProducer(broker_address="xyz", transactional=True)
+
+            registry = MagicMock(spec_set=DataFrameRegistry)
+            registry.get_topics_for_stream_id.return_value = ["topic"]
+            checkpoint = Checkpoint(
+                commit_interval=1,
+                producer=producer,
+                consumer=MagicMock(spec_set=InternalConsumer),
+                state_manager=MagicMock(spec_set=StateStoreManager),
+                sink_manager=SinkManager(),
+                dataframe_registry=registry,
+                exactly_once=True,
+                revoke_flush_timeout=30,
+            )
+            tx = self._transaction(changelog_tp=("changelog", 0))
+            checkpoint._store_transactions = {("topic", 0, "default"): tx}
+            checkpoint.store_offset("topic", 0, 10)
+
+            # Must NOT raise: the transient retriable abort is retried away, so
+            # the exception cannot escape before _revoke_state_partitions runs.
+            checkpoint.commit(revoking=True)
+
+        # The abort was retried (called more than once) rather than propagating.
+        assert inner.abort_transaction.call_count == 2
+
+    def test_idle_close_eos_abort_is_bounded(self):
+        """
+        R4-1 (red): closing an EMPTY checkpoint OFF the revoke path
+        (revoking=False -- the idle main-loop close / graceful shutdown) under
+        exactly-once must abort with a FINITE budget, never None (librdkafka -1 =
+        block up to transaction.timeout.ms). Round 4 passed None here, so a
+        coordinator outage could block the consumer thread past
+        max.poll.interval.ms. Any finite positive budget is acceptable.
+        """
+        checkpoint = self._make_checkpoint(exactly_once=True)
+
+        checkpoint.close(revoking=False)
+
+        checkpoint._producer.abort_transaction.assert_called_once()
+        args, kwargs = checkpoint._producer.abort_transaction.call_args
+        timeout = kwargs.get("timeout", args[0] if args else None)
+        assert timeout is not None, "idle EOS abort must be bounded, not None"
+        assert (
+            0 < timeout <= 60
+        ), f"idle EOS abort timeout must be bounded and positive, got {timeout}"
+
+    def test_revoke_eos_commit_transaction_is_bounded(self):
+        """
+        SWEEP (red): on the EOS revoke happy path the transaction commit itself
+        must be bounded by the shared revoke budget. Round 4 bounded sink-flush +
+        producer-flush + abort on revoke but called commit_transaction with no
+        timeout, so it could block ~3x transaction.timeout.ms inside the
+        rebalance callback (and on failure escape _on_revoke, leaking the lock).
+        """
+        checkpoint = self._make_checkpoint(exactly_once=True, revoke_flush_timeout=30)
+        tx = self._transaction(changelog_tp=("changelog", 0))
+        checkpoint._store_transactions = {("s1", 0, "default"): tx}
+        checkpoint.store_offset("topic", 0, 10)
+
+        checkpoint.commit(revoking=True)
+
+        checkpoint._producer.commit_transaction.assert_called_once()
+        args, kwargs = checkpoint._producer.commit_transaction.call_args
+        timeout = kwargs.get("timeout", args[2] if len(args) > 2 else None)
+        assert timeout is not None, (
+            "revoke EOS commit_transaction must be bounded (an unbounded commit "
+            "can block the rebalance callback up to ~3x transaction.timeout.ms)"
+        )
+        assert (
+            0 < timeout <= 30
+        ), f"revoke commit_transaction timeout must be bounded, got {timeout}"
+
+    def test_slow_sink_does_not_starve_changelog_flush_on_revoke(self):
+        """
+        Round-5 review finding #1 (red): the single shared revoke budget let a
+        slow-but-SUCCESSFUL sink flush (step 1) drain deadline.remaining() toward
+        0, leaving the EOS-critical changelog producer flush (step 3) and commit
+        (step 4) a near-zero timeout. The starved flush returns while the
+        just-produced changelog is still in flight (unproduced > 0), so the
+        checkpoint ABORTS without committing offsets and the new owner
+        reprocesses -> duplicate sink writes on every rebalance with a slow sink.
+
+        _REVOKE_FLUSH_FLOOR guarantees the changelog flush + commit a minimum
+        budget a slow sink cannot starve. Contract: even after the sink consumes
+        most of an (> floor) revoke budget, the changelog flush is given at least
+        the floor, confirms delivery, and the checkpoint COMMITS the transaction
+        instead of aborting.
+
+        Red on Round-5 code (flush gets deadline.remaining() ~= budget - sink,
+        which is < floor -> _flush() reports undelivered -> abort); green once the
+        flush + commit are floored at _REVOKE_FLUSH_FLOOR.
+        """
+        # Full revoke budget deliberately ABOVE the floor, so a starved flush is
+        # caused by the slow sink draining the shared budget -- not by a budget
+        # that is itself below the floor.
+        revoke_flush_timeout = _REVOKE_FLUSH_FLOOR + 0.5
+        checkpoint = self._make_checkpoint(
+            exactly_once=True, revoke_flush_timeout=revoke_flush_timeout
         )
 
+        # Model the wall-clock starvation deterministically: the just-produced
+        # changelog is reported delivered (0 undelivered) only when the flush is
+        # given at least the reserved floor; a starved (< floor) timeout returns
+        # with the changelog still in flight.
+        def _flush(timeout=None):
+            if timeout is not None and timeout >= _REVOKE_FLUSH_FLOOR:
+                return 0
+            return 1
 
-class TestInternalProducerAbortPurge:
-    """
-    Contract: InternalProducer.abort_transaction must not leave purge-induced
-    delivery errors in _error. librdkafka's abort purges undelivered messages
-    and fires their delivery callbacks with _PURGE_QUEUE/_PURGE_INFLIGHT
-    errors; the next produce()/flush() must not see those as real failures.
-    Validates review finding A (EOS _error poisoning on abort).
-    """
+        checkpoint._producer.flush.side_effect = _flush
 
-    def test_abort_transaction_swallows_purge_induced_delivery_errors(self):
-        """
-        Contract: after abort_transaction, _error must be None even when
-        librdkafka fires _PURGE_QUEUE delivery callbacks during the abort.
-        A subsequent _raise_for_error() must be a no-op.
-        """
-        # Build a real InternalProducer with the underlying Producer mocked out
-        with patch("quixstreams.internal_producer.Producer"):
-            producer = InternalProducer(broker_address="localhost:9092")
+        # A slow-but-SUCCESSFUL sink: it sleeps past (budget - floor) so that
+        # deadline.remaining() at the changelog flush is guaranteed below the
+        # floor, then returns cleanly (no timeout, no error).
+        sink_sleep = (revoke_flush_timeout - _REVOKE_FLUSH_FLOOR) + 0.25
 
-        # Replace the inner wrapper with a mock we control
-        mock_inner = MagicMock()
-        producer._producer = mock_inner
-        producer._active_transaction = True
+        class _SlowOkSink(BatchingSink):
+            def write(self, batch):
+                pass
 
-        # Simulate: librdkafka abort purges queued messages and fires delivery
-        # callbacks with _PURGE_QUEUE errors
-        purge_error = KafkaError(KafkaError._PURGE_QUEUE)
-        mock_msg = MagicMock()
-        mock_msg.topic.return_value = "test-topic"
-        mock_msg.partition.return_value = 0
-        mock_msg.offset.return_value = 42
+            def flush(self):
+                time.sleep(sink_sleep)
 
-        def abort_side_effect(timeout=None):
-            # Simulate librdkafka firing delivery callbacks during abort
-            producer._on_delivery(purge_error, mock_msg)
+        checkpoint._sink_manager.register(_SlowOkSink())
 
-        mock_inner.abort_transaction.side_effect = abort_side_effect
+        tx = self._transaction(changelog_tp=("changelog", 0))
+        checkpoint._store_transactions = {("s1", 0, "default"): tx}
+        checkpoint.store_offset("topic", 0, 10)
 
-        # Call abort_transaction
-        producer.abort_transaction()
+        checkpoint.commit(revoking=True)
 
-        # Contract: purge-induced errors must NOT remain in _error
-        assert producer._error is None, (
-            f"abort_transaction left purge-induced error in _error: {producer._error}"
+        # Contract: the changelog flush was floored despite the slow sink
+        # draining the shared budget below the floor.
+        checkpoint._producer.flush.assert_called_once()
+        assert (
+            checkpoint._producer.flush.call_args.kwargs["timeout"]
+            >= _REVOKE_FLUSH_FLOOR
+        ), (
+            "changelog producer flush was starved by the slow sink; it must be "
+            "guaranteed at least _REVOKE_FLUSH_FLOOR on the revoke path"
         )
-        # Equivalently: _raise_for_error must be a no-op
-        producer._raise_for_error()  # must not raise
+        # Behavior: the EOS transaction was COMMITTED (offsets committed), not
+        # aborted -> the new owner does NOT reprocess and re-write the sinks.
+        checkpoint._producer.commit_transaction.assert_called_once()
+        checkpoint._producer.abort_transaction.assert_not_called()
+        # The commit itself is likewise floored.
+        assert (
+            checkpoint._producer.commit_transaction.call_args.kwargs["timeout"]
+            >= _REVOKE_FLUSH_FLOOR
+        )
+
+    def test_flush_sink_bounded_sentinel_means_infinite_not_zero(self):
+        """
+        R4-5 (red): the -1.0 "infinite" sentinel must map to an unbounded join
+        (block until the flush completes), NOT CPython's join(-1)->join(0), which
+        returns immediately and reports a false timeout. A sink that finishes
+        shortly must flush cleanly (return True), not be aborted as timed out.
+        """
+        checkpoint = self._make_checkpoint(revoke_flush_timeout=-1.0)
+
+        class _SlowOkSink(BatchingSink):
+            def write(self, batch):
+                pass
+
+            def flush(self):
+                # Finishes well after a bogus join(0) would return, but quickly
+                # enough to keep the test fast once the sentinel means "infinite".
+                time.sleep(0.3)
+
+        result = checkpoint._flush_sink_bounded(
+            _SlowOkSink(), checkpoint._revoke_flush_timeout
+        )
+
+        assert result is True
+
+    def test_on_revoke_releases_state_partitions_even_if_commit_raises(self):
+        """
+        R4-3 (red): if the bounded revoke commit exhausts its budget and raises,
+        _on_revoke must STILL run _revoke_state_partitions (release the RocksDB
+        store lock) and reset_backpressure -- otherwise the lock leaks and the
+        incoming owner livelocks. Round 4 had no try/finally, so the exception
+        escaped before the release ran. Binds the real Application._on_revoke to
+        a mock app.
+        """
+        app = MagicMock()
+        app._failed = False
+        app._processing_context.commit_checkpoint.side_effect = RuntimeError(
+            "revoke budget exhausted"
+        )
+        tps = [TopicPartition("topic", 0)]
+
+        with pytest.raises(RuntimeError):
+            Application._on_revoke(app, None, tps)
+
+        # Lock released and backpressure cleared despite the commit failure.
+        app._revoke_state_partitions.assert_called_once_with(topic_partitions=tps)
+        app._consumer.reset_backpressure.assert_called_once()
+
+
+class TestSourceCheckpointBounding:
+    """
+    C4 (red): KafkaReplicatorSource's checkpoint runs inside the source's
+    rebalance callback. Its EOS abort (close) and commit (_commit) must be
+    bounded by the source flush_timeout so a coordinator outage cannot block the
+    callback past max.poll.interval.ms. Round 4 turned the shared
+    InternalProducer.abort_transaction into a 3-attempt retry loop, so an
+    unbounded source abort became 3x unbounded.
+    """
+
+    def _make(self, flush_timeout=7):
+        producer = MagicMock(spec_set=InternalProducer)
+        producer.flush.return_value = 0
+        topic = MagicMock()
+        topic.name = "src-topic"
+        return SourceCheckpoint(
+            producer=producer,
+            producer_topic=topic,
+            consumer=MagicMock(spec_set=BaseConsumer),
+            commit_interval=1,
+            flush_timeout=flush_timeout,
+            exactly_once=True,
+        )
+
+    def test_source_close_abort_is_bounded(self):
+        cp = self._make(flush_timeout=7)
+
+        cp.close()
+
+        cp._producer.abort_transaction.assert_called_once()
+        args, kwargs = cp._producer.abort_transaction.call_args
+        timeout = kwargs.get("timeout", args[0] if args else None)
+        assert timeout is not None, "source EOS abort must be bounded, not None"
+        assert 0 < timeout <= 7
+
+    def test_source_commit_transaction_is_bounded(self):
+        cp = self._make(flush_timeout=7)
+        cp.store_offset("t", 0, 5)
+
+        cp.commit()
+
+        cp._producer.commit_transaction.assert_called_once()
+        args, kwargs = cp._producer.commit_transaction.call_args
+        timeout = kwargs.get("timeout", args[2] if len(args) > 2 else None)
+        assert timeout is not None, "source EOS commit_transaction must be bounded"
+        assert 0 < timeout <= 7

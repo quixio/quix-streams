@@ -1,6 +1,5 @@
 import logging
-from functools import wraps
-from time import sleep
+from time import monotonic, sleep
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from confluent_kafka import KafkaError, KafkaException, Message, TopicPartition
@@ -23,51 +22,37 @@ logger = logging.getLogger(__name__)
 
 _KEY_UNSET = object()
 
+# Retry policy for transactional Kafka ops (abort / send-offsets / commit).
+# confluent-kafka's contract says a *retriable* error (e.g. _TIMED_OUT during a
+# transient coordinator outage) should be retried by calling the op again. See
+# InternalProducer._retry_transaction_op for how the attempt cap and the
+# optional wall-clock budget interact (a bounded caller, the revoke path inside
+# the rebalance callback, can never block past its budget).
+_ABORT_RETRY_ATTEMPTS = 3
+_ABORT_RETRY_BACKOFF = 1.0
 
-def _retriable_transaction_op(attempts: int, backoff_seconds: float):
+# librdkafka delivery-report error codes fired when purge()/abort_transaction()
+# drops queued or in-flight messages. These are NOT real delivery failures (the
+# messages were intentionally discarded and nothing from the purged/aborted
+# batch was committed), so _on_delivery filters them out instead of poisoning
+# _error, which the next produce()/flush() would otherwise raise.
+_PURGE_ERROR_CODES = frozenset(
+    {
+        KafkaError._PURGE_QUEUE,  # noqa: SLF001
+        KafkaError._PURGE_INFLIGHT,  # noqa: SLF001
+    }
+)
+
+
+def _deadline_from_timeout(timeout: Optional[float]) -> Optional[float]:
     """
-    Some specific failure cases from sending offsets or committing a transaction
-    are retriable, which is worth re-attempting since the transaction is
-    almost complete (we flushed before attempting to commit).
-
-    Intended as a wrapper for these methods.
+    Absolute ``time.monotonic()`` deadline ``timeout`` seconds from now, or
+    ``None`` (unbounded) when ``timeout`` is ``None`` or negative (the ``-1.0``
+    librdkafka "infinite" sentinel). Shared by the abort and commit paths.
     """
-
-    def decorator(kafka_op: Callable):
-        @wraps(kafka_op)
-        def wrapper(*args, **kwargs):
-            attempts_remaining = attempts
-            op_name = kafka_op.__name__
-            while attempts_remaining:
-                try:
-                    return kafka_op(*args, **kwargs)
-                except KafkaException as e:
-                    error = e.args[0]
-                    if error.retriable():
-                        attempts_remaining -= 1
-                        logger.debug(
-                            f"Kafka transaction operation {op_name} failed, but "
-                            f"can retry; attempts remaining: {attempts_remaining}. "
-                        )
-                        if attempts_remaining:
-                            logger.debug(
-                                f"Sleeping for {backoff_seconds}s before retrying."
-                            )
-                            sleep(backoff_seconds)
-                    else:
-                        # Just treat all errors besides retriable as fatal.
-                        logger.error(
-                            f"Error during Kafka transaction operation {op_name}"
-                        )
-                        raise
-            raise KafkaProducerTransactionCommitFailed(
-                f"All Kafka {op_name} attempts failed; "
-                "aborting transaction and shutting down Application..."
-            )
-
-        return wrapper
-
-    return decorator
+    if timeout is None or timeout < 0:
+        return None
+    return monotonic() + timeout
 
 
 class KafkaProducerTransactionCommitFailed(QuixException): ...
@@ -210,17 +195,28 @@ class InternalProducer:
         )
 
     def _on_delivery(self, err: Optional[KafkaError], msg: Message):
+        if err is not None:
+            # Purge reports (from purge()/abort_transaction() dropping queued or
+            # in-flight messages) are not real delivery failures: nothing from a
+            # purged/aborted batch was committed, so they must not surface on the
+            # next produce()/flush(). Filtering them here removes the need to
+            # snapshot/restore _error around every purge/abort -- a dance that
+            # could discard a genuine error firing in the same poll window.
+            if err.code() in _PURGE_ERROR_CODES:
+                return
+            if self._error is None:
+                self._error = err
+            return
+
         if self._error is not None:
-            # There's an error already set
+            # A real error is already latched; stop recording offsets until it is
+            # surfaced by _raise_for_error (fail-fast).
             return
 
         topic, partition, offset = msg.topic(), msg.partition(), msg.offset()
-        if err is None:
-            self._tp_offsets[(topic, partition)] = offset
-            # Successful delivery confirms broker is reachable
-            self._producer._broker_available()  # noqa: SLF001
-        else:
-            self._error = err
+        self._tp_offsets[(topic, partition)] = offset
+        # Successful delivery confirms broker is reachable
+        self._producer._broker_available()  # noqa: SLF001
 
     def _raise_for_error(self):
         if self._error is not None:
@@ -246,17 +242,14 @@ class InternalProducer:
 
         Swallowing the purge-induced delivery errors is safe here: offsets were
         NOT committed, so the new owner reprocesses these messages from the last
-        committed offset (at-least-once). A genuine delivery error recorded
-        before the purge is snapshotted and restored so the next checkpoint
-        still surfaces it.
+        committed offset (at-least-once). The ``_PURGE`` reports are filtered by
+        ``_on_delivery``, so a genuine delivery error recorded before the purge
+        still surfaces on the next checkpoint.
         """
-        # Snapshot any genuine prior delivery error before purging.
-        error = self._error
         self._producer.purge()
-        # Drain the _PURGE delivery callbacks that purge() just enqueued.
+        # Drain the _PURGE delivery reports purge() just enqueued; _on_delivery
+        # filters those codes, so _error stays clean.
         self._producer.poll(0)
-        # Discard the purge-induced errors, restoring only the real prior one.
-        self._error = error
 
     @property
     def offsets(self) -> Dict[Tuple[str, int], int]:
@@ -281,6 +274,75 @@ class InternalProducer:
             raise
         self._active_transaction = True
 
+    def _retry_transaction_op(
+        self,
+        op: Callable[[Optional[float]], None],
+        *,
+        op_name: str,
+        deadline: Optional[float],
+        max_attempts: Optional[int],
+        on_exhausted: Optional[Callable[[str], Exception]] = None,
+    ) -> None:
+        """
+        Run a transactional Kafka op, retrying on *retriable* errors.
+
+        Shared retriable/backoff core for ``abort_transaction`` and
+        ``commit_transaction`` (send-offsets + commit). confluent-kafka's
+        contract says a retriable error (e.g. ``_TIMED_OUT`` during a transient
+        coordinator outage) should be retried by calling the op again; a
+        non-retriable / fenced / fatal error propagates immediately, unchanged.
+
+        :param op: callable taking a per-attempt timeout (seconds, or ``None``
+            for librdkafka "infinite") and performing one attempt.
+        :param op_name: name for logging / the exhaustion exception.
+        :param deadline: absolute ``time.monotonic()`` deadline for the WHOLE op
+            (every attempt plus backoff), or ``None`` for no wall-clock bound.
+            Each attempt is given the whole remaining budget, so a genuine
+            timeout consumes it and is not retried past the deadline. Bounded
+            callers (the revoke path, inside the rebalance callback) rely on this
+            to guarantee the total time never exceeds their budget.
+        :param max_attempts: cap on the number of attempts, or ``None`` for no
+            cap -- retry retriable errors indefinitely (the idle/close abort's
+            "wait out a transient coordinator blip" contract; only combined with
+            ``deadline=None``).
+        :param on_exhausted: builds the exception raised once the attempt cap or
+            the budget is exhausted after a retriable error. When ``None`` the
+            last retriable error is re-raised (an exception after a bounded time
+            -- no worse than not retrying at all).
+        """
+        attempt = 0
+        while True:
+            if deadline is not None:
+                op_timeout: Optional[float] = max(0.0, deadline - monotonic())
+            else:
+                # None -> Producer maps to librdkafka -1 (block until done/fatal).
+                op_timeout = None
+            try:
+                op(op_timeout)
+                return
+            except KafkaException as exc:
+                error = exc.args[0]
+                if not error.retriable():
+                    # Fatal / fenced / non-retriable: propagate unchanged.
+                    logger.error(f"Error during Kafka transaction operation {op_name}")
+                    raise
+                attempt += 1
+                attempts_left = max_attempts is None or attempt < max_attempts
+                budget_left = deadline is None or (deadline - monotonic()) > 0
+                if not attempts_left or not budget_left:
+                    if on_exhausted is not None:
+                        raise on_exhausted(op_name) from exc
+                    raise
+                logger.debug(
+                    f"Retriable error during Kafka transaction operation "
+                    f"{op_name}; retrying (attempt {attempt})."
+                )
+                backoff = _ABORT_RETRY_BACKOFF
+                if deadline is not None:
+                    backoff = min(backoff, max(0.0, deadline - monotonic()))
+                if backoff > 0:
+                    sleep(backoff)
+
     def abort_transaction(self, timeout: Optional[float] = None):
         """
         Attempt an abort if an active transaction.
@@ -294,86 +356,48 @@ class InternalProducer:
 
         NOTE: under normal circumstances a transaction will be open due to how
         the Checkpoint inits another immediately after committing.
+
+        ``timeout`` is the OVERALL wall-clock budget (seconds) for the whole
+        abort, retries included:
+
+        * A finite ``timeout`` (the revoke path, inside the rebalance callback)
+          bounds both the budget AND the attempts, so it can never block past
+          ``max.poll.interval.ms``.
+        * ``None`` (or negative) means "no deadline" -- a retriable error is
+          retried indefinitely per confluent-kafka's "call abort_transaction()
+          again to continue the abort" contract, waiting out a transient
+          coordinator outage instead of crashing on the first timeout. Callers
+          off the rebalance path pass a finite idle/shutdown budget instead of
+          relying on this (see ``Checkpoint._abort_transaction_if_eos``).
+
+        On success ``_active_transaction`` is cleared; a non-retriable / fenced /
+        fatal error, or retriable exhaustion of a finite budget, propagates and
+        leaves ``_active_transaction`` ``True`` (the transaction is still open).
         """
-        if self._active_transaction:
-            if self._tp_offsets:
-                # Only log here to avoid polluting logging with empty checkpoint aborts
-                logger.debug("Aborting Kafka transaction and clearing producer offsets")
-                self._tp_offsets = {}
-            # librdkafka's abort internally purges the queued messages and flushes
-            # the in-flight ones, firing their _PURGE_QUEUE/_PURGE_INFLIGHT delivery
-            # reports through _on_delivery on this thread. Swallow those exactly as
-            # purge() does: snapshot any genuine prior error, run the abort, drain
-            # the purge-induced callbacks, then restore the snapshot. Safe because
-            # the abort is intentional and nothing from the aborted transaction was
-            # committed, so a _PURGE error is not a real delivery failure that the
-            # next produce()/flush() should raise.
-            error = self._error
-            self._producer.abort_transaction(timeout)
-            self._producer.poll(0)
-            self._error = error
-            self._active_transaction = False
-        else:
+        if not self._active_transaction:
             logger.debug("No Kafka transaction to abort")
+            return
+        if self._tp_offsets:
+            # Only log here to avoid polluting logging with empty checkpoint aborts
+            logger.debug("Aborting Kafka transaction and clearing producer offsets")
+            self._tp_offsets = {}
 
-    def _retriable_op(self, attempts: int, backoff_seconds: float):
-        """
-        Some specific failure cases from sending offsets or committing a transaction
-        are retriable, which is worth re-attempting since the transaction is
-        almost complete (we flushed before attempting to commit).
-
-        NOTE: During testing, most other operations (including producing)
-        did not generate "retriable" errors.
-        """
-
-        def decorator(kafka_op: Callable):
-            @wraps(kafka_op)
-            def wrapper(*args, **kwargs):
-                attempts_remaining = attempts
-                op_name = kafka_op.__name__
-                while attempts_remaining:
-                    try:
-                        return kafka_op(*args, **kwargs)
-                    except KafkaException as e:
-                        error = e.args[0]
-                        if error.retriable():
-                            attempts_remaining -= 1
-                            logger.debug(
-                                f"Kafka transaction operation {op_name} failed, but "
-                                f"can retry; attempts remaining: {attempts_remaining}. "
-                            )
-                            if attempts_remaining:
-                                logger.debug(
-                                    f"Sleeping for {backoff_seconds}s before retrying."
-                                )
-                                sleep(backoff_seconds)
-                        else:
-                            # Just treat all errors besides retriable as fatal.
-                            logger.error(
-                                f"Error during Kafka transaction operation {op_name}"
-                            )
-                            raise
-                raise KafkaProducerTransactionCommitFailed(
-                    f"All Kafka {op_name} attempts failed; "
-                    "aborting transaction and shutting down Application..."
-                )
-
-            return wrapper
-
-        return decorator
-
-    @_retriable_transaction_op(attempts=3, backoff_seconds=1.0)
-    def _send_offsets_to_transaction(
-        self,
-        positions: List[TopicPartition],
-        group_metadata: GroupMetadata,
-        timeout: Optional[float] = None,
-    ):
-        self._producer.send_offsets_to_transaction(positions, group_metadata, timeout)
-
-    @_retriable_transaction_op(attempts=3, backoff_seconds=1.0)
-    def _commit_transaction(self, timeout: Optional[float] = None):
-        self._producer.commit_transaction(timeout)
+        # A finite timeout (revoke path) yields a deadline and caps the attempts;
+        # None/negative (idle / close / shutdown) yields no deadline and no
+        # attempt cap -> retry a retriable error indefinitely (wait out a blip).
+        deadline = _deadline_from_timeout(timeout)
+        self._retry_transaction_op(
+            self._producer.abort_transaction,
+            op_name="abort_transaction",
+            deadline=deadline,
+            max_attempts=_ABORT_RETRY_ATTEMPTS if deadline is not None else None,
+            on_exhausted=None,
+        )
+        # librdkafka's abort purges queued messages and flushes in-flight ones,
+        # firing _PURGE_QUEUE/_PURGE_INFLIGHT delivery reports through
+        # _on_delivery on this thread. Drain them now; _on_delivery filters those
+        # codes, so they never poison _error (no snapshot/restore dance needed).
+        self._producer.poll(0)
         self._active_transaction = False
 
     def commit_transaction(
@@ -382,8 +406,46 @@ class InternalProducer:
         group_metadata: GroupMetadata,
         timeout: Optional[float] = None,
     ):
-        self._send_offsets_to_transaction(positions, group_metadata, timeout)
-        self._commit_transaction(timeout)
+        """
+        Send the consumer offsets into the open transaction and commit it.
+
+        Some failure cases from sending offsets or committing a transaction are
+        retriable, which is worth re-attempting since the transaction is almost
+        complete (the changelog was flushed before attempting to commit).
+
+        ``timeout`` is the OVERALL wall-clock budget (seconds) shared by BOTH the
+        send-offsets and the commit steps, so the whole operation is bounded by
+        one budget rather than 2x it -- important on the revoke path, inside the
+        rebalance callback. ``None`` (off the revoke path) means unbounded: each
+        step keeps its legacy behavior (retry up to ``_ABORT_RETRY_ATTEMPTS``
+        times, then raise ``KafkaProducerTransactionCommitFailed`` to trigger the
+        Application shutdown).
+        """
+        deadline = _deadline_from_timeout(timeout)
+
+        def _fail(op_name: str) -> Exception:
+            return KafkaProducerTransactionCommitFailed(
+                f"All Kafka {op_name} attempts failed; "
+                "aborting transaction and shutting down Application..."
+            )
+
+        self._retry_transaction_op(
+            lambda t: self._producer.send_offsets_to_transaction(
+                positions, group_metadata, t
+            ),
+            op_name="send_offsets_to_transaction",
+            deadline=deadline,
+            max_attempts=_ABORT_RETRY_ATTEMPTS,
+            on_exhausted=_fail,
+        )
+        self._retry_transaction_op(
+            self._producer.commit_transaction,
+            op_name="commit_transaction",
+            deadline=deadline,
+            max_attempts=_ABORT_RETRY_ATTEMPTS,
+            on_exhausted=_fail,
+        )
+        self._active_transaction = False
 
     def __enter__(self):
         return self

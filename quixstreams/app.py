@@ -1283,16 +1283,23 @@ class Application:
         # In this case, we should drop the checkpoint and let another consumer
         # pick up from the latest one
         logger.debug("Rebalancing: revoking partitions")
-        if self._failed:
-            logger.warning(
-                "Application is stopping due to failure, "
-                "latest checkpoint will not be committed."
-            )
-        else:
-            self._processing_context.commit_checkpoint(force=True, revoking=True)
-
-        self._revoke_state_partitions(topic_partitions=topic_partitions)
-        self._consumer.reset_backpressure()
+        try:
+            if self._failed:
+                logger.warning(
+                    "Application is stopping due to failure, "
+                    "latest checkpoint will not be committed."
+                )
+            else:
+                self._processing_context.commit_checkpoint(force=True, revoking=True)
+        finally:
+            # Always release the RocksDB store locks (and clear backpressure),
+            # even if the bounded revoke commit exhausted its budget and raised:
+            # otherwise the lock leaks and the incoming owner livelocks trying to
+            # open the same partition (the contention this branch fixes). The
+            # revoke commit is already bounded, so at worst this runs a little
+            # later, never not-at-all.
+            self._revoke_state_partitions(topic_partitions=topic_partitions)
+            self._consumer.reset_backpressure()
 
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
         """

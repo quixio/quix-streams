@@ -91,7 +91,7 @@ class ProcessingContext:
         """
         if self.checkpoint.expired() or force:
             if self.checkpoint.empty():
-                self.checkpoint.close()
+                self.checkpoint.close(revoking=revoking)
             else:
                 logger.debug(f"Committing a checkpoint; forced={force}")
                 start = time.monotonic()

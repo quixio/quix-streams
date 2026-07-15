@@ -42,10 +42,14 @@ class Checkpoint(BaseCheckpoint):
         """
         Perform cleanup (when the checkpoint is empty) instead of committing.
 
-        Needed for exactly-once, as Kafka transactions are timeboxed.
+        Needed for exactly-once, as Kafka transactions are timeboxed. The abort
+        is bounded by ``flush_timeout`` so it cannot block the source's rebalance
+        callback past ``max.poll.interval.ms``: ``InternalProducer.abort_transaction``
+        is a shared retry loop, so an unbounded abort here would otherwise retry
+        for ~3x ``transaction.timeout.ms`` inside the callback.
         """
         if self._exactly_once:
-            self._producer.abort_transaction()
+            self._producer.abort_transaction(self._flush_timeout)
 
     def commit(self):
         """
@@ -78,8 +82,13 @@ class Checkpoint(BaseCheckpoint):
 
     def _commit(self, offsets: List[TopicPartition]):
         if self._exactly_once:
+            # Bound the transaction commit by flush_timeout (the whole
+            # send-offsets + commit shares one budget) so it cannot block the
+            # source's rebalance callback past max.poll.interval.ms.
             self._producer.commit_transaction(
-                offsets, self._consumer.consumer_group_metadata()
+                offsets,
+                self._consumer.consumer_group_metadata(),
+                timeout=self._flush_timeout,
             )
         else:
             partitions = self._consumer.commit(offsets=offsets, asynchronous=False)
