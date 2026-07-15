@@ -4,7 +4,7 @@ import time
 import uuid
 from typing import Any, Iterable, List, Optional, Tuple, Union
 
-from confluent_kafka import OFFSET_INVALID
+from confluent_kafka import OFFSET_INVALID, KafkaException
 
 from quixstreams.sinks import BatchingSink
 from quixstreams.sinks.base import SinkBatch
@@ -12,6 +12,21 @@ from quixstreams.sinks.base.item import SinkItem
 from quixstreams.sources import Source, StatefulSource
 
 DEFAULT_TIMEOUT = 10.0
+
+
+def make_kafka_exception(*, retriable: bool) -> KafkaException:
+    """
+    Build a ``KafkaException`` whose inner error reports the given retriability,
+    for exercising the transactional retry loops (abort / commit) without a
+    broker. Single shared factory so the fake-error helper is not redefined in
+    each test.
+    """
+
+    class _FakeKafkaError(Exception):
+        def retriable(self) -> bool:
+            return retriable
+
+    return KafkaException(_FakeKafkaError())
 
 
 class Timeout:

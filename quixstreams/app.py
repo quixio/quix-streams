@@ -8,6 +8,7 @@ import uuid
 import warnings
 from collections import defaultdict
 from pathlib import Path
+from threading import Event
 from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union, cast
 
 from confluent_kafka import TopicPartition
@@ -52,7 +53,7 @@ from .sources import BaseSource, SourceException, SourceManager
 from .state import StateStoreManager
 from .state.exceptions import StateRecoveryOffsetOutOfRange
 from .state.recovery import RecoveryManager
-from .state.rocksdb import RocksDBOptionsType
+from .state.rocksdb import OpenDeadline, RocksDBOpenAborted, RocksDBOptionsType
 from .utils.settings import BaseSettings
 
 __all__ = ("Application", "ApplicationConfig")
@@ -74,6 +75,16 @@ _default_consumer_extra_config = {
 consumer_extra_config_overrides = {"partition.assignment.strategy": "range"}
 
 _default_max_poll_interval_ms = 300000
+
+# Fraction of max.poll.interval.ms allotted to each bounded flush during a
+# partition revoke. The revoke runs inside the rebalance callback (itself inside
+# poll()), so each blocking step must finish well within the poll budget;
+# overrunning re-triggers the livelock this PR fixes.
+_REVOKE_FLUSH_FRACTION = 0.2
+
+# Fraction of max.poll.interval.ms allotted to the *total* RocksDB open time
+# across all partitions in a single _on_assign, shared via a per-assign deadline.
+_REBALANCE_OPEN_BUDGET_FRACTION = 0.5
 
 
 class TopicManagerFactory(Protocol):
@@ -385,6 +396,16 @@ class Application:
         self._producer = self._get_internal_producer(on_error=on_producer_error)
         self._running = False
         self._failed = False
+        # Signals to state store partitions that the application is stopping, so
+        # a partition stuck in its open-retry loop (e.g. waiting on a RocksDB
+        # lock held by another instance) aborts promptly instead of sleeping
+        # through the whole retry budget.
+        self._stop_event = Event()
+        # Shared per-assign RocksDB-open budget. Armed at the start of
+        # _on_assign and disarmed in its finally, it bounds the *total* serial
+        # open time across all partitions in one rebalance so multiple contended
+        # partitions cannot push _on_assign past max.poll.interval.ms.
+        self._open_deadline = OpenDeadline()
 
         self._topic_manager = topic_manager or self._get_topic_manager()
 
@@ -404,6 +425,8 @@ class Application:
             rocksdb_options=self._config.rocksdb_options,
             producer=producer,
             recovery_manager=recovery_manager,
+            stop_event=self._stop_event,
+            open_deadline=self._open_deadline,
         )
 
         self._source_manager = SourceManager()
@@ -418,6 +441,7 @@ class Application:
             exactly_once=self._config.exactly_once,
             sink_manager=self._sink_manager,
             dataframe_registry=self._dataframe_registry,
+            revoke_flush_timeout=self._config.revoke_flush_timeout,
         )
         self._run_tracker = RunTracker()
 
@@ -613,6 +637,8 @@ class Application:
         """
 
         self._run_tracker.stop()
+        # Unblock any state partition waiting on its open-retry backoff
+        self._stop_event.set()
         if fail:
             # Update "_failed" only when fail=True to prevent stop(failed=False) from
             # resetting it
@@ -884,6 +910,7 @@ class Application:
                     "a plain Source (no StreamingDataFrame)."
                 )
         self._run_tracker.reset()
+        self._stop_event.clear()
         self._run_tracker.set_stop_condition(timeout=timeout, count=count)
         self._setup_signal_handlers()
 
@@ -919,14 +946,19 @@ class Application:
         return self._run_tracker.collected
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
-        fail = False
+        # A RocksDBOpenAborted means the open-retry loop was intentionally
+        # interrupted by a graceful stop (SIGTERM / stop()). Exit clean and keep
+        # _failed False so the consumer close still commits healthy partitions
+        # in _on_revoke.
+        if exc_type is not None and issubclass(exc_type, RocksDBOpenAborted):
+            self.stop(fail=False)
+            return True  # suppress: graceful stop, not a failure
 
         # Sources and the application are independent.
         # If a source fails, the application can shutdown gracefully.
-        if exc_val is not None and exc_type is not SourceException:
-            fail = True
-
+        fail = exc_val is not None and exc_type is not SourceException
         self.stop(fail=fail)
+        return False
 
     def _run_dataframe(self, sink: Optional[VoidExecutor] = None):
         changelog_topics = self._topic_manager.changelog_topics_list
@@ -1098,6 +1130,26 @@ class Application:
             return
         logger.debug("Rebalancing: assigning partitions")
 
+        # Arm the shared per-assign RocksDB-open budget for the whole callback so
+        # the total open time across all assigned partitions is bounded. Disarmed
+        # in the finally so opens outside a rebalance (e.g. sources) stay
+        # unbounded.
+        self._open_deadline.arm(
+            self._config.flush_timeout * _REBALANCE_OPEN_BUDGET_FRACTION
+        )
+        try:
+            self._assign_partitions(topic_partitions)
+        finally:
+            self._open_deadline.disarm()
+
+    def _assign_partitions(self, topic_partitions: List[TopicPartition]):
+        """
+        Assign store partitions for the given topic partitions under the armed
+        per-assign open budget. Split out of `_on_assign` so the arm/disarm of
+        the shared open deadline stays readable.
+
+        :param topic_partitions: list of `TopicPartition` from Kafka
+        """
         # Only start the sources once the consumer is assigned. Otherwise a source
         # can produce data before the consumer starts. If that happens on a new
         # consumer with `auto_offset_reset` set to `latest` the consumer will not
@@ -1213,6 +1265,13 @@ class Application:
                         partition=tp.partition,
                         committed_offsets=committed_offsets[tp.partition],
                     )
+
+        # Resume any data partition left paused by a previous recovery generation
+        # that this rebalance reassigned without (re)triggering a recovery check
+        # (e.g. a consumer that now holds only stateless partitions). Without this,
+        # such a partition can stay paused indefinitely. No-op during active
+        # recovery or when no state recovery is in play.
+        self._state_manager.resume_reassigned_data_partitions(topic_partitions)
         self._run_tracker.timeout_refresh()
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
@@ -1224,16 +1283,23 @@ class Application:
         # In this case, we should drop the checkpoint and let another consumer
         # pick up from the latest one
         logger.debug("Rebalancing: revoking partitions")
-        if self._failed:
-            logger.warning(
-                "Application is stopping due to failure, "
-                "latest checkpoint will not be committed."
-            )
-        else:
-            self._processing_context.commit_checkpoint(force=True)
-
-        self._revoke_state_partitions(topic_partitions=topic_partitions)
-        self._consumer.reset_backpressure()
+        try:
+            if self._failed:
+                logger.warning(
+                    "Application is stopping due to failure, "
+                    "latest checkpoint will not be committed."
+                )
+            else:
+                self._processing_context.commit_checkpoint(force=True, revoking=True)
+        finally:
+            # Always release the RocksDB store locks (and clear backpressure),
+            # even if the bounded revoke commit exhausted its budget and raised:
+            # otherwise the lock leaks and the incoming owner livelocks trying to
+            # open the same partition (the contention this branch fixes). The
+            # revoke commit is already bounded, so at worst this runs a little
+            # later, never not-at-all.
+            self._revoke_state_partitions(topic_partitions=topic_partitions)
+            self._consumer.reset_backpressure()
 
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
         """
@@ -1342,6 +1408,10 @@ class ApplicationConfig(BaseSettings):
             )
             / 1000
         )  # convert to seconds
+
+    @property
+    def revoke_flush_timeout(self) -> float:
+        return self.flush_timeout * _REVOKE_FLUSH_FRACTION
 
     @property
     def exactly_once(self) -> bool:

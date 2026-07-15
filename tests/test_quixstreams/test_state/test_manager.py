@@ -52,6 +52,27 @@ class TestStateStoreManager:
         )
         state_manager.on_partition_revoke(stream_id="topic", partition=0)
 
+    def test_resume_reassigned_data_partitions_delegates_to_recovery_manager(
+        self, state_manager_factory
+    ):
+        recovery_manager = MagicMock()
+        state_manager = state_manager_factory(
+            recovery_manager=recovery_manager, producer=MagicMock()
+        )
+        partitions = [TopicPartition("topic", 0)]
+
+        state_manager.resume_reassigned_data_partitions(partitions)
+
+        recovery_manager.resume_reassigned_data_partitions.assert_called_once_with(
+            partitions
+        )
+
+    def test_resume_reassigned_data_partitions_noop_without_recovery_manager(
+        self, state_manager
+    ):
+        # Must be a no-op (not an error) when state recovery is not enabled
+        state_manager.resume_reassigned_data_partitions([TopicPartition("topic", 0)])
+
     def test_register_store(self, state_manager):
         state_manager = state_manager
         state_manager.register_store("my_topic", store_name="default")

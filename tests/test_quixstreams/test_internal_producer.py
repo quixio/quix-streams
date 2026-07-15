@@ -1,7 +1,7 @@
 import uuid
 from concurrent.futures import Future
 from time import sleep
-from unittest.mock import call, create_autospec, patch
+from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
 from confluent_kafka import (
@@ -19,6 +19,7 @@ from quixstreams.models import (
     JSONSerializer,
     SerializationError,
 )
+from tests.utils import make_kafka_exception
 
 
 class TestInternalProducer:
@@ -450,26 +451,206 @@ class TestTransactionalInternalProducer:
         Some specific failure cases from sending offsets or committing a transaction
         are retriable.
         """
-
-        class MockKafkaError(Exception):
-            def retriable(self):
-                return True
-
         call_args = [["my", "offsets"], "consumer_metadata", 1]
-        error = ConfluentKafkaException(MockKafkaError())
 
         mock_producer = create_autospec(Producer)
-        mock_producer.send_offsets_to_transaction.__name__ = "send_offsets"
-        mock_producer.commit_transaction.__name__ = "commit"
-        mock_producer.send_offsets_to_transaction.side_effect = [error, None]
-        with patch(
-            "quixstreams.internal_producer.Producer",
-            return_value=mock_producer,
+        mock_producer.send_offsets_to_transaction.side_effect = [
+            make_kafka_exception(retriable=True),
+            None,
+        ]
+        with (
+            patch(
+                "quixstreams.internal_producer.Producer",
+                return_value=mock_producer,
+            ),
+            patch("quixstreams.internal_producer.sleep"),
         ):
             producer = InternalProducer(broker_address="xyz", transactional=True)
             producer.commit_transaction(*call_args)
 
-        mock_producer.send_offsets_to_transaction.assert_has_calls(
-            [call(*call_args)] * 2
-        )
+        # Retried send-offsets twice (1 retriable failure + 1 success). The
+        # per-attempt timeout is now derived from the shared commit budget, so
+        # only the positions/metadata are asserted, not the exact timeout value.
+        assert mock_producer.send_offsets_to_transaction.call_count == 2
+        for c in mock_producer.send_offsets_to_transaction.call_args_list:
+            assert c.args[0] == ["my", "offsets"]
+            assert c.args[1] == "consumer_metadata"
         mock_producer.commit_transaction.assert_called_once()
+
+
+class TestAbortTransactionRetry:
+    """
+    InternalProducer.abort_transaction must retry a *retriable* error
+    (e.g. _TIMED_OUT during a transient coordinator outage) per confluent-kafka's
+    abort-transaction contract ("the application may call abort_transaction()
+    again to continue the abort operation"), instead of propagating on the first
+    failure. Non-retriable / fenced / fatal errors still propagate unchanged.
+    """
+
+    def test_abort_transaction_retries_retriable_error_and_succeeds(self):
+        """
+        A retriable KafkaError from the inner abort_transaction is retried and
+        succeeds on a later attempt instead of propagating.
+        """
+        mock_producer = create_autospec(Producer)
+        # Fail once with a retriable error, then succeed on the retry.
+        mock_producer.abort_transaction.side_effect = [
+            make_kafka_exception(retriable=True),
+            None,
+        ]
+        with (
+            patch("quixstreams.internal_producer.Producer", return_value=mock_producer),
+            patch("quixstreams.internal_producer.sleep"),
+        ):
+            producer = InternalProducer(broker_address="xyz", transactional=True)
+            producer._active_transaction = True
+            # Must retry and succeed instead of raising.
+            producer.abort_transaction(timeout=5.0)
+
+        assert mock_producer.abort_transaction.call_count == 2
+        assert producer._active_transaction is False
+
+    def test_abort_transaction_propagates_non_retriable_error(self):
+        """
+        A non-retriable / fatal error is not retried: it propagates unchanged and
+        leaves the transaction open (its truthful librdkafka code must surface).
+        """
+        mock_producer = create_autospec(Producer)
+        mock_producer.abort_transaction.side_effect = make_kafka_exception(
+            retriable=False
+        )
+        with (
+            patch("quixstreams.internal_producer.Producer", return_value=mock_producer),
+            patch("quixstreams.internal_producer.sleep"),
+        ):
+            producer = InternalProducer(broker_address="xyz", transactional=True)
+            producer._active_transaction = True
+            with pytest.raises(ConfluentKafkaException):
+                producer.abort_transaction(timeout=5.0)
+
+        assert mock_producer.abort_transaction.call_count == 1
+        assert producer._active_transaction is True
+
+    def test_abort_transaction_none_timeout_retries_indefinitely(self):
+        """
+        R4-2 (red): with no timeout (None = "wait out a transient coordinator
+        outage"), a retriable abort error must be retried indefinitely (no
+        attempt cap) until it succeeds or a non-retriable error occurs. Round 4
+        still decremented the attempt counter on the None path, so it re-raised
+        after 3 retriable failures -- contradicting its own docstring.
+        """
+        mock_producer = create_autospec(Producer)
+        # Fail 5 times (well past the 3-attempt cap), then succeed.
+        mock_producer.abort_transaction.side_effect = [
+            make_kafka_exception(retriable=True) for _ in range(5)
+        ] + [None]
+        with (
+            patch("quixstreams.internal_producer.Producer", return_value=mock_producer),
+            patch("quixstreams.internal_producer.sleep"),
+        ):
+            producer = InternalProducer(broker_address="xyz", transactional=True)
+            producer._active_transaction = True
+            # No timeout => unbounded: must keep retrying and finally succeed.
+            producer.abort_transaction(timeout=None)
+
+        assert mock_producer.abort_transaction.call_count == 6
+        assert producer._active_transaction is False
+
+    def test_producer_abort_transaction_maps_none_timeout_to_infinite(self):
+        """
+        R4 latent guard: the Producer wrapper must map a None abort timeout to
+        librdkafka's -1 (infinite), NOT pass None through. Raw confluent
+        abort_transaction(None) raises TypeError, which would bypass
+        InternalProducer's retriable `except KafkaException` and silently break
+        the unbounded (idle/close) abort contract if this mapping regressed.
+        Every other abort test mocks the Producer wrapper, so this exercises the
+        real None->-1 mapping directly.
+        """
+        producer = Producer(broker_address="xyz", transactional=True)
+        inner = MagicMock()
+        producer._inner_producer = inner
+
+        producer.abort_transaction(None)
+
+        inner.abort_transaction.assert_called_once_with(-1)
+
+
+class TestInternalProducerAbortPurge:
+    """
+    Contract: InternalProducer.abort_transaction must not leave purge-induced
+    delivery errors in _error. librdkafka's abort purges undelivered messages
+    and fires their delivery callbacks with _PURGE_QUEUE/_PURGE_INFLIGHT
+    errors; the next produce()/flush() must not see those as real failures.
+    Validates review finding A (EOS _error poisoning on abort).
+    """
+
+    def test_abort_transaction_swallows_purge_induced_delivery_errors(self):
+        """
+        Contract: after abort_transaction, _error must be None even when
+        librdkafka fires _PURGE_QUEUE delivery callbacks during the abort.
+        A subsequent _raise_for_error() must be a no-op.
+        """
+        # Build a real InternalProducer with the underlying Producer mocked out
+        with patch("quixstreams.internal_producer.Producer"):
+            producer = InternalProducer(broker_address="localhost:9092")
+
+        # Replace the inner wrapper with a mock we control
+        mock_inner = MagicMock()
+        producer._producer = mock_inner
+        producer._active_transaction = True
+
+        # Simulate: librdkafka abort purges queued messages and fires delivery
+        # callbacks with _PURGE_QUEUE errors
+        purge_error = ConfluentKafkaError(ConfluentKafkaError._PURGE_QUEUE)
+        mock_msg = MagicMock()
+        mock_msg.topic.return_value = "test-topic"
+        mock_msg.partition.return_value = 0
+        mock_msg.offset.return_value = 42
+
+        def abort_side_effect(timeout=None):
+            # Simulate librdkafka firing delivery callbacks during abort
+            producer._on_delivery(purge_error, mock_msg)
+
+        mock_inner.abort_transaction.side_effect = abort_side_effect
+
+        # Call abort_transaction
+        producer.abort_transaction()
+
+        # Contract: purge-induced errors must NOT remain in _error
+        assert (
+            producer._error is None
+        ), f"abort_transaction left purge-induced error in _error: {producer._error}"
+        # Equivalently: _raise_for_error must be a no-op
+        producer._raise_for_error()  # must not raise
+
+    def test_genuine_delivery_error_during_abort_still_surfaces(self):
+        """
+        R4-4 (red): a genuine (non-_PURGE) delivery error firing during the
+        abort/poll window must NOT be discarded -- it must surface on the next
+        flush()/produce(). The old blanket snapshot/restore of _error around the
+        abort wiped it; filtering only the _PURGE codes in _on_delivery keeps it.
+        """
+        with patch("quixstreams.internal_producer.Producer"):
+            producer = InternalProducer(broker_address="localhost:9092")
+
+        mock_inner = MagicMock()
+        producer._producer = mock_inner
+        producer._active_transaction = True
+
+        # A genuine, non-purge delivery failure fires while librdkafka aborts.
+        genuine_error = ConfluentKafkaError(ConfluentKafkaError._MSG_TIMED_OUT)
+        mock_msg = MagicMock()
+        mock_msg.topic.return_value = "test-topic"
+        mock_msg.partition.return_value = 0
+        mock_msg.offset.return_value = 42
+
+        def abort_side_effect(timeout=None):
+            producer._on_delivery(genuine_error, mock_msg)
+
+        mock_inner.abort_transaction.side_effect = abort_side_effect
+
+        producer.abort_transaction()
+
+        # The genuine error survived the abort and surfaces on the next check.
+        with pytest.raises(KafkaProducerDeliveryError):
+            producer._raise_for_error()
