@@ -51,6 +51,12 @@ class TestRecoveryPartition:
         # Create a RecoveryPartition with the offset ahead of the watermark
         store_partition = MagicMock(RocksDBStorePartition)
         store_partition.get_changelog_offset.return_value = offset
+        # No flipped-but-unfinished TTL migration in this scenario: the
+        # incomplete-migration term is now evaluated independently of the
+        # consumable-offsets guard (finding 2), so an unstubbed MagicMock would
+        # otherwise return a truthy sentinel and force recovery. This mirrors
+        # ``test_needs_recovery_check`` above.
+        store_partition.has_incomplete_ttl_migration.return_value = False
 
         recovery_partition = recovery_partition_factory(
             store_partition=store_partition, lowwater=20, highwater=20
@@ -75,6 +81,33 @@ class TestRecoveryPartition:
 
         recovery_partition = recovery_partition_factory(store_partition=store_partition)
         assert recovery_partition.offset == initial_offset
+
+    def test_needs_recovery_truncated_changelog_incomplete_migration(
+        self, recovery_partition_factory
+    ):
+        """Finding 2: a partition whose store reports
+        ``has_incomplete_ttl_migration() True`` must return
+        ``needs_recovery_check True`` even when the changelog is fully
+        truncated (``lowwater == highwater``).  Without this, a warm,
+        offset-caught-up store with a pending census but a truncated
+        changelog is never flagged for recovery, and ``complete_recovery``
+        never runs -- permanently stranding the leftover legacy records.
+
+        Validates spec: incomplete TTL migration overrides the
+        ``has_consumable_offsets`` guard.
+        """
+        store_partition = MagicMock(RocksDBStorePartition)
+        store_partition.get_changelog_offset.return_value = 19  # caught up
+        store_partition.has_incomplete_ttl_migration.return_value = True
+
+        recovery_partition = recovery_partition_factory(
+            store_partition=store_partition, lowwater=20, highwater=20
+        )
+
+        assert recovery_partition.needs_recovery_check is True, (
+            "needs_recovery_check must be True when the store has an "
+            "incomplete TTL migration, even with a truncated changelog"
+        )
 
 
 class TestRecoverFromChangelogMessage:

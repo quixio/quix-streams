@@ -10,6 +10,7 @@ from datetime import timedelta
 
 import pytest
 
+from quixstreams.state.exceptions import ChangelogFlushError
 from quixstreams.state.memory import MemoryStorePartition
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
@@ -195,3 +196,70 @@ class TestPopulatedLegacyLiveBackfill:
         stored = partition._state["default"][b"pfx|l0"]
         stamp, _ = decode_ttl_value(stored)
         assert stamp != SENTINEL_NEVER
+
+    def test_live_migration_raises_on_undelivered_changelog(self):
+        """Finding 1: the live memory backfill must raise ChangelogFlushError
+        when the changelog flush leaves messages undelivered, mirroring the
+        RocksDB backfill's confirm-or-raise discipline (see
+        RocksDBStorePartition._flush_backfill_changelog).
+
+        Validates spec: memory/RocksDB parity -- ChangelogFlushError on
+        stalled flush during populated-legacy live backfill.
+        """
+        producer = _make_changelog_producer_mock()
+        # Simulate a stuck producer: flush reports 5 undelivered, and
+        # the on_delivery callbacks are never called (produced > acked).
+        producer.flush.return_value = 5
+        partition = MemoryStorePartition(changelog_producer=producer)
+        _seed_legacy(partition, 3)
+
+        with pytest.raises(ChangelogFlushError):
+            with partition.begin() as tx:
+                tx.set(
+                    key="new",
+                    value="vnew",
+                    prefix=b"pfx",
+                    timestamp=BASE_TS,
+                    ttl=timedelta(days=2),
+                )
+
+    def test_additive_backfill_stamp_clamped_when_exceeds_plausible(self):
+        """Finding 4: a ``legacy_records_ttl`` whose magnitude is individually
+        below ``_MAX_PLAUSIBLE_STAMP_MS`` but whose SUM with the enable-time
+        high-water ``>= _MAX_PLAUSIBLE_STAMP_MS`` must be clamped so the
+        backfilled record remains readable (not stranded by
+        ``_safe_decode_stamp``).
+
+        Validates spec: additive backfill stamp is clamped to
+        ``_MAX_PLAUSIBLE_STAMP_MS`` / ``SENTINEL_NEVER``.
+        """
+        # enable_time (set by the triggering write's timestamp) + ttl > 10**15.
+        # The ttl alone is < 10**15, so it passes any magnitude validation.
+        ts = 1_700_000_000_000  # realistic epoch-ms (~year 2023)
+        large_ttl = timedelta(milliseconds=999_000_000_000_000)  # < 10**15 ms
+
+        producer = _make_changelog_producer_mock()
+        partition = MemoryStorePartition(
+            changelog_producer=producer,
+            legacy_records_ttl=large_ttl,
+        )
+        _seed_legacy(partition, 1)
+
+        with partition.begin() as tx:
+            tx.set(
+                key="new",
+                value="vnew",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=1),
+            )
+
+        # The backfilled legacy record must be readable -- get must return
+        # the original value, not raise StateSerializationError or return
+        # a corrupted prefix||value blob.
+        result = partition.begin().get(key=b"l0", prefix=b"pfx", timestamp=ts)
+        assert result == "legacy-0", (
+            "backfilled record with additive stamp >= _MAX_PLAUSIBLE_STAMP_MS "
+            "must still be readable (stamp should be clamped); got "
+            f"{result!r}"
+        )

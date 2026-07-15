@@ -37,6 +37,7 @@ from quixstreams.state.rocksdb.ttl_codec import (
     _MAX_PLAUSIBLE_STAMP_MS,
     SENTINEL_NEVER,
     TTL_STAMP_BYTES,
+    clamp_additive_expiry,
     decode_index_key,
     decode_ttl_value,
     encode_index_key,
@@ -760,6 +761,48 @@ class MemoryStorePartition(StorePartition):
         # durable done-flag marker AFTER the last stamped record.
         self._produce_migration_done_marker()
 
+    def _confirm_migration_delivery_or_raise(
+        self,
+        changelog_producer: Optional[ChangelogProducer],
+        context: str,
+    ) -> None:
+        """
+        Single bounded migration flush + per-partition confirm-or-raise, shared by
+        the live in-RAM backfill and the done-marker. Memory has no chunking, so a
+        single trailing flush suffices; RocksDB uses a progress-sliced
+        ``_flush_backfill_changelog`` loop for its chunked on-disk path. Both
+        backends confirm delivery BEFORE the local commit so the local store never
+        gets ahead of the changelog.
+
+        Fail loudly only on a concrete POSITIVE backlog; a non-int return (an
+        unconfigured test double) is treated as indeterminate and does NOT block. A
+        0 backlog means the shared producer's queue is drained, so no raise. #5
+        (review batch 3): on a positive backlog, base the decision on THIS
+        partition's own outstanding (``produced - acked``, driven by the flush
+        above) rather than the shared producer's GLOBAL count, so a sibling
+        partition's wedged records never falsely raise here; fall back to the int
+        return only when this partition produced nothing through the
+        counter-tracked route. Raises :class:`ChangelogFlushError` on a positive
+        per-partition outstanding (the caller then retries).
+        """
+        if changelog_producer is None:
+            return
+        unproduced = changelog_producer.flush(
+            timeout=_MIGRATION_MARKER_FLUSH_TIMEOUT_S, migration=True
+        )
+        if isinstance(unproduced, int) and unproduced > 0:
+            if self._backfill_produced > 0:
+                outstanding = self._backfill_produced - self._backfill_acked
+            else:
+                outstanding = unproduced
+            if outstanding > 0:
+                raise ChangelogFlushError(
+                    f"{outstanding} {context} still undelivered after "
+                    f"{_MIGRATION_MARKER_FLUSH_TIMEOUT_S}s; not finalizing the "
+                    "migration locally so the local store never gets ahead of the "
+                    "changelog (the next attempt retries)."
+                )
+
     def _produce_migration_done_marker(self) -> None:
         """
         Record + produce the durable "migration done" marker,
@@ -788,32 +831,10 @@ class MemoryStorePartition(StorePartition):
                 on_delivery=self._on_backfill_delivery,
             )
             self._backfill_produced += 1
-            unproduced = self._changelog_producer.flush(
-                timeout=_MIGRATION_MARKER_FLUSH_TIMEOUT_S, migration=True
+            self._confirm_migration_delivery_or_raise(
+                self._changelog_producer,
+                "__ttl_migration_done__ marker record(s)",
             )
-            # Fail loudly only on a concrete positive backlog; a non-int return
-            # (e.g. an unconfigured test double) is treated as indeterminate. A 0
-            # backlog means the shared producer's queue is drained (marker
-            # delivered), so no raise. #5 (review batch 3): on a POSITIVE global
-            # backlog, base the decision on THIS partition's own outstanding
-            # (produced - acked, driven by the flush above) rather than the shared
-            # producer's GLOBAL count — otherwise a sibling partition's wedged
-            # records would falsely raise on this partition's marker. Fall back to
-            # the int return only when this partition produced nothing through the
-            # counter-tracked route.
-            if isinstance(unproduced, int) and unproduced > 0:
-                if self._backfill_produced > 0:
-                    outstanding = self._backfill_produced - self._backfill_acked
-                else:
-                    outstanding = unproduced
-                if outstanding > 0:
-                    raise ChangelogFlushError(
-                        f"{outstanding} __ttl_migration_done__ marker record(s) "
-                        f"still undelivered after {_MIGRATION_MARKER_FLUSH_TIMEOUT_S}s; "
-                        "not recording the marker locally so the next completion "
-                        "retries it (the local store must not mark done ahead of "
-                        "the changelog)."
-                    )
         self._state.setdefault(TTL_SYSTEM_CF_NAME, {})[TTL_MIGRATION_DONE_KEY] = (
             marker_value
         )
@@ -1545,10 +1566,32 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             )
         legacy_records_ttl = self._partition.legacy_records_ttl
         if legacy_records_ttl is not None:
-            return enable_time_ms + _ttl_to_ms(legacy_records_ttl)
+            return self._clamp_legacy_expiry(
+                enable_time_ms + _ttl_to_ms(legacy_records_ttl)
+            )
         if self._max_batch_ttl_ms is not None:
-            return enable_time_ms + self._max_batch_ttl_ms
+            return self._clamp_legacy_expiry(enable_time_ms + self._max_batch_ttl_ms)
         return SENTINEL_NEVER
+
+    def _clamp_legacy_expiry(self, expiry_ms: int) -> int:
+        """
+        Clamp an additive legacy-backfill expiry to :data:`SENTINEL_NEVER` when it
+        would exceed the maximum readable stamp (parity with the RocksDB
+        ``_legacy_expiry_from_ttl_ms`` / completion clamp), WARNing when the clamp
+        fires. Keeps the backfilled records readable instead of writing an
+        unreadable over-range stamp (review re-review #4).
+        """
+        clamped = clamp_additive_expiry(expiry_ms)
+        if clamped != expiry_ms:
+            logger.warning(
+                "Legacy in-RAM backfill expiry %d exceeds the maximum readable TTL "
+                "stamp (%d); clamping to never-expire (SENTINEL) so the backfilled "
+                "records stay readable. Configure a smaller legacy_records_ttl for "
+                "a finite window.",
+                expiry_ms,
+                _MAX_PLAUSIBLE_STAMP_MS,
+            )
+        return clamped
 
     def _backfill_populated_legacy_in_ram(self, expires_at_ms: int) -> int:
         """
@@ -1557,9 +1600,18 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         and are re-stamped by the shared cache loop). Each re-stamp is produced to
         the changelog via the non-transactional migration route with the
         ``__ttl_stamped__`` header and always-apply (``processed_offsets=None``)
-        semantics — exactly as memory recovery-completion does — then a single
-        trailing ``flush(migration=True)`` (no chunking: the store is RAM-bounded).
-        Returns the number of pre-existing records re-stamped.
+        semantics — exactly as memory recovery-completion does.
+
+        **Changelog-first ordering** (parity with
+        ``RocksDBStorePartition.backfill_legacy_records`` /
+        ``_flush_backfill_changelog``): the re-stamps are produced and their
+        delivery CONFIRMED with a bounded flush BEFORE the local in-RAM store is
+        mutated. A stalled flush raises :class:`ChangelogFlushError` with the
+        RAM store untouched, so the flip is aborted and the next ``ttl=`` write
+        retries cleanly from the original legacy values (no double-wrap) — the
+        two backends resolve a stalled populated-store flip identically. No
+        chunking: the store is RAM-bounded. Returns the number of pre-existing
+        records re-stamped.
         """
         partition = self._partition
         default = partition._state.setdefault("default", {})  # noqa: SLF001
@@ -1576,7 +1628,10 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
                 CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
             }
-        restamped = 0
+        # Phase 1: compute the stamped values + produce them to the changelog.
+        # NOTHING is written to the local RAM store yet — the changelog must be
+        # confirmed first (below) so the local store never gets ahead of it.
+        pending_restamps: list[tuple[bytes, bytes]] = []
         produced = False
         for key in list(default.keys()):
             if key in staged_keys:
@@ -1585,9 +1640,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                 # uniform legacy expiry.
                 continue
             stamped = encode_ttl_value(expires_at_ms, cast(bytes, default[key]))
-            default[key] = stamped
-            if expires_at_ms != SENTINEL_NEVER:
-                index[encode_index_key(expires_at_ms, key)] = b""
+            pending_restamps.append((key, stamped))
             if self._changelog_producer is not None:
                 self._changelog_producer.produce(
                     key=key,
@@ -1598,10 +1651,23 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                 )
                 partition._backfill_produced += 1  # noqa: SLF001
                 produced = True
-            restamped += 1
+
+        # Phase 2: confirm delivery (bounded) BEFORE the local commit. Raises
+        # ChangelogFlushError on a stalled flush, leaving the RAM store untouched.
         if produced and self._changelog_producer is not None:
-            self._changelog_producer.flush(migration=True)
-        return restamped
+            partition._confirm_migration_delivery_or_raise(  # noqa: SLF001
+                self._changelog_producer,
+                "legacy re-stamp changelog record(s) during the populated-legacy "
+                "live backfill",
+            )
+
+        # Phase 3: local commit — mutate the RAM store + secondary index only now
+        # that the changelog is durable.
+        for key, stamped in pending_restamps:
+            default[key] = stamped
+            if expires_at_ms != SENTINEL_NEVER:
+                index[encode_index_key(expires_at_ms, key)] = b""
+        return len(pending_restamps)
 
     def _maybe_flip_or_reject(self) -> None:
         if not self._batch_has_ttl_writes:

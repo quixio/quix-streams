@@ -140,20 +140,19 @@ class RecoveryPartition:
         """
         has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
         state_potentially_behind = self._changelog_highwater - 1 > self.offset
-        # Also force the check when the store has a
-        # flipped-but-unfinished legacy-TTL migration (durable pending census, no
-        # done-marker). Without this, an offset-caught-up restart
-        # (``highwater-1 == offset`` → ``state_potentially_behind`` False) would
-        # skip recovery and never run ``complete_recovery``, permanently stranding
-        # the leftover legacy records. The ``has_consumable_offsets`` guard is
-        # kept so an empty changelog still short-circuits (a flipped store with a
-        # non-empty pending census implies a non-empty changelog by construction,
-        # so the guard is satisfied in the real scenario). ``or`` short-circuits,
-        # so the store scan runs only when the offset check is already False.
-        return has_consumable_offsets and (
-            state_potentially_behind
-            or self._store_partition.has_incomplete_ttl_migration()
-        )
+        # Force recovery when the store has a flipped-but-unfinished legacy-TTL
+        # migration (durable pending census, no done-marker), INDEPENDENTLY of the
+        # consumable-offsets / behind checks. The incomplete-migration term is
+        # hoisted OUT of the ``has_consumable_offsets`` guard (finding 2): a warm,
+        # offset-caught-up store whose changelog has been fully truncated
+        # (``lowwater == highwater`` → ``has_consumable_offsets`` False) would
+        # otherwise never be flagged for recovery, so ``complete_recovery`` would
+        # never run and the leftover legacy records would be permanently stranded.
+        # The normal (changelog-present) path is unchanged: it still gates on
+        # ``has_consumable_offsets and state_potentially_behind``.
+        return (
+            has_consumable_offsets and state_potentially_behind
+        ) or self._store_partition.has_incomplete_ttl_migration()
 
     @property
     def has_invalid_offset(self) -> bool:

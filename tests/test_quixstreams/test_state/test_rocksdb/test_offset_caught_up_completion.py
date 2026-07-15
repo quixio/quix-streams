@@ -185,6 +185,90 @@ class TestOffsetCaughtUpCompletion:
         assert _pending_keys(run2) == set()
         run2.close()
 
+    def test_truncated_changelog_completes_migration_strand_free(
+        self,
+        store_partition_factory,
+        changelog_producer_mock,
+        recovery_partition_factory,
+    ):
+        """Validates PR #1130 Finding 2 deeper guarantee: a fully-truncated
+        changelog (``lowwater == highwater``, zero consumable offsets) must NOT
+        strand an interrupted legacy-TTL migration. The recovery gate must fire
+        solely from ``has_incomplete_ttl_migration()``, and ``complete_recovery``
+        must finalize the leftover records, write the done-marker, and clear the
+        pending census — even though no replay occurs this session."""
+        now_ms = 1_780_000_000_000
+        legacy_ttl = timedelta(days=7)
+        stamp_expiry = now_ms + 30 * DAY_MS
+        n_stamped, n_legacy = 3, 5
+        msgs, legacy_values = _mixed_changelog(n_stamped, n_legacy, stamp_expiry)
+
+        # --- Run 1: replay a MIXED changelog to the end, then "crash" BEFORE
+        # complete_recovery drains the census. ---
+        opts = RocksDBOptions(legacy_records_ttl=legacy_ttl)
+        run1 = store_partition_factory(
+            name="trunc", options=opts, changelog_producer=changelog_producer_mock
+        )
+        highwater = _replay(run1, msgs, now_ms=now_ms)
+        assert run1.uses_ttl_stamps is True
+        assert _pending_keys(run1) == set(legacy_values.keys())
+        assert run1.get_changelog_offset() == highwater - 1
+        run1.close()  # crash: completion never ran
+
+        # --- Run 2: reopen with a FULLY-TRUNCATED changelog
+        # (lowwater == highwater — retention purged everything). ---
+        run2 = store_partition_factory(
+            name="trunc", options=opts, changelog_producer=changelog_producer_mock
+        )
+        run2._now_ms = lambda: now_ms  # noqa: E731
+
+        assert run2._persisted_flipped_at_open is True
+        assert run2.has_incomplete_ttl_migration() is True
+
+        # Build a RecoveryPartition with the truncated-changelog watermarks.
+        rp = recovery_partition_factory(
+            store_partition=run2, lowwater=highwater, highwater=highwater
+        )
+        # Both normal recovery signals are False:
+        assert rp._changelog_lowwater == rp._changelog_highwater  # no consumable
+        assert not (rp._changelog_highwater - 1 > rp.offset)  # not behind
+        # Yet recovery is forced by the incomplete-migration check alone.
+        assert rp.needs_recovery_check is True
+
+        # --- Drive completion: no replay this session, just finalize. ---
+        changelog_producer_mock.produce.reset_mock()
+        run2.complete_recovery()
+
+        # Legacy leftovers are stamped at wallclock + TTL.
+        expected_expiry = now_ms + 7 * DAY_MS
+        decoded = {k: decode_ttl_value(v) for k, v in _default_cf(run2).items()}
+        index = _index_cf(run2)
+        for key, raw in legacy_values.items():
+            assert decoded[key] == (expected_expiry, raw), (
+                f"legacy key {key!r} not stamped correctly after truncated-changelog completion"
+            )
+            assert index[key] == expected_expiry
+
+        # Stamped survivors are byte-unchanged.
+        for i in range(n_stamped):
+            key = f"pfx|s{i}".encode()
+            assert decoded[key] == (stamp_expiry, f"stamped-{i}".encode())
+
+        # Pending census is fully drained.
+        assert _pending_keys(run2) == set(), (
+            "pending census not cleared — records stranded after truncated-changelog completion"
+        )
+
+        # Done-marker is written — future restarts will NOT re-flag.
+        assert run2._has_local_migration_done_marker() is True, (
+            "done-marker not written — migration would re-trigger on every restart"
+        )
+        assert run2.has_incomplete_ttl_migration() is False
+
+        # No SENTINEL_NEVER (never-expiring) records escaped.
+        assert all(exp != SENTINEL_NEVER for exp, _ in decoded.values())
+        run2.close()
+
     def test_done_marker_makes_migration_not_incomplete(
         self, store_partition_factory, changelog_producer_mock
     ):

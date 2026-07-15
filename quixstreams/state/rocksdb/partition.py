@@ -52,7 +52,9 @@ from .metadata import (
 )
 from .options import RocksDBOptions
 from .ttl_codec import (
+    _MAX_PLAUSIBLE_STAMP_MS,
     SENTINEL_NEVER,
+    clamp_additive_expiry,
     decode_index_key,
     decode_ttl_value,
     encode_index_key,
@@ -857,7 +859,24 @@ class RocksDBStorePartition(StorePartition):
             # post-recovery writes).
             if self._recovery_now_ms is None:
                 self._recovery_now_ms = self._now_ms()
-            expires_at_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+            # Clamp the ADDITIVE sum (review re-review #4): mirror the backfill /
+            # per-write bound so a large legacy_records_ttl cannot push the
+            # recovery-completion expiry ``>= _MAX_PLAUSIBLE_STAMP_MS`` and strand
+            # the leftover records as unreadable over-range stamps. Over-range
+            # clamps to never-expire (readable, never mass-deleted).
+            raw_expiry_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+            expires_at_ms = clamp_additive_expiry(raw_expiry_ms)
+            if expires_at_ms != raw_expiry_ms:
+                logger.warning(
+                    "Recovery-completion expiry wallclock(%d) + legacy_records_ttl "
+                    "= %d exceeds the maximum readable stamp (%d) at path=%s; "
+                    "clamping to never-expire (SENTINEL) so the leftover legacy "
+                    "record(s) stay readable.",
+                    self._recovery_now_ms,
+                    raw_expiry_ms,
+                    _MAX_PLAUSIBLE_STAMP_MS,
+                    self._path,
+                )
             logger.info(
                 "Recovery: completing interrupted legacy-TTL migration at "
                 "path=%s; %d leftover legacy record(s) will be stamped with "

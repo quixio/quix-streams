@@ -23,6 +23,7 @@ from .ttl_codec import (
     _MAX_PLAUSIBLE_STAMP_MS,
     SENTINEL_NEVER,
     TTL_STAMP_BYTES,
+    clamp_additive_expiry,
     decode_ttl_value,
     encode_index_key,
     encode_ttl_value,
@@ -896,7 +897,28 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "for the triggering batch. This is a framework invariant "
                 "violation (a flip requires at least one ttl= write)."
             )
-        return enable_time_ms + ttl_ms
+        # Clamp the ADDITIVE sum (review re-review #4): unlike the per-write
+        # ``_compute_stamp`` path — which rejects an implausible stamp as a caller
+        # error — the backfill derives its expiry from ``high_water + ttl``, so an
+        # individually valid ttl can still sum ``>= _MAX_PLAUSIBLE_STAMP_MS`` and
+        # become unreadable. Keep such records never-expiring (still readable)
+        # rather than rejecting the whole flip. Plausible sums pass through
+        # unchanged.
+        expiry_ms = enable_time_ms + ttl_ms
+        clamped = clamp_additive_expiry(expiry_ms)
+        if clamped != expiry_ms:
+            logger.warning(
+                "Legacy-TTL backfill expiry high_water(%d) + ttl(%d) = %d exceeds "
+                "the maximum readable stamp (%d) at path=%s; clamping to "
+                "never-expire (SENTINEL) so the backfilled records stay readable. "
+                "Configure a smaller legacy_records_ttl for a finite window.",
+                enable_time_ms,
+                ttl_ms,
+                expiry_ms,
+                _MAX_PLAUSIBLE_STAMP_MS,
+                getattr(self._partition, "path", "<memory>"),
+            )
+        return clamped
 
     def _restamp_default_cf_cache_for_flip(
         self, skip_keys: Optional[Set[bytes]] = None

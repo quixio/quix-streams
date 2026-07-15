@@ -29,6 +29,7 @@ __all__ = (
     "encode_index_key",
     "decode_index_key",
     "is_sentinel",
+    "clamp_additive_expiry",
 )
 
 
@@ -66,6 +67,28 @@ _MAX_PLAUSIBLE_STAMP_MS = 10**15
 def is_sentinel(stamp: int) -> bool:
     """Return ``True`` if ``stamp`` is the never-expires sentinel."""
     return stamp == SENTINEL_NEVER
+
+
+def clamp_additive_expiry(expiry_ms: int) -> int:
+    """
+    Clamp an *additive* legacy-backfill / recovery-completion expiry
+    (``enable_time + ttl``) to :data:`SENTINEL_NEVER` when it would land
+    ``>= _MAX_PLAUSIBLE_STAMP_MS`` and therefore be refused by the read-side
+    strict validator (``_safe_decode_stamp``) on every subsequent read.
+
+    The per-write ``_compute_stamp`` path *rejects* an implausible stamp — there
+    it is a caller error. The backfill / completion paths instead derive the
+    expiry additively from an operator-supplied ``legacy_records_ttl`` (or the
+    batch-implicit ttl) plus the enable-time high-water, so an individually
+    plausible ttl can still sum past the readable bound. Rejecting there would
+    strand the entire migration (and every legacy record with it); instead the
+    record is kept never-expiring — still readable, and never mass-deleted,
+    honoring the no-state-reset guarantee. Callers emit a WARN when the clamp
+    fires. Returns ``expiry_ms`` unchanged when it is already below the bound.
+    """
+    if expiry_ms >= _MAX_PLAUSIBLE_STAMP_MS:
+        return SENTINEL_NEVER
+    return expiry_ms
 
 
 def _check_stamp_range(expires_at_ms: int) -> None:
