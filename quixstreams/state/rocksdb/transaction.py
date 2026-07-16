@@ -448,6 +448,13 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         except ValueError:
             self._status = PartitionTransactionStatus.FAILED
             raise
+        if ttl is not None:
+            # A genuine live ``ttl=`` write on an already-flipped partition (the
+            # stamp is non-sentinel by construction). Record it so the §5.4
+            # corroboration hook in :meth:`prepare` can confirm a provisional
+            # cold-adoption. Harmless on a normal flipped store (the hook no-ops
+            # unless ``_adopt_provisional`` is set).
+            self._batch_has_ttl_writes = True
         try:
             value_serialized = self._serialize_value(value)
         except Exception:
@@ -482,6 +489,10 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         except ValueError:
             self._status = PartitionTransactionStatus.FAILED
             raise
+        if ttl is not None:
+            # See :meth:`_set_default_cf_stamped`: mark the batch as carrying a
+            # live ttl= write so §5.4 corroboration can fire.
+            self._batch_has_ttl_writes = True
         key_serialized = self._serialize_key(key, prefix=prefix)
         self._delete_stale_index_entry(key_serialized, prefix, stamp)
         stamped = encode_ttl_value(stamp, value)
@@ -659,11 +670,31 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         try:
             self._persist_counter()
             self._maybe_flip_or_reject(processed_offsets=processed_offsets)
+            self._maybe_corroborate_adoption()
             self._sweep_expired_into_cache_if_enabled()
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
         super().prepare(processed_offsets=processed_offsets)
+
+    def _maybe_corroborate_adoption(self) -> None:
+        """
+        §5.4 corroboration hook. A live ``state.set(..., ttl=...)`` write (which
+        sets ``_batch_has_ttl_writes`` and always produces a non-sentinel stamp)
+        on a PROVISIONALLY cold-adopted partition confirms the adoption is genuine.
+        Runs AFTER :meth:`_maybe_flip_or_reject` (so the runtime flip state is
+        settled) and BEFORE the sweep (so the corroborating flush's sweep, now
+        un-suppressed, can reclaim now-past adopted records). A plain ``set()``
+        (sentinel, no ``ttl=``) never sets ``_batch_has_ttl_writes`` and so never
+        corroborates — legacy apps do plain sets too. One-time per partition.
+        """
+        partition = self._partition
+        if (
+            self._batch_has_ttl_writes
+            and partition.uses_ttl_stamps
+            and partition._adopt_provisional  # noqa: SLF001
+        ):
+            partition.corroborate_adoption()
 
     def _sweep_expired_into_cache_if_enabled(self) -> None:
         """

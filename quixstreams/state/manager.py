@@ -207,10 +207,9 @@ class StateStoreManager:
             )
         elif store_type == MemoryStore:
             # Fix 7 (review re-review): forward the app-wide TTL scalars so the
-            # memory backend honors legacy_records_ttl / adopt_v3240_stamps /
-            # ttl_changelog_tombstones / max_evictions_per_flush — otherwise the
-            # recovery CRITICAL's "set RocksDBOptions(adopt_v3240_stamps=True)"
-            # advice is unreachable via Application on the memory backend.
+            # memory backend honors legacy_records_ttl / ttl_changelog_tombstones /
+            # max_evictions_per_flush. The v3.24.0-stamp adoption is now automatic
+            # (no flag) on both backends, so nothing adoption-related is forwarded.
             # ``RocksDBOptions`` is the app-wide options dataclass regardless of
             # backend; this reads its scalar fields (it does not couple MemoryStore
             # to a RocksDB partition).
@@ -220,7 +219,6 @@ class StateStoreManager:
                 stream_id=stream_id,
                 changelog_producer_factory=changelog_producer_factory,
                 legacy_records_ttl=opts.legacy_records_ttl,
-                adopt_v3240_stamps=opts.adopt_v3240_stamps,
                 ttl_changelog_tombstones=opts.ttl_changelog_tombstones,
                 max_evictions_per_flush=opts.max_evictions_per_flush,
             )

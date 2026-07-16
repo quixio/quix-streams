@@ -307,8 +307,9 @@ class TestMemoryStoreOptionForwarding:
     """Fix 7 (review re-review): the manager forwards the app-wide TTL scalars
     (from ``rocksdb_options``) into a ``MemoryStore`` so a ``MemoryStorePartition``
     created via ``Application`` reflects ``legacy_records_ttl`` /
-    ``adopt_v3240_stamps`` — otherwise the memory recovery CRITICAL's
-    ``adopt_v3240_stamps=True`` advice is unreachable."""
+    ``ttl_changelog_tombstones`` / ``max_evictions_per_flush``. (v3.24.0-stamp
+    adoption is now automatic — no flag — so nothing adoption-related is
+    forwarded.)"""
 
     def test_manager_forwards_ttl_options_to_memory_partition(self, tmp_path):
         manager = StateStoreManager(
@@ -316,7 +317,6 @@ class TestMemoryStoreOptionForwarding:
             state_dir=str(tmp_path / "state"),
             rocksdb_options=RocksDBOptions(
                 legacy_records_ttl=timedelta(days=7),
-                adopt_v3240_stamps=True,
                 ttl_changelog_tombstones=False,
                 max_evictions_per_flush=123,
             ),
@@ -329,7 +329,6 @@ class TestMemoryStoreOptionForwarding:
 
         partition = store.create_new_partition(0)
         assert partition.legacy_records_ttl == timedelta(days=7)
-        assert partition.adopt_v3240_stamps is True
         assert partition.ttl_changelog_tombstones is False
         assert partition.max_evictions_per_flush == 123
         manager.close()
@@ -345,5 +344,5 @@ class TestMemoryStoreOptionForwarding:
         manager.register_store("topic", store_name="default")
         partition = manager.get_store("topic", "default").create_new_partition(0)
         assert partition.legacy_records_ttl is None
-        assert partition.adopt_v3240_stamps is False
+        assert partition.ttl_changelog_tombstones is True
         manager.close()

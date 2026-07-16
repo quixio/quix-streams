@@ -34,6 +34,15 @@ TTL_BACKFILL_PENDING_CF_NAME = "__ttl_backfill_pending__"
 # commit); the two paths are mutually exclusive per partition lifecycle. Never
 # produced to the changelog.
 TTL_BACKFILL_STAMPED_CF_NAME = "__ttl_backfill_stamped__"
+# Local-only backup of the pre-adoption default-CF values taken by the COLD
+# provisional v3.24.0-stamp adoption (see
+# :meth:`RocksDBStorePartition._adopt_v3240_stamps`). Layout ``key = raw
+# default-CF key``, ``value = verbatim pre-adoption default value (8B‖payload
+# as-is)``. Written only on the reversible cold-heuristic path; it is the restore
+# source for the ``QUIXSTREAMS_STATE_TTL_ROLLBACK`` operational lever and is
+# dropped on corroboration or rollback. Never produced to the changelog; the
+# sound warm-deterministic adopt path never creates it.
+TTL_ADOPT_BACKUP_CF_NAME = "__ttl_adopt_backup__"
 
 # Replicated system CF carrying the durable "migration done" marker.
 # Deliberately NOT in
@@ -72,6 +81,7 @@ LOCAL_ONLY_CFS = frozenset(
         TTL_INDEX_CF_NAME,
         TTL_BACKFILL_PENDING_CF_NAME,
         TTL_BACKFILL_STAMPED_CF_NAME,
+        TTL_ADOPT_BACKUP_CF_NAME,
     }
 )
 

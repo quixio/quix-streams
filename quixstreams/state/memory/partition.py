@@ -1,5 +1,6 @@
 import functools
 import logging
+import os
 import time
 from datetime import timedelta
 from typing import Any, Dict, Literal, Optional, Union, cast
@@ -29,8 +30,10 @@ from quixstreams.state.rocksdb.exceptions import IncompatibleStateStoreError
 from quixstreams.state.rocksdb.metadata import (
     STATE_FORMAT_VERSION,
     STATE_FORMAT_VERSION_KEY,
+    TTL_ADOPT_PENDING_KEY,
     TTL_ENABLED_KEY,
     TTL_HIGH_WATER_KEY,
+    TTL_ROLLBACK_ENV_VAR,
 )
 from quixstreams.state.rocksdb.transaction import _safe_decode_stamp, _ttl_to_ms
 from quixstreams.state.rocksdb.ttl_codec import (
@@ -104,7 +107,6 @@ class MemoryStorePartition(StorePartition):
         max_evictions_per_flush: int = _DEFAULT_MAX_EVICTIONS_PER_FLUSH,
         legacy_records_ttl: Optional[timedelta] = None,
         ttl_changelog_tombstones: bool = True,
-        adopt_v3240_stamps: bool = False,
     ) -> None:
         super().__init__(
             dumps=json_dumps,
@@ -119,16 +121,22 @@ class MemoryStorePartition(StorePartition):
         # local-only (the pre-change ``_run_sweep``-in-``write()`` path). Memory
         # does not consume ``RocksDBOptions``, so it is a direct constructor arg.
         self._ttl_changelog_tombstones: bool = ttl_changelog_tombstones
-        # Opt-in gate for adopting a store created on the v3.24.0 TTL preview,
-        # mirroring ``RocksDBStorePartition._adopt_v3240_stamps_enabled``.
-        # Stored under a distinct attribute so it does NOT shadow the private
-        # :meth:`_adopt_v3240_stamps` method. When False (default) a 100%-quorum
-        # stamp detection logs a CRITICAL and stays legacy; when True it flips +
-        # adopts in place. MemoryStore has no persistent options surface, so it is
-        # set only via direct construction (``create_new_partition`` does not
-        # forward it, exactly like ``legacy_records_ttl`` /
-        # ``ttl_changelog_tombstones``), so production memory is detection-only.
-        self._adopt_v3240_stamps_enabled: bool = adopt_v3240_stamps
+        # §5.6 operational rollback lever, read ONCE at open from the environment
+        # (mirrors ``RocksDBStorePartition._ttl_rollback``). Memory is always the
+        # COLD regime (§5.7); when set it SUPPRESSES the cold provisional adopt on
+        # the next full changelog replay (a fresh replay reconstructs the un-adopted
+        # originals, so no explicit restore is needed).
+        self._ttl_rollback: bool = os.environ.get(TTL_ROLLBACK_ENV_VAR) == "1"
+        # Runtime mirror of the COLD-heuristic provisional-adoption state (§5.2,
+        # parity with ``RocksDBStorePartition._adopt_provisional``). True == this
+        # partition was provisionally cold-adopted and is not yet corroborated:
+        # the TTL sweep is suppressed (§5.3) until a live ``ttl=`` write
+        # corroborates (§5.4). Always a runtime-only flag on the non-persistent
+        # memory backend. No in-RAM value backup is kept — memory rollback (§5.7)
+        # is replay-suppression (the next full changelog replay reconstructs the
+        # un-adopted originals), not an in-lifetime restore, so a backup copy would
+        # be dead state.
+        self._adopt_provisional: bool = False
         self._state: Dict[str, Dict[bytes, Any]] = {
             "default": {},
             METADATA_CF_NAME: {},
@@ -239,16 +247,6 @@ class MemoryStorePartition(StorePartition):
         ``RocksDBStorePartition.ttl_changelog_tombstones``.
         """
         return self._ttl_changelog_tombstones
-
-    @property
-    def adopt_v3240_stamps(self) -> bool:
-        """
-        Whether the opt-in v3.24.0 stamp adoption is enabled. When ``False``
-        (default) a 100%-quorum stamp detection on recovery logs a CRITICAL and
-        leaves the store legacy; when ``True`` it flips + adopts the stamps in
-        place. Parity with ``RocksDBStorePartition.adopt_v3240_stamps``.
-        """
-        return self._adopt_v3240_stamps_enabled
 
     def advance_high_water(self, timestamp: Optional[int]) -> None:
         if timestamp is None:
@@ -549,6 +547,17 @@ class MemoryStorePartition(StorePartition):
             if not self.uses_ttl_stamps:
                 self.uses_ttl_stamps = True
                 self._state.setdefault(TTL_INDEX_CF_NAME, {})
+            # §5.4 done-marker index rebuild (parity with RocksDB): a cold restore
+            # of a CORROBORATED cold-adopted memory store replays the header-absent
+            # adopted records into the census with NO index entry; rebuild the
+            # in-RAM __ttl_index__ from the still-censused all-stamped records
+            # before discarding, else the adopted records are unindexed and never
+            # expire. Self-distinguishing: a completed legacy->TTL migration drains
+            # its census to empty on replay, so the gate is False there (and a
+            # partial / non-stamp census is likewise skipped), leaving that path
+            # byte-identical.
+            if self._all_pending_values_are_stamped():
+                self._rebuild_index_from_stamped_census()
             self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
             return
         # Fix 4 (review re-review #4, parity with RocksDB): discriminate an
@@ -556,50 +565,39 @@ class MemoryStorePartition(StorePartition):
         # always fresh (no persisted flip flag, no ledger), so
         # ``_recovery_saw_stamped`` alone is the this-branch discriminator.
         if not self._recovery_saw_stamped:
-            # BRANCH B — no this-branch evidence: unflipped, pure-legacy OR stock
-            # v3.24.0.
+            # BRANCH B — no this-branch evidence: unflipped, pure-legacy OR a stock
+            # v3.24.0 cold restore. Auto-adoption is now AUTOMATIC + REVERSIBLE
+            # (spec §5.2 / §5.7), so a 100%-stamped not-all-past census is
+            # provisionally adopted instead of logging a CRITICAL and staying legacy.
             if self._all_pending_values_are_stamped():
-                if self._adopt_v3240_stamps_enabled:
-                    if self._pending_all_stamps_in_past():
-                        # REFUSE adopt: every censused stamp is in the past, so
-                        # adoption would rebuild the index with past stamps and the
-                        # next sweep would DELETE everything — the legacy set_bytes()
-                        # shape misidentified as v3.24.0. QUARANTINE (do NOT pop).
-                        logger.critical(
-                            "Recovery replayed an in-memory changelog whose %d "
-                            "censused value(s) ALL decode as stamps ALREADY in the "
-                            "past relative to the recovery clock, with "
-                            "adopt_v3240_stamps=True. Adopting them would rebuild the "
-                            "expiry index with past stamps and the next sweep would "
-                            "DELETE every record -- the exact shape of a legacy "
-                            "set_bytes() store misidentified as v3.24.0. Adoption is "
-                            "REFUSED; NOTHING has been changed and the census is "
-                            "preserved for repair.",
-                            len(self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})),
-                        )
-                        return
-                    self._adopt_v3240_stamps()
+                if self._ttl_rollback:
+                    # §5.6 Case B: the rollback lever suppresses the cold provisional
+                    # adopt — stay legacy, quarantine the census (byte-identical).
+                    logger.warning(
+                        "Recovery: cold v3.24.0 auto-adopt SUPPRESSED by "
+                        "QUIXSTREAMS_STATE_TTL_ROLLBACK=1; the in-memory store stays "
+                        "legacy, every value reads back byte-identical, and the %d "
+                        "censused key(s) are quarantined (unset the env var and "
+                        "restart to re-enable auto-adopt).",
+                        len(self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})),
+                    )
                     return
-                # Flag unset: the store is unflipped, so byte-identical is truthful.
-                # QUARANTINE the census (do NOT pop) and return WITHOUT flipping.
-                logger.critical(
-                    "Recovery replayed an in-memory header-absent changelog whose %d "
-                    "censused value(s) ALL decode as 8-byte TTL stamps. This is the "
-                    "exact shape of a store created on the v3.24.0 TTL preview "
-                    "(stamped values, no __ttl_stamped__ header) -- BUT it is "
-                    "indistinguishable from a pre-TTL legacy store whose values happen "
-                    "to begin with 8 plausible big-endian bytes (e.g. epoch-ms or "
-                    "counters written via set_bytes()). Automatic adoption is DISABLED "
-                    "by default: adopting a legacy store by mistake would turn the "
-                    "first 8 bytes of every value into an expiry stamp and delete the "
-                    "data on the next sweep. NOTHING has been changed -- the store "
-                    "stays in legacy mode and every value reads back byte-identical. "
-                    "If you are CERTAIN this store was created on v3.24.0, set "
-                    "RocksDBOptions(adopt_v3240_stamps=True) and restart to adopt the "
-                    "stamps in place. If this is a genuine pre-TTL store, leave the "
-                    "option unset -- this message is informational and safe to ignore.",
-                    len(self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})),
-                )
+                if self._pending_all_stamps_in_past():
+                    # QUARANTINE (downgraded from CRITICAL to WARN): every censused
+                    # stamp is already in the past — the legacy set_bytes() dedup
+                    # shape. Adopting would rebuild the index with past stamps and
+                    # the next sweep would DELETE everything, so refuse; stay legacy,
+                    # preserve the census, read back byte-identical.
+                    logger.warning(
+                        "Refused auto-adopt: all %d censused in-memory stamp(s) are "
+                        "already in the past (legacy dedup shape); the store stays "
+                        "legacy, byte-identical, and the census is preserved "
+                        "(quarantined).",
+                        len(self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})),
+                    )
+                    return
+                # Not-all-past, 100%-stamped: provisional (reversible) auto-adopt.
+                self._adopt_v3240_stamps()
                 return
             # Sub-100% "looks-like": genuine legacy — discard the orphan census so a
             # pure-legacy store carries no lasting overhead.
@@ -633,26 +631,23 @@ class MemoryStorePartition(StorePartition):
         ):
             # Future-stamped ambiguous census on a flipped store: genuine legacy to
             # wrap once OR already-stamped v3.24.0 that wrapping would DOUBLE-WRAP.
-            if self._legacy_records_ttl is None and self._adopt_v3240_stamps_enabled:
+            if self._legacy_records_ttl is None:
+                # §5.2 Branch-A reconciliation: keep the values VERBATIM via the
+                # reversible provisional adopt instead of HALTing. ``legacy_records_ttl``
+                # remains the explicit wrap-once override (fall-through below).
+                if self._ttl_rollback:
+                    logger.warning(
+                        "Recovery: ambiguous flipped all-stamped in-memory census "
+                        "auto-adopt SUPPRESSED by QUIXSTREAMS_STATE_TTL_ROLLBACK=1; "
+                        "the %d leftover value(s) are kept verbatim and the census "
+                        "is quarantined. Set legacy_records_ttl to complete as a "
+                        "legacy migration, or unset the env var to keep the v3.24.0 "
+                        "stamps.",
+                        len(pending),
+                    )
+                    return
                 self._adopt_v3240_stamps()
                 return
-            if self._legacy_records_ttl is None:
-                logger.critical(
-                    "Recovery: the in-memory store is flipped into TTL mode and its "
-                    "%d header-absent leftover value(s) ALL decode as 8-byte stamps "
-                    "still in the FUTURE -- either genuine legacy to wrap once OR "
-                    "already-stamped v3.24.0 that wrapping would DOUBLE-WRAP, "
-                    "indistinguishable. Recovery is HALTED. To finish as a legacy "
-                    "migration set RocksDBOptions(legacy_records_ttl=timedelta(...)); "
-                    "to keep the v3.24.0 stamps verbatim set "
-                    "RocksDBOptions(adopt_v3240_stamps=True). Then restart.",
-                    len(pending),
-                )
-                raise IncompatibleStateStoreError(
-                    "Ambiguous flipped all-stamped in-memory census: set "
-                    "legacy_records_ttl (complete as legacy) or adopt_v3240_stamps "
-                    "(keep v3.24.0 stamps) to proceed."
-                )
             # else legacy_records_ttl set -> fall through to completion below.
 
         legacy_records_ttl = self._legacy_records_ttl
@@ -920,13 +915,54 @@ class MemoryStorePartition(StorePartition):
             return False
         return max_stamp <= now
 
+    def _rebuild_index_from_stamped_census(self) -> None:
+        """
+        §5.4 done-marker index rebuild (memory parity of
+        ``RocksDBStorePartition._rebuild_index_from_stamped_census``). On a cold
+        restore of a CORROBORATED cold-adopted memory store the header-absent
+        adopted records replay verbatim into the census but carry NO index entry;
+        rebuild the in-RAM ``__ttl_index__`` from the still-censused all-stamped
+        records (stamps kept verbatim, non-sentinel only) before the census is
+        discarded, else the adopted records are unindexed and the sweep can never
+        expire them. Precondition: :meth:`_all_pending_values_are_stamped` is True.
+        """
+        pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
+        default = self._state.get("default", {})
+        index = self._state.setdefault(TTL_INDEX_CF_NAME, {})
+        rebuilt = 0
+        for key in pending:
+            value = default.get(key)
+            if value is None:
+                continue
+            decoded = _safe_decode_stamp(cast(bytes, value))
+            if decoded is None:
+                continue
+            stamp, _ = decoded
+            if stamp != SENTINEL_NEVER:
+                index[encode_index_key(stamp, key)] = b""
+                rebuilt += 1
+        if rebuilt:
+            logger.info(
+                "Recovery: rebuilt %d in-memory __ttl_index__ entry(ies) from the "
+                "corroborated cold-adopted census before discard (done-marker "
+                "path).",
+                rebuilt,
+            )
+
     def _adopt_v3240_stamps(self) -> None:
         """
-        Adopt the pending census as v3.24.0-stamped records, mirroring
-        ``RocksDBStorePartition._adopt_v3240_stamps``. Flip into TTL mode, keep
-        each default value verbatim (no re-wrap — preserves the v3.24.0
-        stamp), rebuild the ``__ttl_index__`` entry from each non-sentinel stamp,
-        discard the census, and emit one INFO line. No changelog re-production.
+        PROVISIONAL, REVERSIBLE adoption of the pending census (spec §5.2 / §5.7
+        memory parity of ``RocksDBStorePartition._adopt_v3240_stamps``). Flip into
+        TTL mode, keep each default value verbatim (no re-wrap — preserves the
+        v3.24.0 stamp), rebuild the ``__ttl_index__`` entry from each non-sentinel
+        stamp, discard the census, then set the provisional marker + runtime guard
+        (``_adopt_provisional``) so the sweep is suppressed (§5.3) until a live
+        ``ttl=`` write corroborates (§5.4). Changelog-silent.
+
+        No in-RAM value backup is taken: memory rollback (§5.7) is
+        replay-suppression, not an in-lifetime restore — a fresh full changelog
+        replay reconstructs the un-adopted originals — so a backup copy would be
+        dead state (finding #5).
         """
         if not self.uses_ttl_stamps:
             self.uses_ttl_stamps = True
@@ -950,11 +986,42 @@ class MemoryStorePartition(StorePartition):
             adopted += 1
         self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
 
-        logger.info(
-            "Recovery: adopted %d v3.24.0-stamped record(s) in memory (flipped "
-            "into TTL mode; values kept verbatim, __ttl_index__ rebuilt from the "
-            "adopted stamps).",
+        # Provisional marker + runtime guard (parity with RocksDB).
+        now_ms = (
+            self._recovery_now_ms
+            if self._recovery_now_ms is not None
+            else self._now_ms()
+        )
+        self._state.setdefault(METADATA_CF_NAME, {})[TTL_ADOPT_PENDING_KEY] = (
+            int_to_bytes(now_ms)
+        )
+        self._adopt_provisional = True
+
+        logger.warning(
+            "Auto-adopted %d v3.24.0-shaped record(s) from the in-memory changelog "
+            "(REVERSIBLE): values kept verbatim, __ttl_index__ rebuilt, "
+            "sweep-deletion suppressed until corroborated by a live ttl= write. If "
+            "this is actually a pre-TTL legacy store, set "
+            "QUIXSTREAMS_STATE_TTL_ROLLBACK=1 and restart to suppress the adopt "
+            "(the next full changelog replay reconstructs the un-adopted "
+            "originals).",
             adopted,
+        )
+
+    def corroborate_adoption(self) -> None:
+        """
+        §5.4 corroboration (memory parity of
+        ``RocksDBStorePartition.corroborate_adoption``): a live ``ttl=`` write
+        confirms a provisional cold-adoption. Produce the durable migration-done
+        marker (changelog-first, confirm-or-raise), drop the in-RAM backup +
+        provisional marker, and lift the sweep guard. One-time per partition.
+        """
+        self._produce_migration_done_marker()
+        self._state.get(METADATA_CF_NAME, {}).pop(TTL_ADOPT_PENDING_KEY, None)
+        self._adopt_provisional = False
+        logger.info(
+            "Corroborated v3.24.0 adoption in memory on a live ttl= write; produced "
+            "the durable migration-done marker, lifted sweep suppression."
         )
 
     def get_changelog_offset(self) -> Optional[int]:
@@ -1063,6 +1130,10 @@ class MemoryStorePartition(StorePartition):
     def _run_sweep(self) -> None:
         if self._high_water_ms is None:
             return
+        if self._adopt_provisional:
+            # §5.3 sweep guard: no eviction while a COLD-heuristic adoption is
+            # provisional (uncorroborated). Lifted on corroboration.
+            return
 
         budget = self._max_evictions_per_flush
         if budget <= 0:
@@ -1148,6 +1219,10 @@ class MemoryStorePartition(StorePartition):
         ``cache.delete``.
         """
         if self._high_water_ms is None:
+            return
+        if self._adopt_provisional:
+            # §5.3 sweep guard (ON path): no eviction while a COLD-heuristic
+            # adoption is provisional (uncorroborated). Lifted on corroboration.
             return
 
         budget = self._max_evictions_per_flush
@@ -1451,6 +1526,10 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         except ValueError:
             self._status = PartitionTransactionStatus.FAILED
             raise
+        if ttl is not None:
+            # Live ttl= write on an already-flipped partition (non-sentinel stamp);
+            # record it so §5.4 corroboration can fire (no-op unless provisional).
+            self._batch_has_ttl_writes = True
         try:
             value_serialized = self._serialize_value(value)
         except Exception:
@@ -1483,6 +1562,10 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         except ValueError:
             self._status = PartitionTransactionStatus.FAILED
             raise
+        if ttl is not None:
+            # See :meth:`_set_default_cf_stamped`: mark a live ttl= write so §5.4
+            # corroboration can fire.
+            self._batch_has_ttl_writes = True
         key_serialized = self._serialize_key(key, prefix=prefix)
         self._delete_stale_index_entry(key_serialized, prefix, stamp)
         stamped = encode_ttl_value(stamp, value)
@@ -1507,11 +1590,26 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         # than leave the transaction STARTED / reusable.
         try:
             self._maybe_flip_or_reject()
+            self._maybe_corroborate_adoption()
             self._sweep_expired_into_cache_if_enabled()
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
         super().prepare(processed_offsets=processed_offsets)
+
+    def _maybe_corroborate_adoption(self) -> None:
+        """§5.4 corroboration hook (memory parity of
+        ``RocksDBPartitionTransaction._maybe_corroborate_adoption``). A live
+        ``ttl=`` write on a provisionally cold-adopted partition confirms the
+        adoption; a plain ``set()`` (sentinel) never sets ``_batch_has_ttl_writes``
+        and so never corroborates."""
+        partition = self._partition
+        if (
+            self._batch_has_ttl_writes
+            and partition.uses_ttl_stamps
+            and partition._adopt_provisional  # noqa: SLF001
+        ):
+            partition.corroborate_adoption()
 
     def _sweep_expired_into_cache_if_enabled(self) -> None:
         """

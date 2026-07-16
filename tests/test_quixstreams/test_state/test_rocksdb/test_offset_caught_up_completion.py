@@ -244,9 +244,9 @@ class TestOffsetCaughtUpCompletion:
         decoded = {k: decode_ttl_value(v) for k, v in _default_cf(run2).items()}
         index = _index_cf(run2)
         for key, raw in legacy_values.items():
-            assert decoded[key] == (expected_expiry, raw), (
-                f"legacy key {key!r} not stamped correctly after truncated-changelog completion"
-            )
+            assert (
+                decoded[key] == (expected_expiry, raw)
+            ), f"legacy key {key!r} not stamped correctly after truncated-changelog completion"
             assert index[key] == expected_expiry
 
         # Stamped survivors are byte-unchanged.
@@ -255,14 +255,14 @@ class TestOffsetCaughtUpCompletion:
             assert decoded[key] == (stamp_expiry, f"stamped-{i}".encode())
 
         # Pending census is fully drained.
-        assert _pending_keys(run2) == set(), (
-            "pending census not cleared — records stranded after truncated-changelog completion"
-        )
+        assert (
+            _pending_keys(run2) == set()
+        ), "pending census not cleared — records stranded after truncated-changelog completion"
 
         # Done-marker is written — future restarts will NOT re-flag.
-        assert run2._has_local_migration_done_marker() is True, (
-            "done-marker not written — migration would re-trigger on every restart"
-        )
+        assert (
+            run2._has_local_migration_done_marker() is True
+        ), "done-marker not written — migration would re-trigger on every restart"
         assert run2.has_incomplete_ttl_migration() is False
 
         # No SENTINEL_NEVER (never-expiring) records escaped.
