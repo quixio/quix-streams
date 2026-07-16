@@ -18,8 +18,18 @@ DAY_MS = 86_400_000
 
 
 def _replay(partition, msgs, now_ms=None):
+    """Replay ``(key, value, ttl_stamped)`` default-CF messages.
+
+    ``now_ms`` models a WARM restore (finding #3): it is seeded as the partition's
+    event-time high-water (the recovery-drop frontier) AND pins the recovery
+    wallclock, so a stamped record with ``stamp <= now_ms`` is dropped exactly as
+    the live read filter would — exercising the delete-supersession path the fix
+    preserves for warm restores."""
     if now_ms is not None:
         partition._now_ms = lambda: now_ms  # noqa: E731
+        # Seed the event-time frontier = now_ms so the recovery drop mirrors the
+        # live read filter (drop iff stamp <= high_water).
+        partition.advance_high_water(now_ms)
     offset = 0
     for key, value, ttl_stamped in msgs:
         partition.recover_from_changelog_message(
@@ -90,12 +100,12 @@ class TestExpiredReplaySupersedesOlderCopy:
 
 
 class TestExpiredReplayDropAggregateInfo:
-    """Wallclock-expired replay drops emit ONE aggregate INFO per partition per
-    recovery (count + clock, no path)."""
+    """Event-time-frontier-expired replay drops emit ONE aggregate INFO per
+    partition per recovery (count + clock, no path)."""
 
     def test_aggregate_info_on_expired_drops(self, changelog_producer_mock, caplog):
-        """Exactly one INFO with count=2 plus the recovery wallclock is emitted
-        when expired stamped records are dropped."""
+        """Exactly one INFO with count=2 plus the recovery event-time frontier
+        (high_water) is emitted when expired stamped records are dropped."""
         import logging
 
         now_ms = 1_780_000_000_000
@@ -126,7 +136,8 @@ class TestExpiredReplayDropAggregateInfo:
         )
         msg = drop_logs[0].getMessage()
         assert "dropped 2 already-expired stamped record(s)" in msg
-        assert f"wallclock={now_ms}" in msg
+        # The drop clock is now the event-time frontier (seeded high_water=now_ms).
+        assert f"high_water={now_ms}" in msg
 
     def test_no_info_when_zero_drops(self, changelog_producer_mock, caplog):
         import logging

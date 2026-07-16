@@ -147,14 +147,23 @@ def test_cold_restore_same_changelog_matches_warm_restart(partition_factory):
     cold = partition_factory(name="fresh")
     _replay(cold, msgs, now_ms=T_RESTART)  # replay AT restart time
     assert cold.uses_ttl_stamps is True
-    assert cold._recovery_max_survivor_expiry_ms is None
-    assert cold._max_index_stamp_ms() is None  # every survivor expired-dropped
+    # finding #3: a COLD restore has an event-time frontier of None, so the stamped
+    # survivors are KEPT (no longer wallclock-dropped) and re-indexed — the
+    # recovery drop mirrors the live read filter. Their stamp is nonetheless
+    # already in the PAST relative to the recovery clock, so it still cannot serve
+    # as the leftover completion expiry.
+    assert cold._recovery_max_survivor_expiry_ms == STAMP_EXPIRY
+    assert cold._max_index_stamp_ms() == STAMP_EXPIRY
+    assert STAMP_EXPIRY < T_RESTART
 
     cold.complete_recovery()
 
     decoded = {k: decode_ttl_value(v) for k, v in _default_cf(cold).items()}
     for key, raw in legacy.items():
-        assert decoded[key] == (SENTINEL_NEVER, raw)  # same outcome as warm
+        # Past survivor stamp -> clamped to SENTINEL_NEVER, the SAME outcome as the
+        # warm restart (determinism preserved, now via the past-survivor clamp
+        # rather than the survivors being wallclock-dropped on cold restore).
+        assert decoded[key] == (SENTINEL_NEVER, raw)
     cold.close()
 
 
@@ -208,12 +217,15 @@ def test_resume_path_past_index_stamp_clamps_to_sentinel(partition_factory):
 
 
 # -------------------------------------------------------------------
-# Memory defensive sibling: an all-expired cohort folds into the clamp.
+# Memory defensive sibling: an all-past survivor cohort folds into the clamp.
 # -------------------------------------------------------------------
 def test_memory_all_expired_survivor_clamps_to_sentinel():
     partition = MemoryStorePartition(changelog_producer=None)
     msgs, legacy = _mixed_changelog(n_stamped=2, n_legacy=4)
-    # Replay AT restart time so every stamped survivor is expired-dropped.
+    # Replay AT restart time. finding #3: memory has no persisted high-water, so
+    # the frontier is None and the stamped survivors are KEPT + indexed (no
+    # wallclock drop) — the recovery drop mirrors the live read filter. Their
+    # stamp is still in the past relative to the recovery clock.
     partition._now_ms = lambda: T_RESTART  # noqa: E731
     for offset, (key, value, ttl_stamped) in enumerate(msgs):
         partition.recover_from_changelog_message(
@@ -224,11 +236,13 @@ def test_memory_all_expired_survivor_clamps_to_sentinel():
             ttl_stamped=ttl_stamped,
         )
     assert partition.uses_ttl_stamps is True
-    assert partition._recovery_max_survivor_expiry_ms is None
-    assert partition._max_index_stamp_ms() is None
+    assert partition._recovery_max_survivor_expiry_ms == STAMP_EXPIRY
+    assert partition._max_index_stamp_ms() == STAMP_EXPIRY
+    assert STAMP_EXPIRY < T_RESTART
 
     partition.complete_recovery()
 
     default = partition._state.get("default", {})
     for key, raw in legacy.items():
+        # Past survivor stamp -> the leftover completion clamps to SENTINEL_NEVER.
         assert decode_ttl_value(default[key]) == (SENTINEL_NEVER, raw)

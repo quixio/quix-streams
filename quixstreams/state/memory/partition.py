@@ -170,7 +170,21 @@ class MemoryStorePartition(StorePartition):
         # high-water (see :meth:`recover_from_changelog_message`). ``None`` means
         # no stamped message has been replayed yet in this partition's lifetime.
         self._recovery_now_ms: Optional[int] = None
-        # Count of wallclock-expired stamped records dropped during this
+        # Event-time replay-drop frontier (finding #3), mirroring
+        # ``RocksDBStorePartition._recovery_frontier_ms``: the partition's
+        # high-water snapshotted ONCE before replay and frozen for the session,
+        # used as the fixed replay-drop clock so recovery matches the live read
+        # filter exactly (drop iff ``high_water_ms is not None and stamp <=
+        # high_water_ms``). Memory has no persisted high-water (a fresh dict on
+        # every open), so in real operation this is ``None`` on every restore ->
+        # nothing drops (a permanent cold restore); the field + latch exist for
+        # predicate parity with RocksDB and to keep the frontier frozen (no
+        # ratchet) whenever a frontier IS present (e.g. a test seeding it).
+        # ``None`` is a valid frontier; the ``_recovery_frontier_captured`` latch
+        # distinguishes "captured as None" from "not yet captured".
+        self._recovery_frontier_ms: Optional[int] = None
+        self._recovery_frontier_captured: bool = False
+        # Count of event-time-frontier-expired stamped records dropped during this
         # recovery's changelog replay by the latest-record-wins recovery-drop
         # filter. Surfaced as
         # one aggregate INFO at :meth:`complete_recovery` so an operator sees the
@@ -466,25 +480,36 @@ class MemoryStorePartition(StorePartition):
             self._state.setdefault(cf_name, {})[key] = value
         elif is_main_cf:
             stamped, stamp = self._normalize_replay_value(value)
-            # Judge expiry against the current wallclock captured once per
-            # recovery session, NOT against a stamp-ratcheted pseudo-clock (the
-            # old ``recovery_now = self._high_water_ms`` ratchet, advanced by
-            # each entry's stamp, collapsed uniform-expiry backfilled stores).
-            # Capture lazily on the first
-            # stamped default-CF replay. The wallclock is the
-            # replay drop clock ONLY; it is NO LONGER seeded into the live
-            # ``_high_water_ms`` clock (removed for parity with RocksDB, so an
-            # event-time-lagging workload never over-expires its own writes).
-            # Sentinel-stamped entries are never compared and always survive.
+            # Judge expiry against the EVENT-TIME frontier (parity with
+            # ``RocksDBStorePartition``): the high-water snapshotted ONCE before
+            # replay, using the exact clock and condition the live read filter
+            # uses (drop iff ``high_water_ms is not None and stamp <=
+            # high_water_ms``). This is the finding-#3 fix — the old wallclock
+            # drop mass-deleted an event-time-lagging store's records that the
+            # live filter would keep. Memory has no persisted high-water, so the
+            # frontier is ``None`` on a real restore -> nothing drops (a
+            # permanent cold restore, keeping everything until live events
+            # advance high-water and the sweep reclaims genuinely-expired
+            # records). The frontier is FROZEN (replay never advances high-water)
+            # and captured via a distinct latch (``None`` is a valid frontier),
+            # so it can never ratchet up from the replayed stamps.
+            # ``_recovery_now_ms`` is still captured here, UNCHANGED, for the
+            # migration-completion / adoption consumers; it no longer drives the
+            # replay drop. Sentinel-stamped entries are never compared and always
+            # survive.
             expired = False
             if stamp != SENTINEL_NEVER:
                 if self._recovery_now_ms is None:
                     self._recovery_now_ms = self._now_ms()
-                recovery_now_ms = self._recovery_now_ms
-                expired = stamp <= recovery_now_ms
+                if not self._recovery_frontier_captured:
+                    self._recovery_frontier_ms = self._high_water_ms
+                    self._recovery_frontier_captured = True
+                frontier = self._recovery_frontier_ms
+                expired = frontier is not None and stamp <= frontier
             if expired:
-                # Already-expired against wallclock-at-recovery
-                # (latest-record-wins, parity with RocksDB). An OLDER copy of
+                # Already-expired against the event-time frontier (matches the
+                # live read filter; latest-record-wins, parity with RocksDB). An
+                # OLDER copy of
                 # ``key`` replayed earlier this session (verbatim legacy, or an
                 # older unexpired stamped copy) may already sit in the main dict;
                 # skipping (the old bare ``pass``) let it survive as a
@@ -538,17 +563,18 @@ class MemoryStorePartition(StorePartition):
               (never-expire) + a WARN in the all-expired fallback.
         """
         if self._recovery_expired_drops > 0:
-            # Make the wallclock-expired replay drops
-            # observable — ONE aggregate INFO per partition per recovery (no
-            # per-record logging). Emitted at the once-per-recovery finalize seam
-            # before any early return; a non-zero count implies the partition
-            # flipped, so no early-return branch can skip a non-zero log.
+            # Make the event-time-frontier replay drops observable — ONE
+            # aggregate INFO per partition per recovery (no per-record logging).
+            # Emitted at the once-per-recovery finalize seam before any early
+            # return; a non-zero count implies the partition flipped, so no
+            # early-return branch can skip a non-zero log.
             logger.info(
                 "Recovery dropped %d already-expired stamped record(s) from the "
-                "in-memory changelog replay (expired against recovery "
-                "wallclock=%d ms; latest-record-wins).",
+                "in-memory changelog replay (expired against the recovery "
+                "event-time frontier high_water=%d ms; matches the live read "
+                "filter).",
                 self._recovery_expired_drops,
-                self._recovery_now_ms or 0,
+                self._recovery_frontier_ms or 0,
             )
         if not type(self).uses_ttl_stamps:
             return

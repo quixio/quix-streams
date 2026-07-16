@@ -184,7 +184,23 @@ class RocksDBStorePartition(StorePartition):
         # stamped message has been replayed yet in this partition's lifetime;
         # a fresh partition instance per assignment is a fresh recovery session.
         self._recovery_now_ms: Optional[int] = None
-        # Count of wallclock-expired stamped records dropped during this
+        # Event-time replay-drop frontier (finding #3). Snapshot of the
+        # partition's persisted event-time high-water (:attr:`high_water_ms`) as
+        # it stood BEFORE any changelog record replayed, captured ONCE (lazily,
+        # on the first stamped default-CF replay) and frozen for the whole
+        # recovery session. The replay-drop decides expiry against THIS value
+        # with the exact clock + condition the live read filter uses
+        # (``transaction.py``: drop iff ``high_water_ms is not None and stamp <=
+        # high_water_ms``), so recovery never mass-deletes a record the live path
+        # would keep. Because ``recover_from_changelog_message`` never advances
+        # high-water, the frontier cannot ratchet up from replayed stamps (the
+        # collapse the old ``recovery_now = high_water`` per-record clock caused).
+        # ``None`` is a VALID frontier (cold restore / fresh volume) meaning
+        # "drop nothing"; the ``_recovery_frontier_captured`` latch distinguishes
+        # "captured as None" from "not yet captured".
+        self._recovery_frontier_ms: Optional[int] = None
+        self._recovery_frontier_captured: bool = False
+        # Count of event-time-frontier-expired stamped records dropped during this
         # recovery's changelog replay (the latest-record-wins recovery-drop
         # filter, :meth:`recover_from_changelog_message`). Surfaced as one aggregate INFO at
         # :meth:`complete_recovery` so an operator sees the deletions instead of
@@ -589,27 +605,45 @@ class RocksDBStorePartition(StorePartition):
             batch.put(key, value, cf_handle)
         elif is_main_cf:
             stamped, stamp = self._normalize_replay_value(value)
-            # Judge expiry against the current wallclock captured once per
-            # recovery session, NOT against a stamp-ratcheted pseudo-clock
-            # (the old ``recovery_now = self._high_water_ms`` ratchet collapsed
-            # uniform-expiry backfilled stores). Capture lazily on the first
-            # stamped default-CF replay.
-            # The recovery wallclock is used ONLY as the latest-record-wins
-            # replay-drop clock; it is NO LONGER seeded into the live
-            # ``_high_water_ms`` clock. Post-recovery ``_high_water_ms`` is the
-            # loaded value or
-            # ``None`` and advances only on live event-time writes, so an
-            # event-time-lagging workload never over-expires its own writes.
-            # Sentinel-stamped entries are never compared and always survive.
+            # Judge expiry against the EVENT-TIME frontier — the partition's
+            # persisted high-water snapshotted ONCE before replay — using the
+            # exact clock and condition the live read filter uses
+            # (``transaction.py``: drop iff ``high_water_ms is not None and
+            # stamp <= high_water_ms``). This is the finding-#3 fix: the old
+            # wallclock drop deleted records whose event-time expiry stamp was
+            # behind wallclock even though the live filter (event-time) would
+            # keep them, mass-deleting a lagging store's dedup set on cold
+            # restore.
+            #   - WARM restore: the frontier is the loaded persisted high-water;
+            #     a record at/below it would also be hidden by the live read and
+            #     reclaimed by the sweep, so dropping it here is consistent and
+            #     bounds memory.
+            #   - COLD restore / store that flips mid-replay: high-water is
+            #     ``None`` -> frontier ``None`` -> NOTHING is dropped, identical
+            #     to the live filter; genuinely-expired records are reclaimed by
+            #     the first post-recovery sweep once live events advance
+            #     high-water past their stamps.
+            # The frontier is FROZEN for the session (replay never advances
+            # high-water) and captured via a distinct latch (``None`` is a valid
+            # frontier), so it can never ratchet up from the replayed stamps (the
+            # collapse the old ``recovery_now = high_water`` per-record clock
+            # caused). ``_recovery_now_ms`` is still captured here, UNCHANGED, for
+            # the migration-completion / adoption / heuristic wallclock consumers;
+            # it no longer drives the replay drop. Sentinel-stamped entries are
+            # never compared and always survive.
             expired = False
             if stamp != SENTINEL_NEVER:
                 if self._recovery_now_ms is None:
                     self._recovery_now_ms = self._now_ms()
-                recovery_now_ms = self._recovery_now_ms
-                expired = stamp <= recovery_now_ms
+                if not self._recovery_frontier_captured:
+                    self._recovery_frontier_ms = self._high_water_ms
+                    self._recovery_frontier_captured = True
+                frontier = self._recovery_frontier_ms
+                expired = frontier is not None and stamp <= frontier
             if expired:
-                # Already-expired against wallclock-at-recovery
-                # (latest-record-wins). A compacted changelog can carry several
+                # Already-expired against the event-time frontier (matches the
+                # live read filter; latest-record-wins). A compacted changelog
+                # can carry several
                 # pre-compaction copies of one key; an OLDER copy of ``key``
                 # replayed earlier this session (a verbatim header-absent legacy
                 # value, or an older unexpired stamped copy) may already sit in
@@ -690,18 +724,19 @@ class RocksDBStorePartition(StorePartition):
         stamped) changelog and resumes over exactly the remainder.
         """
         if self._recovery_expired_drops > 0:
-            # Make the latest-record-wins wallclock-expired replay drops
-            # observable — ONE aggregate INFO per partition per recovery (no
-            # per-record logging). Emitted at the once-per-recovery finalize seam
-            # before any early return; a non-zero count implies the partition
-            # flipped, so no early-return branch below can skip a non-zero log.
+            # Make the event-time-frontier replay drops observable — ONE
+            # aggregate INFO per partition per recovery (no per-record logging).
+            # Emitted at the once-per-recovery finalize seam before any early
+            # return; a non-zero count implies the partition flipped, so no
+            # early-return branch below can skip a non-zero log. A cold restore
+            # has frontier None and 0 drops, so this does not fire there.
             logger.info(
                 "Recovery at path=%s dropped %d already-expired stamped record(s) "
-                "during changelog replay (expired against recovery wallclock=%d "
-                "ms; latest-record-wins).",
+                "during changelog replay (expired against the recovery event-time "
+                "frontier high_water=%d ms; matches the live read filter).",
                 self._path,
                 self._recovery_expired_drops,
-                self._recovery_now_ms or 0,
+                self._recovery_frontier_ms or 0,
             )
         if not type(self).uses_ttl_stamps:
             # A subclass opted out (windowed / timestamped): the class-level
