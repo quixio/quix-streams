@@ -109,6 +109,17 @@ class MemoryStorePartition(StorePartition):
         legacy_records_ttl: Optional[timedelta] = None,
         ttl_changelog_tombstones: bool = True,
     ) -> None:
+        if max_evictions_per_flush <= 0:
+            # Parity with ``RocksDBOptions.__post_init__`` (#4, review batch 4):
+            # a 0/negative cap silently disables the per-flush TTL sweep AND the
+            # tombstone reclamation that rides on it, so expired records accumulate
+            # unbounded with no error. This is the chokepoint every partition
+            # construction funnels through (direct or via ``MemoryStore``), so the
+            # guard here protects all paths.
+            raise ValueError(
+                "max_evictions_per_flush must be a strictly positive int, "
+                f"got {max_evictions_per_flush!r}"
+            )
         super().__init__(
             dumps=json_dumps,
             loads=json_loads,
