@@ -676,10 +676,22 @@ class RecoveryManager:
                     f"must be assigned to recover from it"
                 )
 
-            if rp.needs_recovery_check:
-                logger.debug(f"Adding a recovery check for {rp}")
-                self._recovery_partitions.setdefault(partition, {})[changelog_name] = rp
-            elif rp.has_invalid_offset:
+            if rp.has_invalid_offset:
+                # #5 (review batch 4): check invalid-offset BEFORE
+                # ``needs_recovery_check``. The latter is force-True whenever
+                # ``has_incomplete_ttl_migration()`` is True (the finding-2 hoist
+                # above), which broke the invariant that a partition can never be
+                # both "needs recovery" and "invalid offset" at once. A store
+                # mid-TTL-migration whose changelog was deleted+recreated
+                # (``highwater <= stored offset`` with ``highwater > 0``) would
+                # otherwise take the recovery branch, silently rebuild from a
+                # changelog that cannot reconstruct its state, and then cement the
+                # inconsistency with a done-marker. An invalid offset must always
+                # raise so the operator clears state. The finding-2 warm-completion
+                # path is preserved: a fully-truncated changelog has
+                # ``highwater == 0`` → ``has_invalid_offset`` early-returns False,
+                # and a caught-up warm store has ``offset == highwater - 1`` →
+                # False, so both still fall through to the recovery branch below.
                 raise InvalidStoreChangelogOffset(
                     "The offset in the state store is greater than or equal to its "
                     "respective changelog highwater. This can happen if the changelog "
@@ -687,6 +699,9 @@ class RecoveryManager:
                     "invalid state store can be deleted by manually calling "
                     "Application.clear_state() before running the application again."
                 )
+            elif rp.needs_recovery_check:
+                logger.debug(f"Adding a recovery check for {rp}")
+                self._recovery_partitions.setdefault(partition, {})[changelog_name] = rp
 
         # Figure out if we need to pause any topic partitions
         if self._recovery_partitions:

@@ -144,6 +144,15 @@ class RocksDBOptions(RocksDBOptionsType):
                 "legacy_backfill_chunk_size must be a strictly positive int, "
                 f"got {self.legacy_backfill_chunk_size!r}"
             )
+        if self.max_evictions_per_flush <= 0:
+            # #4 (review batch 4): a 0/negative cap silently disables the per-flush
+            # TTL sweep AND the tombstone reclamation that rides on it, so expired
+            # records accumulate unbounded with no error. Reject at construction,
+            # mirroring the other bound checks above.
+            raise ValueError(
+                "max_evictions_per_flush must be a strictly positive int, "
+                f"got {self.max_evictions_per_flush!r}"
+            )
 
     def to_options(self) -> rocksdict.Options:
         """

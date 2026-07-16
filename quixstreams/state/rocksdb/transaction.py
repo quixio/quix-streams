@@ -188,18 +188,25 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "from a custom Source), use as_state(prefix, timestamp=...)."
             )
         expiry = timestamp + _ttl_to_ms(ttl)
-        if expiry < 0:
-            # #12 (review batch 3): a pre-epoch / negative event-time yields a
-            # negative expiry that the unsigned stamp encoder cannot represent.
-            # Reject loudly at the source with a clear ValueError (naming the
-            # offending values) instead of letting a raw struct.error crash-loop
-            # on every replay. Caught by the #14 validate-before-stage + FAILED
-            # handling, so nothing is committed. We reject rather than clamp: a
-            # clamped expiry would silently change the record's TTL semantics.
+        if expiry <= 0:
+            # #12 (review batch 3) + #1 (review batch 4): reject a NON-POSITIVE
+            # expiry loudly at the source. A negative expiry (pre-epoch / negative
+            # event-time) cannot be represented by the unsigned stamp encoder at
+            # all. An expiry of EXACTLY 0 (e.g. timestamp=-1 + ttl=1ms) does encode
+            # as ``\x00`` * 8, but the strict read validator (``_safe_decode_stamp``)
+            # only accepts ``0 < stamp``, so a stamp-0 value reads back as raw bytes
+            # -> StateSerializationError on every read and never sweeps. We reject
+            # at write time rather than widen the read validator to ``0 <=`` on
+            # purpose: the ``0 <`` guard is what stops a genuine un-stamped legacy
+            # value whose first 8 bytes happen to be ``\x00`` * 8 from being
+            # mis-read as an expire-at-epoch stamp and silently stripped/swept.
+            # Caught by the #14 validate-before-stage + FAILED handling, so nothing
+            # is committed. We reject rather than clamp: a clamped expiry would
+            # silently change the record's TTL semantics.
             raise ValueError(
-                f"ttl=... produced a negative expiry ({expiry} ms) from "
-                f"timestamp={timestamp} and ttl={ttl!r}; a pre-epoch or negative "
-                "event-time cannot be TTL-stamped."
+                f"ttl=... produced a non-positive expiry ({expiry} ms) from "
+                f"timestamp={timestamp} and ttl={ttl!r}; a pre-epoch, negative, or "
+                "exactly-zero (epoch-ms 0) event-time expiry cannot be TTL-stamped."
             )
         if expiry >= _MAX_PLAUSIBLE_STAMP_MS:
             # Symmetric upper bound (review re-review #3): a stamp this large

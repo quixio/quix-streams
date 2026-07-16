@@ -5,6 +5,7 @@ import time
 from datetime import timedelta
 from typing import Any, Dict, Literal, Optional, Union, cast
 
+from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
 from quixstreams.models import HeadersMapping
 from quixstreams.state import PartitionTransaction
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
@@ -616,12 +617,19 @@ class MemoryStorePartition(StorePartition):
             # recovery — nothing was stamped this session.
             try:
                 self._produce_migration_done_marker()
-            except ChangelogFlushError:
+            except (ChangelogFlushError, KafkaProducerDeliveryError):
+                # #2 (review batch 4): the marker's produce()/flush() raise
+                # KafkaProducerDeliveryError (NOT ChangelogFlushError) on a latched
+                # delivery error from a sibling partition on the shared migration
+                # producer; both must be swallowed here. This best-effort branch
+                # stamped nothing this session, so a failed marker must NOT fail
+                # recovery (next restart retries). Widened to the empty-census
+                # branch ONLY.
                 logger.warning(
                     "Recovery: in-memory state fully migrated (empty pending "
-                    "census) but the done-marker changelog flush failed; leaving "
-                    "the store unmarked. Recovery continues; the marker will be "
-                    "retried on the next restart."
+                    "census) but the done-marker changelog flush/delivery failed; "
+                    "leaving the store unmarked. Recovery continues; the marker "
+                    "will be retried on the next restart."
                 )
             return
 
@@ -1333,14 +1341,19 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "as_state(prefix, timestamp=...)."
             )
         expiry = timestamp + _ttl_to_ms(ttl)
-        if expiry < 0:
-            # #12: reject a negative expiry loudly (parity with
-            # ``RocksDBPartitionTransaction._compute_stamp``); caught by the #14
-            # validate-before-stage + FAILED handling so nothing is committed.
+        if expiry <= 0:
+            # #12 + #1 (review batch 4): reject a NON-POSITIVE expiry loudly
+            # (parity with ``RocksDBPartitionTransaction._compute_stamp``).
+            # expiry==0 encodes as ``\x00`` * 8 but the strict read validator
+            # (``_safe_decode_stamp``) only accepts ``0 < stamp``, so a stamp-0
+            # value reads back as raw bytes (StateSerializationError) and never
+            # sweeps; reject at write time to keep the read-side ``0 <`` guard
+            # intact (see the RocksDB twin for the full rationale). Caught by the
+            # #14 validate-before-stage + FAILED handling so nothing is committed.
             raise ValueError(
-                f"ttl=... produced a negative expiry ({expiry} ms) from "
-                f"timestamp={timestamp} and ttl={ttl!r}; a pre-epoch or negative "
-                "event-time cannot be TTL-stamped."
+                f"ttl=... produced a non-positive expiry ({expiry} ms) from "
+                f"timestamp={timestamp} and ttl={ttl!r}; a pre-epoch, negative, or "
+                "exactly-zero (epoch-ms 0) event-time expiry cannot be TTL-stamped."
             )
         if expiry >= _MAX_PLAUSIBLE_STAMP_MS:
             # Symmetric upper bound (review re-review #3), parity with

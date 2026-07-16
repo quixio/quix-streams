@@ -14,6 +14,7 @@ from typing import (
 
 from rocksdict import AccessType, ColumnFamily, Rdict, ReadOptions, WriteBatch
 
+from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
 from quixstreams.models import HeadersMapping
 from quixstreams.state.base import (
     PartitionTransactionCache,
@@ -843,12 +844,22 @@ class RocksDBStorePartition(StorePartition):
             # restart re-derives the same empty census and retries the marker).
             try:
                 self._produce_migration_done_marker()
-            except ChangelogFlushError:
+            except (ChangelogFlushError, KafkaProducerDeliveryError):
+                # #2 (review batch 4): the marker routes through
+                # ``InternalProducer.produce()`` / ``flush()``, which raise
+                # ``KafkaProducerDeliveryError`` (NOT ``ChangelogFlushError``) on a
+                # latched delivery error from a sibling partition on the shared
+                # migration producer. Both must be swallowed here: this best-effort
+                # branch stamped nothing this session, so a failed marker must NOT
+                # fail recovery — it only forgoes the optimization (the next restart
+                # re-derives the same empty census and retries). Widened to the
+                # empty-census branch ONLY; the critical backfill/completion paths
+                # keep propagating.
                 logger.warning(
                     "Recovery at path=%s: state fully migrated (empty pending "
-                    "census) but the done-marker changelog flush failed; leaving "
-                    "the store unmarked. Recovery continues; the marker will be "
-                    "retried on the next restart.",
+                    "census) but the done-marker changelog flush/delivery failed; "
+                    "leaving the store unmarked. Recovery continues; the marker "
+                    "will be retried on the next restart.",
                     self._path,
                 )
             return
