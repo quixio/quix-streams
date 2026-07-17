@@ -60,6 +60,7 @@ from .options import RocksDBOptions
 from .ttl_codec import (
     _MAX_PLAUSIBLE_STAMP_MS,
     SENTINEL_NEVER,
+    TTL_STAMP_BYTES,
     clamp_additive_expiry,
     decode_index_key,
     decode_ttl_value,
@@ -283,6 +284,33 @@ class RocksDBStorePartition(StorePartition):
         self._adopt_provisional: bool = class_uses_ttl_stamps and (
             self._load_adopt_pending_flag()
         )
+
+        # §5.4 / finding #4: reconcile a corroboration whose LOCAL teardown was
+        # interrupted by a crash. :meth:`corroborate_adoption` persists the durable
+        # done-marker FIRST (changelog-first), THEN deletes the pending marker and
+        # (post-commit-barrier) drops the backup CF in separate writes. Two crash
+        # windows can strand local state even though corroboration already succeeded:
+        #  - crash before the pending delete -> pending marker survives, which
+        #    re-armed ``_adopt_provisional`` above and would pin the TTL sweep off
+        #    forever;
+        #  - crash after the pending delete but before the backup drop -> an orphaned
+        #    ``__ttl_adopt_backup__`` CF lingers as dead state.
+        # The done-marker is the durable proof of success and takes precedence over
+        # either leftover: force the store out of provisional mode and finish the
+        # interrupted teardown (delete pending + drop backup — both idempotent).
+        # Runs BEFORE the §5.6 rollback resolution so a corroborated store
+        # (done-marker present) is never rolled back. The ``list_column_families``
+        # guard short-circuits the marker probe so a store that never had a
+        # ``__ttl_system__`` CF does not get one created here; a cleanly-corroborated
+        # store (pending absent, backup already dropped) skips the reconciliation.
+        cfs_at_open = self.list_column_families()
+        if (
+            class_uses_ttl_stamps
+            and TTL_SYSTEM_CF_NAME in cfs_at_open
+            and (self._adopt_provisional or TTL_ADOPT_BACKUP_CF_NAME in cfs_at_open)
+            and self._has_local_migration_done_marker()
+        ):
+            self._finish_interrupted_corroboration()
 
         # §5.0 warm/cold classification + §5.6 rollback resolution, evaluated at
         # open BEFORE the persisted-flip snapshot. Three outcomes:
@@ -1583,17 +1611,64 @@ class RocksDBStorePartition(StorePartition):
         """
         §5.4 corroboration: a live ``state.set(..., ttl=...)`` write (non-sentinel)
         confirms a PROVISIONAL cold-heuristic adoption is genuine. Called from the
-        transaction's :meth:`prepare` after :meth:`_maybe_flip_or_reject`. One-time
-        per partition:
+        transaction's :meth:`prepare` after :meth:`_maybe_flip_or_reject` and BEFORE
+        ``super().prepare()`` (the changelog-commit barrier). One-time per partition:
 
         1. produce the durable migration-done marker (changelog-first,
            confirm-or-raise) so any FUTURE cold rebuild is deterministic via the
            done-marker path (§5.4 index rebuild);
-        2. clear ``__ttl_adopt_pending__``, drop ``__ttl_adopt_backup__``, set
-           ``_adopt_provisional = False`` — the sweep re-enables and reclaims
-           now-past adopted records.
+        2. clear ``__ttl_adopt_pending__`` and set ``_adopt_provisional = False`` —
+           the sweep re-enables and reclaims now-past adopted records (the
+           corroborating flush's own sweep runs right after this hook).
+
+        **The backup drop is DEFERRED (finding #1).** The irreversible
+        ``__ttl_adopt_backup__`` drop is NOT done here; it runs from
+        :meth:`finalize_corroboration_teardown`, which the transaction calls ONLY
+        after ``super().prepare()`` succeeds. If ``super().prepare()`` fails (e.g. a
+        changelog producer error) the transaction is FAILED and the backup CF is
+        left intact, so a subsequent rollback is still possible. A crash that
+        interrupts the teardown is reconciled at the next open by
+        :meth:`_finish_interrupted_corroboration` (the durable done-marker proves
+        corroboration succeeded).
         """
         self._produce_migration_done_marker()
+        batch = WriteBatch(raw_mode=True)
+        batch.delete(
+            TTL_ADOPT_PENDING_KEY, self.get_column_family_handle(METADATA_CF_NAME)
+        )
+        self._write(batch)
+        self._adopt_provisional = False
+        logger.info(
+            "Corroborated v3.24.0 adoption at path=%s on a live ttl= write; "
+            "produced the durable migration-done marker, cleared the pending "
+            "marker, lifted sweep suppression (backup dropped after the commit "
+            "barrier).",
+            self._path,
+        )
+
+    def finalize_corroboration_teardown(self) -> None:
+        """
+        §5.4 / finding #1: deferred, post-commit-barrier teardown of a corroboration.
+
+        Drops the reversible ``__ttl_adopt_backup__`` CF. The transaction invokes
+        this ONLY after ``super().prepare()`` has succeeded, so an aborted prepare
+        never destroys the backup and rollback stays possible until corroboration
+        actually reaches the commit barrier. Idempotent: the open-time reconciliation
+        (:meth:`_finish_interrupted_corroboration`) repeats the drop if a crash
+        interrupts this step.
+        """
+        self._drop_local_cf_if_exists(TTL_ADOPT_BACKUP_CF_NAME)
+
+    def _finish_interrupted_corroboration(self) -> None:
+        """
+        §5.4 / finding #4: complete a corroboration whose LOCAL teardown was
+        interrupted (durable done-marker present, but the pending-marker delete
+        and/or the backup drop did not finish before a crash). Deletes the surviving
+        ``__ttl_adopt_pending__`` marker, drops ``__ttl_adopt_backup__``, and clears
+        the runtime provisional flag so the TTL sweep is no longer suppressed. Only
+        called at open when the done-marker is present, so it can never demote a
+        genuinely-still-provisional (uncorroborated) store.
+        """
         batch = WriteBatch(raw_mode=True)
         batch.delete(
             TTL_ADOPT_PENDING_KEY, self.get_column_family_handle(METADATA_CF_NAME)
@@ -1602,38 +1677,82 @@ class RocksDBStorePartition(StorePartition):
         self._drop_local_cf_if_exists(TTL_ADOPT_BACKUP_CF_NAME)
         self._adopt_provisional = False
         logger.info(
-            "Corroborated v3.24.0 adoption at path=%s on a live ttl= write; "
-            "produced the durable migration-done marker, dropped the backup, "
-            "lifted sweep suppression.",
+            "Reconciled an interrupted v3.24.0 corroboration at path=%s: the durable "
+            "migration-done marker is present but the pending marker survived a "
+            "crash; cleared the pending marker, dropped the backup, lifted sweep "
+            "suppression.",
             self._path,
         )
 
     def _rollback_provisional_adopt(self) -> None:
         """
         §5.6 Case A: roll back a PROVISIONAL cold-heuristic adoption (warm restart
-        with ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1``). Restore every backed-up original
-        into the default CF byte-identical, delete the flip flag + format-version
-        marker + high-water + provisional marker, drop ``__ttl_index__`` and
-        ``__ttl_adopt_backup__``, and set the runtime flags back to legacy. The
-        store returns to legacy mode byte-identical to pre-adoption. Idempotent and
-        safe: it only runs when the provisional marker is present, so a corroborated
-        store (no marker) and the sound warm-deterministic path (no marker/backup)
-        are never touched.
+        with ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1``). Revert the store to legacy mode
+        WITHOUT losing post-adoption data (finding #2), then delete the flip flag +
+        format-version marker + high-water + provisional marker, drop
+        ``__ttl_index__`` and ``__ttl_adopt_backup__``, and set the runtime flags
+        back to legacy. Idempotent and safe: it only runs when the provisional
+        marker is present, so a corroborated store (no marker) and the sound
+        warm-deterministic path (no marker/backup) are never touched.
+
+        **Value-aware, not blind backup-restore (finding #2).** After a provisional
+        adoption the default CF holds a mix of (a) UNTOUCHED adopted originals —
+        still byte-identical to the ``__ttl_adopt_backup__`` snapshot — and (b)
+        POST-ADOPTION writes committed after the flip: updates to an adopted key, or
+        brand-new keys that never existed pre-adoption. Every (b) value carries the
+        8-byte stamp the flipped write path prepends. Blindly restoring every backup
+        entry (the old behavior) both CLOBBERED updates with their stale
+        pre-adoption value AND left new keys stamp-prefixed. Instead, per
+        default-CF key:
+
+        - current value == its backup entry -> UNTOUCHED: leave the pre-adoption
+          bytes verbatim (byte-identical rollback for a false-positive legacy
+          store);
+        - otherwise (differs from the backup, or the key is absent from the backup)
+          -> POST-ADOPTION write: strip the 8-byte stamp the framework added while
+          flipped, which reconstructs exactly what a legacy store would have
+          persisted for that write, so the latest committed value survives the
+          rollback.
+
+        A key DELETED post-adoption is simply absent from the default CF here, so it
+        stays deleted (never resurrected from the backup).
         """
         backup_cf = self.get_or_create_column_family(TTL_ADOPT_BACKUP_CF_NAME)
+        default_cf = self.get_or_create_column_family("default")
         default_handle = self.get_column_family_handle("default")
-        # Materialize the backup snapshot, then restore in bounded chunks (no
-        # concurrent write-while-iterate on the same CF). Rollback is a rare,
-        # deliberate operator action, so the transient full-key materialization is
-        # acceptable.
-        backup_items = [
-            (cast(bytes, raw_key), cast(bytes, value))
+        # Materialize both snapshots up front so the restore never writes to the
+        # default CF while iterating it. Rollback is a rare, deliberate operator
+        # action, so the transient full-key materialization is acceptable.
+        backup = {
+            bytes(cast(bytes, raw_key)): bytes(cast(bytes, value))
             for raw_key, value in backup_cf.items()
+        }
+        default_items = [
+            (bytes(cast(bytes, raw_key)), bytes(cast(bytes, value)))
+            for raw_key, value in default_cf.items()
         ]
+        kept = 0
+        reverted_puts: list[tuple[bytes, bytes]] = []
+        for raw_key, current_value in default_items:
+            original = backup.get(raw_key)
+            if original is not None and current_value == original:
+                # Untouched adopted original: its pre-adoption bytes are already on
+                # disk verbatim — leave them (byte-identical rollback).
+                kept += 1
+                continue
+            # Post-adoption write (update of an adopted key, or a brand-new key):
+            # drop the 8-byte stamp the flipped write path prepended so the value
+            # reads back as legacy user bytes rather than the stale backup or
+            # stamp-prefixed garbage.
+            reverted_puts.append((raw_key, current_value[TTL_STAMP_BYTES:]))
+
+        # Only the stamp-stripped post-adoption writes need rewriting; untouched
+        # keys are already byte-identical on disk. Bounded chunks (no concurrent
+        # write-while-iterate; the default CF is already fully materialized).
         chunk_size = self._legacy_backfill_chunk_size
-        for i in range(0, len(backup_items), chunk_size):
+        for i in range(0, len(reverted_puts), chunk_size):
             batch = WriteBatch(raw_mode=True)
-            for raw_key, value in backup_items[i : i + chunk_size]:
+            for raw_key, value in reverted_puts[i : i + chunk_size]:
                 batch.put(raw_key, value, default_handle)
             self._write(batch)
 
@@ -1655,9 +1774,11 @@ class RocksDBStorePartition(StorePartition):
         self._high_water_ms = None
         logger.warning(
             "Rolled back v3.24.0 adoption at path=%s (QUIXSTREAMS_STATE_TTL_ROLLBACK);"
-            " restored %d value(s) byte-identical, reverted to legacy mode.",
+            " kept %d untouched original(s) byte-identical, stamp-stripped %d "
+            "post-adoption write(s), reverted to legacy mode.",
             self._path,
-            len(backup_items),
+            kept,
+            len(reverted_puts),
         )
 
     def _has_warm_ttl_artifacts(self) -> bool:

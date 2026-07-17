@@ -150,6 +150,13 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # TTL store never touches it.
         self._max_batch_ttl_ms: Optional[int] = None
 
+        # Set True by :meth:`_maybe_corroborate_adoption` when THIS transaction
+        # corroborates a provisional cold adoption. Consulted after
+        # ``super().prepare()`` succeeds to run the DEFERRED, irreversible backup-CF
+        # teardown (finding #1) — never before the commit barrier, so an aborted
+        # prepare leaves the rollback backup intact.
+        self._corroborated_this_tx: bool = False
+
     # ------------------------------------------------------------------
     # TTL-aware write / read overrides.
     # ------------------------------------------------------------------
@@ -683,6 +690,14 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
         super().prepare(processed_offsets=processed_offsets)
+        # Finding #1: run the DEFERRED, irreversible corroboration teardown (drop
+        # the ``__ttl_adopt_backup__`` CF) ONLY after ``super().prepare()`` has
+        # produced the changelog records. A producer error there raises above and
+        # skips this, so the backup stays intact and rollback is still possible
+        # after a failed prepare. A crash between here and the flush is reconciled at
+        # the next open (the durable done-marker proves corroboration succeeded).
+        if self._corroborated_this_tx:
+            self._partition.finalize_corroboration_teardown()
 
     def _maybe_corroborate_adoption(self) -> None:
         """
@@ -702,6 +717,9 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             and partition._adopt_provisional  # noqa: SLF001
         ):
             partition.corroborate_adoption()
+            # Defer the irreversible backup drop to after ``super().prepare()`` —
+            # see :meth:`prepare` (finding #1).
+            self._corroborated_this_tx = True
 
     def _sweep_expired_into_cache_if_enabled(self) -> None:
         """
