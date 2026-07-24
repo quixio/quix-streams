@@ -1,7 +1,10 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, Optional, Type, Union
+from threading import Event
+from typing import Dict, List, Optional, Type, Union
+
+from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.internal_producer import InternalProducer
 from quixstreams.models.topics import TopicConfig
@@ -14,7 +17,7 @@ from .exceptions import (
 )
 from .memory import MemoryStore
 from .recovery import ChangelogProducerFactory, RecoveryManager
-from .rocksdb import RocksDBOptions, RocksDBOptionsType, RocksDBStore
+from .rocksdb import OpenDeadline, RocksDBOptions, RocksDBOptionsType, RocksDBStore
 from .rocksdb.timestamped import TimestampedStore
 from .rocksdb.windowed.store import WindowedRocksDBStore
 
@@ -48,6 +51,8 @@ class StateStoreManager:
         recovery_manager: Optional[RecoveryManager] = None,
         default_store_type: StoreTypes = RocksDBStore,
         migration_producer: Optional[InternalProducer] = None,
+        stop_event: Optional[Event] = None,
+        open_deadline: Optional[OpenDeadline] = None,
     ):
         if state_dir is not None:
             state_dir = Path(state_dir).absolute()
@@ -65,6 +70,8 @@ class StateStoreManager:
         self._migration_producer = migration_producer
         self._recovery_manager = recovery_manager
         self._default_store_type = default_store_type
+        self._stop_event = stop_event
+        self._open_deadline = open_deadline
 
     def _init_state_dir(self) -> None:
         if self._state_dir is None:
@@ -204,6 +211,8 @@ class StateStoreManager:
                 base_dir=str(self._state_dir),
                 changelog_producer_factory=changelog_producer_factory,
                 options=self._rocksdb_options,
+                stop_event=self._stop_event,
+                open_deadline=self._open_deadline,
             )
         elif store_type == MemoryStore:
             # Fix 7 (review re-review): forward the app-wide TTL scalars so the
@@ -254,6 +263,8 @@ class StateStoreManager:
                 topic_config=changelog_config,
             ),
             options=self._rocksdb_options,
+            stop_event=self._stop_event,
+            open_deadline=self._open_deadline,
         )
         self._stores.setdefault(stream_id, {})[store_name] = store
 
@@ -293,6 +304,8 @@ class StateStoreManager:
                 topic_config=changelog_config,
             ),
             options=self._rocksdb_options,
+            stop_event=self._stop_event,
+            open_deadline=self._open_deadline,
         )
 
     def clear_stores(self) -> None:
@@ -340,6 +353,18 @@ class StateStoreManager:
                 store_partitions=store_partitions,
             )
         return store_partitions
+
+    def resume_reassigned_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        """
+        Resume data partitions still paused from a previous recovery generation.
+
+        Delegates to the RecoveryManager; no-op when state recovery is not enabled.
+        See `RecoveryManager.resume_reassigned_data_partitions`.
+        """
+        if self._recovery_manager:
+            self._recovery_manager.resume_reassigned_data_partitions(partitions)
 
     def on_partition_revoke(
         self,

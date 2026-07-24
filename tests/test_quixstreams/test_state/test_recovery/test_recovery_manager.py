@@ -1,3 +1,4 @@
+import logging
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -599,6 +600,126 @@ class TestRecoveryManager:
         )
 
         assert (data_topic.name, 1) not in consumer.paused
+
+    @staticmethod
+    def _topic_manager_with_data_topic(topic_name: str) -> TopicManager:
+        def broker_topic(topic):
+            topic.broker_config = topic.create_config
+            return topic
+
+        topic_manager = TopicManager(
+            topic_admin=MagicMock(),
+            consumer_group=str(uuid.uuid4()),
+        )
+        with patch.object(
+            topic_manager, "_get_or_create_broker_topic", side_effect=broker_topic
+        ):
+            topic_manager.topic(topic_name)
+        return topic_manager
+
+    def test_resume_reassigned_data_partitions_resumes_orphaned_pause(self):
+        """
+        A data partition paused by a previous recovery generation and later
+        reassigned in a rebalance that triggers no stateful assignment must be
+        resumed; partitions never paused by recovery are left alone.
+        """
+        topic_name = str(uuid.uuid4())
+        consumer = MagicMock()
+        recovery_manager = RecoveryManager(
+            consumer=consumer,
+            topic_manager=self._topic_manager_with_data_topic(topic_name),
+        )
+        recovery_manager._recovery_paused_data_tps.add((topic_name, 0))
+
+        recovery_manager.resume_reassigned_data_partitions(
+            [
+                ConfluentPartition(topic_name, 0),
+                ConfluentPartition(topic_name, 1),
+            ]
+        )
+
+        consumer.resume.assert_called_once()
+        resumed = consumer.resume.call_args.args[0]
+        assert [(tp.topic, tp.partition) for tp in resumed] == [(topic_name, 0)]
+        assert not recovery_manager._recovery_paused_data_tps
+
+    def test_resume_reassigned_data_partitions_noop_during_pending_recovery(self):
+        """
+        While a recovery is pending/active, recovery-paused partitions must
+        stay paused: `do_recovery`/`assign_partition` own resuming them.
+        """
+        topic_name = str(uuid.uuid4())
+        consumer = MagicMock()
+        recovery_manager = RecoveryManager(
+            consumer=consumer,
+            topic_manager=self._topic_manager_with_data_topic(topic_name),
+        )
+        recovery_manager._recovery_paused_data_tps.add((topic_name, 0))
+        # Simulate a pending recovery assignment
+        recovery_manager._recovery_partitions[0] = {"changelog": MagicMock()}
+
+        recovery_manager.resume_reassigned_data_partitions(
+            [ConfluentPartition(topic_name, 0)]
+        )
+
+        consumer.resume.assert_not_called()
+        assert (topic_name, 0) in recovery_manager._recovery_paused_data_tps
+
+    def test_resume_reassigned_data_partitions_noop_without_paused_partitions(self):
+        topic_name = str(uuid.uuid4())
+        consumer = MagicMock()
+        recovery_manager = RecoveryManager(
+            consumer=consumer,
+            topic_manager=self._topic_manager_with_data_topic(topic_name),
+        )
+
+        recovery_manager.resume_reassigned_data_partitions(
+            [ConfluentPartition(topic_name, 0)]
+        )
+
+        consumer.resume.assert_not_called()
+
+    def test_resume_reassigned_data_partitions_ignores_unassigned_partitions(self):
+        """
+        A partition that is still paused but was NOT part of this assignment
+        must not be resumed (it belongs to another consumer now).
+        """
+        topic_name = str(uuid.uuid4())
+        consumer = MagicMock()
+        recovery_manager = RecoveryManager(
+            consumer=consumer,
+            topic_manager=self._topic_manager_with_data_topic(topic_name),
+        )
+        recovery_manager._recovery_paused_data_tps.add((topic_name, 1))
+
+        recovery_manager.resume_reassigned_data_partitions(
+            [ConfluentPartition(topic_name, 0)]
+        )
+
+        consumer.resume.assert_not_called()
+        assert (topic_name, 1) in recovery_manager._recovery_paused_data_tps
+
+    def test_resume_reassigned_data_partitions_logs_resumed_tps(self, caplog):
+        """
+        Finding 4: resuming recovery-paused data partitions emits an INFO log
+        listing the resumed (topic, partition) pairs.
+        """
+        topic_name = str(uuid.uuid4())
+        consumer = MagicMock()
+        recovery_manager = RecoveryManager(
+            consumer=consumer,
+            topic_manager=self._topic_manager_with_data_topic(topic_name),
+        )
+        recovery_manager._recovery_paused_data_tps.add((topic_name, 0))
+
+        with caplog.at_level(logging.INFO):
+            recovery_manager.resume_reassigned_data_partitions(
+                [ConfluentPartition(topic_name, 0)]
+            )
+
+        consumer.resume.assert_called_once()
+        assert "Resuming data partitions paused for recovery" in caplog.text
+        assert f"('{topic_name}', 0)" in caplog.text
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)

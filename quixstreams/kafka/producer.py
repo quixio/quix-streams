@@ -257,6 +257,18 @@ class Producer:
             timeout=timeout if timeout is not None else self._flush_timeout
         )
 
+    def purge(self):
+        """
+        Purge messages currently handled by the producer instance.
+
+        Drops the queued messages; voids the in-flight (produced but
+        unacknowledged) acks locally so their delivery becomes unknowable. Both
+        fire delivery reports carrying ``_PURGE_QUEUE`` / ``_PURGE_INFLIGHT``
+        errors. See ``InternalProducer.purge`` for the revoke-path policy and
+        why swallowing those errors is safe.
+        """
+        self._producer.purge()
+
     @property
     def _producer(self) -> ConfluentProducer:
         if not self._inner_producer:

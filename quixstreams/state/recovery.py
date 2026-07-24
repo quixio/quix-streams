@@ -609,8 +609,32 @@ class RecoveryManager:
         if not to_resume:
             return
 
+        logger.info(
+            f"Resuming data partitions paused for recovery: "
+            f"{[(tp.topic, tp.partition) for tp in to_resume]}"
+        )
         self._consumer.resume(to_resume)
         self._forget_recovery_paused_data_partitions(to_resume)
+
+    def resume_reassigned_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        """
+        Resume data partitions still paused from a previous recovery generation.
+
+        `assign_partition` resumes recovery-paused data partitions, but it only runs
+        when a rebalance assigns at least one stateful store partition. A partition
+        paused by recovery can be revoked and later reassigned in a rebalance that
+        brings no stateful partition to this consumer (e.g. only stateless topics),
+        in which case `assign_partition` never runs and the partition would stay
+        paused indefinitely. Application calls this on every assignment to cover it.
+
+        Skipped while a recovery is pending/active (`has_assignments`): those pauses
+        are intentional and get resumed by `do_recovery`/`assign_partition`.
+        """
+        if not self._recovery_paused_data_tps or self.has_assignments:
+            return
+        self._resume_recovery_paused_data_partitions(partitions)
 
     def _generate_recovery_partitions(
         self,

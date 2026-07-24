@@ -1,4 +1,5 @@
 from collections import deque
+from threading import Event
 from typing import Any, Optional, cast
 
 from quixstreams.state.base.transaction import (
@@ -17,6 +18,7 @@ from quixstreams.state.serialization import (
     serialize,
 )
 
+from .open_deadline import OpenDeadline
 from .partition import RocksDBStorePartition
 from .store import RocksDBStore
 from .transaction import RocksDBPartitionTransaction
@@ -284,8 +286,16 @@ class TimestampedStorePartition(RocksDBStorePartition):
         keep_duplicates: bool,
         options: Optional[RocksDBOptionsType] = None,
         changelog_producer: Optional[ChangelogProducer] = None,
+        stop_event: Optional[Event] = None,
+        open_deadline: Optional[OpenDeadline] = None,
     ) -> None:
-        super().__init__(path, options=options, changelog_producer=changelog_producer)
+        super().__init__(
+            path,
+            options=options,
+            changelog_producer=changelog_producer,
+            stop_event=stop_event,
+            open_deadline=open_deadline,
+        )
         self._grace_ms = grace_ms
         self._keep_duplicates = keep_duplicates
 
@@ -317,6 +327,8 @@ class TimestampedStore(RocksDBStore):
         keep_duplicates: bool,
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
         options: Optional[RocksDBOptionsType] = None,
+        stop_event: Optional[Event] = None,
+        open_deadline: Optional[OpenDeadline] = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -324,6 +336,8 @@ class TimestampedStore(RocksDBStore):
             base_dir=base_dir,
             changelog_producer_factory=changelog_producer_factory,
             options=options,
+            stop_event=stop_event,
+            open_deadline=open_deadline,
         )
         self._grace_ms = grace_ms
         self._keep_duplicates = keep_duplicates
@@ -346,4 +360,6 @@ class TimestampedStore(RocksDBStore):
             keep_duplicates=self._keep_duplicates,
             options=self._options,
             changelog_producer=changelog_producer,
+            stop_event=self._stop_event,
+            open_deadline=self._open_deadline,
         )
