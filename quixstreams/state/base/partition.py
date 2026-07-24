@@ -95,7 +95,12 @@ class StorePartition(ABC):
 
     @abstractmethod
     def recover_from_changelog_message(
-        self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
+        self,
+        key: bytes,
+        value: Optional[bytes],
+        cf_name: str,
+        offset: int,
+        ttl_stamped: bool = False,
     ):
         """
         Updates state from a given changelog message.
@@ -104,7 +109,42 @@ class StorePartition(ABC):
         :param value: changelog message value
         :param cf_name: column family name
         :param offset: changelog message offset
+        :param ttl_stamped: True when the changelog record carries the
+            ``__ttl_stamped__`` header — i.e. the value is a stamped
+            default-CF record. Absent/False = legacy / un-stamped.
         """
+
+    def complete_recovery(self) -> None:
+        """
+        Recovery-finalize hook, called once by the recovery manager after this
+        partition has replayed every changelog message up to the high-watermark
+        and before it is handed to live processing.
+
+        The default is a no-op. The RocksDB backend overrides this to complete an
+        interrupted legacy-TTL migration whose changelog replayed as MIXED
+        (some ``__ttl_stamped__``-header records + some header-absent legacy
+        records) — see ``RocksDBStorePartition.complete_recovery``.
+        """
+        return None
+
+    def has_incomplete_ttl_migration(self) -> bool:
+        """
+        Whether this partition has a durably-recorded, not-yet-finished legacy-TTL
+        migration that must be completed via :meth:`complete_recovery`.
+
+        True iff the partition is persisted-flipped into TTL mode AND its
+        ``__ttl_backfill_pending__`` census still holds leftover legacy keys AND
+        no durable "migration done" marker is present. The recovery layer consults
+        this so a restart whose changelog offset is already caught up
+        (``highwater-1 == offset``, so the normal "state behind" check is False)
+        still runs the completion pass instead of stranding the leftovers.
+
+        The default is ``False`` — only the RocksDB backend has the durable
+        pending census + flip flag on disk that this detects. The memory backend
+        re-recovers from the changelog on every open (full replay), so the
+        offset-caught-up crash window does not apply to it.
+        """
+        return False
 
     @abstractmethod
     def begin(self) -> PartitionTransaction:

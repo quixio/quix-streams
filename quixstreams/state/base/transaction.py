@@ -18,7 +18,7 @@ from typing import (
     overload,
 )
 
-from quixstreams.models import Headers
+from quixstreams.models import HeadersMapping
 from quixstreams.state.exceptions import (
     InvalidChangelogOffset,
     StateSerializationError,
@@ -27,9 +27,11 @@ from quixstreams.state.exceptions import (
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TTL_STAMPED_HEADER,
     DEFAULT_PREFIX,
     LOCAL_ONLY_CFS,
     SEPARATOR,
+    TTL_SYSTEM_CF_NAME,
     Marker,
 )
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, deserialize, serialize
@@ -604,24 +606,53 @@ class PartitionTransaction(ABC, Generic[K, V]):
             return
 
         logger.debug(
-            f"Flushing state changes to the changelog topic "
-            f'topic_name="{self._changelog_producer.changelog_name}" '
-            f"partition={self._changelog_producer.partition}"
+            'Flushing state changes to the changelog topic topic_name="%s" '
+            "partition=%s",
+            self._changelog_producer.changelog_name,
+            self._changelog_producer.partition,
         )
         source_tp_offset_header = json_dumps(processed_offsets)
         column_families = self._update_cache.get_column_families()
+        # Fix 6 (review re-review #6): deterministic production order with the
+        # ``__ttl_system__`` done-marker CF produced LAST. ``get_column_families``
+        # returns a set, so the raw iteration order is non-deterministic and could
+        # produce the marker before the data it certifies — under at-least-once a
+        # changelog suffix loss would then leave a "migration done" marker ahead
+        # of the records it claims are migrated. Sorting the non-system CFs is not
+        # required for correctness (it only makes the order fully deterministic on
+        # a small set); the load-bearing guarantee is that ``__ttl_system__`` is
+        # produced last. NOTE: a plain ``sorted()`` would put ``__ttl_system__``
+        # BEFORE ``default`` (``_`` 0x5f < ``d`` 0x64) — the exact opposite of what
+        # is needed — so the system CF is appended explicitly, never sorted inline.
+        ordered_cfs = sorted(cf for cf in column_families if cf != TTL_SYSTEM_CF_NAME)
+        if TTL_SYSTEM_CF_NAME in column_families:
+            ordered_cfs.append(TTL_SYSTEM_CF_NAME)
 
-        for cf_name in column_families:
+        for cf_name in ordered_cfs:
             # Local-only column families (e.g. the TTL secondary expiry index)
             # never participate in changelog production; their writes are
             # rebuilt locally on recovery.
             if cf_name in LOCAL_ONLY_CFS:
                 continue
 
-            headers: Headers = {
+            headers: HeadersMapping = {
                 CHANGELOG_CF_MESSAGE_HEADER: cf_name,
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: source_tp_offset_header,
             }
+
+            # TTL stamped/legacy bit. Carry an out-of-band per-record
+            # header on every ``default``-CF record produced while the partition
+            # is in TTL mode, so cold-restore recovery can route stamped-vs-legacy
+            # reliably without sniffing value content. Read-only attribute probe
+            # on the partition the base already owns: a no-op for any backend that
+            # lacks ``uses_ttl_stamps`` (header omitted → byte-identical legacy
+            # behavior). Broader than "this write carried ttl=": after the flip
+            # even a no-ttl= SENTINEL write carries the 8-byte prefix on the wire
+            # and so must be marked stamped.
+            if cf_name == "default" and getattr(
+                self._partition, "uses_ttl_stamps", False
+            ):
+                headers[CHANGELOG_TTL_STAMPED_HEADER] = b"\x01"
 
             updates = self._update_cache.get_updates(cf_name=cf_name)
             for prefix_update_cache in updates.values():

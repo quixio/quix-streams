@@ -410,6 +410,7 @@ class Application:
         self._topic_manager = topic_manager or self._get_topic_manager()
 
         producer = None
+        migration_producer = None
         recovery_manager = None
         if self._config.use_changelog_topics:
             producer = self._producer
@@ -418,6 +419,18 @@ class Application:
                 topic_manager=self._topic_manager,
                 broker_availability_timeout=self._broker_availability_timeout,
             )
+            if self._config.exactly_once:
+                # Under exactly-once the main
+                # changelog producer is transactional, so flush() does not make
+                # records durable until the checkpoint transaction commits. The
+                # legacy-TTL migration/backfill paths write local state right after
+                # producing each chunk (changelog-first), so they need a producer
+                # whose flush()==durable. Create a dedicated NON-transactional
+                # producer used ONLY for those migration records; normal changelog
+                # production stays on the transactional producer. The underlying
+                # librdkafka producer is created lazily on first use, so this is a
+                # no-op object for the common no-migration case.
+                migration_producer = self._get_internal_producer(transactional=False)
 
         self._state_manager = StateStoreManager(
             group_id=self._config.consumer_group,
@@ -425,6 +438,7 @@ class Application:
             rocksdb_options=self._config.rocksdb_options,
             producer=producer,
             recovery_manager=recovery_manager,
+            migration_producer=migration_producer,
             stop_event=self._stop_event,
             open_deadline=self._open_deadline,
         )
@@ -661,9 +675,23 @@ class Application:
         if transactional is None:
             transactional = self._config.exactly_once
 
+        extra_config = self._config.producer_extra_config
+        if not transactional:
+            # A non-transactional InternalProducer (the legacy-TTL migration
+            # producer created under exactly-once at __init__, or a Sources
+            # producer) must NOT inherit the shared ``transactional.id`` injected
+            # into ``producer_extra_config`` under exactly-once (see __init__): a
+            # non-transactional producer carrying a transactional.id corrupts it
+            # for itself and for any transactional producer created afterwards.
+            # Strip it on a deepcopy so the shared config dict is never mutated
+            # (mirrors ``get_producer``). The transactional path keeps the config
+            # verbatim (its id resolves as before).
+            extra_config = copy.deepcopy(extra_config)
+            extra_config.pop("transactional.id", None)
+
         return InternalProducer(
             broker_address=self._config.broker_address,
-            extra_config=self._config.producer_extra_config,
+            extra_config=extra_config,
             flush_timeout=self._config.flush_timeout,
             on_error=on_error,
             transactional=transactional,

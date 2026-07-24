@@ -1,6 +1,7 @@
+import inspect
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from confluent_kafka import OFFSET_BEGINNING
 from confluent_kafka import TopicPartition as ConfluentPartition
@@ -23,9 +24,32 @@ from .exceptions import (
 from .metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TTL_STAMPED_HEADER,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _accepts_ttl_stamped(method: Callable) -> bool:
+    """
+    Return whether ``method`` accepts a ``ttl_stamped`` keyword argument.
+
+    ``StorePartition.recover_from_changelog_message`` declares ``ttl_stamped``
+    (default ``False``), but a third-party subclass may override it with a rigid
+    signature that predates the parameter. Introspecting once lets the recovery
+    loop omit the kwarg for such subclasses instead of failing with
+    a ``TypeError`` — the dropped bit is a no-op for a non-TTL store. An
+    un-introspectable callable (e.g. a C implementation) is assumed to honor the
+    base contract and accept it.
+    """
+    try:
+        params = inspect.signature(method).parameters
+    except (TypeError, ValueError):
+        return True
+    if "ttl_stamped" in params:
+        return True
+    return any(p.kind is p.VAR_KEYWORD for p in params.values())
+
 
 __all__ = (
     "ChangelogProducer",
@@ -64,6 +88,12 @@ class RecoveryPartition:
         self._initial_offset: Optional[int] = None
         self._invalid_offset_count = 0  # Track consecutive invalid offset attempts
         self._last_valid_position_time: Optional[float] = None
+        # Whether the store partition's recovery hook accepts ``ttl_stamped``.
+        # Computed once so per-message dispatch stays cheap and a
+        # third-party subclass with a rigid override signature does not raise.
+        self._partition_accepts_ttl_stamped = _accepts_ttl_stamped(
+            store_partition.recover_from_changelog_message
+        )
 
     def __repr__(self):
         return (
@@ -110,7 +140,20 @@ class RecoveryPartition:
         """
         has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
         state_potentially_behind = self._changelog_highwater - 1 > self.offset
-        return has_consumable_offsets and state_potentially_behind
+        # Also force the check when the store has a
+        # flipped-but-unfinished legacy-TTL migration (durable pending census, no
+        # done-marker). Without this, an offset-caught-up restart
+        # (``highwater-1 == offset`` → ``state_potentially_behind`` False) would
+        # skip recovery and never run ``complete_recovery``, permanently stranding
+        # the leftover legacy records. The ``has_consumable_offsets`` guard is
+        # kept so an empty changelog still short-circuits (a flipped store with a
+        # non-empty pending census implies a non-empty changelog by construction,
+        # so the guard is satisfied in the real scenario). ``or`` short-circuits,
+        # so the store scan runs only when the offset check is already False.
+        return has_consumable_offsets and (
+            state_potentially_behind
+            or self._store_partition.has_incomplete_ttl_migration()
+        )
 
     @property
     def has_invalid_offset(self) -> bool:
@@ -191,6 +234,12 @@ class RecoveryPartition:
         processed_offsets = json_loads(
             headers.get(CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER, b"null")
         )
+
+        # Stamped-vs-legacy bit. Out-of-band, never inferred from
+        # value content. Absent header → legacy / un-stamped (default False, also
+        # covers pre-header changelog messages for back-compat).
+        ttl_stamped = bool(headers.get(CHANGELOG_TTL_STAMPED_HEADER))
+
         if processed_offsets is None or self._should_apply_changelog(
             processed_offsets=processed_offsets
         ):
@@ -206,18 +255,43 @@ class RecoveryPartition:
                     f'Invalid changelog value type {type(value)}, expected "bytes"'
                 )
 
-            self._store_partition.recover_from_changelog_message(
-                cf_name=cf_name,
-                key=key,
-                value=value,
-                offset=changelog_message.offset(),
-            )
+            if self._partition_accepts_ttl_stamped:
+                self._store_partition.recover_from_changelog_message(
+                    cf_name=cf_name,
+                    key=key,
+                    value=value,
+                    offset=changelog_message.offset(),
+                    ttl_stamped=ttl_stamped,
+                )
+            else:
+                # Third-party StorePartition subclass whose override predates the
+                # ``ttl_stamped`` parameter: omit the kwarg so the
+                # rigid signature still works. Such stores are non-TTL, so the
+                # dropped stamped bit is a no-op (it would default to False).
+                self._store_partition.recover_from_changelog_message(
+                    cf_name=cf_name,
+                    key=key,
+                    value=value,
+                    offset=changelog_message.offset(),
+                )
         else:
             # Even if the changelog update is skipped, roll the changelog offset
             # to move forward within the changelog topic
             self._store_partition.write_changelog_offset(
                 offset=changelog_message.offset(),
             )
+
+    def complete_recovery(self):
+        """
+        Finalize recovery for the underlying `StorePartition`.
+
+        Called once by the recovery manager after this partition has reached its
+        changelog high-watermark and before it is unassigned / handed to live
+        processing. Delegates to ``StorePartition.complete_recovery`` (a no-op on
+        every backend except RocksDB, which uses it to complete an interrupted
+        legacy-TTL migration).
+        """
+        self._store_partition.complete_recovery()
 
     def set_recovery_consume_position(self, offset: int):
         """
@@ -256,15 +330,25 @@ class ChangelogProducerFactory:
     Generates ChangelogProducers, which produce changelog messages to a StorePartition.
     """
 
-    def __init__(self, changelog_name: str, producer: InternalProducer):
+    def __init__(
+        self,
+        changelog_name: str,
+        producer: InternalProducer,
+        migration_producer: Optional[InternalProducer] = None,
+    ):
         """
         :param changelog_name: changelog topic name
         :param producer: a InternalProducer (not shared with `Application` instance)
+        :param migration_producer: an optional dedicated NON-transactional
+            InternalProducer for legacy-TTL migration / backfill records only.
+            Supplied only when the app runs
+            exactly-once — see :class:`ChangelogProducer`. ``None`` otherwise.
 
         :return: a ChangelogWriter instance
         """
         self._changelog_name = changelog_name
         self._producer = producer
+        self._migration_producer = migration_producer
 
     def get_partition_producer(self, partition_num) -> "ChangelogProducer":
         """
@@ -277,6 +361,7 @@ class ChangelogProducerFactory:
             changelog_name=self._changelog_name,
             partition=partition_num,
             producer=self._producer,
+            migration_producer=self._migration_producer,
         )
 
 
@@ -291,15 +376,32 @@ class ChangelogProducer:
         changelog_name: str,
         partition: int,
         producer: InternalProducer,
+        migration_producer: Optional[InternalProducer] = None,
     ):
         """
         :param changelog_name: A changelog topic name
         :param partition: source topic partition number
         :param producer: an InternalProducer (not shared with `Application` instance)
+        :param migration_producer: an optional dedicated NON-transactional
+            InternalProducer used ONLY for legacy-TTL migration / backfill records.
+            It is set only when the app runs
+            exactly-once: the main ``producer`` is then transactional, so a
+            ``flush()`` does NOT make records durable until the checkpoint
+            transaction commits — but the migration paths write local RocksDB
+            state immediately after producing each chunk and rely on the
+            changelog-first invariant (produced+flushed == durable BEFORE the
+            local write). Routing migration records through a non-transactional
+            producer restores ``flush()==durable`` so a crash before the
+            transaction commits cannot leave local stamps + resume ledger ahead of
+            an aborted (never-republished) changelog record. When ``None``
+            (non-exactly-once) migration records fall back to the main producer,
+            which is already non-transactional. NORMAL changelog production is
+            never routed here.
         """
         self._changelog_name = changelog_name
         self._partition = partition
         self._producer = producer
+        self._migration_producer = migration_producer
 
     @property
     def changelog_name(self) -> str:
@@ -309,11 +411,21 @@ class ChangelogProducer:
     def partition(self) -> int:
         return self._partition
 
+    def _producer_for(self, migration: bool) -> InternalProducer:
+        """Pick the underlying producer: the dedicated non-transactional
+        migration producer for migration/backfill records when one is configured
+        (exactly-once), else the main producer."""
+        if migration and self._migration_producer is not None:
+            return self._migration_producer
+        return self._producer
+
     def produce(
         self,
         key: bytes,
         value: Optional[bytes] = None,
         headers: Optional[Headers] = None,
+        migration: bool = False,
+        on_delivery: Optional[Callable] = None,
     ):
         """
         Produce a message to a changelog topic partition.
@@ -321,17 +433,27 @@ class ChangelogProducer:
         :param key: message key (same as state key, including prefixes)
         :param value: message value (same as state value)
         :param headers: message headers (includes column family info)
+        :param migration: route through the dedicated non-transactional migration
+            producer when configured. Set only by the legacy-TTL
+            backfill / recovery-completion / done-marker sites; normal changelog
+            production leaves it ``False``.
+        :param on_delivery: optional per-record delivery callback, chained with the
+            producer's internal callback (review batch 3 #5). The legacy-TTL
+            migration sites pass a per-partition ack counter so the backfill flush
+            stall detector measures THIS partition's outstanding records rather
+            than the shared producer's global queue depth.
         """
-        self._producer.produce(
+        self._producer_for(migration).produce(
             key=key,
             value=value,
             headers=headers,
             partition=self._partition,
             topic=self._changelog_name,
+            on_delivery=on_delivery,
         )
 
-    def flush(self, timeout: Optional[float] = None) -> int:
-        return self._producer.flush(timeout=timeout)
+    def flush(self, timeout: Optional[float] = None, migration: bool = False) -> int:
+        return self._producer_for(migration).flush(timeout=timeout)
 
 
 class RecoveryManager:
@@ -658,6 +780,12 @@ class RecoveryManager:
 
             rp.set_recovery_consume_position(position)
             if rp.finished_recovery_check:
+                # Recovery-finalize seam: the partition has reached
+                # its changelog high-watermark. Complete any interrupted legacy-
+                # TTL migration before the partition is unassigned and handed to
+                # live processing. A no-op on every shape except a MIXED changelog
+                # restored with ``legacy_records_ttl`` set.
+                rp.complete_recovery()
                 rp_revokes.append(rp)
                 if rp.had_recovery_changes:
                     logger.info(f"Recovery successful for {rp}")

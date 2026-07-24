@@ -1,4 +1,5 @@
 import dataclasses
+from datetime import timedelta
 from typing import Mapping, Optional
 
 import rocksdict
@@ -44,6 +45,60 @@ class RocksDBOptions(RocksDBOptionsType):
         steady-state expiration rates. Only meaningful for TTL-enabled
         stores; ignored otherwise.
         Default - ``10_000``.
+    :param legacy_records_ttl: expiry for pre-existing records when enabling
+        TTL on a **populated** legacy store that already holds un-stamped
+        records. When ``None`` (the default), the migration still completes:
+        the pre-existing records are backfilled using the ttl the service
+        itself uses (the max ``ttl=`` in the triggering flush) and a WARNING
+        names the implicit value. When set to a strictly positive
+        ``timedelta``, that value is used instead: the partition **backfills**
+        its pre-existing un-stamped records with a uniform expiry of
+        ``high_water + legacy_records_ttl`` (event-time high-water at the
+        enable moment) and flips into TTL mode in place — no state deletion.
+        New records keep getting their true event-time expiry. The backfill
+        runs exactly once; a redeploy / restart never re-runs it. Ignored for
+        windowed / timestamped stores (they opt out of the TTL stamp
+        machinery at the class level). Must be strictly positive if set;
+        ``<= 0`` raises ``ValueError`` at construction.
+        Default - ``None``.
+    :param legacy_backfill_chunk_size: number of pre-existing records re-stamped
+        per write-batch during the one-time legacy backfill (see
+        ``legacy_records_ttl``). The backfill iterates the populated default CF
+        in chunks of this size; each chunk is re-stamped, produced to the
+        changelog, flushed, and committed before the next chunk is read, so peak
+        transient memory is bounded to one chunk regardless of total store size.
+        Lower it on memory-constrained deployments. Only meaningful on the single
+        backfilling flush; ignored otherwise and on windowed / timestamped
+        stores. Must be strictly positive; ``<= 0`` raises ``ValueError`` at
+        construction.
+        Default - ``10_000``.
+    :param ttl_changelog_tombstones: when ``True`` (the default), TTL-driven
+        evictions are also produced to the changelog as tombstones
+        (``value=None``) so log compaction physically reclaims expired keys in
+        step with the local store — ``cleanup.policy=compact`` alone then shrinks
+        the changelog as keys expire (no ``delete`` policy / retention tuning
+        needed to reclaim). When ``False``, evictions are local-only (the
+        pre-change behavior): the changelog keeps each expired key's last record
+        until compacted by other means, and rebuilds rely on the read-time
+        expiry filter. Read-time consistency is identical either way. Only
+        meaningful for TTL-enabled stores; ignored for windowed / timestamped
+        stores and for no-``ttl=`` workloads.
+        Default - ``True``.
+    :param adopt_v3240_stamps: opt-in one-time adoption of a store created on the
+        v3.24.0 TTL preview. v3.24.0 wrote 8-byte-stamped values to the changelog
+        WITHOUT the ``__ttl_stamped__`` header, so on a cold restore such a store
+        is byte-for-byte indistinguishable from a pre-TTL legacy store whose
+        values happen to begin with 8 plausible big-endian bytes (e.g. epoch-ms
+        written via ``set_bytes()``). When ``False`` (the default), recovery only
+        DETECTS this shape and logs a CRITICAL — it never flips the store, so a
+        false-positive legacy store is never corrupted and its values read back
+        byte-identical. Set this to ``True`` ONLY if you are certain the store was
+        created on v3.24.0: recovery will then flip it into TTL mode, keep each
+        value verbatim (its original v3.24.0 stamp is preserved), and rebuild the
+        expiry index. Leaving it ``True`` is safe and idempotent on
+        already-adopted or genuinely-legacy stores. Ignored for windowed /
+        timestamped stores.
+        Default - ``False``.
 
     Please see `rocksdict.Options` for a complete description of other options.
     """
@@ -65,6 +120,46 @@ class RocksDBOptions(RocksDBOptionsType):
     use_fsync: bool = True
     on_corrupted_recreate: bool = True
     max_evictions_per_flush: int = 10_000
+    legacy_records_ttl: Optional[timedelta] = None
+    legacy_backfill_chunk_size: int = 10_000
+    ttl_changelog_tombstones: bool = True
+    adopt_v3240_stamps: bool = False
+
+    def __post_init__(self) -> None:
+        if self.legacy_records_ttl is not None and self.legacy_records_ttl <= timedelta(
+            0
+        ):
+            raise ValueError(
+                "legacy_records_ttl must be a strictly positive timedelta or "
+                f"None, got {self.legacy_records_ttl!r}"
+            )
+        if self.legacy_records_ttl is not None:
+            # Symmetric upper bound (review re-review #3): the backfill expiry is
+            # ``enable_time + legacy_records_ttl`` and ``enable_time`` is unknown
+            # at config time, so bound the ttl magnitude itself. A ttl of
+            # ~31,600 years would derive a backfill stamp above
+            # ``_MAX_PLAUSIBLE_STAMP_MS`` that the read validator refuses on every
+            # read (permanently unreadable). Reject the ``timedelta.max`` /
+            # unit-mistake config here, before it can produce such a stamp. Local
+            # imports mirror the codebase's circular-import avoidance (options is
+            # imported early by the rocksdb package).
+            from .transaction import _ttl_to_ms
+            from .ttl_codec import _MAX_PLAUSIBLE_STAMP_MS
+
+            if _ttl_to_ms(self.legacy_records_ttl) >= _MAX_PLAUSIBLE_STAMP_MS:
+                raise ValueError(
+                    "legacy_records_ttl is implausibly large "
+                    f"({self.legacy_records_ttl!r}): its millisecond magnitude "
+                    f"({_ttl_to_ms(self.legacy_records_ttl)}) meets or exceeds "
+                    f"the maximum representable TTL stamp ({_MAX_PLAUSIBLE_STAMP_MS}"
+                    "), so the derived backfill expiry would be unreadable. Use a "
+                    "ttl below ~31,600 years (check for a unit mistake)."
+                )
+        if self.legacy_backfill_chunk_size <= 0:
+            raise ValueError(
+                "legacy_backfill_chunk_size must be a strictly positive int, "
+                f"got {self.legacy_backfill_chunk_size!r}"
+            )
 
     def to_options(self) -> rocksdict.Options:
         """
