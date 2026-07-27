@@ -8,6 +8,7 @@ from typing import (
     Iterator,
     List,
     Literal,
+    NamedTuple,
     Optional,
     Union,
     cast,
@@ -94,16 +95,44 @@ _CENSUS_SPILL_WARN_THRESHOLD = 3_000_000
 # flush in repeated slices and fail only when a full slice delivers ZERO messages
 # (no progress) — measuring lack of progress, not total time — so a large chunk
 # that legitimately needs more than one slice to deliver does not trip a spurious
-# ``ChangelogFlushError``. A generous total slice cap bounds a pathological
-# ever-shrinking trickle so the loop always terminates.
+# ``ChangelogFlushError``. A total slice cap bounds a pathological ever-shrinking
+# trickle so the loop always terminates within the consumer's poll budget.
 #
 # One slice; kept below the 30 s producer poll interval
 # (``quixstreams.kafka.producer.PRODUCER_POLL_TIMEOUT``).
 _BACKFILL_CHANGELOG_FLUSH_SLICE_S: float = 25.0
-# Runaway cap: max slices before aborting even if the backlog keeps shrinking
-# (~1000 s at the default slice). Zero-progress is the primary trip; this is the
-# belt-and-braces bound against a broker that only ever delivers a trickle.
-_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES: int = 40
+# Runaway cap: max slices before aborting even if the backlog keeps shrinking.
+# Invariant: MAX_SLICES × SLICE_S — the worst-case time the flush loop can
+# block — must stay BELOW the default Kafka ``max.poll.interval.ms`` (300 s,
+# ``quixstreams.app._default_max_poll_interval_ms``). The flush runs INLINE on
+# the consumer thread (``prepare()`` / the recovery-completion loop), so a
+# longer block would breach the poll budget and trigger a rebalance
+# mid-migration. 10 × 25 s = 250 s keeps a safety margin under that budget.
+# Zero-progress is the primary trip (a wedged broker aborts after ~2 slices);
+# this cap only bounds a pathological ever-shrinking trickle, where
+# abort-and-retry is the correct outcome — a healthy per-chunk flush (bounded
+# by ``legacy_backfill_chunk_size``) finishes in one or two slices.
+_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES: int = 10
+
+
+class _PendingCensusSurvey(NamedTuple):
+    """
+    Result of ONE pass over the ``__ttl_backfill_pending__`` census — every
+    store-level signal the cold auto-adopt decision (``complete_recovery``
+    Branch B) branches on. Computed together so the decision inputs are
+    mutually consistent by construction: ``covers_default_cf`` is only proven
+    when ``all_stamped`` is True, because the same pass that proves the quorum
+    also point-verifies a live default-CF value per censused key (census ⊆
+    default keys), which is what turns the coverage COUNT equality into SET
+    equality. ``pending_count`` / ``all_past`` / ``covers_default_cf`` are
+    only meaningful when ``all_stamped`` is True (the survey short-circuits on
+    the first quorum failure).
+    """
+
+    pending_count: int
+    all_stamped: bool
+    all_past: bool
+    covers_default_cf: bool
 
 
 class RocksDBStorePartition(StorePartition):
@@ -315,10 +344,11 @@ class RocksDBStorePartition(StorePartition):
         # either leftover: force the store out of provisional mode and finish the
         # interrupted teardown (delete pending + drop backup — both idempotent).
         # Runs BEFORE the §5.6 rollback resolution so a corroborated store
-        # (done-marker present) is never rolled back. The ``list_column_families``
-        # guard short-circuits the marker probe so a store that never had a
-        # ``__ttl_system__`` CF does not get one created here; a cleanly-corroborated
-        # store (pending absent, backup already dropped) skips the reconciliation.
+        # (done-marker present) is never rolled back. The marker probe is
+        # read-only (an absent ``__ttl_system__`` CF means no marker and is never
+        # created by the probe); the ``cfs_at_open`` check just short-circuits the
+        # call. A cleanly-corroborated store (pending absent, backup already
+        # dropped) skips the reconciliation.
         cfs_at_open = self.list_column_families()
         if (
             class_uses_ttl_stamps
@@ -402,10 +432,11 @@ class RocksDBStorePartition(StorePartition):
         # adopt / survivor-derived / offset-skip cold-restore paths are byte-for-byte
         # unchanged. Only an interrupted LIVE backfill (whose earlier chunks wrote
         # real ledger entries on this same volume) opens with the CF non-empty →
-        # snapshot True. The ``list_column_families()`` guard short-circuits so a
-        # pure-legacy store never creates the ledger CF (``_live_backfill_ledger_
-        # has_any`` would ``get_or_create`` it); it is the same ``list_cf`` call
-        # the cleanup paths already make. Snapshot-at-open (not a live re-probe)
+        # snapshot True. The ledger probe is read-only (an absent ledger CF is
+        # treated as empty and is never created by the probe); the
+        # ``list_column_families()`` guard just short-circuits the call — the
+        # same ``list_cf`` call the cleanup paths already make.
+        # Snapshot-at-open (not a live re-probe)
         # is deliberate: a live probe is self-fulfilling — the first ledgered
         # record would make every subsequent one ledger too, re-introducing the
         # cold-restore false positive the gate exists to prevent.
@@ -418,9 +449,11 @@ class RocksDBStorePartition(StorePartition):
         # is already local at open (a warm restart of a fully-migrated store). When
         # True, changelog replay skips the pending-CF census entirely — the marker
         # means the migration is complete, so ``complete_recovery`` would discard
-        # any censused entries anyway. Guarded by ``list_column_families()`` so a
-        # legacy store never creates the system CF (parity with the ledger snapshot
-        # above); a fresh-volume COLD restore opens with the CF absent → False and
+        # any censused entries anyway. The marker probe is read-only (an absent
+        # ``__ttl_system__`` CF means no marker, never created by the probe); the
+        # ``list_column_families()`` guard just short-circuits the call (parity
+        # with the ledger snapshot above).
+        # A fresh-volume COLD restore opens with the CF absent → False and
         # relies on the ``_recovery_saw_migration_done`` replay latch instead.
         self._migration_done_at_open: bool = (
             type(self).uses_ttl_stamps
@@ -629,9 +662,19 @@ class RocksDBStorePartition(StorePartition):
                     )
             elif value is not None:
                 # A header-absent (legacy) default-CF record. Census the key as a
-                # leftover-legacy candidate; it lands verbatim below. A tombstone
-                # (value is None) is not a leftover record and is not censused.
+                # leftover-legacy candidate; it lands verbatim below.
                 batch.put(key, b"", pending_handle)
+            else:
+                # A header-absent TOMBSTONE. The verbatim replay below deletes
+                # the key from the default CF, so any earlier census entry for
+                # it must be removed too (symmetric with the stamped-supersession
+                # delete above, riding the same atomic WriteBatch). Invariant:
+                # the pending census tracks only keys LIVE in the default CF —
+                # a censused-but-deleted key would fail the store-wide adoption
+                # quorum (``_all_pending_values_are_stamped`` point-gets every
+                # censused key and fails on the first missing value), blocking
+                # auto-adopt for an otherwise fully-censused v3.24.0 store.
+                batch.delete(key, pending_handle)
 
         if not self.uses_ttl_stamps:
             # Legacy / non-TTL partitions: replay the raw payload verbatim.
@@ -884,7 +927,10 @@ class RocksDBStorePartition(StorePartition):
             # v3.24.0-stamp adoption is now AUTOMATIC and REVERSIBLE (spec §5.2):
             # a 100%-stamped, not-all-past census is provisionally adopted with a
             # backup + sweep-guard instead of logging a CRITICAL and staying legacy.
-            if self._all_pending_values_are_stamped():
+            # Every decision input (census size, stamp quorum, all-past, coverage)
+            # comes from ONE census pass so the inputs are mutually consistent.
+            survey = self._survey_backfill_pending()
+            if survey.all_stamped:
                 if self._ttl_rollback:
                     # §5.6 Case B: the operational rollback lever suppresses the
                     # cold provisional adopt on a fresh volume — stay legacy,
@@ -896,10 +942,10 @@ class RocksDBStorePartition(StorePartition):
                         "censused key(s) are quarantined (unset the env var and "
                         "restart to re-enable auto-adopt).",
                         self._path,
-                        self._count_backfill_pending(),
+                        survey.pending_count,
                     )
                     return
-                if self._pending_all_stamps_in_past():
+                if survey.all_past:
                     # QUARANTINE (downgraded from CRITICAL to WARN): every censused
                     # stamp is already in the past — the exact shape of a legacy
                     # set_bytes() dedup store (past epoch-ms). Adopting would rebuild
@@ -913,10 +959,10 @@ class RocksDBStorePartition(StorePartition):
                         "(quarantined). If this really is a v3.24.0 store, re-seed "
                         "the state from source.",
                         self._path,
-                        self._count_backfill_pending(),
+                        survey.pending_count,
                     )
                     return
-                if not self._census_covers_default_cf():
+                if not survey.covers_default_cf:
                     # Completeness invariant: adoption flips read semantics
                     # STORE-WIDE (once ``uses_ttl_stamps`` is set, every
                     # default-CF read strips a leading 8-byte stamp), so the
@@ -943,7 +989,7 @@ class RocksDBStorePartition(StorePartition):
                         "/ clear_state) replays and censuses the complete "
                         "changelog and will auto-adopt safely.",
                         self._path,
-                        self._count_backfill_pending(),
+                        survey.pending_count,
                     )
                     return
                 # Not-all-past, 100%-stamped, full-coverage census: provisional
@@ -1456,33 +1502,94 @@ class RocksDBStorePartition(StorePartition):
             return False
         return max_stamp <= now
 
-    def _census_covers_default_cf(self) -> bool:
+    def _survey_backfill_pending(self) -> _PendingCensusSurvey:
         """
-        Census-completeness proof for the cold auto-adopt (Branch B): return
-        True iff the pending census covers EVERY default-CF key.
+        ONE-pass survey of the ``__ttl_backfill_pending__`` census for the cold
+        auto-adopt decision (Branch B of :meth:`complete_recovery`): a single
+        census walk (one default-CF point-get per key) computes the census
+        size, the total stamp quorum, and the all-past heuristic together, then
+        a single default-CF key walk proves census completeness. Replaces the
+        separate count / all-stamped / all-past / coverage walks, three of
+        which each point-got the default CF per censused key.
 
-        Invariant: adoption flips read semantics store-wide, so the census it
-        is decided on must cover exactly the keys the flip will affect. Only a
-        complete replay (a cold restore on a fresh volume) censuses every
-        default-CF key; a warm restart behind the changelog censuses only the
-        replayed tail.
+        Quorum (``all_stamped``): EVERY censused key must have a live
+        default-CF value that passes ``_safe_decode_stamp``. The survey
+        **short-circuits on the first failure**, so a pure-legacy store
+        (population 1) typically pays a single point-get and the 99% legacy
+        path is not taxed. An empty census fails the quorum (no adoption
+        without positive evidence). This byte inspection makes ONLY the
+        store-level, all-or-nothing adoption decision — never a per-record
+        routing choice (per-record byte-heuristics are banned).
 
-        Precondition: :meth:`_all_pending_values_are_stamped` is True, which
-        point-verified a live default-CF value for every censused key — the
-        census is therefore a subset of the default-CF key set, so COUNT
-        equality is SET equality. The default-CF scan short-circuits as soon
-        as its count exceeds the census count, and it only runs after the
-        (rare) total stamp quorum has already passed — the 99% legacy path
-        never pays it.
+        All-past (``all_past``): True iff the MAX censused stamp is ``<= the
+        recovery clock``. A ``SENTINEL_NEVER`` stamp counts as future (a
+        never-expire record is not past), so any sentinel makes the census
+        not-all-past.
+
+        Coverage (``covers_default_cf``): True iff the census covers EVERY
+        default-CF key. Invariant: adoption flips read semantics store-wide,
+        so the census it is decided on must cover exactly the keys the flip
+        will affect. The proof REQUIRES census ⊆ default keys (else count
+        equality is not set equality) — that subset fact is established by the
+        quorum loop of THIS SAME pass (each censused key point-verified a live
+        default-CF value), so the precondition cannot be reordered away at a
+        call site: coverage is only computed after the quorum has passed
+        inside this method. The default-CF key walk short-circuits as soon as
+        its count exceeds the census count.
         """
-        pending_count = self._count_backfill_pending()
+        pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
         default_cf = self.get_or_create_column_family("default")
+        count = 0
+        max_stamp: Optional[int] = None
+        saw_never = False
+        for raw_key in pending_cf.keys():
+            value = default_cf.get(cast(bytes, raw_key), default=None)
+            decoded = None if value is None else _safe_decode_stamp(cast(bytes, value))
+            if decoded is None:
+                # Quorum failure (or a censused key with no live default-CF
+                # value): short-circuit — the remaining fields are unused.
+                return _PendingCensusSurvey(
+                    pending_count=count,
+                    all_stamped=False,
+                    all_past=False,
+                    covers_default_cf=False,
+                )
+            count += 1
+            stamp, _ = decoded
+            if stamp == SENTINEL_NEVER:
+                saw_never = True
+            elif max_stamp is None or stamp > max_stamp:
+                max_stamp = stamp
+        if count == 0:
+            # Empty census: no positive evidence, quorum fails.
+            return _PendingCensusSurvey(
+                pending_count=0,
+                all_stamped=False,
+                all_past=False,
+                covers_default_cf=False,
+            )
+        now = (
+            self._recovery_now_ms
+            if self._recovery_now_ms is not None
+            else self._now_ms()
+        )
+        all_past = not saw_never and max_stamp is not None and max_stamp <= now
+        # Coverage proof — runs only under the quorum proven above (census ⊆
+        # default keys), turning count equality into set equality.
+        covers = True
         default_count = 0
         for _ in default_cf.keys():
             default_count += 1
-            if default_count > pending_count:
-                return False
-        return default_count == pending_count
+            if default_count > count:
+                covers = False
+                break
+        covers = covers and default_count == count
+        return _PendingCensusSurvey(
+            pending_count=count,
+            all_stamped=True,
+            all_past=all_past,
+            covers_default_cf=covers,
+        )
 
     def _adopt_v3240_stamps(self) -> None:
         """
@@ -1941,7 +2048,17 @@ class RocksDBStorePartition(StorePartition):
 
     def _backfill_pending_has_any(self) -> bool:
         """Cheap "is the pending census non-empty" probe: short-circuits on the
-        first key instead of counting the whole CF."""
+        first key instead of counting the whole CF.
+
+        Read-only: an absent ``__ttl_backfill_pending__`` CF means an empty
+        census, WITHOUT materializing the CF. Invariant: a probe must never
+        create what it probes — CF existence is itself a classification signal
+        (:meth:`_has_warm_ttl_artifacts` treats the migration-bookkeeping CFs as
+        proof of current-build migration activity), so the CF is created only
+        where the census is actually written (the recovery census / completion
+        write sites)."""
+        if TTL_BACKFILL_PENDING_CF_NAME not in self.list_column_families():
+            return False
         pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
         for _ in pending_cf.keys():
             return True
@@ -1952,7 +2069,14 @@ class RocksDBStorePartition(StorePartition):
         short-circuits on the first key instead of counting the whole CF. Mirrors
         :meth:`_backfill_pending_has_any` but scans the
         ``__ttl_backfill_stamped__`` ledger — the durable resume cursor of an
-        interrupted in-place :meth:`backfill_legacy_records`."""
+        interrupted in-place :meth:`backfill_legacy_records`.
+
+        Read-only: an absent ledger CF means an empty ledger, WITHOUT
+        materializing the CF (same never-create-on-a-read invariant as the
+        pending probe — CF existence is a classification signal). The ledger CF
+        is created only by the backfill / replay-ledgering write sites."""
+        if TTL_BACKFILL_STAMPED_CF_NAME not in self.list_column_families():
+            return False
         ledger_cf = self.get_or_create_column_family(TTL_BACKFILL_STAMPED_CF_NAME)
         for _ in ledger_cf.keys():
             return True
@@ -1961,7 +2085,14 @@ class RocksDBStorePartition(StorePartition):
     def _has_local_migration_done_marker(self) -> bool:
         """Whether the durable "migration done" marker is present on disk in the
         replicated ``__ttl_system__`` CF. Its presence means the
-        migration completed, so nothing is left to finish."""
+        migration completed, so nothing is left to finish.
+
+        Read-only: an absent ``__ttl_system__`` CF means no marker, WITHOUT
+        materializing the CF (never-create-on-a-read invariant — CF existence is
+        a classification signal in :meth:`_has_warm_ttl_artifacts`). The CF is
+        created only where the marker is written / replayed."""
+        if TTL_SYSTEM_CF_NAME not in self.list_column_families():
+            return False
         system_cf = self.get_or_create_column_family(TTL_SYSTEM_CF_NAME)
         return system_cf.get(TTL_MIGRATION_DONE_KEY, default=None) is not None
 
@@ -1992,6 +2123,12 @@ class RocksDBStorePartition(StorePartition):
         Ordered cheapest-first with short-circuits: a legacy store returns on the
         first check with no CF scans; the pending probe runs before the ledger
         probe (either satisfies the OR).
+
+        Read-only end to end: every sub-probe treats an absent bookkeeping CF
+        (``__ttl_system__`` / ``__ttl_backfill_pending__`` /
+        ``__ttl_backfill_stamped__``) as its empty/False answer without creating
+        it, so probing a store with no migration activity leaves it
+        byte-identical (CF existence is a classification signal elsewhere).
         """
         if not self.uses_ttl_stamps:
             return False

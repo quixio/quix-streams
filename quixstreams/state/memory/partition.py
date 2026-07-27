@@ -37,6 +37,7 @@ from quixstreams.state.rocksdb.metadata import (
     TTL_HIGH_WATER_KEY,
     TTL_ROLLBACK_ENV_VAR,
 )
+from quixstreams.state.rocksdb.partition import _PendingCensusSurvey
 from quixstreams.state.rocksdb.transaction import _safe_decode_stamp, _ttl_to_ms
 from quixstreams.state.rocksdb.ttl_codec import (
     _MAX_PLAUSIBLE_STAMP_MS,
@@ -472,6 +473,17 @@ class MemoryStorePartition(StorePartition):
                 pending.pop(key, None)
             elif value is not None:
                 pending[key] = b""
+            else:
+                # A header-absent TOMBSTONE. The verbatim replay below removes
+                # the key from the default dict, so any earlier census entry
+                # for it must be popped too (symmetric with the
+                # stamped-supersession pop above). Invariant: the pending
+                # census tracks only keys LIVE in the default dict — a
+                # censused-but-deleted key would fail the store-wide adoption
+                # quorum (``_all_pending_values_are_stamped`` point-gets every
+                # censused key and fails on the first missing value), blocking
+                # auto-adopt for an otherwise fully-censused v3.24.0 store.
+                pending.pop(key, None)
 
         if not self.uses_ttl_stamps:
             # Legacy / non-TTL partitions: replay the raw payload verbatim. Key
@@ -632,7 +644,10 @@ class MemoryStorePartition(StorePartition):
             # v3.24.0 cold restore. Auto-adoption is now AUTOMATIC + REVERSIBLE
             # (spec §5.2 / §5.7), so a 100%-stamped not-all-past census is
             # provisionally adopted instead of logging a CRITICAL and staying legacy.
-            if self._all_pending_values_are_stamped():
+            # Every decision input (census size, stamp quorum, all-past, coverage)
+            # comes from ONE census pass so the inputs are mutually consistent.
+            survey = self._survey_backfill_pending()
+            if survey.all_stamped:
                 if self._ttl_rollback:
                     # §5.6 Case B: the rollback lever suppresses the cold provisional
                     # adopt — stay legacy, quarantine the census (byte-identical).
@@ -642,10 +657,10 @@ class MemoryStorePartition(StorePartition):
                         "legacy, every value reads back byte-identical, and the %d "
                         "censused key(s) are quarantined (unset the env var and "
                         "restart to re-enable auto-adopt).",
-                        len(self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})),
+                        survey.pending_count,
                     )
                     return
-                if self._pending_all_stamps_in_past():
+                if survey.all_past:
                     # QUARANTINE (downgraded from CRITICAL to WARN): every censused
                     # stamp is already in the past — the legacy set_bytes() dedup
                     # shape. Adopting would rebuild the index with past stamps and
@@ -656,10 +671,10 @@ class MemoryStorePartition(StorePartition):
                         "already in the past (legacy dedup shape); the store stays "
                         "legacy, byte-identical, and the census is preserved "
                         "(quarantined).",
-                        len(self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})),
+                        survey.pending_count,
                     )
                     return
-                if not self._census_covers_default_cf():
+                if not survey.covers_default_cf:
                     # Completeness invariant (parity with RocksDB): adoption
                     # flips read semantics STORE-WIDE (every default read strips
                     # a leading 8-byte stamp once ``uses_ttl_stamps`` is set),
@@ -677,7 +692,7 @@ class MemoryStorePartition(StorePartition):
                         "back byte-identical, and the census is preserved "
                         "(quarantined). A full changelog replay that censuses "
                         "every key auto-adopts safely.",
-                        len(self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})),
+                        survey.pending_count,
                         len(self._state.get("default", {})),
                     )
                     return
@@ -1048,22 +1063,71 @@ class MemoryStorePartition(StorePartition):
             return False
         return max_stamp <= now
 
-    def _census_covers_default_cf(self) -> bool:
+    def _survey_backfill_pending(self) -> _PendingCensusSurvey:
         """
-        Census-completeness proof for the cold auto-adopt (memory parity of
-        ``RocksDBStorePartition._census_covers_default_cf``). Return True iff
-        the pending census covers EVERY key in the in-RAM default dict.
+        ONE-pass survey of the in-RAM pending census for the cold auto-adopt
+        decision (Branch B of :meth:`complete_recovery`), the memory parity of
+        ``RocksDBStorePartition._survey_backfill_pending``: a single census
+        walk computes the census size, the total stamp quorum
+        (short-circuiting on the first failure, so a pure-legacy store pays a
+        single lookup) and the all-past heuristic together, then proves census
+        completeness against the default dict.
 
-        Invariant: adoption flips read semantics store-wide, so the census it
-        is decided on must cover exactly the keys the flip will affect.
-        Precondition: :meth:`_all_pending_values_are_stamped` is True, which
-        verified a live default value for every censused key — the census is
-        therefore a subset of the default key set, so count equality is set
-        equality.
+        Coverage invariant: adoption flips read semantics store-wide, so the
+        census it is decided on must cover exactly the keys the flip will
+        affect. The proof REQUIRES census ⊆ default keys (else count equality
+        is not set equality) — established by the quorum loop of THIS SAME
+        pass (each censused key verified to have a live default value), so the
+        precondition cannot be reordered away at a call site. An empty census
+        fails the quorum (no adoption without positive evidence); a
+        ``SENTINEL_NEVER`` stamp counts as future (never all-past).
         """
         pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
         default = self._state.get("default", {})
-        return len(pending) == len(default)
+        count = 0
+        max_stamp: Optional[int] = None
+        saw_never = False
+        for key in pending:
+            value = default.get(key)
+            decoded = None if value is None else _safe_decode_stamp(cast(bytes, value))
+            if decoded is None:
+                # Quorum failure (or a censused key with no live default
+                # value): short-circuit — the remaining fields are unused.
+                return _PendingCensusSurvey(
+                    pending_count=count,
+                    all_stamped=False,
+                    all_past=False,
+                    covers_default_cf=False,
+                )
+            count += 1
+            stamp, _ = decoded
+            if stamp == SENTINEL_NEVER:
+                saw_never = True
+            elif max_stamp is None or stamp > max_stamp:
+                max_stamp = stamp
+        if count == 0:
+            # Empty census: no positive evidence, quorum fails.
+            return _PendingCensusSurvey(
+                pending_count=0,
+                all_stamped=False,
+                all_past=False,
+                covers_default_cf=False,
+            )
+        now = (
+            self._recovery_now_ms
+            if self._recovery_now_ms is not None
+            else self._now_ms()
+        )
+        all_past = not saw_never and max_stamp is not None and max_stamp <= now
+        # Coverage proof — valid only under the quorum proven above (census ⊆
+        # default keys), turning count equality into set equality.
+        covers = count == len(default)
+        return _PendingCensusSurvey(
+            pending_count=count,
+            all_stamped=True,
+            all_past=all_past,
+            covers_default_cf=covers,
+        )
 
     def _rebuild_index_from_stamped_census(self) -> None:
         """
