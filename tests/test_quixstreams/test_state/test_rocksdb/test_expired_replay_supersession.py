@@ -28,10 +28,20 @@ DAY_MS = 86_400_000
 
 
 def _replay(partition, msgs, now_ms=None):
-    """Replay ``(key, value, ttl_stamped)`` default-CF messages, optionally
-    fixing the recovery wallclock so the expiry decision is deterministic."""
+    """Replay ``(key, value, ttl_stamped)`` default-CF messages.
+
+    ``now_ms`` models a WARM restore (finding #3): it is seeded as the partition's
+    persisted event-time high-water (the recovery-drop frontier) AND pins the
+    recovery wallclock, so a stamped record with ``stamp <= now_ms`` is dropped
+    exactly as the live read filter would drop it. This exercises the
+    delete-supersession path (a past-frontier expired copy supersedes an older
+    copy by deletion) that the fix preserves for warm restores."""
     if now_ms is not None:
         partition._now_ms = lambda: now_ms  # noqa: E731
+        # Seed the event-time frontier = now_ms so the recovery drop mirrors the
+        # live read filter (drop iff stamp <= high_water); a past-dated stamp is
+        # then dropped just as it was under the old wallclock, now event-time.
+        partition.advance_high_water(now_ms)
     offset = 0
     for key, value, ttl_stamped in msgs:
         partition.recover_from_changelog_message(
@@ -125,15 +135,16 @@ class TestExpiredReplaySupersedesOlderCopy:
 
 
 class TestExpiredReplayDropAggregateInfo:
-    """The wallclock-expired replay drops must be visible as ONE aggregate INFO
-    per partition per recovery (count + path + clock), not silent."""
+    """The event-time-frontier-expired replay drops must be visible as ONE
+    aggregate INFO per partition per recovery (count + path + clock), not
+    silent."""
 
     def test_aggregate_info_on_expired_drops(
         self, store_partition_factory, changelog_producer_mock, caplog
     ):
-        """>=2 stamped records already expired against the recovery wallclock
-        are dropped during replay; complete_recovery emits exactly one aggregate
-        INFO naming the count and the recovery wallclock.
+        """>=2 stamped records already expired against the recovery event-time
+        frontier are dropped during replay; complete_recovery emits exactly one
+        aggregate INFO naming the count and the frontier (high_water).
 
         RED (HEAD): no INFO mentions dropped/expired records.
         GREEN: exactly one INFO with count=2 + path + clock.
@@ -170,7 +181,8 @@ class TestExpiredReplayDropAggregateInfo:
         )
         msg = drop_logs[0].getMessage()
         assert "dropped 2 already-expired stamped record(s)" in msg
-        assert f"wallclock={now_ms}" in msg
+        # The drop clock is now the event-time frontier (seeded high_water=now_ms).
+        assert f"high_water={now_ms}" in msg
         assert "path=" in msg
         recovered.close()
 

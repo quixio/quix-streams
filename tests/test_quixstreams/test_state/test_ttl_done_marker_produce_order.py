@@ -154,7 +154,11 @@ def test_empty_pending_marker_flush_failure_warns_and_continues(tmp_path, caplog
         part.complete_recovery()  # must NOT raise — best-effort on the empty path
 
     assert any(
-        "done-marker changelog flush failed" in r.getMessage() for r in caplog.records
+        # #2 (review batch 4): the WARN now reads "...flush/delivery failed" after
+        # the best-effort except was widened to KafkaProducerDeliveryError; match
+        # the stable prefix so the assertion survives that wording change.
+        "done-marker changelog flush" in r.getMessage()
+        for r in caplog.records
     )
     # Recovery continued; the store is left unmarked so the next restart retries.
     assert part._has_local_migration_done_marker() is False

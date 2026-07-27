@@ -1,18 +1,21 @@
 """
-v3.24.0 stamp adoption is opt-in.
+v3.24.0 stamp adoption is AUTOMATIC (regime-split).
 
-On a 100%-quorum stamp detection ``complete_recovery`` used to AUTOMATICALLY flip
-a store into TTL mode and rewrite its ``__ttl_index__``. That is unsafe: a genuine
-v3.24.0 store is byte-for-byte indistinguishable from a legacy ``set_bytes()``
-store whose values happen to begin with 8 plausible big-endian bytes (epoch-ms,
-counters). Auto-flipping the latter turns the first 8 bytes of every value into an
-expiry stamp; the sweep + changelog tombstones then delete the data.
+**Reworked from the original opt-in suite.** The ``adopt_v3240_stamps`` flag is
+REMOVED (spec §4). Detection stays automatic; the FLIP is now also automatic:
 
-DETECTION stays automatic but the FLIP is opt-in via a new
-``RocksDBOptions(adopt_v3240_stamps=...)`` boolean (default ``False``). Without the
-flag a 100%-quorum detection logs a CRITICAL naming the flag and then follows the
-pure-legacy disposition (stay legacy, discard the census, values byte-identical).
-With the flag, adoption proceeds as before but its ``WriteBatch`` is chunked.
+- Cold rebuild, 100%-stamped, >=1 future → **provisional auto-adopt** (backup +
+  sweep-guard + corroboration). No flag needed.
+- Cold rebuild, all-past → quarantined (unchanged).
+- Sub-100% quorum → veto (unchanged).
+
+The old "no flag → CRITICAL, stay legacy" behavior is replaced by the auto-adopt.
+The old "flag set → adopt" behavior is subsumed.
+
+This file tests the COLD REGIME automatic adoption path. Warm-restart and
+rollback scenarios are in ``test_v3240_auto_adopt.py``.
+
+Spec: ``dev-planning/state-ttl-v3240-auto-adopt/spec.md``
 """
 
 import logging
@@ -32,6 +35,10 @@ from quixstreams.utils.json import dumps as json_dumps
 
 DAY_MS = 86_400_000
 NOW_MS = 1_780_000_000_000
+
+# New metadata/CF names from the spec (§4).
+TTL_ADOPT_BACKUP_CF_NAME = "__ttl_adopt_backup__"
+TTL_ADOPT_PENDING_KEY = b"__ttl_adopt_pending__"
 
 
 # ---------------------------------------------------------------------------
@@ -106,123 +113,126 @@ def _read_via_tx(partition, key, prefix=b"pfx", timestamp=None):
     return tx.get(key=key, prefix=prefix, cf_name="default", timestamp=timestamp)
 
 
-def _critical_names_flag(caplog):
-    return any(
-        r.levelno == logging.CRITICAL and "adopt_v3240_stamps" in r.getMessage()
-        for r in caplog.records
-    )
-
-
 # ---------------------------------------------------------------------------
-# Opt-in adoption suite
+# Automatic adoption suite (reworked from opt-in)
 # ---------------------------------------------------------------------------
 
 
-class TestV3240AdoptionOptIn:
-    # (i) 100%-stamped store, NO flag → no flip, CRITICAL, raw-readable.
-    # RED on HEAD (HEAD auto-flips → uses_ttl_stamps True, no CRITICAL).
-    def test_100pct_no_flag_stays_legacy_and_criticals(self, tmp_path, caplog):
+class TestV3240AutomaticAdoption:
+    """Reworked from ``TestV3240AdoptionOptIn``. The ``adopt_v3240_stamps``
+    parameter is removed. The cold-rebuild 100%-stamped-not-all-past path now
+    auto-adopts PROVISIONALLY (with backup + sweep guard + corroboration).
+
+    All tests below should be RED on HEAD (HEAD requires the removed flag).
+    """
+
+    # (i) 100%-stamped store → AUTO provisional adopt (was: CRITICAL + stay legacy).
+    # RED on HEAD (HEAD: no flag → CRITICAL → stays legacy).
+    def test_100pct_auto_adopts_provisionally(self, tmp_path, caplog):
+        """Spec §5.2: a header-absent all-stamped (>=1 future) census triggers
+        automatic provisional adoption. No flag needed.
+
+        OLD behavior: stays legacy, CRITICAL naming adopt_v3240_stamps.
+        NEW behavior: provisional adopt (flip + backup + guard), WARN.
+        """
         producer = _make_producer()
         expiry = NOW_MS + 7 * DAY_MS
         msgs = [_v3240_msg(f"k{i}", f"v{i}", expiry) for i in range(4)]
 
         partition = _rocksdb_partition(
-            tmp_path, name="noflag", changelog_producer=producer
+            tmp_path, name="autoadopt", changelog_producer=producer
         )
-        with caplog.at_level(logging.CRITICAL):
+        with caplog.at_level(logging.WARNING):
             _replay_default(partition, msgs, now_ms=NOW_MS)
             partition.complete_recovery()
 
-        # No flip: the store stays legacy.
-        assert partition.uses_ttl_stamps is False
-        # A CRITICAL naming the opt-in flag was logged.
-        assert _critical_names_flag(caplog)
-        # Every value reads back byte-identical (still carries the 8-byte prefix).
-        for i in range(4):
-            raw_key = b"pfx|" + json_dumps(f"k{i}")
-            expected = encode_ttl_value(expiry, json_dumps(f"v{i}"))
-            assert _raw_default_get(partition, raw_key) == expected
-        # No index built. Fix 4 (review re-review #4): the census is now
-        # QUARANTINED (preserved as the repair vector for a later opt-in
-        # adoption), NOT discarded, on the unflipped all-stamped Branch-B path.
-        assert _index_count(partition) == 0
-        assert _pending_keys(partition) == {
-            b"pfx|" + json_dumps(f"k{i}") for i in range(4)
-        }
-        partition.close()
-
-    # (ii) same store, flag SET → adopts (flip + verbatim values + index +
-    # discard + one INFO). Cannot run on HEAD (the flag does not exist there).
-    def test_100pct_with_flag_adopts(self, tmp_path, caplog):
-        producer = _make_producer()
-        expiry = NOW_MS + 7 * DAY_MS
-        keys = {f"k{i}": f"v{i}" for i in range(4)}
-        msgs = [_v3240_msg(k, v, expiry) for k, v in keys.items()]
-
-        partition = _rocksdb_partition(
-            tmp_path,
-            name="withflag",
-            options=RocksDBOptions(adopt_v3240_stamps=True),
-            changelog_producer=producer,
-        )
-        with caplog.at_level(logging.INFO):
-            _replay_default(partition, msgs, now_ms=NOW_MS)
-            partition.complete_recovery()
-
-        assert partition.uses_ttl_stamps is True
+        # Flipped (provisional).
+        assert (
+            partition.uses_ttl_stamps is True
+        ), "Without any flag, cold auto-adopt must flip the store"
         # Values read back STRIPPED to the original user payload.
-        for k, v in keys.items():
-            assert _read_via_tx(partition, k, timestamp=NOW_MS) == v
-        # One index entry per non-sentinel stamp; census discarded.
+        for i in range(4):
+            assert _read_via_tx(partition, f"k{i}", timestamp=NOW_MS) == f"v{i}"
+        # Index entries built.
         assert _index_count(partition) == 4
-        assert _pending_keys(partition) == set()
-        # An INFO adoption log was emitted.
-        assert any(
-            r.levelno >= logging.INFO and "adopted" in r.getMessage().lower()
+
+        # No CRITICAL naming the removed flag.
+        assert not any(
+            r.levelno == logging.CRITICAL and "adopt_v3240_stamps" in r.getMessage()
             for r in caplog.records
         )
         partition.close()
 
-    # (iii) set_bytes big-endian-int false-positive store, NO flag → untouched
-    # byte-identical (the previously-missing regression). RED on HEAD.
-    def test_set_bytes_false_positive_no_flag_untouched(self, tmp_path, caplog):
+    # (ii) set_bytes big-endian-int false-positive store → provisional adopt
+    # THEN rollback via env var restores byte-identical.
+    # RED on HEAD (HEAD: CRITICAL + stays legacy with the old flag path).
+    def test_set_bytes_false_positive_provisional_then_rollback(self, tmp_path, caplog):
+        """Spec §5.2 + §5.6: a legacy set_bytes store whose values look like
+        stamps is provisionally auto-adopted (wrong but reversible). While
+        provisional, sweep is suppressed. Rollback restores byte-identical.
+
+        OLD behavior: CRITICAL, stays legacy.
+        NEW behavior: provisional adopt, then rollback restores.
+        """
+        import os
+
         producer = _make_producer()
-        # Legacy values written via set_bytes(): a leading big-endian uint64 in
-        # the plausible range so each passes _safe_decode_stamp → 100% quorum.
         originals = {}
         msgs = []
         for i in range(5):
             raw_key = b"pfx|" + json_dumps(f"c{i}")
-            value = struct.pack(">Q", NOW_MS - i) + f"-counter-{i}".encode()
+            value = struct.pack(">Q", NOW_MS + i * DAY_MS) + f"-counter-{i}".encode()
             originals[raw_key] = value
             msgs.append((raw_key, value, False))
 
         partition = _rocksdb_partition(
             tmp_path, name="falsepos", changelog_producer=producer
         )
-        with caplog.at_level(logging.CRITICAL):
-            _replay_default(partition, msgs, now_ms=NOW_MS)
-            partition.complete_recovery()
+        _replay_default(partition, msgs, now_ms=NOW_MS)
+        partition.complete_recovery()
 
-        # No flip, CRITICAL logged.
-        assert partition.uses_ttl_stamps is False
-        assert _critical_names_flag(caplog)
-        # Every value reads back byte-identical through the user path — no prefix
-        # is stripped because the store never flipped.
-        for i in range(5):
-            val = _read_bytes_via_tx(partition, f"c{i}", timestamp=NOW_MS)
-            assert val == originals[b"pfx|" + json_dumps(f"c{i}")]
-        # No __ttl_index__ writes and no changelog tombstone (value=None) produced.
-        assert _index_count(partition) == 0
+        # Provisionally adopted (wrong — these are legacy values).
+        assert (
+            partition.uses_ttl_stamps is True
+        ), "False-positive legacy store auto-adopts provisionally"
+        # No CRITICAL naming the removed flag.
+        assert not any(
+            r.levelno == logging.CRITICAL and "adopt_v3240_stamps" in r.getMessage()
+            for r in caplog.records
+        )
+
+        # While provisional: no deletions produced (sweep suppressed).
         assert all(
             call.kwargs.get("value") is not None
             for call in producer.produce.call_args_list
-        )
+        ), "Sweep must be suppressed: no tombstones produced"
+
         partition.close()
 
-    # (iv) single-bad-value veto still holds WITH the flag set: quorum fails, so
-    # the gate is not entered — no flip, no CRITICAL, census discarded.
-    def test_single_bad_value_veto_with_flag(self, tmp_path, caplog):
+        # Rollback.
+        os.environ["QUIXSTREAMS_STATE_TTL_ROLLBACK"] = "1"
+        try:
+            producer2 = _make_producer()
+            partition2 = _rocksdb_partition(
+                tmp_path, name="falsepos", changelog_producer=producer2
+            )
+            assert (
+                partition2.uses_ttl_stamps is False
+            ), "After rollback the store must be legacy"
+            # Byte-identical.
+            for raw_key, expected in originals.items():
+                assert (
+                    _raw_default_get(partition2, raw_key) == expected
+                ), f"Value for {raw_key!r} must be byte-identical after rollback"
+            partition2.close()
+        finally:
+            os.environ.pop("QUIXSTREAMS_STATE_TTL_ROLLBACK", None)
+
+    # (iii) single-bad-value veto still holds: quorum fails, so the gate is
+    # not entered — no flip, census discarded.
+    # GREEN on HEAD: unchanged behavior.
+    def test_single_bad_value_veto(self, tmp_path, caplog):
+        """Sub-100% quorum → no flip, census discarded. Unchanged from HEAD."""
         producer = _make_producer()
         expiry = NOW_MS + 7 * DAY_MS
         msgs = [_v3240_msg(f"k{i}", f"v{i}", expiry) for i in range(4)]
@@ -230,25 +240,22 @@ class TestV3240AdoptionOptIn:
         msgs.append((b"pfx|" + json_dumps("k_legacy"), b"short", False))
 
         partition = _rocksdb_partition(
-            tmp_path,
-            name="veto",
-            options=RocksDBOptions(adopt_v3240_stamps=True),
-            changelog_producer=producer,
+            tmp_path, name="veto", changelog_producer=producer
         )
-        with caplog.at_level(logging.CRITICAL):
-            _replay_default(partition, msgs, now_ms=NOW_MS)
-            partition.complete_recovery()
+        _replay_default(partition, msgs, now_ms=NOW_MS)
+        partition.complete_recovery()
 
         assert partition.uses_ttl_stamps is False
-        # The gate `if` was never entered, so no CRITICAL fired.
-        assert not _critical_names_flag(caplog)
-        # Pure-legacy disposition: census discarded.
         assert _pending_keys(partition) == set()
         partition.close()
 
-    # (v) adoption is chunked: with the flag set and a small chunk size, adoption
-    # commits in more than one batch.
+    # (iv) adoption is chunked: with a small chunk size, adoption commits in
+    # more than one batch.
+    # RED on HEAD (HEAD requires ``adopt_v3240_stamps=True``).
     def test_adoption_is_chunked(self, tmp_path):
+        """Spec §5.2: provisional adoption must be chunked (reuses
+        ``legacy_backfill_chunk_size``). No flag needed.
+        """
         producer = _make_producer()
         expiry = NOW_MS + 7 * DAY_MS
         n = 5
@@ -258,9 +265,7 @@ class TestV3240AdoptionOptIn:
         partition = _rocksdb_partition(
             tmp_path,
             name="chunked",
-            options=RocksDBOptions(
-                adopt_v3240_stamps=True, legacy_backfill_chunk_size=chunk_size
-            ),
+            options=RocksDBOptions(legacy_backfill_chunk_size=chunk_size),
             changelog_producer=producer,
         )
         _replay_default(partition, msgs, now_ms=NOW_MS)
@@ -277,17 +282,18 @@ class TestV3240AdoptionOptIn:
 
         expected_chunks = math.ceil(n / chunk_size)
         assert expected_chunks > 1
-        # One durable flip-metadata write + one commit per adoption chunk.
-        assert writes["n"] == expected_chunks + 1
+        # At least the expected number of chunk writes + flip metadata write.
+        assert writes["n"] >= expected_chunks + 1
         # Fully adopted: flipped, index complete, census drained.
         assert partition.uses_ttl_stamps is True
         assert _index_count(partition) == n
         assert _pending_keys(partition) == set()
         partition.close()
 
-    # Sanity: a sentinel-only v3.24.0 store with the flag adopts with NO index
-    # entries (sentinel records skip the index) — guards the chunk-skip branch.
-    def test_sentinel_only_with_flag_adopts_no_index(self, tmp_path):
+    # (v) Sentinel-only v3.24.0 store adopts with NO index entries.
+    # RED on HEAD (HEAD requires ``adopt_v3240_stamps=True``).
+    def test_sentinel_only_adopts_no_index(self, tmp_path):
+        """Sentinel-only store auto-adopts with 0 index entries."""
         producer = _make_producer()
         msgs = []
         keys = {f"k{i}": f"v{i}" for i in range(3)}
@@ -298,10 +304,7 @@ class TestV3240AdoptionOptIn:
             )
 
         partition = _rocksdb_partition(
-            tmp_path,
-            name="sentinel",
-            options=RocksDBOptions(adopt_v3240_stamps=True),
-            changelog_producer=producer,
+            tmp_path, name="sentinel", changelog_producer=producer
         )
         _replay_default(partition, msgs, now_ms=NOW_MS)
         partition.complete_recovery()

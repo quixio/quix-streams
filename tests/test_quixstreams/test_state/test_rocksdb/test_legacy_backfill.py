@@ -553,7 +553,15 @@ class TestRecoveryWallclock:
         # the legacy expiry; rebuilding strictly after it drops everything.
         max_expiry = max(exp for exp, _ in source_default.values())
         recovered = store_partition_factory(name="dst")
-        _replay_default(recovered, msgs, now_ms=max_expiry + 1)
+        # WARM restore (finding #3 reconciliation): the recovery drop now uses the
+        # event-time frontier, not wallclock, so seed the persisted high-water
+        # (loaded in __init__ on a real warm open) just past the max expiry. A
+        # frontier past every stamp drops every record — the same all-dropped
+        # outcome the old wallclock-past-window rebuild produced, now driven by
+        # the same event-time clock+condition as the live read filter.
+        frontier = max_expiry + 1
+        recovered.advance_high_water(frontier)
+        _replay_default(recovered, msgs, now_ms=frontier)
 
         recovered_default = _decode_default_cf(recovered)
         assert recovered_default == {}
@@ -590,6 +598,12 @@ class TestRecoveryWallclock:
         # order to prove order-independence vs the old stamp ratchet.
         cutoff = base + 2 * DAY_MS + 1
         recovered = store_partition_factory(name="dst")
+        # WARM restore (finding #3 reconciliation): seed the persisted event-time
+        # frontier to the cutoff, then replay in REVERSED order. The recovery drop
+        # mirrors the live filter (drop iff stamp <= frontier), so exactly the
+        # stamps above the cutoff survive — order-independent, proving the frontier
+        # is fixed and never ratchets up toward the max replayed stamp.
+        recovered.advance_high_water(cutoff)
         _replay_default(recovered, list(reversed(msgs)), now_ms=cutoff)
 
         recovered_default = _decode_default_cf(recovered)
@@ -623,10 +637,15 @@ class TestRecoveryWallclock:
         msgs = _capture_default_cf_changelog(changelog_producer_mock)
         partition.close()
 
-        # Rebuild in the far future: the expiring entry is dropped, the
-        # sentinel entry survives unconditionally.
+        # WARM restore (finding #3 reconciliation) with the event-time frontier
+        # seeded far past every finite stamp: the sentinel entry is never compared
+        # (survives unconditionally); the finite expiring entry is below the
+        # frontier and dropped — the same split, now event-time-driven, not
+        # wallclock.
         recovered = store_partition_factory(name="dst")
-        _replay_default(recovered, msgs, now_ms=base + 10_000 * DAY_MS)
+        far_future = base + 10_000 * DAY_MS
+        recovered.advance_high_water(far_future)
+        _replay_default(recovered, msgs, now_ms=far_future)
 
         recovered_default = _decode_default_cf(recovered)
         sentinel_keys = {

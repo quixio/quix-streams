@@ -38,11 +38,20 @@ def _apply_state_log_level_override() -> None:
     ``QUIXSTREAMS_STATE_LOG_LEVEL`` env var.
 
     Lets an operator raise ``quixstreams.state.*`` to DEBUG without flipping the
-    whole app to DEBUG. Strictly scoped to the ``quixstreams.state`` logger: it
-    attaches a *dedicated* handler to that logger at the requested level and stops
-    propagation to the parent so the shared root handler is never mutated and
-    non-state loggers are entirely unaffected (the earlier build lowered the
-    shared ``_DEFAULT_HANDLER`` level — a global side effect this avoids).
+    whole app to DEBUG. It lowers the ``quixstreams.state`` logger level and
+    attaches a *dedicated* handler to that logger at the requested level so the
+    (possibly more verbose) state records reach stderr WITHOUT touching the shared
+    root ``_DEFAULT_HANDLER`` (the earlier build lowered that shared handler's
+    level — a global side effect this avoids).
+
+    Propagation is deliberately LEFT ENABLED (finding 3, review batch 4): a custom
+    handler an operator has attached to the ``quixstreams`` (or root) logger must
+    keep receiving ``quixstreams.state.*`` records — including ERROR/CRITICAL —
+    which is exactly when someone enables this env var to debug a migration. An
+    earlier build set ``propagate = False`` here, which silently stole those
+    records from custom handlers. The trade-off is minor duplicate emission when
+    an upstream handler is also present (the dedicated handler AND the upstream
+    handler each emit), which is strictly preferable to dropping errors.
 
     Unset/empty is a no-op: the state namespace inherits the app loglevel and
     propagates to the shared handler as usual. An unrecognized value warns once
@@ -67,18 +76,23 @@ def _apply_state_log_level_override() -> None:
     level = logging.getLevelName(level_name)  # accepted name -> int
     state_logger = logging.getLogger(_STATE_LOGGER_NAME)
     state_logger.setLevel(level)
+    # Keep propagation ON so any custom/upstream handler on ``quixstreams`` or the
+    # root logger still receives state records (finding 3). Set explicitly (rather
+    # than relying on the default) so a re-run that follows an older
+    # ``propagate = False`` build re-enables it idempotently.
+    state_logger.propagate = True
 
     # Give the state namespace its OWN handler at the requested level so its
-    # (possibly more verbose) records reach stderr WITHOUT touching the shared
-    # root handler. Route state records solely through this handler
-    # (propagate=False) so the parent handler neither re-filters nor
-    # double-emits them. Created once; subsequent calls only refresh the level.
+    # (possibly more verbose) records still reach stderr even when the app
+    # configured no handler at all (or only a higher-level one that would filter
+    # DEBUG state records out). Created once; subsequent calls only refresh the
+    # level. Because propagation stays on, an upstream handler may ALSO emit these
+    # records — accepted minor duplication over dropping errors (see docstring).
     if _STATE_HANDLER is None:
         _STATE_HANDLER = logging.StreamHandler(stream=sys.stderr)
         if _DEFAULT_HANDLER.formatter is not None:
             _STATE_HANDLER.setFormatter(_DEFAULT_HANDLER.formatter)
         state_logger.addHandler(_STATE_HANDLER)
-        state_logger.propagate = False
     _STATE_HANDLER.setLevel(level)
 
 

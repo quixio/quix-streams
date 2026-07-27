@@ -84,21 +84,6 @@ class RocksDBOptions(RocksDBOptionsType):
         meaningful for TTL-enabled stores; ignored for windowed / timestamped
         stores and for no-``ttl=`` workloads.
         Default - ``True``.
-    :param adopt_v3240_stamps: opt-in one-time adoption of a store created on the
-        v3.24.0 TTL preview. v3.24.0 wrote 8-byte-stamped values to the changelog
-        WITHOUT the ``__ttl_stamped__`` header, so on a cold restore such a store
-        is byte-for-byte indistinguishable from a pre-TTL legacy store whose
-        values happen to begin with 8 plausible big-endian bytes (e.g. epoch-ms
-        written via ``set_bytes()``). When ``False`` (the default), recovery only
-        DETECTS this shape and logs a CRITICAL — it never flips the store, so a
-        false-positive legacy store is never corrupted and its values read back
-        byte-identical. Set this to ``True`` ONLY if you are certain the store was
-        created on v3.24.0: recovery will then flip it into TTL mode, keep each
-        value verbatim (its original v3.24.0 stamp is preserved), and rebuild the
-        expiry index. Leaving it ``True`` is safe and idempotent on
-        already-adopted or genuinely-legacy stores. Ignored for windowed /
-        timestamped stores.
-        Default - ``False``.
 
     Please see `rocksdict.Options` for a complete description of other options.
     """
@@ -123,7 +108,6 @@ class RocksDBOptions(RocksDBOptionsType):
     legacy_records_ttl: Optional[timedelta] = None
     legacy_backfill_chunk_size: int = 10_000
     ttl_changelog_tombstones: bool = True
-    adopt_v3240_stamps: bool = False
 
     def __post_init__(self) -> None:
         if self.legacy_records_ttl is not None and self.legacy_records_ttl <= timedelta(
@@ -159,6 +143,15 @@ class RocksDBOptions(RocksDBOptionsType):
             raise ValueError(
                 "legacy_backfill_chunk_size must be a strictly positive int, "
                 f"got {self.legacy_backfill_chunk_size!r}"
+            )
+        if self.max_evictions_per_flush <= 0:
+            # #4 (review batch 4): a 0/negative cap silently disables the per-flush
+            # TTL sweep AND the tombstone reclamation that rides on it, so expired
+            # records accumulate unbounded with no error. Reject at construction,
+            # mirroring the other bound checks above.
+            raise ValueError(
+                "max_evictions_per_flush must be a strictly positive int, "
+                f"got {self.max_evictions_per_flush!r}"
             )
 
     def to_options(self) -> rocksdict.Options:

@@ -29,6 +29,15 @@ TTL_HIGH_WATER_KEY = b"__ttl_high_water_ms__"
 STATE_FORMAT_VERSION_KEY = b"__ttl_format_version__"
 STATE_FORMAT_VERSION = 2
 
+# Lowest on-disk format-version marker that a warm open is allowed to UPGRADE
+# in place (see ``RocksDBStorePartition._enforce_format_version``). The v3.24.0
+# preview persisted marker ``1`` (or none); those are forward-compatible with
+# the current stamp codec and are rewritten to ``STATE_FORMAT_VERSION``. A
+# marker below this floor (``0``, negative, or an undecodable value) is NOT a
+# recognized preview shape — it keeps the forward-incompatibility guard and
+# raises ``IncompatibleStateStoreError`` rather than being silently rewritten.
+MIN_UPGRADEABLE_STATE_FORMAT_VERSION = 1
+
 # Per-partition opt-in flag for the TTL machinery. Absent (or empty) means the
 # partition is in legacy mode: writes are not stamped, ``__ttl_index__`` does
 # not exist, the sweep is a no-op, and recovery replays values verbatim.
@@ -36,6 +45,28 @@ STATE_FORMAT_VERSION = 2
 # framework on the first ``state.set(..., ttl=...)`` write that landed on a
 # fresh (empty) default CF; once flipped, it stays flipped.
 TTL_ENABLED_KEY = b"__ttl_enabled__"
+
+# Local-only marker recording that a COLD-heuristic v3.24.0-stamp adoption is
+# currently PROVISIONAL: the pre-adoption originals are backed up to
+# ``__ttl_adopt_backup__`` and the TTL sweep is suppressed until a live
+# ``state.set(..., ttl=...)`` write corroborates the adoption (see
+# :meth:`RocksDBStorePartition._adopt_v3240_stamps` /
+# :meth:`RocksDBStorePartition.corroborate_adoption`). Its value is
+# ``int_to_bytes(adoption_wallclock_ms)``. Present == "provisional: backup live,
+# sweep suppressed". Cleared on corroboration or ``QUIXSTREAMS_STATE_TTL_ROLLBACK``
+# rollback. Lives in the metadata CF (``LOCAL_ONLY_CFS``), never on the changelog;
+# the sound warm-deterministic adopt path never sets it.
+TTL_ADOPT_PENDING_KEY = b"__ttl_adopt_pending__"
+
+# Operational rollback lever for the COLD-heuristic provisional adoption
+# (spec §5.6), read via ``os.environ.get`` at partition open. Modelled on the
+# ``QUIXSTREAMS_STATE_LOG_LEVEL`` env-var pattern: transient, Portal-settable, NOT
+# a ``RocksDBOptions`` field. When set to ``"1"`` it restores a provisionally
+# cold-adopted store to legacy byte-identical (warm restart), or suppresses the
+# cold provisional adopt entirely (fresh volume). It never touches the sound
+# warm-deterministic path (that has no backup / no pending marker) nor a
+# corroborated store (done-marker present).
+TTL_ROLLBACK_ENV_VAR = "QUIXSTREAMS_STATE_TTL_ROLLBACK"
 
 # Persisted backfill cursor for the legacy-records backfill.
 # Holds the integer count ``N`` of keys

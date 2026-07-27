@@ -28,7 +28,6 @@ class MemoryStore(Store):
         stream_id: Optional[str],
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
         legacy_records_ttl: Optional[timedelta] = None,
-        adopt_v3240_stamps: bool = False,
         ttl_changelog_tombstones: bool = True,
         max_evictions_per_flush: int = _DEFAULT_MAX_EVICTIONS_PER_FLUSH,
     ) -> None:
@@ -41,22 +40,26 @@ class MemoryStore(Store):
             completed during a MIXED-changelog recovery (parity with
             ``RocksDBOptions.legacy_records_ttl``). Forwarded to each
             ``MemoryStorePartition``.
-        :param adopt_v3240_stamps: opt-in one-time adoption of a store created on
-            the v3.24.0 TTL preview (parity with
-            ``RocksDBOptions.adopt_v3240_stamps``). Forwarded to each partition so
-            the recovery CRITICAL's "set RocksDBOptions(adopt_v3240_stamps=True)"
-            advice is actually reachable on the memory backend.
         :param ttl_changelog_tombstones: whether TTL evictions are produced to the
             changelog as tombstones (parity with
             ``RocksDBOptions.ttl_changelog_tombstones``).
         :param max_evictions_per_flush: cap on TTL-driven evictions per flush
             (parity with ``RocksDBOptions.max_evictions_per_flush``).
         """
+        if max_evictions_per_flush <= 0:
+            # Fail-fast parity with ``RocksDBOptions`` (#4): reject a non-positive
+            # cap at store construction so a store that never creates a partition
+            # cannot silently hold an invalid value. ``MemoryStorePartition.__init__``
+            # re-checks the value it actually receives, since direct partition
+            # construction bypasses the store.
+            raise ValueError(
+                "max_evictions_per_flush must be a strictly positive int, "
+                f"got {max_evictions_per_flush!r}"
+            )
         super().__init__(name, stream_id)
 
         self._changelog_producer_factory = changelog_producer_factory
         self._legacy_records_ttl = legacy_records_ttl
-        self._adopt_v3240_stamps = adopt_v3240_stamps
         self._ttl_changelog_tombstones = ttl_changelog_tombstones
         self._max_evictions_per_flush = max_evictions_per_flush
 
@@ -72,5 +75,4 @@ class MemoryStore(Store):
             max_evictions_per_flush=self._max_evictions_per_flush,
             legacy_records_ttl=self._legacy_records_ttl,
             ttl_changelog_tombstones=self._ttl_changelog_tombstones,
-            adopt_v3240_stamps=self._adopt_v3240_stamps,
         )

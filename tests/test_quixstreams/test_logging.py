@@ -98,3 +98,44 @@ class TestStateLogLevelOverride:
         state_logger = logging.getLogger(logging_module._STATE_LOGGER_NAME)
         assert state_logger.level == logging.NOTSET
         assert logging_module._STATE_HANDLER is None
+
+    def test_custom_handler_still_receives_state_records_when_override_set(
+        self, monkeypatch, reset_state_override
+    ):
+        """Finding 3: with ``QUIXSTREAMS_STATE_LOG_LEVEL`` set, a custom handler
+        on the ``quixstreams`` logger must still receive ``quixstreams.state.*``
+        records -- i.e. the state-log override must be additive, NOT steal
+        propagation from custom handlers on the parent.
+
+        Validates spec: state-log override preserves propagation to parent
+        logger's handlers.
+        """
+        monkeypatch.setenv("QUIXSTREAMS_STATE_LOG_LEVEL", "DEBUG")
+
+        # Attach a capturing handler to the parent ``quixstreams`` logger.
+        parent_logger = logging.getLogger("quixstreams")
+        captured: list[logging.LogRecord] = []
+
+        class _Capture(logging.Handler):
+            def emit(self, record):
+                captured.append(record)
+
+        handler = _Capture()
+        handler.setLevel(logging.DEBUG)
+        parent_logger.addHandler(handler)
+        try:
+            # Apply the state-log override (same path as configure_logging's
+            # ``finally`` block).
+            logging_module._apply_state_log_level_override()
+
+            # Log an ERROR on a quixstreams.state child logger.
+            state_child = logging.getLogger("quixstreams.state.test_propagation")
+            state_child.error("test-error-finding-3")
+
+            assert any(r.getMessage() == "test-error-finding-3" for r in captured), (
+                "custom handler on 'quixstreams' must receive "
+                "'quixstreams.state.*' ERROR records; propagation was stolen "
+                "by the state-log override (propagate=False)"
+            )
+        finally:
+            parent_logger.removeHandler(handler)

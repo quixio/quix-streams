@@ -427,11 +427,17 @@ On a **cold restore** (state volume lost, rebuilt from the changelog), the **dro
 
 If a rebuild encounters an interrupted migration (some records already stamped, some not — a "MIXED" changelog), recovery auto-completes the remaining un-stamped records. With `legacy_records_ttl` set, they expire at `wallclock-at-rebuild + legacy_records_ttl`; without it, they inherit the expiry of the already-stamped cohort (or `SENTINEL_NEVER` with a `[WARNING]` in the unlikely case that no stamped record with a future expiry survives). No data is deleted.
 
-A store created on the earlier TTL preview (stock v3.24.0) has stamped values in its changelog but no `__ttl_stamped__` headers (those were introduced later). Recovery detects this by checking whether every replayed key decodes as a valid 8-byte stamp. If all keys pass **and** you set `RocksDBOptions(adopt_v3240_stamps=True)`, recovery adopts the stamps verbatim: it flips the store into TTL mode, keeps every value as-is (original v3.24.0 stamps are preserved), and rebuilds the expiry index. No data is re-stamped or deleted. The store emerges from recovery fully TTL-enabled and continues normal expiry from each record's original stamp. Leaving `adopt_v3240_stamps=True` set after adoption is safe and has no effect on subsequent restarts.
+A store created on the earlier TTL preview (v3.24.0) is adopted **automatically** — there is no configuration flag. The upgrade path splits into two regimes by the trace available at open:
 
-If `adopt_v3240_stamps` is **not** set (the default), recovery logs a `CRITICAL` naming the flag and does nothing — the store stays in legacy mode and every value reads back unchanged. The default is conservative because a legacy store whose values happen to begin with 8 plausible numeric bytes is on-disk identical to a v3.24.0 store; auto-adopting the wrong store would silently corrupt it.
+- **Warm restart (the state volume is intact — e.g. the normal Quix Cloud upgrade).** The preview left local TTL-only artifacts (`__ttl_enabled__`, `__ttl_format_version__`, `__ttl_high_water_ms__`, `__ttl_index__`) that a genuine pre-TTL store can never have, so the store is recognized *deterministically* and resumes TTL mode in place. If the preview's on-disk format marker is older than the current one (or absent), it is upgraded in place instead of rejected — the previous "delete the state directory" dead-end is gone. This path is a sound positive identification: no backup and no sweep-suppression are needed.
 
-The memory backend mirrors the same opt-in contract. Pass `adopt_v3240_stamps=True` directly to the `MemoryStorePartition` constructor to enable adoption there. Production memory deployments are detection-only by default — `MemoryStore.create_new_partition` does not forward this flag, matching how `legacy_records_ttl` and `ttl_changelog_tombstones` work for the memory backend. A memory partition that sees the all-stamped census without the flag logs the same `CRITICAL` and leaves every value byte-identical.
+- **Cold rebuild / fresh volume / memory backend.** The only durable trace is the raw stamped bytes, which are byte-identical to a legacy `set_bytes()` value. When every replayed key decodes as a valid 8-byte stamp **and** at least one stamp is still in the future, recovery adopts the stamps **provisionally and reversibly**: it flips the store into TTL mode, keeps every value verbatim (original stamps preserved), rebuilds the expiry index, and **backs up the originals** to a local `__ttl_adopt_backup__` column family. While provisional, the TTL sweep is suppressed so no misidentified record can be deleted. A `[WARNING]` (not a `CRITICAL`) records the reversible adoption. The adoption is **corroborated** — made permanent, backup dropped, sweep re-enabled — the first time the store sees a genuine live `state.set(..., ttl=...)` write, which also produces a durable migration-done marker so future cold rebuilds are deterministic.
+
+If every censused stamp is already in the **past** (the shape of a legacy `set_bytes()` dedup store — adopting it would delete every record on the next sweep), recovery **quarantines** the census instead: the store stays legacy, every value reads back byte-identical, and a `[WARNING]` explains the refusal.
+
+**Rolling back a wrong cold adoption.** Because a mis-flipped genuine-legacy store is not byte-detectably wrong, rollback is an operational lever, not an automatic action. Set the environment variable `QUIXSTREAMS_STATE_TTL_ROLLBACK=1` (in the deployment env, like `QUIXSTREAMS_STATE_LOG_LEVEL`) and restart: on a warm restart of a provisionally-adopted store the originals are restored byte-identical and the store reverts to legacy mode; on a fresh volume the provisional adopt is suppressed entirely. The lever only ever touches provisional (uncorroborated) cold adoptions — a corroborated store and the sound warm path are immune. Unset the variable and restart once the rollback has taken effect.
+
+The memory backend is always the cold regime (it re-recovers from the changelog on every open). It mirrors the same automatic provisional-adopt / quarantine / rollback behavior with an in-RAM backup; a fresh replay reconstructs the un-adopted originals, so `QUIXSTREAMS_STATE_TTL_ROLLBACK=1` simply suppresses the auto-adopt on the next open.
 
 
 ### Troubleshooting
@@ -543,13 +549,21 @@ The `<N> leftover` count is normally much smaller than the store — it is only 
 
 The `RESUME STARTED` line names the path and the expiry derived from the surviving stamped cohort. The `RESUME COMPLETED` line confirms how many leftover records were stamped. After both lines, the done-marker is present and subsequent restarts skip the resume entirely.
 
-**v3.24.0 preview-store adoption** — a store created on the earlier TTL preview can be adopted verbatim during rebuild when `RocksDBOptions(adopt_v3240_stamps=True)` is set:
+**v3.24.0 preview-store adoption** — a store created on the earlier TTL preview is adopted automatically during rebuild (no flag). A **warm** restart resumes TTL mode deterministically:
 
 ```
-[INFO] Recovery: adopted <N> v3.24.0-stamped record(s) at path=<...> (flipped into TTL mode; values kept verbatim, __ttl_index__ rebuilt from the adopted stamps).
+[INFO] Detected v3.24.0 TTL store at path=<...> (local __ttl_index__ / TTL metadata present, no __ttl_enabled__ flag); resuming TTL mode deterministically.
+[INFO] Upgraded on-disk TTL format marker <N>->2 in place at path=<...> (v3.24.0 preview warm restart; values unchanged).
 ```
 
-Without the flag, recovery logs a `CRITICAL` naming `adopt_v3240_stamps` instead of this `INFO` line, and the store stays in legacy mode. See [Reference clock — when do migrated records expire?](#reference-clock-when-do-migrated-records-expire) for the adoption rationale.
+A **cold** rebuild adopts provisionally and reversibly (backup + sweep-suppression until corroborated):
+
+```
+[WARNING] Auto-adopted <N> v3.24.0-shaped record(s) from the changelog at path=<...> (REVERSIBLE): values kept verbatim, __ttl_index__ rebuilt, originals backed up to __ttl_adopt_backup__, sweep-deletion suppressed until corroborated by a live ttl= write. If this is actually a pre-TTL legacy store, set QUIXSTREAMS_STATE_TTL_ROLLBACK=1 and restart to roll back (originals restored byte-identical).
+[INFO] Corroborated v3.24.0 adoption at path=<...> on a live ttl= write; produced the durable migration-done marker, dropped the backup, lifted sweep suppression.
+```
+
+An all-past census is quarantined instead (`[WARNING] Refused auto-adopt ... already in the past ...`), and `QUIXSTREAMS_STATE_TTL_ROLLBACK=1` reverses a wrong cold adoption. See [Reference clock — when do migrated records expire?](#reference-clock-when-do-migrated-records-expire) for the adoption rationale.
 
 **Wallclock-expired record drops** — whenever the wallclock filter discards at least one stamped record during replay, recovery logs a single aggregate `INFO` at the end of replay (never per-record). RocksDB:
 

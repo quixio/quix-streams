@@ -1011,13 +1011,13 @@ class TestContractTargets:
             stamped_value = encode_ttl_value(past_expiry, json_dumps(f"old-{i}"))
             msgs.append((raw_key, stamped_value, False))
 
-        # v3.24.0 stamp adoption is opt-in — a genuine v3.24.0 upgrader
-        # sets adopt_v3240_stamps=True to self-heal (the no-flag CRITICAL path is
-        # covered in test_v3240_adoption_opt_in.py).
+        # v3.24.0 stamp adoption is now AUTOMATIC + reversible (no flag): a
+        # cold rebuild of an all-stamped, not-all-past census provisionally
+        # auto-adopts, and the live ttl= write below corroborates it. (Warm/rollback
+        # scenarios are covered in test_v3240_auto_adopt.py.)
         partition = _rocksdb_partition(
             tmp_path,
             name="f",
-            options=RocksDBOptions(adopt_v3240_stamps=True),
             changelog_producer=producer,
         )
 

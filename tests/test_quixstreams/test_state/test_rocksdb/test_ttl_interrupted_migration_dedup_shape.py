@@ -1,8 +1,12 @@
 """
 Regression tests for review re-review finding #4 (Fix 4): the all-stamped
 recovery gate must discriminate an interrupted THIS-BRANCH dedup migration from
-opt-in v3.24.0 adoption, and never corrupt / mass-delete either scenario by
-default.
+v3.24.0 adoption, and never corrupt / mass-delete either scenario.
+
+RECONCILED to the automatic + reversible v3.24.0-stamp adoption
+(``dev-planning/state-ttl-v3240-auto-adopt/spec.md``): the ``adopt_v3240_stamps``
+flag is removed; adoption is automatic (cold-heuristic provisional adopt with
+backup + sweep-guard) and the CRITICAL/HALT dead-ends become WARN + auto-adopt.
 
 Key shapes (all leftover values are 8-byte-prefixed, so per-record byte routing
 is impossible — Fix 4 makes ONE store-level all-or-nothing decision):
@@ -10,28 +14,26 @@ is impossible — Fix 4 makes ONE store-level all-or-nothing decision):
 - Scenario A (this-branch mixed, all-PAST dedup leftovers): header-true survivors
   flip the store; header-absent 8-byte epoch-ms leftovers are all in the past. The
   default auto-COMPLETES (wrap once at the survivor expiry, payload preserved, no
-  mass-delete).
-- Branch B, no flag, all-stamped: an unflipped store that is byte-identical to a
-  stock v3.24.0 cold restore. CRITICAL + QUARANTINE (census preserved), unflipped,
-  byte-identical.
-- adopt=True + all-PAST census: REFUSED (would mass-delete), census preserved,
-  unflipped.
-- Ambiguous FUTURE-stamped this-branch census (no flag): HALT with
-  IncompatibleStateStoreError, census preserved.
-- Ambiguous future + legacy_records_ttl: completes (wrap once).
-- Ambiguous future + adopt flag: adopts (keep verbatim).
+  mass-delete). UNCHANGED.
+- Branch B, all-stamped FUTURE: an unflipped store byte-identical to a stock
+  v3.24.0 cold restore. NEW: provisional AUTO-ADOPT (flip + backup + index), WARN.
+- All-PAST census: QUARANTINE (WARN, downgraded from CRITICAL) — stay legacy,
+  census preserved, byte-identical (would mass-delete if adopted).
+- Ambiguous FUTURE-stamped this-branch census (no legacy_records_ttl): NEW —
+  provisional auto-adopt (keep verbatim), no HALT.
+- Ambiguous future + legacy_records_ttl: completes (wrap once). UNCHANGED.
 """
 
 import logging
 import struct
 from unittest.mock import MagicMock, PropertyMock
 
-import pytest
-
-from quixstreams.state.metadata import TTL_BACKFILL_PENDING_CF_NAME
+from quixstreams.state.metadata import (
+    TTL_ADOPT_BACKUP_CF_NAME,
+    TTL_BACKFILL_PENDING_CF_NAME,
+)
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.rocksdb import RocksDBOptions, RocksDBStorePartition
-from quixstreams.state.rocksdb.exceptions import IncompatibleStateStoreError
 from quixstreams.state.rocksdb.metadata import TTL_INDEX_CF_NAME
 from quixstreams.state.rocksdb.ttl_codec import decode_ttl_value, encode_ttl_value
 
@@ -131,50 +133,54 @@ def test_scenario_a_all_past_dedup_leftovers_complete(tmp_path):
 
 
 # -------------------------------------------------------------------
-# Branch B — unflipped all-stamped, no flag → CRITICAL + QUARANTINE.
+# Branch B — unflipped all-stamped FUTURE → provisional AUTO-ADOPT (WARN).
 # -------------------------------------------------------------------
-def test_branch_b_unflipped_all_stamped_no_flag_quarantines(tmp_path, caplog):
-    # Pure stock-v3.24.0 shape: all header-absent stamped, no survivors.
+def test_branch_b_unflipped_all_stamped_auto_adopts(tmp_path, caplog):
+    # Pure stock-v3.24.0 shape: all header-absent FUTURE-stamped, no survivors.
+    # NEW (spec §5.2): auto-adopt PROVISIONALLY (flip + backup + index), WARN.
     v3240 = {
         b"pfx|k0": encode_ttl_value(STAMP_EXPIRY, b"a"),
         b"pfx|k1": encode_ttl_value(STAMP_EXPIRY, b"b"),
     }
     partition = _partition(tmp_path)
-    with caplog.at_level(logging.CRITICAL):
+    with caplog.at_level(logging.WARNING):
         _recover(partition, [(k, v, False) for k, v in v3240.items()])
-        assert partition.uses_ttl_stamps is False  # never flipped
+        assert partition.uses_ttl_stamps is False  # not flipped until adopt
         partition.complete_recovery()
 
-    assert partition.uses_ttl_stamps is False
-    assert any(
-        "adopt_v3240_stamps" in r.getMessage() for r in _critical_records(caplog)
-    )
-    # QUARANTINE: census preserved (repair vector), values byte-identical.
-    assert _pending_keys(partition) == set(v3240)
+    # Provisionally adopted: flipped, index rebuilt, census drained, backup made.
+    assert partition.uses_ttl_stamps is True
+    assert _pending_keys(partition) == set()
+    assert _index_count(partition) == 2
+    assert TTL_ADOPT_BACKUP_CF_NAME in partition.list_column_families()
+    # Values kept verbatim on disk (each carries its own v3.24.0 stamp).
     for raw_key, verbatim in v3240.items():
         assert bytes(partition.get(raw_key, cf_name="default")) == verbatim
+    # WARN (not CRITICAL); no mention of the removed flag.
+    assert not _critical_records(caplog)
+    assert any("auto-adopted" in r.getMessage().lower() for r in caplog.records)
     partition.close()
 
 
 # -------------------------------------------------------------------
-# adopt=True + all-PAST census → REFUSED (would mass-delete).
+# All-PAST census → QUARANTINE (WARN, downgraded from CRITICAL).
 # -------------------------------------------------------------------
-def test_adopt_all_past_refused(tmp_path, caplog):
-    partition = _partition(
-        tmp_path, options=RocksDBOptions(open_max_retries=0, adopt_v3240_stamps=True)
-    )
-    with caplog.at_level(logging.CRITICAL):
+def test_all_past_quarantined(tmp_path, caplog):
+    partition = _partition(tmp_path)
+    with caplog.at_level(logging.WARNING):
         _recover(partition, [(k, v, False) for k, v in PAST_DEDUP.items()])
         assert partition.uses_ttl_stamps is False
         partition.complete_recovery()
 
-    # Adoption REFUSED: unflipped, census preserved, no index built.
+    # QUARANTINE: unflipped, census preserved, no index, values byte-identical.
     assert partition.uses_ttl_stamps is False
     assert _pending_keys(partition) == set(PAST_DEDUP)
     assert _index_count(partition) == 0
+    assert not _critical_records(caplog)  # downgraded to WARN
     assert any(
-        "REFUSED" in r.getMessage() or "past" in r.getMessage()
-        for r in _critical_records(caplog)
+        ("refused" in r.getMessage().lower() or "past" in r.getMessage().lower())
+        and r.levelno == logging.WARNING
+        for r in caplog.records
     )
     for raw_key, verbatim in PAST_DEDUP.items():
         assert bytes(partition.get(raw_key, cf_name="default")) == verbatim
@@ -182,9 +188,12 @@ def test_adopt_all_past_refused(tmp_path, caplog):
 
 
 # -------------------------------------------------------------------
-# Ambiguous FUTURE-stamped this-branch census, no flag → HALT.
+# Ambiguous FUTURE-stamped this-branch census (no ttl) → provisional adopt.
 # -------------------------------------------------------------------
-def test_ambiguous_future_this_branch_halts(tmp_path):
+def test_ambiguous_future_this_branch_auto_adopts(tmp_path):
+    # NEW (spec §5.2 Branch-A reconciliation): keep verbatim via provisional adopt
+    # instead of HALTing. ``legacy_records_ttl`` stays the explicit wrap-once
+    # override (see test_ambiguous_future_legacy_ttl_completes).
     future_leftovers = {
         b"pfx|l0": encode_ttl_value(NOW_MS + 10 * DAY_MS, b"p0"),
         b"pfx|l1": encode_ttl_value(NOW_MS + 10 * DAY_MS, b"p1"),
@@ -193,11 +202,14 @@ def test_ambiguous_future_this_branch_halts(tmp_path):
     _recover(partition, _mixed_with_survivors(future_leftovers))
     assert partition.uses_ttl_stamps is True
 
-    with pytest.raises(IncompatibleStateStoreError, match="Ambiguous"):
-        partition.complete_recovery()
+    partition.complete_recovery()  # must NOT raise
 
-    # Census preserved (quarantined) so the operator can pick a flag and retry.
-    assert _pending_keys(partition) == set(future_leftovers)
+    assert partition.uses_ttl_stamps is True
+    # Leftovers kept VERBATIM (adopted, not re-wrapped); census drained; backup made.
+    for raw_key, verbatim in future_leftovers.items():
+        assert bytes(partition.get(raw_key, cf_name="default")) == verbatim
+    assert _pending_keys(partition) == set()
+    assert TTL_ADOPT_BACKUP_CF_NAME in partition.list_column_families()
     partition.close()
 
 
@@ -233,23 +245,30 @@ def test_ambiguous_future_legacy_ttl_completes(tmp_path):
 
 
 # -------------------------------------------------------------------
-# Ambiguous future + adopt flag → adopts (keep verbatim).
+# Provisional adopt is REVERSIBLE: marker set + sweep suppressed until corroborated.
 # -------------------------------------------------------------------
-def test_ambiguous_future_adopt_adopts(tmp_path):
-    future_leftovers = {
-        b"pfx|l0": encode_ttl_value(NOW_MS + 10 * DAY_MS, b"p0"),
-        b"pfx|l1": encode_ttl_value(NOW_MS + 10 * DAY_MS, b"p1"),
+def test_provisional_adopt_marks_reversible_and_suppresses_sweep(tmp_path):
+    # Branch B future-stamped census -> provisional adopt. The provisional marker
+    # is set and the sweep is suppressed (a past-stamped adopted record survives a
+    # flush with an advanced high-water until a live ttl= write corroborates).
+    v3240 = {
+        b"pfx|k_past": encode_ttl_value(NOW_MS - DAY_MS, b"pastval"),
+        b"pfx|k_future": encode_ttl_value(STAMP_EXPIRY, b"futureval"),
     }
-    partition = _partition(
-        tmp_path, options=RocksDBOptions(open_max_retries=0, adopt_v3240_stamps=True)
-    )
-    _recover(partition, _mixed_with_survivors(future_leftovers))
-
+    partition = _partition(tmp_path)
+    _recover(partition, [(k, v, False) for k, v in v3240.items()])
     partition.complete_recovery()
 
     assert partition.uses_ttl_stamps is True
-    # Adopted verbatim: the stored value is UNCHANGED (no re-wrap).
-    for raw_key, verbatim in future_leftovers.items():
-        assert bytes(partition.get(raw_key, cf_name="default")) == verbatim
-    assert _pending_keys(partition) == set()
+    assert partition._adopt_provisional is True
+
+    # Advance high-water past the expired key and flush a plain (non-ttl) write:
+    # the sweep must be suppressed, so the past-stamped adopted key survives.
+    partition._high_water_ms = NOW_MS + 1
+    tx = partition.begin()
+    tx.set(key="klive", value="vlive", prefix=b"pfx", timestamp=NOW_MS)
+    tx.prepare(processed_offsets={"topic": 1})
+    tx.flush(changelog_offset=100)
+
+    assert partition.get(b"pfx|k_past", cf_name="default") is not None
     partition.close()

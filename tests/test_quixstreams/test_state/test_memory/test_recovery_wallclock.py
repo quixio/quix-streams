@@ -130,6 +130,12 @@ class TestMemoryRecoveryWallclock:
             changelog_producer_mock, n=5, ts=ts, ttl=ttl
         )
         recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
+        # WARM restore (finding #3 reconciliation): seed the event-time frontier
+        # just past the uniform expiry (models a loaded persisted high-water). The
+        # recovery drop now mirrors the live read filter (drop iff stamp <=
+        # frontier), so a frontier past every stamp drops every record — the same
+        # all-dropped outcome the old wallclock-past-window rebuild produced.
+        recovered.advance_high_water(uniform_expiry + 1)
         _replay_default(recovered, msgs, now_ms=uniform_expiry + 1)
 
         assert _decode_default(recovered) == {}
@@ -155,7 +161,12 @@ class TestMemoryRecoveryWallclock:
 
         cutoff = base + 2 * DAY_MS + 1
         recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
-        # Reverse the replay order to prove order-independence vs the old ratchet.
+        # WARM restore (finding #3 reconciliation): seed the event-time frontier to
+        # the cutoff, then reverse the replay order to prove order-independence.
+        # The recovery drop mirrors the live filter (drop iff stamp <= frontier),
+        # so exactly the stamps above the cutoff survive — the frontier is fixed
+        # and never ratchets up toward the max replayed stamp.
+        recovered.advance_high_water(cutoff)
         _replay_default(recovered, list(reversed(msgs)), now_ms=cutoff)
 
         recovered_default = _decode_default(recovered)
@@ -184,7 +195,13 @@ class TestMemoryRecoveryWallclock:
         partition.close()
 
         recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
-        _replay_default(recovered, msgs, now_ms=base + 10_000 * DAY_MS)
+        # WARM restore (finding #3 reconciliation) with the event-time frontier
+        # seeded far past every finite stamp: the sentinel entry is never compared
+        # (survives unconditionally); the finite expiring entry is below the
+        # frontier and dropped — the same split, now event-time-driven.
+        far_future = base + 10_000 * DAY_MS
+        recovered.advance_high_water(far_future)
+        _replay_default(recovered, msgs, now_ms=far_future)
 
         recovered_default = _decode_default(recovered)
         sentinel_keys = {

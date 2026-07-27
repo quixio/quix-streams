@@ -23,6 +23,7 @@ from .ttl_codec import (
     _MAX_PLAUSIBLE_STAMP_MS,
     SENTINEL_NEVER,
     TTL_STAMP_BYTES,
+    clamp_additive_expiry,
     decode_ttl_value,
     encode_index_key,
     encode_ttl_value,
@@ -149,6 +150,13 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # TTL store never touches it.
         self._max_batch_ttl_ms: Optional[int] = None
 
+        # Set True by :meth:`_maybe_corroborate_adoption` when THIS transaction
+        # corroborates a provisional cold adoption. Consulted after
+        # ``super().prepare()`` succeeds to run the DEFERRED, irreversible backup-CF
+        # teardown (finding #1) — never before the commit barrier, so an aborted
+        # prepare leaves the rollback backup intact.
+        self._corroborated_this_tx: bool = False
+
     # ------------------------------------------------------------------
     # TTL-aware write / read overrides.
     # ------------------------------------------------------------------
@@ -187,18 +195,25 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "from a custom Source), use as_state(prefix, timestamp=...)."
             )
         expiry = timestamp + _ttl_to_ms(ttl)
-        if expiry < 0:
-            # #12 (review batch 3): a pre-epoch / negative event-time yields a
-            # negative expiry that the unsigned stamp encoder cannot represent.
-            # Reject loudly at the source with a clear ValueError (naming the
-            # offending values) instead of letting a raw struct.error crash-loop
-            # on every replay. Caught by the #14 validate-before-stage + FAILED
-            # handling, so nothing is committed. We reject rather than clamp: a
-            # clamped expiry would silently change the record's TTL semantics.
+        if expiry <= 0:
+            # #12 (review batch 3) + #1 (review batch 4): reject a NON-POSITIVE
+            # expiry loudly at the source. A negative expiry (pre-epoch / negative
+            # event-time) cannot be represented by the unsigned stamp encoder at
+            # all. An expiry of EXACTLY 0 (e.g. timestamp=-1 + ttl=1ms) does encode
+            # as ``\x00`` * 8, but the strict read validator (``_safe_decode_stamp``)
+            # only accepts ``0 < stamp``, so a stamp-0 value reads back as raw bytes
+            # -> StateSerializationError on every read and never sweeps. We reject
+            # at write time rather than widen the read validator to ``0 <=`` on
+            # purpose: the ``0 <`` guard is what stops a genuine un-stamped legacy
+            # value whose first 8 bytes happen to be ``\x00`` * 8 from being
+            # mis-read as an expire-at-epoch stamp and silently stripped/swept.
+            # Caught by the #14 validate-before-stage + FAILED handling, so nothing
+            # is committed. We reject rather than clamp: a clamped expiry would
+            # silently change the record's TTL semantics.
             raise ValueError(
-                f"ttl=... produced a negative expiry ({expiry} ms) from "
-                f"timestamp={timestamp} and ttl={ttl!r}; a pre-epoch or negative "
-                "event-time cannot be TTL-stamped."
+                f"ttl=... produced a non-positive expiry ({expiry} ms) from "
+                f"timestamp={timestamp} and ttl={ttl!r}; a pre-epoch, negative, or "
+                "exactly-zero (epoch-ms 0) event-time expiry cannot be TTL-stamped."
             )
         if expiry >= _MAX_PLAUSIBLE_STAMP_MS:
             # Symmetric upper bound (review re-review #3): a stamp this large
@@ -447,6 +462,13 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         except ValueError:
             self._status = PartitionTransactionStatus.FAILED
             raise
+        if ttl is not None:
+            # A genuine live ``ttl=`` write on an already-flipped partition (the
+            # stamp is non-sentinel by construction). Record it so the §5.4
+            # corroboration hook in :meth:`prepare` can confirm a provisional
+            # cold-adoption. Harmless on a normal flipped store (the hook no-ops
+            # unless ``_adopt_provisional`` is set).
+            self._batch_has_ttl_writes = True
         try:
             value_serialized = self._serialize_value(value)
         except Exception:
@@ -481,6 +503,10 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         except ValueError:
             self._status = PartitionTransactionStatus.FAILED
             raise
+        if ttl is not None:
+            # See :meth:`_set_default_cf_stamped`: mark the batch as carrying a
+            # live ttl= write so §5.4 corroboration can fire.
+            self._batch_has_ttl_writes = True
         key_serialized = self._serialize_key(key, prefix=prefix)
         self._delete_stale_index_entry(key_serialized, prefix, stamp)
         stamped = encode_ttl_value(stamp, value)
@@ -658,11 +684,42 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         try:
             self._persist_counter()
             self._maybe_flip_or_reject(processed_offsets=processed_offsets)
+            self._maybe_corroborate_adoption()
             self._sweep_expired_into_cache_if_enabled()
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
         super().prepare(processed_offsets=processed_offsets)
+        # Finding #1: run the DEFERRED, irreversible corroboration teardown (drop
+        # the ``__ttl_adopt_backup__`` CF) ONLY after ``super().prepare()`` has
+        # produced the changelog records. A producer error there raises above and
+        # skips this, so the backup stays intact and rollback is still possible
+        # after a failed prepare. A crash between here and the flush is reconciled at
+        # the next open (the durable done-marker proves corroboration succeeded).
+        if self._corroborated_this_tx:
+            self._partition.finalize_corroboration_teardown()
+
+    def _maybe_corroborate_adoption(self) -> None:
+        """
+        §5.4 corroboration hook. A live ``state.set(..., ttl=...)`` write (which
+        sets ``_batch_has_ttl_writes`` and always produces a non-sentinel stamp)
+        on a PROVISIONALLY cold-adopted partition confirms the adoption is genuine.
+        Runs AFTER :meth:`_maybe_flip_or_reject` (so the runtime flip state is
+        settled) and BEFORE the sweep (so the corroborating flush's sweep, now
+        un-suppressed, can reclaim now-past adopted records). A plain ``set()``
+        (sentinel, no ``ttl=``) never sets ``_batch_has_ttl_writes`` and so never
+        corroborates — legacy apps do plain sets too. One-time per partition.
+        """
+        partition = self._partition
+        if (
+            self._batch_has_ttl_writes
+            and partition.uses_ttl_stamps
+            and partition._adopt_provisional  # noqa: SLF001
+        ):
+            partition.corroborate_adoption()
+            # Defer the irreversible backup drop to after ``super().prepare()`` —
+            # see :meth:`prepare` (finding #1).
+            self._corroborated_this_tx = True
 
     def _sweep_expired_into_cache_if_enabled(self) -> None:
         """
@@ -896,7 +953,28 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "for the triggering batch. This is a framework invariant "
                 "violation (a flip requires at least one ttl= write)."
             )
-        return enable_time_ms + ttl_ms
+        # Clamp the ADDITIVE sum (review re-review #4): unlike the per-write
+        # ``_compute_stamp`` path — which rejects an implausible stamp as a caller
+        # error — the backfill derives its expiry from ``high_water + ttl``, so an
+        # individually valid ttl can still sum ``>= _MAX_PLAUSIBLE_STAMP_MS`` and
+        # become unreadable. Keep such records never-expiring (still readable)
+        # rather than rejecting the whole flip. Plausible sums pass through
+        # unchanged.
+        expiry_ms = enable_time_ms + ttl_ms
+        clamped = clamp_additive_expiry(expiry_ms)
+        if clamped != expiry_ms:
+            logger.warning(
+                "Legacy-TTL backfill expiry high_water(%d) + ttl(%d) = %d exceeds "
+                "the maximum readable stamp (%d) at path=%s; clamping to "
+                "never-expire (SENTINEL) so the backfilled records stay readable. "
+                "Configure a smaller legacy_records_ttl for a finite window.",
+                enable_time_ms,
+                ttl_ms,
+                expiry_ms,
+                _MAX_PLAUSIBLE_STAMP_MS,
+                getattr(self._partition, "path", "<memory>"),
+            )
+        return clamped
 
     def _restamp_default_cf_cache_for_flip(
         self, skip_keys: Optional[Set[bytes]] = None

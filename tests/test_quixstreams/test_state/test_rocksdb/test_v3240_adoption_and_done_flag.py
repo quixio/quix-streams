@@ -134,9 +134,8 @@ class TestSentinelOnlyAdoption:
         partition = _rocksdb_partition(
             tmp_path,
             name="sentinel",
-            # v3.24.0 adoption is opt-in; assert the adopt behavior with the flag
-            # set (the no-flag path is covered in test_v3240_adoption_opt_in).
-            options=RocksDBOptions(adopt_v3240_stamps=True),
+            # v3.24.0 adoption is now AUTOMATIC (no flag). The cold-rebuild path
+            # auto-adopts provisionally when 100% of censused values are stamped.
             changelog_producer=producer,
         )
         with caplog.at_level(logging.INFO):
@@ -379,10 +378,14 @@ def _read_memory_tx(partition, key, prefix=b"pfx", timestamp=None):
 
 
 class TestMemoryV3240Adoption:
-    """Memory v3.24.0 adoption is OPT-IN, mirroring the RocksDB
-    ``adopt_v3240_stamps`` contract. Split from the former single
-    auto-adopt assertion into (a) no-flag detection-only, (b) flag adopts, and
-    (c) a ``set_bytes`` false-positive that must stay untouched."""
+    """Memory v3.24.0 adoption is AUTOMATIC (spec §5.7, mirroring the RocksDB
+    cold-regime auto-adopt). The ``adopt_v3240_stamps`` flag is REMOVED.
+
+    Reworked from the original opt-in suite:
+    - (a) auto-adopts provisionally (was: stays legacy + CRITICAL)
+    - (b) auto-adopts without any flag (was: flag=True adopts)
+    - (c) false-positive auto-adopts provisionally (was: stays legacy + CRITICAL)
+    """
 
     def _all_stamped_msgs(self, now_ms):
         expiry = now_ms + 7 * DAY_MS
@@ -399,75 +402,66 @@ class TestMemoryV3240Adoption:
             payload[key] = val
         return msgs, raw_by_key, payload
 
-    def test_no_flag_stays_legacy_and_criticals(self, caplog):
+    def test_memory_auto_adopts_provisionally(self, caplog):
         """(a) A default-constructed memory partition replaying an all-stamped
-        header-absent changelog must NOT flip.
+        (>=1 future) header-absent changelog must auto-adopt PROVISIONALLY.
 
-        RED (HEAD): the memory backend auto-adopts (``uses_ttl_stamps`` True) and
-        an ``adopted`` INFO is logged.
-        GREEN: stays legacy, a CRITICAL naming ``adopt_v3240_stamps`` is logged,
-        every value is byte-identical, and the census is discarded."""
+        RED on HEAD: HEAD stays legacy and logs a CRITICAL naming the removed
+        ``adopt_v3240_stamps`` flag.
+        GREEN: auto-adopts, no CRITICAL naming the removed flag."""
         producer = _make_producer_mock()
         now_ms = 1_780_000_000_000
-        msgs, raw_by_key, _ = self._all_stamped_msgs(now_ms)
+        msgs, _, payload = self._all_stamped_msgs(now_ms)
 
         partition = MemoryStorePartition(changelog_producer=producer)
         with caplog.at_level(logging.INFO):
             _replay_memory(partition, msgs, now_ms=now_ms)
             partition.complete_recovery()
 
-        assert partition.uses_ttl_stamps is False, "no-flag memory must stay legacy"
-        assert any(
+        assert (
+            partition.uses_ttl_stamps is True
+        ), "Memory must auto-adopt provisionally (no flag needed)"
+        # Values read back stripped.
+        for key, expected in payload.items():
+            val = _read_memory_tx(partition, key, timestamp=now_ms)
+            assert val == expected, f"adopted record {key!r}: expected {expected!r}"
+        # No CRITICAL naming the removed flag.
+        assert not any(
             r.levelno >= logging.CRITICAL and "adopt_v3240_stamps" in r.message
             for r in caplog.records
-        ), "a CRITICAL naming adopt_v3240_stamps must be logged"
-        assert not any(
-            "adopted" in r.message.lower() and r.levelno >= logging.INFO
-            for r in caplog.records
-        ), "no adoption may happen without the flag"
-        # Byte-identical: every value untouched in the store.
-        default = partition._state.get("default", {})
-        for raw_key, stamped in raw_by_key.items():
-            assert default.get(raw_key) == stamped, "values must be byte-identical"
-        # Fix 4 (review re-review #4): the census is QUARANTINED (preserved as the
-        # repair vector), NOT discarded, on the unflipped all-stamped Branch-B path.
-        census = partition._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
-        assert set(census.keys()) == set(raw_by_key.keys())
+        ), "No CRITICAL naming the removed flag should be emitted"
         partition.close()
 
-    def test_flag_adopts(self, caplog):
-        """(b) The ported happy path: ``adopt_v3240_stamps=True`` adopts — values
-        read back stripped, partition flipped, INFO adoption log emitted."""
+    def test_memory_auto_adopts_reads_stripped(self, caplog):
+        """(b) Auto-adopted values read back stripped. No flag needed.
+
+        RED on HEAD: requires ``adopt_v3240_stamps=True`` to adopt."""
         producer = _make_producer_mock()
         now_ms = 1_780_000_000_000
         msgs, _, payload = self._all_stamped_msgs(now_ms)
 
-        partition = MemoryStorePartition(
-            changelog_producer=producer, adopt_v3240_stamps=True
-        )
+        partition = MemoryStorePartition(changelog_producer=producer)
         with caplog.at_level(logging.INFO):
             _replay_memory(partition, msgs, now_ms=now_ms)
             partition.complete_recovery()
 
-        assert partition.uses_ttl_stamps is True, "flag must adopt (flip)"
+        assert partition.uses_ttl_stamps is True, "auto-adopt must flip"
         for key, expected in payload.items():
             val = _read_memory_tx(partition, key, timestamp=now_ms)
             assert val == expected, f"adopted record {key!r}: expected {expected!r}"
         assert any(
             "adopted" in r.message.lower() and r.levelno >= logging.INFO
             for r in caplog.records
-        ), "adoption INFO log must be emitted with the flag set"
-        # Read-only property mirrors the RocksDB surface.
-        assert partition.adopt_v3240_stamps is True
+        ), "adoption log must be emitted"
         partition.close()
 
-    def test_set_bytes_false_positive_no_flag_untouched(self, caplog):
-        """(c) A legacy ``set_bytes`` store whose values begin with plausible
-        big-endian 8-byte prefixes (``struct.pack(">Q", n) + bytes``) replays.
+    def test_set_bytes_false_positive_auto_adopts_provisionally(self, caplog):
+        """(c) A legacy ``set_bytes`` store whose values look like stamps is
+        provisionally auto-adopted (wrong but REVERSIBLE: sweep suppressed,
+        rollback via env var).
 
-        RED (HEAD): memory auto-flips → the store enters TTL mode.
-        GREEN: no flip, a CRITICAL is logged, every value is byte-identical, and
-        NO changelog tombstone (``value=None``) is ever produced."""
+        RED on HEAD: stays legacy + CRITICAL.
+        GREEN: auto-adopts provisionally, no CRITICAL, sweep suppressed."""
         import struct
 
         producer = _make_producer_mock()
@@ -477,8 +471,6 @@ class TestMemoryV3240Adoption:
         raw_by_key = {}
         for i in range(4):
             raw_key = b"pfx|" + json_dumps(f"k{i}")
-            # A counter/epoch-ms value written via set_bytes() — its first 8 bytes
-            # decode as a plausible stamp, but it is genuine user data.
             set_bytes_value = struct.pack(">Q", now_ms + i) + f"user-data-{i}".encode()
             msgs.append((raw_key, set_bytes_value, "default", False))
             raw_by_key[raw_key] = set_bytes_value
@@ -488,21 +480,24 @@ class TestMemoryV3240Adoption:
             _replay_memory(partition, msgs, now_ms=now_ms)
             partition.complete_recovery()
 
-        assert partition.uses_ttl_stamps is False, "set_bytes store must NOT flip"
-        assert any(
+        # Auto-adopts provisionally (wrong but reversible).
+        assert (
+            partition.uses_ttl_stamps is True
+        ), "set_bytes false-positive must auto-adopt provisionally"
+        # No CRITICAL naming the removed flag.
+        assert not any(
             r.levelno >= logging.CRITICAL and "adopt_v3240_stamps" in r.message
             for r in caplog.records
         )
-        default = partition._state.get("default", {})
-        for raw_key, value in raw_by_key.items():
-            assert default.get(raw_key) == value, "set_bytes values byte-identical"
-        # No changelog tombstone was produced (data is not deleted).
+        # No changelog tombstone produced (sweep suppressed while provisional).
         produced_none = [
             call
             for call in producer.produce.call_args_list
             if call.kwargs.get("value") is None
         ]
-        assert produced_none == [], "no tombstone may be produced for a legacy store"
+        assert (
+            produced_none == []
+        ), "Sweep must be suppressed: no tombstones produced while provisional"
         partition.close()
 
 
