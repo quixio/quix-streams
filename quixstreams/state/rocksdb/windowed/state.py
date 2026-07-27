@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Iterable, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional
 
 from quixstreams.state.base import TransactionState
 from quixstreams.state.types import ExpiredWindowDetail, WindowDetail, WindowedState
@@ -163,6 +163,51 @@ class WindowedTransactionState(TransactionState, WindowedState):
             start_to_ms=start_to_ms,
             prefix=self._prefix,
             backwards=backwards,
+        )
+
+    def iter_windows(
+        self,
+        start_from_ms: int = 0,
+        start_to_ms: Optional[int] = None,
+        backwards: bool = False,
+    ) -> Iterator[WindowDetail]:
+        """
+        Lazily iterate over the windows of the current message key, ordered by
+        window start.
+
+        Unlike `get_windows()`, the lower bound is **inclusive** (so a window
+        starting at 0 is returned for `start_from_ms=0`), the upper bound is
+        optional, and the result is a generator rather than a materialised list.
+
+        :param start_from_ms: The minimal window start time, inclusive.
+        :param start_to_ms: The maximum window start time, inclusive.
+            `None` means unbounded.
+        :param backwards: If True, yields windows from the greatest start down.
+        :return: An iterator of tuples in the format `((start, end), value, prefix)`.
+        """
+        return self._transaction.iter_windows(
+            prefix=self._prefix,
+            start_from_ms=start_from_ms,
+            start_to_ms=start_to_ms,
+            backwards=backwards,
+        )
+
+    def get_expiry_checkpoint(self) -> Optional[int]:
+        """
+        Get the start timestamp of the last expired window for the current message
+        key, or `None` if no window has expired yet.
+        """
+        return self._transaction.get_expiry_checkpoint(prefix=self._prefix)
+
+    def set_expiry_checkpoint(self, timestamp_ms: int) -> None:
+        """
+        Store the start timestamp of the last expired window for the current
+        message key.
+
+        :param timestamp_ms: the start timestamp of the last expired window.
+        """
+        self._transaction.set_expiry_checkpoint(
+            timestamp_ms=timestamp_ms, prefix=self._prefix
         )
 
     def delete_windows(self, max_start_time: int, delete_values: bool) -> None:

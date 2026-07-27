@@ -2,6 +2,8 @@ import abc
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Generic, Optional, TypeVar, Union
 
+from quixstreams.core.stream.exceptions import InvalidOperation
+
 from .aggregations import (
     BaseAggregator,
     BaseCollector,
@@ -116,7 +118,10 @@ class WindowDefinition(abc.ABC, Generic[WindowT]):
         )
 
     def reduce(
-        self, reducer: Callable[[Any, Any], Any], initializer: Callable[[Any], Any]
+        self,
+        reducer: Callable[[Any, Any], Any],
+        initializer: Callable[[Any], Any],
+        merger: Optional[Callable[[Any, Any], Any]] = None,
     ) -> WindowT:
         """
         Configure the window to perform a custom aggregation using `reducer`
@@ -150,13 +155,24 @@ class WindowDefinition(abc.ABC, Generic[WindowT]):
             The returned value will be saved to the state store and sent downstream.
         :param initializer: A function to call for every first element of the window.
             This function is used to initialize the aggregation within a window.
+        :param merger: A function that takes two accumulated values and returns a
+            single one. Required by session windows only, which may merge two open
+            sessions when a late event bridges them. The `reducer` cannot be reused
+            here because it takes a raw value, not a second accumulated value.
+            Default - `None`.
 
         :return: A window configured to perform custom reduce aggregation on the data.
         """
 
         return self._create_window(
             func_name="reduce",
-            aggregators={"value": Reduce(reducer=reducer, initializer=initializer)},
+            aggregators={
+                "value": Reduce(
+                    reducer=reducer,
+                    initializer=initializer,
+                    merger=merger,
+                )
+            },
         )
 
     def max(self) -> WindowT:
@@ -544,10 +560,10 @@ class SessionWindowDefinition(WindowDefinition):
     """
     Definition for session windows that group events by activity sessions.
 
-    Session windows group events that occur within a specified timeout period.
+    Session windows group events separated by no more than `inactivity_gap_ms`.
     A session starts with the first event and extends each time a new event arrives
-    within the timeout period. The session closes after the timeout period with no
-    new events.
+    within the inactivity gap. The session closes once the watermark passes
+    `last event + inactivity_gap_ms + grace_ms`.
     """
 
     def __init__(
@@ -559,16 +575,22 @@ class SessionWindowDefinition(WindowDefinition):
         on_late: Optional[WindowOnLateCallback] = None,
     ):
         if not isinstance(inactivity_gap_ms, int):
-            raise TypeError("Session timeout must be an integer")
+            raise TypeError("inactivity_gap_ms must be an integer")
         if inactivity_gap_ms < 1:
-            raise ValueError("Session timeout cannot be smaller than 1ms")
+            raise ValueError("inactivity_gap_ms cannot be smaller than 1ms")
+        if not isinstance(grace_ms, int):
+            raise TypeError("grace_ms must be an integer")
         if grace_ms < 0:
-            raise ValueError("Session grace cannot be smaller than 0ms")
+            raise ValueError("grace_ms cannot be smaller than 0ms")
 
         super().__init__(name, dataframe, on_late)
 
         self._inactivity_gap_ms = inactivity_gap_ms
         self._grace_ms = grace_ms
+
+    @property
+    def inactivity_gap_ms(self) -> int:
+        return self._inactivity_gap_ms
 
     @property
     def grace_ms(self) -> int:
@@ -587,6 +609,27 @@ class SessionWindowDefinition(WindowDefinition):
         aggregators: Optional[dict[str, BaseAggregator]] = None,
         collectors: Optional[dict[str, BaseCollector]] = None,
     ) -> SessionWindow:
+        # Session windows may merge two open sessions when a late event bridges
+        # them, which requires combining their aggregation states. Validate that
+        # here - the single choke point every builder goes through - so that a
+        # pipeline that cannot work fails at build time rather than hours into a
+        # production stream on a data-dependent code path.
+        non_mergeable = [
+            column
+            for column, aggregator in (aggregators or {}).items()
+            if not aggregator.mergeable
+        ]
+        if non_mergeable:
+            raise InvalidOperation(
+                f"Aggregations {non_mergeable} cannot be used with session windows "
+                f"because they do not implement `merge`. Session windows may merge "
+                f"two open sessions into one when a late event bridges them, which "
+                f"requires combining their aggregation states. Use a mergeable "
+                f"aggregation (Count, Sum, Mean, Min, Max, First, Last, Earliest, "
+                f"Latest, Collect), pass `merger=` to `Reduce`, or implement "
+                f"`merge()` on your custom aggregator."
+            )
+
         if func_name:
             window_type: Union[
                 type[SessionWindowSingleAggregation],
@@ -596,7 +639,7 @@ class SessionWindowDefinition(WindowDefinition):
             window_type = SessionWindowMultiAggregation
 
         return window_type(
-            timeout_ms=self._inactivity_gap_ms,
+            inactivity_gap_ms=self._inactivity_gap_ms,
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),
             dataframe=self._dataframe,

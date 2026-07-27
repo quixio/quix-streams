@@ -152,7 +152,7 @@ class RocksDBStorePartition(StorePartition):
     def iter_items(
         self,
         lower_bound: bytes,  # inclusive
-        upper_bound: bytes,  # exclusive
+        upper_bound: Optional[bytes] = None,  # exclusive
         backwards: bool = False,
         cf_name: str = "default",
     ) -> Iterator[tuple[bytes, bytes]]:
@@ -161,20 +161,43 @@ class RocksDBStorePartition(StorePartition):
 
         :param lower_bound: The lower bound key (inclusive) for the iteration range.
         :param upper_bound: The upper bound key (exclusive) for the iteration range.
+            `None` means the range is unbounded above. Unbounded iteration cannot be
+            combined with `backwards=True` because there is no key to seek to first.
         :param backwards: If `True`, iterate in reverse order (descending).
             Default is `False` (ascending).
         :param cf_name: The name of the column family to iterate over.
             Default is "default".
         :return: An iterator yielding (key, value) tuples.
+
+        NOTE: The pinned `rocksdict` version yields zero rows when only
+        `set_iterate_lower_bound` is called on `ReadOptions` without an upper
+        bound, so the `ReadOptions` bounds are set only when `upper_bound` is
+        provided; in the unbounded forward case, `from_key=lower_bound` alone
+        guarantees no key below `lower_bound` is yielded.
         """
+        if backwards:
+            if upper_bound is None:
+                raise ValueError(
+                    "Backwards iteration requires an upper bound to seek from"
+                )
+            from_key = upper_bound
+        else:
+            from_key = lower_bound
+
         cf = self.get_or_create_column_family(cf_name=cf_name)
 
-        # Set iterator bounds to reduce IO by limiting the range of keys fetched
+        # Set iterator bounds to reduce IO by limiting the range of keys fetched.
+        # NOTE: Setting ONLY the lower bound (no upper bound) makes the rocksdict
+        # iterator yield zero rows, so both bounds are set together or not at all.
+        # Skipping the lower bound when `upper_bound` is None is safe: a forward
+        # seek to `from_key=lower_bound` never yields keys below `lower_bound`,
+        # and the backwards branch (which always has an upper bound) additionally
+        # filters `key < lower_bound` manually below. Do not "restore" the
+        # lone lower bound.
         read_opt = ReadOptions()
-        read_opt.set_iterate_lower_bound(lower_bound)
-        read_opt.set_iterate_upper_bound(upper_bound)
-
-        from_key = upper_bound if backwards else lower_bound
+        if upper_bound is not None:
+            read_opt.set_iterate_lower_bound(lower_bound)
+            read_opt.set_iterate_upper_bound(upper_bound)
 
         # RDict accepts Any type as value but we only write bytes so we should only get bytes back.
         items = cast(

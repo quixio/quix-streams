@@ -504,16 +504,16 @@ sdf = (
 
 ## Session Windows
 
-Session windows group events that occur within a specified timeout period. Unlike fixed-time windows (tumbling, hopping, sliding), session windows have dynamic durations based on the actual timing of events. This makes them ideal for user activity tracking, fraud detection, and other event-driven scenarios.
+Session windows group events that are separated by no more than a configured inactivity gap. Unlike fixed-time windows (tumbling, hopping, sliding), session windows have dynamic durations based on the actual timing of events. This makes them ideal for user activity tracking, fraud detection, and other event-driven scenarios.
 
-A session starts with the first event and extends each time a new event arrives within the timeout period. The session closes after the timeout period with no new events.
+A session starts with the first event and extends each time a new event arrives within `inactivity_gap_ms` of the session's current boundary. The session closes once the watermark advances past `last_event + inactivity_gap + grace`.
 
 Key characteristics of session windows:
 
-- **Dynamic boundaries**: Each session can have different start and end times based on actual events
-- **Activity-based**: Sessions extend automatically when events arrive within the timeout period  
-- **Event-driven closure**: Sessions close when no events arrive within the timeout period
-- **Grace period support**: Late events can still extend sessions if they arrive within the grace period
+- **Dynamic boundaries**: Each session can have different start and end times based on actual events.
+- **Activity-based**: Sessions extend automatically when events arrive within the inactivity gap.
+- **Merging**: An out-of-order event that falls within one gap of two open sessions merges them into one.
+- **Grace period support**: The grace period delays closing, giving late events more time to arrive.
 
 ### How Session Windows Work
 
@@ -521,20 +521,24 @@ Key characteristics of session windows:
 Time:    0    5    10   15   20   25   30   35   40   45   50
 Events:  A         B              C    D              E
 
-Timeout: 10 seconds
-Grace:   2 seconds
+inactivity_gap_ms: 10 seconds
+grace_ms:           2 seconds
 
-Session 1: [0, 20] - Events A, B (B extends the session from A)
-Session 2: [25, 40] - Events C, D (D extends the session from C)
-Session 3: [45, 55] - Event E (session will close at 55 if no more events)
+Session 1: [0, 11)  - events A(0), B(10)    closes when the watermark passes 22
+Session 2: [25, 31) - events C(25), D(30)   closes when the watermark passes 42
+Session 3: [45, 46) - event E(45)           closes when the watermark passes 57
 ```
 
 In this example:
-- Event A starts Session 1 at time 0, session would timeout at time 10
-- Event B arrives at time 10, extending Session 1 to timeout at time 20
-- Event C arrives at time 25, starting Session 2 (too late for Session 1)
-- Event D arrives at time 30, extending Session 2 to timeout at time 40
-- Event E arrives at time 45, starting Session 3
+- Event A at time 0 starts Session 1 as `[0, 1)`. `end` is `last event + 1` (exclusive).
+- Event B at time 10 is within one gap of Session 1 (Session 1's `end + gap = 1 + 10 = 11 > 10`), so it extends Session 1 to `[0, 11)`.
+- Event C at time 25 cannot extend Session 1: Session 1's `end + gap = 11 + 10 = 21 ≤ 25`. C starts Session 2 as `[25, 26)`.
+- Event D at time 30 extends Session 2 to `[25, 31)`.
+- Event E at time 45 cannot extend Session 2 (Session 2's `end + gap = 31 + 10 = 41 ≤ 45`). E starts Session 3 as `[45, 46)`.
+
+`end` is always **exclusive**: the last event's timestamp plus one. Session 1's `end` of 11 means it contains events with timestamps up to and including 10.
+
+A session closes when the watermark passes `last_event + inactivity_gap + grace`. With `grace_ms=0` there is still a full inactivity gap of out-of-order tolerance: an event is accepted as long as its timestamp falls within `gap` of an existing session boundary.
 
 ### Basic Session Window Example
 
@@ -558,27 +562,20 @@ from quixstreams.dataframe.windows import Count, Collect
 app = Application(...)
 sdf = app.dataframe(...)
 
-sdf = (
-    # Define a session window with 30-minute timeout and 5-minute grace period
-    .session_window(
-        timeout_ms=timedelta(minutes=30),
-        grace_ms=timedelta(minutes=5)
-    )
-
+sdf = sdf.session_window(
+    # Define a session window with 30-minute inactivity gap and 5-minute grace period
+    inactivity_gap_ms=timedelta(minutes=30),
+    grace_ms=timedelta(minutes=5)
+).agg(
     # Count the number of actions in each session and collect all actions
-    .agg(
-        action_count=Count(),
-        actions=Collect("user_action")
-    )
-
-    # Emit results when sessions are complete
-    .final()
-)
+    action_count=Count(),
+    actions=Collect("user_action")
+).final()
 
 # Expected output (when session expires):
 # {
 #   "start": 1000,
-#   "end": 2000000,  # timestamp of last event
+#   "end": 2000001,  # exclusive: last event timestamp (2000000) + 1
 #   "action_count": 4,
 #   "actions": ["page_view", "click", "page_view", "purchase"]
 # }
@@ -603,24 +600,19 @@ from quixstreams.dataframe.windows import Sum, Count
 app = Application(...)
 sdf = app.dataframe(...)
 
-sdf = (
-    # Define a session window with 10-second timeout
-    .session_window(timeout_ms=timedelta(seconds=10))
-
+sdf = sdf.session_window(
+    # Define a session window with 10-second inactivity gap
+    inactivity_gap_ms=timedelta(seconds=10)
+).agg(
     # Track total purchase amount and count in each session
-    .agg(
-        total_amount=Sum("amount"),
-        purchase_count=Count()
-    )
+    total_amount=Sum("amount"),
+    purchase_count=Count()
+).current()
 
-    # Emit updates for each message (real-time session tracking)
-    .current()
-)
-
-# Output for each incoming event:
-# Event 1: {"start": 1000, "end": 1000, "total_amount": 25, "purchase_count": 1}
-# Event 2: {"start": 1000, "end": 5000, "total_amount": 75, "purchase_count": 2}
-# Event 3: {"start": 1000, "end": 8000, "total_amount": 125, "purchase_count": 3}
+# Output for each incoming event (end is exclusive: last event timestamp + 1):
+# Event 1: {"start": 1000, "end": 1001, "total_amount": 25, "purchase_count": 1}
+# Event 2: {"start": 1000, "end": 5001, "total_amount": 75, "purchase_count": 2}
+# Event 3: {"start": 1000, "end": 8001, "total_amount": 125, "purchase_count": 3}
 ```
 
 ### Handling Late Events in Sessions
@@ -643,16 +635,12 @@ def on_late_session_event(
 app = Application(...)
 sdf = app.dataframe(...)
 
-sdf = (
-    # Session window with 5-minute timeout and 1-minute grace period
-    .session_window(
-        timeout_ms=timedelta(minutes=5),
-        grace_ms=timedelta(minutes=1),
-        on_late=on_late_session_event
-    )
-    .agg(event_count=Count())
-    .final()
-)
+sdf = sdf.session_window(
+    # Session window with 5-minute inactivity gap and 1-minute grace period
+    inactivity_gap_ms=timedelta(minutes=5),
+    grace_ms=timedelta(minutes=1),
+    on_late=on_late_session_event
+).agg(event_count=Count()).final()
 ```
 
 ### Session Window Use Cases
@@ -660,52 +648,48 @@ sdf = (
 **1. User Activity Tracking**
 ```python
 # Track user sessions on a website or app
-.session_window(timeout_ms=timedelta(minutes=30))
-.agg(
+sdf.session_window(inactivity_gap_ms=timedelta(minutes=30)).agg(
     page_views=Count(),
-    unique_pages=Count("page_url", unique=True),
-    session_duration=Max("timestamp") - Min("timestamp")
-)
+    pages_visited=Collect("page_url"),
+    total_time_ms=Sum("duration_ms"),
+).final()
 ```
 
 **2. Fraud Detection**
 ```python
 # Detect suspicious transaction patterns
-.session_window(timeout_ms=timedelta(minutes=10))
-.agg(
+sdf.session_window(inactivity_gap_ms=timedelta(minutes=10)).agg(
     transaction_count=Count(),
     total_amount=Sum("amount"),
-    locations=Collect("location")
-)
+    locations=Collect("location"),
+).final()
 ```
 
 **3. IoT Device Monitoring**
 ```python
 # Monitor device activity sessions
-.session_window(timeout_ms=timedelta(hours=1))
-.agg(
+sdf.session_window(inactivity_gap_ms=timedelta(hours=1)).agg(
     readings_count=Count(),
     avg_temperature=Mean("temperature"),
-    max_pressure=Max("pressure")
-)
+    max_pressure=Max("pressure"),
+).final()
 ```
 
 **4. Gaming Analytics**
 ```python
 # Track gaming sessions
-.session_window(timeout_ms=timedelta(minutes=20))
-.agg(
+sdf.session_window(inactivity_gap_ms=timedelta(minutes=20)).agg(
     actions_performed=Count(),
     points_earned=Sum("points"),
-    levels_completed=Count("level_completed")
-)
+    levels_completed=Count("level_completed"),
+).final()
 ```
 
 ### Session Window Parameters
 
-- **`timeout_ms`**: The session timeout period. If no new events arrive within this period, the session will be closed. Can be specified as either an `int` (milliseconds) or a `timedelta` object.
+- **`inactivity_gap_ms`**: The maximum gap between two consecutive events of the same session. If no new event arrives within this interval of an existing session's boundary, the session closes. Can be specified as either an `int` (milliseconds) or a `timedelta` object.
 
-- **`grace_ms`**: The grace period for data arrival. Allows late-arriving data to be included in the session, even if it arrives after the session has theoretically timed out. Can be specified as either an `int` (milliseconds) or a `timedelta` object.
+- **`grace_ms`**: Delays closing by this amount, giving late events extra time to arrive. An event is late only when its timestamp falls below `watermark - inactivity_gap - grace`. With `grace_ms=0` (the default) there is still a full inactivity gap of out-of-order tolerance. Can be specified as either an `int` (milliseconds) or a `timedelta` object.
 
 - **`name`**: Optional unique identifier for the window. If not provided, it will be automatically generated based on the window's properties.
 
@@ -713,17 +697,21 @@ sdf = (
 
 ### Session Window Behavior
 
-**Session Creation**: A new session starts when an event arrives and no existing session can accommodate it (i.e., all existing sessions have timed out).
+**Merging**: When an out-of-order event falls within one `inactivity_gap_ms` of two open sessions, those two sessions merge into one. The merged session spans from the earlier session's `start` to the later session's `end`. If you use `.current()`, the merged session is emitted as an updated result whose `start` may be earlier than a result the pipeline previously emitted for the same key. Downstream consumers must handle this: a naive upsert keyed only by `(key, start)` will leave an orphan row for each superseded session.
 
-**Session Extension**: An existing session is extended when an event arrives within `timeout + grace_period` of the session's last activity.
+**Out-of-order events**: An event is late only when `ts < watermark - inactivity_gap - grace`. With `grace_ms=0` (the default) there is still a full inactivity gap of out-of-order tolerance — any event whose timestamp falls within `inactivity_gap_ms` of an existing session boundary is accepted. Increasing `grace_ms` extends that tolerance further; it has no effect on which events belong to which session, only on when a session closes.
 
-**Session Closure**: A session closes when the current time exceeds `last_event_time + timeout + grace_period`. The session end time in the output represents the timestamp of the last event in the session.
+**Aggregations**: Session windows require mergeable aggregations because an out-of-order event may bridge two open sessions and their aggregation states must be combined. All nine built-in aggregators (`Count`, `Sum`, `Mean`, `Min`, `Max`, `Earliest`, `Latest`, `First`, `Last`) implement `BaseAggregator.merge()`. Custom aggregations must do the same. `Reduce` requires a `merger=` argument (a function that takes two accumulated states and returns one). Using a non-mergeable aggregation raises `InvalidOperation` (containing `"do not implement \`merge\`"`) when the window is defined, before the pipeline runs.
 
-**Out-of-Order Events**: When out-of-order events arrive within the grace period, they extend the session but do not change the end time if they are older than the current latest event. The end time always represents the timestamp of the chronologically latest event in the session.
+`Collect` works with session windows too, but by a different mechanism: collected values are keyed by timestamp in a separate store and range-fetched over `[start, end)` at expiry. Because a merged session's range is the hull of the two original ranges, the fetch already returns both sessions' values in timestamp order — no `merge()` needed.
 
-**Key Grouping**: Like all windows in Quix Streams, sessions are grouped by message key. Each key maintains its own independent sessions.
+`First` and `Last` fall back to session order under a merge — `First` keeps the earlier session's value, `Last` keeps the later session's. Use `Earliest` and `Latest` when the result must be independent of processing order.
 
-**Event Time**: Sessions use event time (from Kafka message timestamps) rather than processing time.
+**Closing strategies**: With `closing_strategy="key"` (the default), each key's watermark advances only when that key receives an event. A key that goes silent will never have its last open session emitted by `.final()`. With `closing_strategy="partition"`, the partition-wide watermark advances with any message on any key, so idle keys' sessions eventually close and are emitted. This is the right choice when you need `.final()` to emit a session after a period of inactivity. The trade-off is a partition sweep each time the watermark crosses the next session's closing threshold.
+
+**Key grouping**: Like all windows in Quix Streams, sessions are grouped by message key. Each key maintains its own independent sessions.
+
+**Event time**: Sessions use event time (from Kafka message timestamps) rather than processing time.
 
 ## Lateness and Out-of-Order Processing
 When working with event time, some events may be processed later than they're supposed to.  
@@ -1022,11 +1010,11 @@ window specification.
 The state store name is auto-generated by default using the following window attributes:
 
 - Window type: `"tumbling"`, `"hopping"`, `"sliding"`, or `"session"`
-- Window parameters: `duration_ms` and `step_ms` for time-based windows, `timeout_ms` for session windows
+- Window parameters: `duration_ms` and `step_ms` for time-based windows, `inactivity_gap_ms` for session windows
 
 Examples:
 - A hopping window of 30 seconds with a 5 second step: `hopping_window_30000_5000`
-- A session window with 30 second timeout: `session_window_30000`
+- A session window with 30 second inactivity gap: `session_window_30000`
 
 ### Updating Window Definitions
 

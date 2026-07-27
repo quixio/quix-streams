@@ -1,9 +1,12 @@
+from unittest.mock import patch
+
 import pytest
 
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
 )
+from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
 from quixstreams.state.serialization import encode_integer_pair
 from quixstreams.utils.json import dumps
 
@@ -220,35 +223,44 @@ class TestWindowedRocksDBPartitionTransaction:
 
         assert not expired
 
-    def test_get_window_invalid_duration(self, windowed_rocksdb_store_factory):
+    @pytest.mark.parametrize("start_ms, end_ms", [(1, 0), (0, 0)])
+    def test_get_window_invalid_duration(
+        self, windowed_rocksdb_store_factory, start_ms, end_ms
+    ):
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
         prefix = b"__key__"
         with store.start_partition_transaction(0) as tx:
             with pytest.raises(ValueError, match="Invalid window duration"):
-                tx.get_window(start_ms=1, end_ms=0, prefix=prefix)
+                tx.get_window(start_ms=start_ms, end_ms=end_ms, prefix=prefix)
 
-    def test_update_window_invalid_duration(self, windowed_rocksdb_store_factory):
+    @pytest.mark.parametrize("start_ms, end_ms", [(1, 0), (0, 0)])
+    def test_update_window_invalid_duration(
+        self, windowed_rocksdb_store_factory, start_ms, end_ms
+    ):
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
         prefix = b"__key__"
         with store.start_partition_transaction(0) as tx:
             with pytest.raises(ValueError, match="Invalid window duration"):
                 tx.update_window(
-                    start_ms=1,
-                    end_ms=0,
+                    start_ms=start_ms,
+                    end_ms=end_ms,
                     value=1,
                     timestamp_ms=1,
                     prefix=prefix,
                 )
 
-    def test_delete_window_invalid_duration(self, windowed_rocksdb_store_factory):
+    @pytest.mark.parametrize("start_ms, end_ms", [(1, 0), (0, 0)])
+    def test_delete_window_invalid_duration(
+        self, windowed_rocksdb_store_factory, start_ms, end_ms
+    ):
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
         prefix = b"__key__"
         with store.start_partition_transaction(0) as tx:
             with pytest.raises(ValueError, match="Invalid window duration"):
-                tx.delete_window(start_ms=1, end_ms=0, prefix=prefix)
+                tx.delete_window(start_ms=start_ms, end_ms=end_ms, prefix=prefix)
 
     def test_expire_windows_no_expired(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
@@ -398,3 +410,168 @@ class TestWindowedRocksDBPartitionTransaction:
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(processed_offsets),
             },
         )
+
+
+class TestIterWindows:
+    """
+    Validates spec §7.4: `iter_windows` is the lazy, inclusive-lower-bound
+    counterpart of `get_windows` (B1/B5/B7).
+    """
+
+    def test_inclusive_lower_bound(self, windowed_rocksdb_store_factory):
+        """
+        Validates spec §7.4 (B5 fix): a window starting exactly at
+        `start_from_ms` is included, unlike `get_windows`' exclusive bound.
+        """
+        store = windowed_rocksdb_store_factory()
+        store.assign_partition(0)
+        prefix = b"__key__"
+        with store.start_partition_transaction(0) as tx:
+            tx.update_window(
+                start_ms=0, end_ms=1, value=1, timestamp_ms=0, prefix=prefix
+            )
+
+        with store.start_partition_transaction(0) as tx:
+            result = list(tx.iter_windows(prefix=prefix, start_from_ms=0))
+
+        assert result == [((0, 1), 1, prefix)]
+
+    def test_unbounded_upper_bound(self, windowed_rocksdb_store_factory):
+        """Validates spec §7.4: `start_to_ms=None` means unbounded above."""
+        store = windowed_rocksdb_store_factory()
+        store.assign_partition(0)
+        prefix = b"__key__"
+        with store.start_partition_transaction(0) as tx:
+            tx.update_window(
+                start_ms=0, end_ms=1, value=1, timestamp_ms=0, prefix=prefix
+            )
+            tx.update_window(
+                start_ms=1000, end_ms=1001, value=2, timestamp_ms=1000, prefix=prefix
+            )
+
+        with store.start_partition_transaction(0) as tx:
+            result = list(
+                tx.iter_windows(prefix=prefix, start_from_ms=0, start_to_ms=None)
+            )
+
+        assert result == [((0, 1), 1, prefix), ((1000, 1001), 2, prefix)]
+
+    def test_backwards_returns_greatest_start_first(
+        self, windowed_rocksdb_store_factory
+    ):
+        """Validates spec §7.4: `backwards=True` yields greatest-start-first."""
+        store = windowed_rocksdb_store_factory()
+        store.assign_partition(0)
+        prefix = b"__key__"
+        with store.start_partition_transaction(0) as tx:
+            tx.update_window(
+                start_ms=0, end_ms=1, value=1, timestamp_ms=0, prefix=prefix
+            )
+            tx.update_window(
+                start_ms=1000, end_ms=1001, value=2, timestamp_ms=1000, prefix=prefix
+            )
+
+        with store.start_partition_transaction(0) as tx:
+            result = list(
+                tx.iter_windows(prefix=prefix, start_to_ms=1000, backwards=True)
+            )
+
+        assert result == [((1000, 1001), 2, prefix), ((0, 1), 1, prefix)]
+
+    def test_uncommitted_update_cache_visible(self, windowed_rocksdb_store_factory):
+        """
+        Validates spec §7.4: uncommitted writes made earlier in the same
+        transaction are visible to `iter_windows` before any flush.
+        """
+        store = windowed_rocksdb_store_factory()
+        store.assign_partition(0)
+        prefix = b"__key__"
+        with store.start_partition_transaction(0) as tx:
+            tx.update_window(
+                start_ms=0, end_ms=1, value=1, timestamp_ms=0, prefix=prefix
+            )
+            result = list(tx.iter_windows(prefix=prefix))
+
+        assert result == [((0, 1), 1, prefix)]
+
+    def test_deleted_windows_not_returned(self, windowed_rocksdb_store_factory):
+        """Validates spec §7.4: a window deleted in this transaction's cache
+        must not be yielded, even though it is still on disk."""
+        store = windowed_rocksdb_store_factory()
+        store.assign_partition(0)
+        prefix = b"__key__"
+        with store.start_partition_transaction(0) as tx:
+            tx.update_window(
+                start_ms=0, end_ms=1, value=1, timestamp_ms=0, prefix=prefix
+            )
+
+        with store.start_partition_transaction(0) as tx:
+            tx.delete_window(start_ms=0, end_ms=1, prefix=prefix)
+            result = list(tx.iter_windows(prefix=prefix))
+
+        assert result == []
+
+    def test_is_lazy_does_not_use_materializing_get_items(
+        self, windowed_rocksdb_store_factory
+    ):
+        """
+        Validates spec §7.4 (B7 fix): `iter_windows` must reach its first
+        element without falling back to `_get_items`, the materializing
+        primitive `get_windows` uses. A prefix holding 10k windows would be
+        fully built into a list on every message if this regressed.
+        """
+        store = windowed_rocksdb_store_factory()
+        store.assign_partition(0)
+        prefix = b"__key__"
+        with store.start_partition_transaction(0) as tx:
+            for i in range(10_000):
+                tx.update_window(
+                    start_ms=i, end_ms=i + 1, value=i, timestamp_ms=i, prefix=prefix
+                )
+
+        with store.start_partition_transaction(0) as tx:
+            with patch.object(RocksDBPartitionTransaction, "_get_items") as spy:
+                first = next(tx.iter_windows(prefix=prefix))
+
+        assert first == ((0, 1), 0, prefix)
+        spy.assert_not_called()
+
+
+class TestIterPrefixes:
+    """Validates spec §7.5: `iter_prefixes` (B6 fix)."""
+
+    def test_iter_prefixes_deterministic_order(self, windowed_rocksdb_store_factory):
+        """
+        Three message keys x two windows each, one key present only in the
+        uncommitted cache: exactly three distinct prefixes, in deterministic
+        (byte-sorted) order.
+        """
+        store = windowed_rocksdb_store_factory()
+        store.assign_partition(0)
+        key_a, key_b, key_c = b"key_a", b"key_b", b"key_c"
+
+        with store.start_partition_transaction(0) as tx:
+            tx.update_window(
+                start_ms=0, end_ms=1, value=1, timestamp_ms=0, prefix=key_a
+            )
+            tx.update_window(
+                start_ms=1, end_ms=2, value=1, timestamp_ms=1, prefix=key_a
+            )
+            tx.update_window(
+                start_ms=0, end_ms=1, value=1, timestamp_ms=0, prefix=key_c
+            )
+            tx.update_window(
+                start_ms=1, end_ms=2, value=1, timestamp_ms=1, prefix=key_c
+            )
+
+        with store.start_partition_transaction(0) as tx:
+            # key_b exists only in this transaction's uncommitted update cache.
+            tx.update_window(
+                start_ms=0, end_ms=1, value=1, timestamp_ms=0, prefix=key_b
+            )
+            tx.update_window(
+                start_ms=1, end_ms=2, value=1, timestamp_ms=1, prefix=key_b
+            )
+            prefixes = list(tx.iter_prefixes())
+
+        assert prefixes == [key_a, key_b, key_c]

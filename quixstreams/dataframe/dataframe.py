@@ -1537,10 +1537,11 @@ class StreamingDataFrame:
         """
         Create a session window transformation on this StreamingDataFrame.
 
-        Session windows group events that occur within a specified timeout period.
-        A session starts with the first event and extends each time a new event arrives
-        within the timeout period. The session closes after the timeout period with no
-        new events.
+        Session windows group events that are separated by no more than
+        `inactivity_gap_ms`. A session starts with the first event and extends each
+        time a new event arrives within the inactivity gap of the session's current
+        boundary. The session closes once the watermark passes
+        `last_event + inactivity_gap + grace`.
 
         Unlike fixed-time windows, session windows have dynamic durations based on the
         actual events and their timing, making them ideal for user activity tracking,
@@ -1555,45 +1556,57 @@ class StreamingDataFrame:
         - Every session is grouped by the current Kafka message key.
         - Messages with `None` key will be ignored.
         - Sessions always use the current event time.
+        - Session `end` is **exclusive** (last event timestamp + 1), consistent with
+          all other window types.
+        - An event is late when `ts < watermark - inactivity_gap - grace`. With
+          `grace_ms=0` (the default) there is still a full inactivity gap of
+          out-of-order tolerance.
+        - An out-of-order event within one gap of two open sessions **merges** them
+          into one. All aggregations used with session windows must be mergeable
+          (implement `BaseAggregator.merge()`). Non-mergeable aggregations raise
+          `InvalidOperation` when the window is defined. `Reduce` requires a
+          `merger=` argument.
+        - With `closing_strategy="key"` (the default), a key that goes silent will
+          never have its last open session emitted by `final()`. Use
+          `closing_strategy="partition"` to close idle keys' sessions when other
+          keys advance the partition watermark.
 
         Example Snippet:
 
         ```python
+        from datetime import timedelta
+
         from quixstreams import Application
         import quixstreams.dataframe.windows.aggregations as agg
 
         app = Application()
         sdf = app.dataframe(...)
 
-        sdf = (
-            # Define a session window with 30-second timeout and 10-second grace period
-            sdf.session_window(
-                inactivity_gap_ms=timedelta(seconds=30),
-                grace_ms=timedelta(seconds=10)
-            )
-
+        sdf = sdf.session_window(
+            # Maximum gap between two consecutive events of the same session
+            inactivity_gap_ms=timedelta(seconds=30),
+            grace_ms=timedelta(seconds=10)
+        ).agg(
             # Specify the aggregation function
-            .agg(value=agg.Sum())
-
-            # Specify how the results should be emitted downstream.
-            # "current()" will emit results as they come for each updated session,
-            # possibly producing multiple messages per key-session pair
-            # "final()" will emit sessions only when they are closed and cannot
-            # receive any updates anymore.
-            .final()
-        )
+            value=agg.Sum()
+        ).final()
+        # "current()" emits the running session on every update (including after a
+        # merge, where it supersedes two previously emitted sessions).
+        # "final()" emits each session exactly once, when it is closed.
         ```
 
-        :param inactivity_gap_ms: The session timeout period.
-            If no new events arrive within this period, the session will be closed.
+        :param inactivity_gap_ms: The maximum gap between two consecutive events of
+            the same session. If no new event arrives within this interval of an
+            existing session's boundary, the session closes.
             Can be specified as either an `int` representing milliseconds
             or a `timedelta` object.
             >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
             value.
 
-        :param grace_ms: The grace period for data arrival.
-            It allows late-arriving data to be included in the session,
-            even if it arrives after the session has theoretically timed out.
+        :param grace_ms: Delays closing by this amount, giving late events extra time
+            to arrive. An event is late only when its timestamp falls below
+            `watermark - inactivity_gap - grace`. With the default of `0` there is
+            still a full inactivity gap of out-of-order tolerance.
             Can be specified as either an `int` representing milliseconds
             or a `timedelta` object.
             >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
