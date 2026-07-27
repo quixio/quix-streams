@@ -85,9 +85,7 @@ def _provision_partition(tmp_path, name, n_keys=3, expiry_ms=None, producer=None
     if expiry_ms is None:
         expiry_ms = NOW_MS + 7 * DAY_MS
     msgs = [_v3240_msg(f"k{i}", f"v{i}", expiry_ms) for i in range(n_keys)]
-    partition = _rocksdb_partition(
-        tmp_path, name=name, changelog_producer=producer
-    )
+    partition = _rocksdb_partition(tmp_path, name=name, changelog_producer=producer)
     _replay_default(partition, msgs, now_ms=NOW_MS)
     partition.complete_recovery()
 
@@ -102,8 +100,7 @@ def _provision_partition(tmp_path, name, n_keys=3, expiry_ms=None, producer=None
     # Snapshot the originals from the backup CF.
     backup_cf = partition.get_or_create_column_family(TTL_ADOPT_BACKUP_CF_NAME)
     originals = {
-        bytes(cast(bytes, k)): bytes(cast(bytes, v))
-        for k, v in backup_cf.items()
+        bytes(cast(bytes, k)): bytes(cast(bytes, v)) for k, v in backup_cf.items()
     }
     assert len(originals) == n_keys, "precondition: backup populated"
     return partition, originals
@@ -168,7 +165,9 @@ class TestAbortDuringCorroborationPreservesBackup:
         producer.produce.side_effect = produce_side_effect
 
         # prepare() should raise — the changelog production failed.
-        with pytest.raises(RuntimeError, match="simulated changelog production failure"):
+        with pytest.raises(
+            RuntimeError, match="simulated changelog production failure"
+        ):
             tx.prepare(processed_offsets={"topic": 1})
 
         # THE RED ASSERTION: the backup CF must still exist with all originals.
@@ -181,8 +180,7 @@ class TestAbortDuringCorroborationPreservesBackup:
         )
         backup_cf = partition.get_or_create_column_family(TTL_ADOPT_BACKUP_CF_NAME)
         remaining = {
-            bytes(cast(bytes, k)): bytes(cast(bytes, v))
-            for k, v in backup_cf.items()
+            bytes(cast(bytes, k)): bytes(cast(bytes, v)) for k, v in backup_cf.items()
         }
         assert remaining == originals, (
             "BUG #1: backup values should be intact after an aborted corroboration; "
@@ -255,9 +253,9 @@ class TestRollbackPreservesPostAdoptionWrites:
                 tmp_path, name="rollback_clobber", changelog_producer=producer2
             )
 
-            assert partition2.uses_ttl_stamps is False, (
-                "precondition: store reverted to legacy after rollback"
-            )
+            assert (
+                partition2.uses_ttl_stamps is False
+            ), "precondition: store reverted to legacy after rollback"
 
             # THE RED ASSERTIONS:
             # (a) k0 should be the LATEST committed value, not the stale backup.
@@ -265,9 +263,7 @@ class TestRollbackPreservesPostAdoptionWrites:
             from quixstreams.state.metadata import Marker
 
             val_k0 = partition2.get(raw_k0, cf_name="default")
-            assert val_k0 is not Marker.UNDEFINED, (
-                "k0 should exist after rollback"
-            )
+            assert val_k0 is not Marker.UNDEFINED, "k0 should exist after rollback"
             # The rollback should NOT have clobbered the post-adoption write.
             # BUG: rollback restores the stale pre-adoption value over v_updated.
             # After rollback to legacy, the raw value on disk IS the user value
@@ -422,9 +418,9 @@ class TestCrashMidCorroborationDoesNotPinSweepOff:
 
         # Verify the done-marker IS present (the first _write succeeded).
         system_cf = partition2.get_or_create_column_family(TTL_SYSTEM_CF_NAME)
-        assert system_cf.get(TTL_MIGRATION_DONE_KEY, default=None) is not None, (
-            "precondition: done-marker should be on disk (first _write succeeded)"
-        )
+        assert (
+            system_cf.get(TTL_MIGRATION_DONE_KEY, default=None) is not None
+        ), "precondition: done-marker should be on disk (first _write succeeded)"
 
         # Verify the pending marker is still on disk (the second _write crashed).
         metadata_cf = partition2.get_or_create_column_family(METADATA_CF_NAME)
