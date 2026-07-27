@@ -245,6 +245,12 @@ class RocksDBStorePartition(StorePartition):
         # not decode to a valid stamp.
         self._unstamped_read_warned: bool = False
 
+        # H1 (review batch 4): warn-once guard for an implausibly large event-time
+        # timestamp ignored by :meth:`advance_high_water`. Partition-scoped (same
+        # rationale as ``_unstamped_read_warned``) so a stream of mis-scaled
+        # timestamps logs once, not once per record.
+        self._high_water_warned: bool = False
+
         # #5 (review batch 3): per-partition delivery accounting for the
         # legacy-TTL migration produce sites (live backfill / recovery-completion
         # / done-marker). ``_backfill_produced`` counts records THIS partition
@@ -463,6 +469,28 @@ class RocksDBStorePartition(StorePartition):
             # position, so it must not advance — or establish — the high-water.
             # Left unguarded it set a negative high-water that int_to_bytes (an
             # unsigned >Q packer) then failed to persist with a raw struct.error.
+            return
+        if timestamp >= _MAX_PLAUSIBLE_STAMP_MS:
+            # H1 (review batch 4): an implausibly large event-time (e.g. a ns/µs
+            # timestamp fed where epoch-ms is expected) must not poison the shared
+            # high-water clock that drives the read-expiry filter AND the
+            # destructive sweep (``now_ms = self._high_water_ms``). Symmetric with
+            # the write-side reject in ``transaction.py::_compute_stamp``; IGNORE
+            # (do not advance) rather than raise — matching the negative-timestamp
+            # guard above — so a stray read / no-ttl write can neither crash nor
+            # mass-evict every other still-valid record. Real event-times (~1.7e12)
+            # are far below the 1e15 cap, so valid data is unaffected.
+            if not self._high_water_warned:
+                logger.warning(
+                    "Ignoring implausibly large event-time timestamp %d (>= %d) "
+                    "for the TTL high-water at path=%s; advancing it would poison "
+                    "the read-expiry filter and the sweep. Check for a mis-scaled "
+                    "(nanosecond/microsecond) timestamp on a state read/write.",
+                    timestamp,
+                    _MAX_PLAUSIBLE_STAMP_MS,
+                    self._path,
+                )
+                self._high_water_warned = True
             return
         if self._high_water_ms is None or timestamp > self._high_water_ms:
             self._high_water_ms = timestamp
@@ -2002,14 +2030,31 @@ class RocksDBStorePartition(StorePartition):
             # "flush and proceed" behavior).
             if not isinstance(remaining, int):
                 return
-            # A 0 global backlog means the SHARED producer's queue is fully
-            # drained — every partition's records (including this one's) are
-            # delivered — so return regardless of the ack counter. This also keeps
-            # a delivery-callback-less test double (flush()==0 but no callbacks
-            # fired) working. The cross-partition false-abort only arises when
-            # flush() reports a POSITIVE backlog from a SIBLING partition's wedged
-            # records, which the per-partition accounting below then discounts.
+            # A 0 GLOBAL backlog means the SHARED producer's send queue is fully
+            # drained. For a real producer this also means every delivery callback
+            # has been served, so THIS partition's records are each either acked or
+            # FAILED.
+            # M3 (review batch 4): a record that FAILED delivery is ALSO removed
+            # from the queue (its callback fired with err != None, which never
+            # increments ``_backfill_acked``) — so a drained-but-unacked record on
+            # a partition that produced through the counter-tracked route means a
+            # failed delivery, not a success (e.g. a sibling drained the global
+            # queue while this partition's own record failed). Waiting is pointless
+            # (a failed delivery never acks), so raise rather than let the local
+            # commit proceed ahead of the changelog. When this partition produced
+            # nothing through the counter-tracked route (``_backfill_produced == 0``
+            # — the direct-call unit doubles), ``produced > acked`` is False, so the
+            # pre-existing "0 backlog → return" is preserved unchanged.
             if remaining == 0:
+                if self._backfill_produced > self._backfill_acked:
+                    raise ChangelogFlushError(
+                        f"{self._backfill_produced - self._backfill_acked} "
+                        f"legacy-TTL backfill changelog record(s) drained from the "
+                        f"shared producer queue WITHOUT delivery confirmation (a "
+                        f"failed delivery never acks) at path={self._path}; aborting "
+                        f"before the local commit so the local store never gets "
+                        f"ahead of the changelog."
+                    )
                 return
             # remaining > 0: some backlog exists. Use THIS partition's own
             # outstanding (produced - acked) when it produced through the
@@ -2637,7 +2682,15 @@ class RocksDBStorePartition(StorePartition):
                     continue
                 stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
                 batch.put(key, stamped, default_handle)
-                batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
+                # L1 (review batch 4): a SENTINEL_NEVER (never-expires) expiry must
+                # NOT be indexed — a sentinel-stamped record never expires, so a
+                # ``__ttl_index__`` entry for it is a permanent, never-swept leak
+                # (parity with ``_complete_pending_backfill`` / ``_adopt_v3240_stamps``
+                # / ``_restamp_default_cf_cache_for_flip``). Reachable here via the
+                # resume / ``_resume_interrupted_live_backfill`` fallback and via the
+                # additive-sum clamp (``clamp_additive_expiry``).
+                if expires_at_ms != SENTINEL_NEVER:
+                    batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
                 # LEDGER this key as stamped IN THE SAME batch, so a crash cannot
                 # leave a key stamped-on-disk but absent from the resume ledger
                 # (which would double-wrap it on the next run).

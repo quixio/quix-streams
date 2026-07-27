@@ -61,8 +61,21 @@ def _producer():
     producer = MagicMock(spec_set=ChangelogProducer)
     type(producer).changelog_name = PropertyMock(return_value="cl")
     type(producer).partition = PropertyMock(return_value=0)
+
+    def _flush(*args, **kwargs):
+        # Fire every recorded ``on_delivery`` callback with a successful delivery
+        # before reporting a drained (0) queue, mirroring a real producer serving
+        # its callbacks on flush. Without this, ``_backfill_acked`` never catches
+        # up to ``_backfill_produced`` and the M3 drained-but-unacked check
+        # (partition.py) raises ``ChangelogFlushError`` spuriously.
+        for call in producer.produce.call_args_list:
+            on_delivery = call.kwargs.get("on_delivery")
+            if on_delivery is not None:
+                on_delivery(None, None)
+        return 0
+
     # A real int keeps ``_flush_backfill_changelog`` on its progress path.
-    producer.flush.return_value = 0
+    producer.flush.side_effect = _flush
     return producer
 
 

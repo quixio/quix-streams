@@ -1,4 +1,5 @@
 import functools
+import heapq
 import logging
 import os
 import time
@@ -215,6 +216,11 @@ class MemoryStorePartition(StorePartition):
         # than once per checkpoint transaction.
         self._unstamped_read_warned: bool = False
 
+        # H1 (review batch 4): warn-once guard for an implausibly large event-time
+        # timestamp ignored by :meth:`advance_high_water` (parity with
+        # ``RocksDBStorePartition._high_water_warned``).
+        self._high_water_warned: bool = False
+
         # #5 (review batch 3): per-partition delivery accounting for the memory
         # migration produce sites (live populated-legacy backfill, recovery-
         # completion re-stamps, done-marker). Mirrors ``RocksDBStorePartition``:
@@ -283,6 +289,25 @@ class MemoryStorePartition(StorePartition):
             # not advance / establish the high-water — a negative high-water then
             # fails the unsigned int_to_bytes persist with a raw struct.error.
             # Mirrors ``RocksDBStorePartition.advance_high_water``.
+            return
+        if timestamp >= _MAX_PLAUSIBLE_STAMP_MS:
+            # H1 (review batch 4): an implausibly large event-time (e.g. a ns/µs
+            # timestamp fed where epoch-ms is expected) must not poison the shared
+            # high-water clock that drives the read-expiry filter and the
+            # destructive sweep. IGNORE (do not advance) rather than raise, matching
+            # the negative-timestamp guard above and
+            # ``RocksDBStorePartition.advance_high_water``; real event-times
+            # (~1.7e12) are far below the 1e15 cap, so valid data is unaffected.
+            if not self._high_water_warned:
+                logger.warning(
+                    "Ignoring implausibly large event-time timestamp %d (>= %d) "
+                    "for the in-memory TTL high-water; advancing it would poison "
+                    "the read-expiry filter and the sweep. Check for a mis-scaled "
+                    "(nanosecond/microsecond) timestamp on a state read/write.",
+                    timestamp,
+                    _MAX_PLAUSIBLE_STAMP_MS,
+                )
+                self._high_water_warned = True
             return
         if self._high_water_ms is None or timestamp > self._high_water_ms:
             self._high_water_ms = timestamp
@@ -1190,13 +1215,21 @@ class MemoryStorePartition(StorePartition):
 
         evicted = 0
         visited = 0
-        # Iterate in sorted order — index keys are big-endian-stamped so
-        # ascending byte order equals ascending expiry order. The budget
-        # counts every index-entry VISIT (ghost or genuine), not just evictions,
-        # so a store dense with refresh-minted ghost entries cannot pay more than
+        # M5 (review batch 4): pull only the ``budget`` smallest index keys via a
+        # heap instead of fully sorting the ENTIRE index every flush. Index keys
+        # are big-endian-stamped, so the ``budget``-smallest are the oldest
+        # expiries — exactly the entries a bounded sweep processes (the loop still
+        # breaks at the first future entry / when the budget is spent). This is the
+        # same set the old full ``sorted(index.keys())`` would have visited before
+        # breaking, so eviction is byte-identical, but the cost is O(N log budget)
+        # instead of O(N log N). The outer ``sorted`` re-affirms ascending order the
+        # break-at-first-future invariant relies on (heapq.nsmallest already returns
+        # ascending) and keeps the scan bounded to ``budget`` elements. The budget
+        # counts every index-entry VISIT (ghost or genuine), not just evictions, so
+        # a store dense with refresh-minted ghost entries cannot pay more than
         # ``budget`` main-CF point-gets per sweep. Convergent — ghosts shrink each
         # sweep until none remain and cease consuming budget.
-        for index_key in sorted(index.keys()):
+        for index_key in sorted(heapq.nsmallest(budget, index.keys())):
             if visited >= budget:
                 break
 
@@ -1284,9 +1317,12 @@ class MemoryStorePartition(StorePartition):
 
         evicted = 0
         visited = 0
-        # Budget counts every index-entry visit (ghost or genuine), bounding
-        # main-CF point-gets to <= budget per sweep (parity with _run_sweep).
-        for index_key in sorted(index.keys()):
+        # M5 (review batch 4): pull only the ``budget`` smallest (oldest-expiry)
+        # index keys via a heap instead of fully sorting the entire index every
+        # flush — O(N log budget), not O(N log N) — with byte-identical eviction
+        # (see :meth:`_run_sweep`). Budget counts every index-entry visit (ghost or
+        # genuine), bounding main-CF point-gets to <= budget per sweep.
+        for index_key in sorted(heapq.nsmallest(budget, index.keys())):
             if visited >= budget:
                 break
 
