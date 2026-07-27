@@ -287,8 +287,8 @@ class RecoveryPartition:
         Called once by the recovery manager after this partition has reached its
         changelog high-watermark and before it is unassigned / handed to live
         processing. Delegates to ``StorePartition.complete_recovery`` (a no-op on
-        every backend except RocksDB, which uses it to complete an interrupted
-        legacy-TTL migration).
+        the base class; both the RocksDB and memory backends override it to
+        complete an interrupted legacy-TTL migration).
         """
         self._store_partition.complete_recovery()
 

@@ -22,6 +22,10 @@ from quixstreams.state.base import (
     PartitionTransactionCache,
     StorePartition,
 )
+from quixstreams.state.base.migration_flush import (
+    MigrationFlushVerdict,
+    confirm_migration_delivery,
+)
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
@@ -2189,12 +2193,29 @@ class RocksDBStorePartition(StorePartition):
         if err is None:
             self._backfill_acked += 1
 
+    def _log_backfill_flush_progress(self, outstanding: int, slice_no: int) -> None:
+        """
+        Per-slice DEBUG progress line for :meth:`_flush_backfill_changelog`
+        (``slice_no`` is 1-based, supplied by the shared flush helper).
+        """
+        logger.debug(
+            "TTL backfill changelog flush progress: %d outstanding after "
+            "slice %d (path=%s)",
+            outstanding,
+            slice_no,
+            self._path,
+        )
+
     def _flush_backfill_changelog(
         self, changelog_producer: Optional[ChangelogProducer]
     ) -> None:
         """
-        Flush a backfill / recovery-completion chunk's changelog records with a
-        PROGRESS-based bounded loop and fail loudly only when delivery stalls.
+        Confirm a backfill / recovery-completion chunk's changelog delivery via
+        the shared progress-based bounded flush loop
+        (:func:`quixstreams.state.base.migration_flush.confirm_migration_delivery`,
+        also used by the memory backend's
+        ``_confirm_migration_delivery_or_raise``) and map any non-confirmed
+        verdict onto :class:`ChangelogFlushError`.
 
         Callers MUST invoke this AFTER producing a chunk's stamped records and
         BEFORE committing the chunk's local ``WriteBatch``: the stamped chunk has
@@ -2202,100 +2223,61 @@ class RocksDBStorePartition(StorePartition):
         crash would leave the local store ahead of the changelog and a peer
         rebuild would diverge.
 
-        The loop flushes in ``_BACKFILL_CHANGELOG_FLUSH_SLICE_S`` slices (each
-        ``flush`` DRIVES delivery / serves the delivery callbacks) and:
-
-        - returns as soon as THIS partition's outstanding records reach 0;
-        - raises :class:`ChangelogFlushError` when a full slice makes NO delivery
-          progress (``outstanding >= prev``) — a wedged broker surfaces after ~2
-          slices, while a large-but-progressing chunk keeps going;
-        - raises at ``_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES`` (runaway cap) so an
-          ever-shrinking trickle still terminates;
-        - returns without blocking on a non-int flush return (an unconfigured test
-          double), matching the pre-existing "flush and proceed" behavior.
-
-        The stall decision is based on THIS partition's ``produced - acked``
-        counters — NOT on ``Producer.flush()``'s int return, which is the GLOBAL
-        in-flight count across every topic/partition on the shared migration
-        producer. Under a shared producer, a sibling partition's wedged records
-        would otherwise hold ``flush()``'s count static and falsely abort a
-        partition that has fully delivered its own records. When this partition
-        produced nothing through the counter-tracked route (the direct unit-test
-        doubles that key on the flush return), it falls back to the int-return so
-        those cases keep their exact semantics.
-
-        The timeout thus measures *lack of progress*, not *total time*, so it is
-        robust to a large ``legacy_backfill_chunk_size``. The flush routes through
-        the migration path (the dedicated non-transactional producer under
-        exactly-once, else the main producer), so a confirmed flush means durable
-        BEFORE the caller's local commit.
+        The loop flushes in ``_BACKFILL_CHANGELOG_FLUSH_SLICE_S`` slices, up to
+        ``_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES`` of them, and bases the stall
+        decision on THIS partition's ``produced - acked`` counters rather than
+        the shared producer's GLOBAL queue depth — see the helper's module
+        docstring for the full decision table (per-partition vs global
+        accounting, the drained-but-unacked failure signature, the non-int
+        "indeterminate" test-double return). The timeout measures *lack of
+        progress*, not *total time*, so it is robust to a large
+        ``legacy_backfill_chunk_size``. The flush routes through the migration
+        path (the dedicated non-transactional producer under exactly-once, else
+        the main producer), so a confirmed flush means durable BEFORE the
+        caller's local commit.
         """
-        if changelog_producer is None:
+        outcome = confirm_migration_delivery(
+            changelog_producer,
+            # A live (re-read per slice) view of this partition's delivery
+            # accounting: ``_backfill_acked`` is mutated by the delivery
+            # callbacks that each ``flush()`` slice serves.
+            counters=lambda: (self._backfill_produced, self._backfill_acked),
+            # Read from this module's globals at CALL time (not captured at
+            # import time / as defaults): tests monkeypatch them on this module
+            # to shrink the loop.
+            slice_timeout_s=_BACKFILL_CHANGELOG_FLUSH_SLICE_S,
+            max_slices=_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES,
+            on_slice_progress=self._log_backfill_flush_progress,
+        )
+        verdict = outcome.verdict
+        if verdict is MigrationFlushVerdict.CONFIRMED:
             return
-        prev: Optional[int] = None
-        for slice_no in range(_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES):
-            remaining = changelog_producer.flush(
-                timeout=_BACKFILL_CHANGELOG_FLUSH_SLICE_S, migration=True
+        if verdict is MigrationFlushVerdict.INDETERMINATE:
+            # A non-int flush return (unconfigured test double / a producer with
+            # no delivery accounting): do not block the local commit
+            # (pre-existing "flush and proceed" behavior).
+            return
+        if verdict is MigrationFlushVerdict.DRAINED_UNACKED:
+            raise ChangelogFlushError(
+                f"{outcome.outstanding} "
+                f"legacy-TTL backfill changelog record(s) drained from the "
+                f"shared producer queue WITHOUT delivery confirmation (a "
+                f"failed delivery never acks) at path={self._path}; aborting "
+                f"before the local commit so the local store never gets "
+                f"ahead of the changelog."
             )
-            # A non-int return (unconfigured test double / a producer with no
-            # delivery accounting): do not block the local commit (pre-existing
-            # "flush and proceed" behavior).
-            if not isinstance(remaining, int):
-                return
-            # A 0 GLOBAL backlog means the SHARED producer's send queue is fully
-            # drained. For a real producer this also means every delivery callback
-            # has been served, so THIS partition's records are each either acked or
-            # FAILED.
-            # A record that FAILED delivery is ALSO removed
-            # from the queue (its callback fired with err != None, which never
-            # increments ``_backfill_acked``) — so a drained-but-unacked record on
-            # a partition that produced through the counter-tracked route means a
-            # failed delivery, not a success (e.g. a sibling drained the global
-            # queue while this partition's own record failed). Waiting is pointless
-            # (a failed delivery never acks), so raise rather than let the local
-            # commit proceed ahead of the changelog. When this partition produced
-            # nothing through the counter-tracked route (``_backfill_produced == 0``
-            # — the direct-call unit doubles), ``produced > acked`` is False, so the
-            # pre-existing "0 backlog → return" is preserved unchanged.
-            if remaining == 0:
-                if self._backfill_produced > self._backfill_acked:
-                    raise ChangelogFlushError(
-                        f"{self._backfill_produced - self._backfill_acked} "
-                        f"legacy-TTL backfill changelog record(s) drained from the "
-                        f"shared producer queue WITHOUT delivery confirmation (a "
-                        f"failed delivery never acks) at path={self._path}; aborting "
-                        f"before the local commit so the local store never gets "
-                        f"ahead of the changelog."
-                    )
-                return
-            # remaining > 0: some backlog exists. Use THIS partition's own
-            # outstanding (produced - acked) when it produced through the
-            # counter-tracked migration route, so a sibling's records do not abort
-            # it; else fall back to the producer's global int return (the
-            # direct-call unit doubles that never produced anything).
-            if self._backfill_produced > 0:
-                outstanding = self._backfill_produced - self._backfill_acked
-            else:
-                outstanding = remaining
-            if outstanding <= 0:
-                return
-            if prev is not None and outstanding >= prev:
-                raise ChangelogFlushError(
-                    f"{outstanding} legacy-TTL backfill changelog record(s) made no "
-                    f"delivery progress in a full {_BACKFILL_CHANGELOG_FLUSH_SLICE_S}s "
-                    f"slice at path={self._path}; aborting before the local commit "
-                    f"so the local store never gets ahead of the changelog."
-                )
-            logger.debug(
-                "TTL backfill changelog flush progress: %d outstanding after "
-                "slice %d (path=%s)",
-                outstanding,
-                slice_no + 1,
-                self._path,
+        if verdict is MigrationFlushVerdict.NO_PROGRESS:
+            raise ChangelogFlushError(
+                f"{outcome.outstanding} legacy-TTL backfill changelog record(s) "
+                f"made no delivery progress in a full "
+                f"{_BACKFILL_CHANGELOG_FLUSH_SLICE_S}s "
+                f"slice at path={self._path}; aborting before the local commit "
+                f"so the local store never gets ahead of the changelog."
             )
-            prev = outstanding
+        # SLICES_EXHAUSTED: the runaway cap was hit while still progressing.
         raise ChangelogFlushError(
-            f"legacy-TTL backfill changelog still has {prev} undelivered "
+            f"legacy-TTL backfill changelog still has {outcome.outstanding} "
+            f"undelivered "
             f"record(s) after {_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES} × "
             f"{_BACKFILL_CHANGELOG_FLUSH_SLICE_S}s slices at path={self._path}; "
             f"aborting before the local commit so the local store never gets "
