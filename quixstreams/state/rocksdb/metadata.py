@@ -58,8 +58,8 @@ TTL_ENABLED_KEY = b"__ttl_enabled__"
 # the sound warm-deterministic adopt path never sets it.
 TTL_ADOPT_PENDING_KEY = b"__ttl_adopt_pending__"
 
-# Operational rollback lever for the COLD-heuristic provisional adoption
-# (spec §5.6), read via ``os.environ.get`` at partition open. Modelled on the
+# Operational rollback lever for the COLD-heuristic provisional adoption,
+# read via ``os.environ.get`` at partition open. Modelled on the
 # ``QUIXSTREAMS_STATE_LOG_LEVEL`` env-var pattern: transient, Portal-settable, NOT
 # a ``RocksDBOptions`` field. When set to ``"1"`` it restores a provisionally
 # cold-adopted store to legacy byte-identical (warm restart), or suppresses the

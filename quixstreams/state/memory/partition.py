@@ -112,7 +112,7 @@ class MemoryStorePartition(StorePartition):
         ttl_changelog_tombstones: bool = True,
     ) -> None:
         if max_evictions_per_flush <= 0:
-            # Parity with ``RocksDBOptions.__post_init__`` (#4, review batch 4):
+            # Parity with ``RocksDBOptions.__post_init__``:
             # a 0/negative cap silently disables the per-flush TTL sweep AND the
             # tombstone reclamation that rides on it, so expired records accumulate
             # unbounded with no error. This is the chokepoint every partition
@@ -135,21 +135,22 @@ class MemoryStorePartition(StorePartition):
         # local-only (the pre-change ``_run_sweep``-in-``write()`` path). Memory
         # does not consume ``RocksDBOptions``, so it is a direct constructor arg.
         self._ttl_changelog_tombstones: bool = ttl_changelog_tombstones
-        # §5.6 operational rollback lever, read ONCE at open from the environment
+        # Operational rollback lever, read ONCE at open from the environment
         # (mirrors ``RocksDBStorePartition._ttl_rollback``). Memory is always the
-        # COLD regime (§5.7); when set it SUPPRESSES the cold provisional adopt on
+        # COLD regime (non-persistent: every restart replays the changelog from
+        # scratch); when set it SUPPRESSES the cold provisional adopt on
         # the next full changelog replay (a fresh replay reconstructs the un-adopted
         # originals, so no explicit restore is needed).
         self._ttl_rollback: bool = os.environ.get(TTL_ROLLBACK_ENV_VAR) == "1"
-        # Runtime mirror of the COLD-heuristic provisional-adoption state (§5.2,
-        # parity with ``RocksDBStorePartition._adopt_provisional``). True == this
+        # Runtime mirror of the COLD-heuristic provisional-adoption state
+        # (parity with ``RocksDBStorePartition._adopt_provisional``). True == this
         # partition was provisionally cold-adopted and is not yet corroborated:
-        # the TTL sweep is suppressed (§5.3) until a live ``ttl=`` write
-        # corroborates (§5.4). Always a runtime-only flag on the non-persistent
-        # memory backend. No in-RAM value backup is kept — memory rollback (§5.7)
-        # is replay-suppression (the next full changelog replay reconstructs the
-        # un-adopted originals), not an in-lifetime restore, so a backup copy would
-        # be dead state.
+        # the TTL sweep is suppressed until a live ``ttl=`` write
+        # corroborates the adoption. Always a runtime-only flag on the
+        # non-persistent memory backend. No in-RAM value backup is kept — memory
+        # rollback is replay-suppression (the next full changelog replay
+        # reconstructs the un-adopted originals), not an in-lifetime restore, so
+        # a backup copy would be dead state.
         self._adopt_provisional: bool = False
         self._state: Dict[str, Dict[bytes, Any]] = {
             "default": {},
@@ -172,7 +173,7 @@ class MemoryStorePartition(StorePartition):
         # high-water (see :meth:`recover_from_changelog_message`). ``None`` means
         # no stamped message has been replayed yet in this partition's lifetime.
         self._recovery_now_ms: Optional[int] = None
-        # Event-time replay-drop frontier (finding #3), mirroring
+        # Event-time replay-drop frontier, mirroring
         # ``RocksDBStorePartition._recovery_frontier_ms``: the partition's
         # high-water snapshotted ONCE before replay and frozen for the session,
         # used as the fixed replay-drop clock so recovery matches the live read
@@ -217,12 +218,12 @@ class MemoryStorePartition(StorePartition):
         # than once per checkpoint transaction.
         self._unstamped_read_warned: bool = False
 
-        # H1 (review batch 4): warn-once guard for an implausibly large event-time
+        # Warn-once guard for an implausibly large event-time
         # timestamp ignored by :meth:`advance_high_water` (parity with
         # ``RocksDBStorePartition._high_water_warned``).
         self._high_water_warned: bool = False
 
-        # #5 (review batch 3): per-partition delivery accounting for the memory
+        # Per-partition delivery accounting for the memory
         # migration produce sites (live populated-legacy backfill, recovery-
         # completion re-stamps, done-marker). Mirrors ``RocksDBStorePartition``:
         # the done-marker flush confirmation compares THIS partition's
@@ -232,7 +233,7 @@ class MemoryStorePartition(StorePartition):
         self._backfill_produced: int = 0
         self._backfill_acked: int = 0
 
-        # #9 (review batch 3): parity with ``RocksDBStorePartition``. A memory
+        # Parity with ``RocksDBStorePartition``. A memory
         # partition is non-persistent (fresh ``_state`` every open), so this is
         # always False at construction — the ``_recovery_saw_migration_done``
         # replay latch is what stops the census once the marker replays (the marker
@@ -285,14 +286,14 @@ class MemoryStorePartition(StorePartition):
         if timestamp is None:
             return
         if timestamp < 0:
-            # #12 (review batch 3): a negative timestamp (Kafka NO_TIMESTAMP = -1
+            # A negative timestamp (Kafka NO_TIMESTAMP = -1
             # or pre-epoch event-time) never represents a real position, so it must
             # not advance / establish the high-water — a negative high-water then
             # fails the unsigned int_to_bytes persist with a raw struct.error.
             # Mirrors ``RocksDBStorePartition.advance_high_water``.
             return
         if timestamp >= _MAX_PLAUSIBLE_STAMP_MS:
-            # H1 (review batch 4): an implausibly large event-time (e.g. a ns/µs
+            # An implausibly large event-time (e.g. a ns/µs
             # timestamp fed where epoch-ms is expected) must not poison the shared
             # high-water clock that drives the read-expiry filter and the
             # destructive sweep. IGNORE (do not advance) rather than raise, matching
@@ -325,7 +326,7 @@ class MemoryStorePartition(StorePartition):
     def _on_backfill_delivery(
         self, err: Optional[object], msg: Optional[object] = None
     ) -> None:
-        """Chained delivery callback for the memory migration produce sites (#5).
+        """Chained delivery callback for the memory migration produce sites.
         Counts a successful delivery so the done-marker flush confirmation can
         measure THIS partition's own outstanding records instead of the shared
         producer's global queue depth. Mirrors
@@ -462,7 +463,7 @@ class MemoryStorePartition(StorePartition):
             and cf_name == "default"
             and not (self._migration_done_at_open or self._recovery_saw_migration_done)
         ):
-            # #9 (parity with RocksDB): stop censusing once the migration
+            # Parity with RocksDB: stop censusing once the migration
             # done-marker is known (latched when the marker replays — it is produced
             # last, so it arrives after every record it certifies).
             # ``complete_recovery`` discards / no-ops the census in that case, so
@@ -521,7 +522,7 @@ class MemoryStorePartition(StorePartition):
             # ``RocksDBStorePartition``): the high-water snapshotted ONCE before
             # replay, using the exact clock and condition the live read filter
             # uses (drop iff ``high_water_ms is not None and stamp <=
-            # high_water_ms``). This is the finding-#3 fix — the old wallclock
+            # high_water_ms``). Judging by event-time matters: the old wallclock
             # drop mass-deleted an event-time-lagging store's records that the
             # live filter would keep. Memory has no persisted high-water, so the
             # frontier is ``None`` on a real restore -> nothing drops (a
@@ -622,7 +623,7 @@ class MemoryStorePartition(StorePartition):
             if not self.uses_ttl_stamps:
                 self.uses_ttl_stamps = True
                 self._state.setdefault(TTL_INDEX_CF_NAME, {})
-            # §5.4 done-marker index rebuild (parity with RocksDB): a cold restore
+            # Done-marker index rebuild (parity with RocksDB): a cold restore
             # of a CORROBORATED cold-adopted memory store replays the header-absent
             # adopted records into the census with NO index entry; rebuild the
             # in-RAM __ttl_index__ from the still-censused all-stamped records
@@ -635,21 +636,21 @@ class MemoryStorePartition(StorePartition):
                 self._rebuild_index_from_stamped_census()
             self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
             return
-        # Fix 4 (review re-review #4, parity with RocksDB): discriminate an
+        # Parity with RocksDB: discriminate an
         # interrupted THIS-BRANCH completion from opt-in v3.24.0 adoption. Memory is
         # always fresh (no persisted flip flag, no ledger), so
         # ``_recovery_saw_stamped`` alone is the this-branch discriminator.
         if not self._recovery_saw_stamped:
             # BRANCH B — no this-branch evidence: unflipped, pure-legacy OR a stock
-            # v3.24.0 cold restore. Auto-adoption is now AUTOMATIC + REVERSIBLE
-            # (spec §5.2 / §5.7), so a 100%-stamped not-all-past census is
+            # v3.24.0 cold restore. Auto-adoption is now AUTOMATIC + REVERSIBLE,
+            # so a 100%-stamped not-all-past census is
             # provisionally adopted instead of logging a CRITICAL and staying legacy.
             # Every decision input (census size, stamp quorum, all-past, coverage)
             # comes from ONE census pass so the inputs are mutually consistent.
             survey = self._survey_backfill_pending()
             if survey.all_stamped:
                 if self._ttl_rollback:
-                    # §5.6 Case B: the rollback lever suppresses the cold provisional
+                    # The rollback lever suppresses the cold provisional
                     # adopt — stay legacy, quarantine the census (byte-identical).
                     logger.warning(
                         "Recovery: cold v3.24.0 auto-adopt SUPPRESSED by "
@@ -713,12 +714,12 @@ class MemoryStorePartition(StorePartition):
         pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
         if not pending:
             # Fully-migrated MIXED changelog drained to empty: record the done-
-            # marker best-effort (Fix 6 part 2 parity). A failed flush must NOT fail
+            # marker best-effort (parity with RocksDB). A failed flush must NOT fail
             # recovery — nothing was stamped this session.
             try:
                 self._produce_migration_done_marker()
             except (ChangelogFlushError, KafkaProducerDeliveryError):
-                # #2 (review batch 4): the marker's produce()/flush() raise
+                # The marker's produce()/flush() raise
                 # KafkaProducerDeliveryError (NOT ChangelogFlushError) on a latched
                 # delivery error from a sibling partition on the shared migration
                 # producer; both must be swallowed here. This best-effort branch
@@ -740,7 +741,7 @@ class MemoryStorePartition(StorePartition):
             # Future-stamped ambiguous census on a flipped store: genuine legacy to
             # wrap once OR already-stamped v3.24.0 that wrapping would DOUBLE-WRAP.
             if self._legacy_records_ttl is None:
-                # §5.2 Branch-A reconciliation: keep the values VERBATIM via the
+                # Branch-A reconciliation: keep the values VERBATIM via the
                 # reversible provisional adopt instead of HALTing. ``legacy_records_ttl``
                 # remains the explicit wrap-once override (fall-through below).
                 if self._ttl_rollback:
@@ -779,7 +780,7 @@ class MemoryStorePartition(StorePartition):
             )
         else:
             # Config absent: derive from the surviving stamped cohort, CLAMPED
-            # against the recovery clock (Fix 5, parity with RocksDB). The
+            # against the recovery clock (parity with RocksDB). The
             # ``_max_index_stamp_ms()`` fallback is structurally unreachable on the
             # always-full-replay memory backend, but the clamp is implemented for
             # parity and defence: over-clamping to SENTINEL_NEVER only over-keeps
@@ -851,7 +852,7 @@ class MemoryStorePartition(StorePartition):
                     value=stamped,
                     headers=headers,
                     migration=True,
-                    # #5: per-partition delivery accounting.
+                    # Per-partition delivery accounting.
                     on_delivery=self._on_backfill_delivery,
                 )
                 self._backfill_produced += 1
@@ -859,7 +860,7 @@ class MemoryStorePartition(StorePartition):
             pending.pop(key, None)
 
         if produced and self._changelog_producer is not None:
-            # review round 5 / finding 1: confirm re-stamp delivery
+            # Confirm re-stamp delivery
             # (changelog-first) BEFORE dropping the census and recording the
             # done-marker. The bare ``flush(migration=True)`` here ignored its
             # result, so a failed re-stamp delivery silently finalized the
@@ -896,7 +897,7 @@ class MemoryStorePartition(StorePartition):
         and does NOT block. A 0 backlog means the shared producer's queue is
         drained — but a drained queue with THIS partition still unacked
         (``produced > acked``) means a FAILED delivery, which also raises (see
-        below). #5 (review batch 3): on a positive backlog, base the decision on
+        below). On a positive backlog, base the decision on
         THIS partition's own outstanding (``produced - acked``, driven by the
         flush above) rather than the shared producer's GLOBAL count, so a sibling
         partition's wedged records never falsely raise here; fall back to the int
@@ -913,8 +914,8 @@ class MemoryStorePartition(StorePartition):
             # Indeterminate (unconfigured test double): do not block.
             return
         if unproduced == 0:
-            # review round 5 / finding 2 (M3 parity with
-            # ``RocksDBStorePartition._flush_backfill_changelog``): a 0 GLOBAL
+            # Parity with
+            # ``RocksDBStorePartition._flush_backfill_changelog``: a 0 GLOBAL
             # backlog means the shared queue is drained and every delivery
             # callback served — so a still-unacked record on a partition that
             # produced through the counter-tracked route means a FAILED delivery
@@ -970,7 +971,7 @@ class MemoryStorePartition(StorePartition):
                 },
                 # Non-transactional migration route (parity with RocksDB).
                 migration=True,
-                # #5: count this record against THIS partition's outstanding.
+                # Count this record against THIS partition's outstanding.
                 on_delivery=self._on_backfill_delivery,
             )
             self._backfill_produced += 1
@@ -1037,7 +1038,7 @@ class MemoryStorePartition(StorePartition):
         iff the MAX plausible stamp across the in-RAM census is ``<= the recovery
         clock`` (every censused stamp is in the past). A ``SENTINEL_NEVER`` stamp
         counts as future. Memory mirror of
-        ``RocksDBStorePartition._pending_all_stamps_in_past`` (Fix 4).
+        ``RocksDBStorePartition._pending_all_stamps_in_past``.
         """
         now = (
             self._recovery_now_ms
@@ -1131,7 +1132,7 @@ class MemoryStorePartition(StorePartition):
 
     def _rebuild_index_from_stamped_census(self) -> None:
         """
-        §5.4 done-marker index rebuild (memory parity of
+        Done-marker index rebuild (memory parity of
         ``RocksDBStorePartition._rebuild_index_from_stamped_census``). On a cold
         restore of a CORROBORATED cold-adopted memory store the header-absent
         adopted records replay verbatim into the census but carry NO index entry;
@@ -1165,18 +1166,18 @@ class MemoryStorePartition(StorePartition):
 
     def _adopt_v3240_stamps(self) -> None:
         """
-        PROVISIONAL, REVERSIBLE adoption of the pending census (spec §5.2 / §5.7
-        memory parity of ``RocksDBStorePartition._adopt_v3240_stamps``). Flip into
+        PROVISIONAL, REVERSIBLE adoption of the pending census (memory parity
+        of ``RocksDBStorePartition._adopt_v3240_stamps``). Flip into
         TTL mode, keep each default value verbatim (no re-wrap — preserves the
         v3.24.0 stamp), rebuild the ``__ttl_index__`` entry from each non-sentinel
         stamp, discard the census, then set the provisional marker + runtime guard
-        (``_adopt_provisional``) so the sweep is suppressed (§5.3) until a live
-        ``ttl=`` write corroborates (§5.4). Changelog-silent.
+        (``_adopt_provisional``) so the sweep is suppressed until a live
+        ``ttl=`` write corroborates the adoption. Changelog-silent.
 
-        No in-RAM value backup is taken: memory rollback (§5.7) is
+        No in-RAM value backup is taken: memory rollback is
         replay-suppression, not an in-lifetime restore — a fresh full changelog
         replay reconstructs the un-adopted originals — so a backup copy would be
-        dead state (finding #5).
+        dead state.
         """
         if not self.uses_ttl_stamps:
             self.uses_ttl_stamps = True
@@ -1224,11 +1225,13 @@ class MemoryStorePartition(StorePartition):
 
     def corroborate_adoption(self) -> None:
         """
-        §5.4 corroboration (memory parity of
+        Adoption corroboration (memory parity of
         ``RocksDBStorePartition.corroborate_adoption``): a live ``ttl=`` write
         confirms a provisional cold-adoption. Produce the durable migration-done
-        marker (changelog-first, confirm-or-raise), drop the in-RAM backup +
-        provisional marker, and lift the sweep guard. One-time per partition.
+        marker (changelog-first, confirm-or-raise), drop the provisional marker,
+        and lift the sweep guard. One-time per partition. Unlike the RocksDB
+        backend there is no value backup to discard — the memory backend never
+        keeps one (rollback is replay-suppression, not an in-lifetime restore).
         """
         self._produce_migration_done_marker()
         self._state.get(METADATA_CF_NAME, {}).pop(TTL_ADOPT_PENDING_KEY, None)
@@ -1296,7 +1299,7 @@ class MemoryStorePartition(StorePartition):
             logger.warning("Failed to decode persisted TTL high-water; ignoring.")
             return
         if loaded >= _MAX_PLAUSIBLE_STAMP_MS:
-            # review round 5 / finding 3: H1 parity on the load path (mirrors
+            # Implausible-event-time guard on the load path (mirrors
             # ``RocksDBStorePartition._load_high_water``). A high-water persisted
             # before the ``advance_high_water`` guard existed must not reload
             # verbatim: every finite-stamped record would then read as
@@ -1365,8 +1368,9 @@ class MemoryStorePartition(StorePartition):
         if self._high_water_ms is None:
             return
         if self._adopt_provisional:
-            # §5.3 sweep guard: no eviction while a COLD-heuristic adoption is
-            # provisional (uncorroborated). Lifted on corroboration.
+            # Provisional-adoption sweep guard: no eviction while a COLD-
+            # heuristic adoption is provisional (uncorroborated). Lifted on
+            # corroboration.
             return
 
         budget = self._max_evictions_per_flush
@@ -1379,21 +1383,19 @@ class MemoryStorePartition(StorePartition):
 
         evicted = 0
         visited = 0
-        # M5 (review batch 4): pull only the ``budget`` smallest index keys via a
-        # heap instead of fully sorting the ENTIRE index every flush. Index keys
-        # are big-endian-stamped, so the ``budget``-smallest are the oldest
-        # expiries — exactly the entries a bounded sweep processes (the loop still
-        # breaks at the first future entry / when the budget is spent). This is the
-        # same set the old full ``sorted(index.keys())`` would have visited before
-        # breaking, so eviction is byte-identical, but the cost is O(N log budget)
-        # instead of O(N log N). The outer ``sorted`` re-affirms ascending order the
-        # break-at-first-future invariant relies on (heapq.nsmallest already returns
-        # ascending) and keeps the scan bounded to ``budget`` elements. The budget
-        # counts every index-entry VISIT (ghost or genuine), not just evictions, so
-        # a store dense with refresh-minted ghost entries cannot pay more than
-        # ``budget`` main-CF point-gets per sweep. Convergent — ghosts shrink each
-        # sweep until none remain and cease consuming budget.
-        for index_key in sorted(heapq.nsmallest(budget, index.keys())):
+        # Pull only the ``budget`` smallest index keys via a heap instead of
+        # fully sorting the ENTIRE index every flush. Index keys are
+        # big-endian-stamped, so the ``budget``-smallest are the oldest
+        # expiries — exactly the entries a bounded sweep processes (the loop
+        # still breaks at the first future entry / when the budget is spent),
+        # and ``heapq.nsmallest`` returns them already ascending, which the
+        # break-at-first-future invariant relies on. Cost is O(N log budget)
+        # instead of O(N log N), with byte-identical eviction. The budget
+        # counts every index-entry VISIT (ghost or genuine), not just
+        # evictions, so a store dense with refresh-minted ghost entries cannot
+        # pay more than ``budget`` main-CF point-gets per sweep. Convergent —
+        # ghosts shrink each sweep until none remain and cease consuming budget.
+        for index_key in heapq.nsmallest(budget, index.keys()):
             if visited >= budget:
                 break
 
@@ -1436,6 +1438,14 @@ class MemoryStorePartition(StorePartition):
             else:
                 index.pop(index_key, None)
 
+        if evicted:
+            logger.debug(
+                "TTL sweep evicted %d expired entries (memory) now_ms=%d budget=%d",
+                evicted,
+                now_ms,
+                budget,
+            )
+
     def sweep_expired_into_cache(
         self,
         cache: PartitionTransactionCache,
@@ -1463,8 +1473,9 @@ class MemoryStorePartition(StorePartition):
         if self._high_water_ms is None:
             return
         if self._adopt_provisional:
-            # §5.3 sweep guard (ON path): no eviction while a COLD-heuristic
-            # adoption is provisional (uncorroborated). Lifted on corroboration.
+            # Provisional-adoption sweep guard (ON path): no eviction while a
+            # COLD-heuristic adoption is provisional (uncorroborated). Lifted
+            # on corroboration.
             return
 
         budget = self._max_evictions_per_flush
@@ -1481,12 +1492,13 @@ class MemoryStorePartition(StorePartition):
 
         evicted = 0
         visited = 0
-        # M5 (review batch 4): pull only the ``budget`` smallest (oldest-expiry)
-        # index keys via a heap instead of fully sorting the entire index every
-        # flush — O(N log budget), not O(N log N) — with byte-identical eviction
-        # (see :meth:`_run_sweep`). Budget counts every index-entry visit (ghost or
+        # Pull only the ``budget`` smallest (oldest-expiry) index keys via a
+        # heap instead of fully sorting the entire index every flush —
+        # O(N log budget), not O(N log N) — with byte-identical eviction;
+        # ``heapq.nsmallest`` returns them already ascending (see
+        # :meth:`_run_sweep`). Budget counts every index-entry visit (ghost or
         # genuine), bounding main-CF point-gets to <= budget per sweep.
-        for index_key in sorted(heapq.nsmallest(budget, index.keys())):
+        for index_key in heapq.nsmallest(budget, index.keys()):
             if visited >= budget:
                 break
 
@@ -1527,6 +1539,15 @@ class MemoryStorePartition(StorePartition):
             else:
                 delete_index_if_not_staged(index_key)
 
+        if evicted:
+            logger.debug(
+                "TTL sweep tombstoned %d expired entries (memory) now_ms=%d "
+                "budget=%d",
+                evicted,
+                now_ms,
+                budget,
+            )
+
 
 class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
     """
@@ -1545,7 +1566,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         self._batch_has_ttl_writes: bool = False
         self._pending_stamps: dict[tuple[bytes, bytes], int] = {}
         # Max ``ttl=`` duration (ms) among default-CF TTL writes staged on a
-        # not-yet-flipped partition (#1, parity with
+        # not-yet-flipped partition (parity with
         # ``RocksDBPartitionTransaction._max_batch_ttl_ms``). Feeds the implicit
         # legacy expiry (``high_water + max(ttl=)``) when a POPULATED legacy memory
         # store flips WITHOUT ``legacy_records_ttl`` configured. ``None`` until the
@@ -1557,7 +1578,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
 
     def _track_batch_ttl_ms(self, ttl: timedelta) -> None:
         """Record the max ``ttl=`` duration (ms) among unflipped default-CF TTL
-        writes (#1, parity with
+        writes (parity with
         ``RocksDBPartitionTransaction._track_batch_ttl_ms``). Called only after
         ``_compute_stamp`` has validated ``ttl > 0``."""
         ttl_ms = _ttl_to_ms(ttl)
@@ -1579,21 +1600,21 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             )
         expiry = timestamp + _ttl_to_ms(ttl)
         if expiry <= 0:
-            # #12 + #1 (review batch 4): reject a NON-POSITIVE expiry loudly
+            # Reject a NON-POSITIVE expiry loudly
             # (parity with ``RocksDBPartitionTransaction._compute_stamp``).
             # expiry==0 encodes as ``\x00`` * 8 but the strict read validator
             # (``_safe_decode_stamp``) only accepts ``0 < stamp``, so a stamp-0
             # value reads back as raw bytes (StateSerializationError) and never
             # sweeps; reject at write time to keep the read-side ``0 <`` guard
             # intact (see the RocksDB twin for the full rationale). Caught by the
-            # #14 validate-before-stage + FAILED handling so nothing is committed.
+            # validate-before-stage + FAILED handling so nothing is committed.
             raise ValueError(
                 f"ttl=... produced a non-positive expiry ({expiry} ms) from "
                 f"timestamp={timestamp} and ttl={ttl!r}; a pre-epoch, negative, or "
                 "exactly-zero (epoch-ms 0) event-time expiry cannot be TTL-stamped."
             )
         if expiry >= _MAX_PLAUSIBLE_STAMP_MS:
-            # Symmetric upper bound (review re-review #3), parity with
+            # Symmetric upper bound, parity with
             # ``RocksDBPartitionTransaction._compute_stamp``: a stamp this large
             # encodes fine but the strict read validator refuses it on every
             # read, so reject at write time with the same ValueError class.
@@ -1630,7 +1651,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._set_default_cf_stamped(key, value, prefix, timestamp, ttl)
             return
 
-        # #14: validate the stamp BEFORE staging the value, fail on a stamp
+        # Validate the stamp BEFORE staging the value, fail on a stamp
         # ValueError (parity with RocksDB) so a caught error stages nothing. The
         # TTL bookkeeping is grouped with the validated stamp.
         if ttl is not None:
@@ -1646,7 +1667,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
         elif self._pending_stamps:
-            # Fix 2 (review re-review #2), parity with
+            # Parity with
             # ``RocksDBPartitionTransaction.set``: last-write-wins — a plain
             # (no-ttl) write of a key that had an earlier ttl= write staged in
             # this unflipped batch must clear that key's pending stamp, else the
@@ -1693,7 +1714,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._set_bytes_default_cf_stamped(key, value, prefix, timestamp, ttl)
             return
 
-        # #14: validate the stamp BEFORE staging (see :meth:`set`).
+        # Validate the stamp BEFORE staging (see :meth:`set`).
         if ttl is not None:
             try:
                 stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
@@ -1707,7 +1728,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
         elif self._pending_stamps:
-            # Fix 2 (review re-review #2): last-write-wins — clear a stale pending
+            # Last-write-wins — clear a stale pending
             # stamp for this key (see :meth:`set`). Gated on a non-empty map.
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._pending_stamps.pop((prefix, key_serialized), None)
@@ -1715,7 +1736,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         super().set_bytes(key=key, value=value, prefix=prefix, cf_name="default")
 
     def delete(self, key: Any, prefix: bytes, cf_name: str = "default") -> None:
-        # Fix 2 (review re-review #2), parity with
+        # Parity with
         # ``RocksDBPartitionTransaction.delete``: pop any pending stamp for a
         # deleted key so a delete()→set(no-ttl) sequence cannot resurrect a stale
         # stamp at flip time. Gated on a non-empty map (a no-op on the flipped
@@ -1728,7 +1749,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
     def _delete_stale_index_entry(
         self, key_serialized: bytes, prefix: bytes, new_stamp: int
     ) -> None:
-        """#8 (review batch 3): inline-delete a key's OLD ``__ttl_index__`` entry
+        """Inline-delete a key's OLD ``__ttl_index__`` entry
         on refresh so a refresh-heavy store does not accumulate ghost index
         entries. Mirror of
         ``RocksDBPartitionTransaction._delete_stale_index_entry``: update-cache
@@ -1778,7 +1799,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             raise
         if ttl is not None:
             # Live ttl= write on an already-flipped partition (non-sentinel stamp);
-            # record it so §5.4 corroboration can fire (no-op unless provisional).
+            # record it so adoption corroboration can fire (no-op unless provisional).
             self._batch_has_ttl_writes = True
         try:
             value_serialized = self._serialize_value(value)
@@ -1813,8 +1834,8 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
         if ttl is not None:
-            # See :meth:`_set_default_cf_stamped`: mark a live ttl= write so §5.4
-            # corroboration can fire.
+            # See :meth:`_set_default_cf_stamped`: mark a live ttl= write so
+            # adoption corroboration can fire.
             self._batch_has_ttl_writes = True
         key_serialized = self._serialize_key(key, prefix=prefix)
         self._delete_stale_index_entry(key_serialized, prefix, stamp)
@@ -1848,7 +1869,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         super().prepare(processed_offsets=processed_offsets)
 
     def _maybe_corroborate_adoption(self) -> None:
-        """§5.4 corroboration hook (memory parity of
+        """Adoption-corroboration hook (memory parity of
         ``RocksDBPartitionTransaction._maybe_corroborate_adoption``). A live
         ``ttl=`` write on a provisionally cold-adopted partition confirms the
         adoption; a plain ``set()`` (sentinel) never sets ``_batch_has_ttl_writes``
@@ -1894,7 +1915,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
 
     def _resolve_legacy_expiry(self) -> int:
         """
-        Resolve the uniform expiry for the #1 live in-RAM backfill via the frozen
+        Resolve the uniform expiry for the live in-RAM backfill via the frozen
         expiry chain (parity with ``RocksDBPartitionTransaction._legacy_expiry_from_ttl_ms``):
         ``legacy_records_ttl`` (if configured) → ``high_water + max(batch ttl=)``
         (the implicit window derived from the triggering batch) → ``SENTINEL_NEVER``
@@ -1927,7 +1948,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         would exceed the maximum readable stamp (parity with the RocksDB
         ``_legacy_expiry_from_ttl_ms`` / completion clamp), WARNing when the clamp
         fires. Keeps the backfilled records readable instead of writing an
-        unreadable over-range stamp (review re-review #4).
+        unreadable over-range stamp.
         """
         clamped = clamp_additive_expiry(expiry_ms)
         if clamped != expiry_ms:
@@ -1943,8 +1964,8 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
 
     def _backfill_populated_legacy_in_ram(self, expires_at_ms: int) -> int:
         """
-        Re-stamp every pre-existing default-CF record in RAM with ``expires_at_ms``
-        (#1). Excludes the in-batch staged keys (they carry their own pending stamp
+        Re-stamp every pre-existing default-CF record in RAM with ``expires_at_ms``.
+        Excludes the in-batch staged keys (they carry their own pending stamp
         and are re-stamped by the shared cache loop). Each re-stamp is produced to
         the changelog via the non-transactional migration route with the
         ``__ttl_stamped__`` header and always-apply (``processed_offsets=None``)
@@ -2027,7 +2048,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         restamped = 0
         expires_at_ms: Optional[int] = None
         if populated:
-            # #1 (review batch 3, HIGH): live in-RAM migration of a POPULATED
+            # Live in-RAM migration of a POPULATED
             # legacy memory store on the first ttl= write — mirrors the RocksDB
             # populated path but on the in-RAM dict (data already in RAM → no
             # chunking / OOM concern). This REPLACES the old warn-and-defer no-op,
@@ -2095,8 +2116,8 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
 
         if populated:
             if self._partition.legacy_records_ttl is None:
-                # §15.1 implicit window: derived from the triggering write, not
-                # config. Reuse the RocksDB wording.
+                # Implicit legacy-TTL window: derived from the triggering write,
+                # not config. Reuse the RocksDB wording.
                 logger.warning(
                     "Enabled TTL on a populated legacy in-memory store WITHOUT "
                     "legacy_records_ttl configured: auto-backfilled %d pre-existing "

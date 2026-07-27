@@ -153,7 +153,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # Set True by :meth:`_maybe_corroborate_adoption` when THIS transaction
         # corroborates a provisional cold adoption. Consulted after
         # ``super().prepare()`` succeeds to run the DEFERRED, irreversible backup-CF
-        # teardown (finding #1) — never before the commit barrier, so an aborted
+        # teardown — never before the commit barrier, so an aborted
         # prepare leaves the rollback backup intact.
         self._corroborated_this_tx: bool = False
 
@@ -196,7 +196,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             )
         expiry = timestamp + _ttl_to_ms(ttl)
         if expiry <= 0:
-            # #12 (review batch 3) + #1 (review batch 4): reject a NON-POSITIVE
+            # Reject a NON-POSITIVE
             # expiry loudly at the source. A negative expiry (pre-epoch / negative
             # event-time) cannot be represented by the unsigned stamp encoder at
             # all. An expiry of EXACTLY 0 (e.g. timestamp=-1 + ttl=1ms) does encode
@@ -207,7 +207,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # purpose: the ``0 <`` guard is what stops a genuine un-stamped legacy
             # value whose first 8 bytes happen to be ``\x00`` * 8 from being
             # mis-read as an expire-at-epoch stamp and silently stripped/swept.
-            # Caught by the #14 validate-before-stage + FAILED handling, so nothing
+            # Caught by the validate-before-stage + FAILED handling, so nothing
             # is committed. We reject rather than clamp: a clamped expiry would
             # silently change the record's TTL semantics.
             raise ValueError(
@@ -216,7 +216,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "exactly-zero (epoch-ms 0) event-time expiry cannot be TTL-stamped."
             )
         if expiry >= _MAX_PLAUSIBLE_STAMP_MS:
-            # Symmetric upper bound (review re-review #3): a stamp this large
+            # Symmetric upper bound: a stamp this large
             # encodes fine (``< 2**64-1``) but the strict read validator
             # (``_safe_decode_stamp``) refuses it on every read, so the record
             # would be permanently unreadable (StateSerializationError per key)
@@ -271,9 +271,9 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # *does* land we flip the partition (or reject loudly) and the
         # flush path re-encodes the cache.
         #
-        # #14 (review batch 3): compute + validate the stamp BEFORE staging the
+        # Compute + validate the stamp BEFORE staging the
         # value (``super().set_bytes`` below), and fail the transaction on a stamp
-        # ValueError (bad ttl, missing timestamp, negative expiry from #12).
+        # ValueError (bad ttl, missing timestamp, negative expiry).
         # Otherwise a caught ValueError leaves the already-staged value behind to
         # commit as a stray never-expiring legacy record. The TTL bookkeeping is
         # grouped with the validated stamp so nothing is staged on failure.
@@ -294,7 +294,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
         elif self._pending_stamps:
-            # Fix 2 (review re-review #2): last-write-wins. A plain (no-ttl) write
+            # Last-write-wins. A plain (no-ttl) write
             # of a key that had an earlier ttl= write staged in this same
             # unflipped batch must clear that key's pending stamp; otherwise the
             # flip stamps the final never-expires value with the stale finite
@@ -348,7 +348,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             )
             return
 
-        # #14: validate the stamp BEFORE staging (see :meth:`set`).
+        # Validate the stamp BEFORE staging (see :meth:`set`).
         if ttl is not None:
             try:
                 stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
@@ -362,7 +362,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
         elif self._pending_stamps:
-            # Fix 2 (review re-review #2): last-write-wins — clear a stale pending
+            # Last-write-wins — clear a stale pending
             # stamp for this key (see :meth:`set`). Gated on a non-empty map.
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._pending_stamps.pop((prefix, key_serialized), None)
@@ -370,7 +370,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         super().set_bytes(key=key, value=value, prefix=prefix, cf_name="default")
 
     def delete(self, key: Any, prefix: bytes, cf_name: str = "default") -> None:
-        # Fix 2 (review re-review #2): keep ``_pending_stamps`` consistent with
+        # Keep ``_pending_stamps`` consistent with
         # the cache on the unflipped path. A deleted key carries no TTL intent, so
         # a delete()→set(no-ttl) sequence must not resurrect a stale pending stamp
         # at flip time; pop it here before delegating. Gated on a non-empty map
@@ -403,7 +403,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         self, key_serialized: bytes, prefix: bytes, new_stamp: int
     ) -> None:
         """
-        #8 (review batch 3): inline-delete a key's OLD ``__ttl_index__`` entry
+        Inline-delete a key's OLD ``__ttl_index__`` entry
         when it is refreshed with a new stamp, so a refresh-heavy store (dedup
         sliding window) does not accumulate ghost index entries and grow the
         below-cutoff index unboundedly. MUST be called BEFORE the new stamped
@@ -415,7 +415,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         bloom-filter negative and a hot refresh key is a block-cache hit. No-op
         when there is no old value (new key), the old stamp is the sentinel
         (unindexed), or the stamp is unchanged. The ``__ttl_index__`` CF is
-        LOCAL_ONLY, so the delete never reaches the changelog. The batch-2
+        LOCAL_ONLY, so the delete never reaches the changelog. The
         visit-budget sweep is retained as the backstop for pre-existing ghosts
         (older code, recovery/backfill re-stamps, externally-mutated entries).
         """
@@ -454,7 +454,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         """Stamp + cache write path used when the partition is flipped."""
         if timestamp is not None:
             self._partition.advance_high_water(timestamp)
-        # #14: fail the transaction on a stamp ValueError (parity with the
+        # Fail the transaction on a stamp ValueError (parity with the
         # serialize-error path below and the unflipped write path). The stamp is
         # computed before any staging, so nothing is committed on failure.
         try:
@@ -464,8 +464,8 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             raise
         if ttl is not None:
             # A genuine live ``ttl=`` write on an already-flipped partition (the
-            # stamp is non-sentinel by construction). Record it so the §5.4
-            # corroboration hook in :meth:`prepare` can confirm a provisional
+            # stamp is non-sentinel by construction). Record it so the
+            # adoption-corroboration hook in :meth:`prepare` can confirm a provisional
             # cold-adoption. Harmless on a normal flipped store (the hook no-ops
             # unless ``_adopt_provisional`` is set).
             self._batch_has_ttl_writes = True
@@ -475,7 +475,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
         key_serialized = self._serialize_key(key, prefix=prefix)
-        # #8: delete the stale index entry BEFORE staging the new value.
+        # Delete the stale index entry BEFORE staging the new value.
         self._delete_stale_index_entry(key_serialized, prefix, stamp)
         stamped = encode_ttl_value(stamp, value_serialized)
         super().set_bytes(key=key, value=stamped, prefix=prefix, cf_name="default")
@@ -505,7 +505,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             raise
         if ttl is not None:
             # See :meth:`_set_default_cf_stamped`: mark the batch as carrying a
-            # live ttl= write so §5.4 corroboration can fire.
+            # live ttl= write so adoption corroboration can fire.
             self._batch_has_ttl_writes = True
         key_serialized = self._serialize_key(key, prefix=prefix)
         self._delete_stale_index_entry(key_serialized, prefix, stamp)
@@ -690,7 +690,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
         super().prepare(processed_offsets=processed_offsets)
-        # Finding #1: run the DEFERRED, irreversible corroboration teardown (drop
+        # Run the DEFERRED, irreversible corroboration teardown (drop
         # the ``__ttl_adopt_backup__`` CF) ONLY after ``super().prepare()`` has
         # produced the changelog records. A producer error there raises above and
         # skips this, so the backup stays intact and rollback is still possible
@@ -701,7 +701,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
     def _maybe_corroborate_adoption(self) -> None:
         """
-        §5.4 corroboration hook. A live ``state.set(..., ttl=...)`` write (which
+        Adoption-corroboration hook. A live ``state.set(..., ttl=...)`` write (which
         sets ``_batch_has_ttl_writes`` and always produces a non-sentinel stamp)
         on a PROVISIONALLY cold-adopted partition confirms the adoption is genuine.
         Runs AFTER :meth:`_maybe_flip_or_reject` (so the runtime flip state is
@@ -718,7 +718,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         ):
             partition.corroborate_adoption()
             # Defer the irreversible backup drop to after ``super().prepare()`` —
-            # see :meth:`prepare` (finding #1).
+            # see :meth:`prepare`.
             self._corroborated_this_tx = True
 
     def _sweep_expired_into_cache_if_enabled(self) -> None:
@@ -823,7 +823,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         staged_default_keys: set[bytes] = set()
         if populated:
             # Backfill branch: re-stamp every pre-existing on-disk record with a
-            # uniform expiry in bounded chunks (values chunk-bounded; #10a), producing
+            # uniform expiry in bounded chunks (values chunk-bounded), producing
             # and committing each chunk before reading the next. The genuine
             # in-batch user writes are skipped here (passed as
             # ``staged_default_keys``) and re-stamped with their own true pending
@@ -953,7 +953,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "for the triggering batch. This is a framework invariant "
                 "violation (a flip requires at least one ttl= write)."
             )
-        # Clamp the ADDITIVE sum (review re-review #4): unlike the per-write
+        # Clamp the ADDITIVE sum: unlike the per-write
         # ``_compute_stamp`` path — which rejects an implausible stamp as a caller
         # error — the backfill derives its expiry from ``high_water + ttl``, so an
         # individually valid ttl can still sum ``>= _MAX_PLAUSIBLE_STAMP_MS`` and

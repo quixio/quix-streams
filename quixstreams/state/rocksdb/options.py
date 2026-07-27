@@ -118,7 +118,7 @@ class RocksDBOptions(RocksDBOptionsType):
                 f"None, got {self.legacy_records_ttl!r}"
             )
         if self.legacy_records_ttl is not None:
-            # Symmetric upper bound (review re-review #3): the backfill expiry is
+            # Symmetric upper bound: the backfill expiry is
             # ``enable_time + legacy_records_ttl`` and ``enable_time`` is unknown
             # at config time, so bound the ttl magnitude itself. A ttl of
             # ~31,600 years would derive a backfill stamp above
@@ -145,7 +145,7 @@ class RocksDBOptions(RocksDBOptionsType):
                 f"got {self.legacy_backfill_chunk_size!r}"
             )
         if self.max_evictions_per_flush <= 0:
-            # #4 (review batch 4): a 0/negative cap silently disables the per-flush
+            # A 0/negative cap silently disables the per-flush
             # TTL sweep AND the tombstone reclamation that rides on it, so expired
             # records accumulate unbounded with no error. Reject at construction,
             # mirroring the other bound checks above.

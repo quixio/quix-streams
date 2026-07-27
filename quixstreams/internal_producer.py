@@ -184,7 +184,7 @@ class InternalProducer:
         self._raise_for_error()
 
         # An optional caller-supplied delivery callback (e.g. the legacy-TTL
-        # backfill's per-partition ack counter, review batch 3 #5) is CHAINED with
+        # backfill's per-partition ack counter) is CHAINED with
         # the internal ``_on_delivery`` — never replaces it — so offset tracking and
         # error capture keep working. librdkafka invokes exactly one callback per
         # record, so we combine them here.
@@ -268,6 +268,15 @@ class InternalProducer:
     @property
     def offsets(self) -> Dict[Tuple[str, int], int]:
         return self._tp_offsets
+
+    @property
+    def instantiated(self) -> bool:
+        """
+        Whether the underlying librdkafka producer has been created (it is
+        created lazily on first use). ``False`` means nothing was ever
+        produced, so teardown flushes can be skipped entirely.
+        """
+        return self._producer.instantiated
 
     def begin_transaction(self):
         try:

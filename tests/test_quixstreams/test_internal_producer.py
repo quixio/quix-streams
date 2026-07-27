@@ -654,3 +654,81 @@ class TestInternalProducerAbortPurge:
         # The genuine error survived the abort and surfaces on the next check.
         with pytest.raises(KafkaProducerDeliveryError):
             producer._raise_for_error()
+
+
+class TestInternalProducerChainedOnDelivery:
+    """
+    Contract (internal_producer.py:~186-197): a caller-supplied ``on_delivery``
+    passed to ``InternalProducer.produce()`` is CHAINED with the internal
+    ``_on_delivery`` (offset tracking + error capture), never replaces it --
+    librdkafka invokes exactly one callback per record, so both must fire from
+    that single invocation.
+    """
+
+    def test_produce_chains_caller_on_delivery_with_internal_on_delivery(self):
+        mock_producer = create_autospec(Producer)
+        with patch(
+            "quixstreams.internal_producer.Producer", return_value=mock_producer
+        ):
+            producer = InternalProducer(broker_address="xyz")
+
+        caller_calls = []
+
+        def caller_on_delivery(err, msg):
+            caller_calls.append((err, msg))
+
+        producer.produce(
+            topic="test-topic",
+            value=b"value",
+            key=b"key",
+            on_delivery=caller_on_delivery,
+        )
+
+        # InternalProducer hands the *wrapped* Producer a single delivery
+        # function; simulate librdkafka firing it once, as it would on a
+        # successful delivery.
+        _, kwargs = mock_producer.produce.call_args
+        delivery = kwargs["on_delivery"]
+
+        mock_msg = MagicMock()
+        mock_msg.topic.return_value = "test-topic"
+        mock_msg.partition.return_value = 0
+        mock_msg.offset.return_value = 7
+
+        delivery(None, mock_msg)
+
+        # The internal _on_delivery fired (offset tracking).
+        assert producer.offsets[("test-topic", 0)] == 7
+        # The caller-supplied callback also fired, with the same args.
+        assert caller_calls == [(None, mock_msg)]
+
+
+class TestInstantiatedGuard:
+    """
+    #5 shutdown-skip guard: ``InternalProducer.instantiated`` /
+    ``Producer.instantiated`` (kafka/producer.py:~224-234,
+    internal_producer.py:~272-279) must be ``False`` until the underlying
+    librdkafka handle is created lazily on first use, and ``True`` afterward --
+    callers (e.g. ``StateStoreManager.close()``) use this to skip teardown
+    work without spinning up a producer handle just to flush nothing.
+    """
+
+    def test_producer_instantiated_false_before_and_true_after_lazy_creation(self):
+        producer = Producer(broker_address="xyz")
+        assert producer.instantiated is False
+
+        # Simulate the lazy creation that the `_producer` property performs on
+        # first use, without making a real broker connection.
+        producer._inner_producer = MagicMock()
+
+        assert producer.instantiated is True
+
+    def test_internal_producer_instantiated_false_before_and_true_after_lazy_creation(
+        self,
+    ):
+        producer = InternalProducer(broker_address="xyz")
+        assert producer.instantiated is False
+
+        producer._producer._inner_producer = MagicMock()
+
+        assert producer.instantiated is True

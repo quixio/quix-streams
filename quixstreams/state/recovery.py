@@ -143,7 +143,7 @@ class RecoveryPartition:
         # Force recovery when the store has a flipped-but-unfinished legacy-TTL
         # migration (durable pending census, no done-marker), INDEPENDENTLY of the
         # consumable-offsets / behind checks. The incomplete-migration term is
-        # hoisted OUT of the ``has_consumable_offsets`` guard (finding 2): a warm,
+        # hoisted OUT of the ``has_consumable_offsets`` guard: a warm,
         # offset-caught-up store whose changelog has been fully truncated
         # (``lowwater == highwater`` → ``has_consumable_offsets`` False) would
         # otherwise never be flagged for recovery, so ``complete_recovery`` would
@@ -437,7 +437,7 @@ class ChangelogProducer:
             backfill / recovery-completion / done-marker sites; normal changelog
             production leaves it ``False``.
         :param on_delivery: optional per-record delivery callback, chained with the
-            producer's internal callback (review batch 3 #5). The legacy-TTL
+            producer's internal callback (never replacing it). The legacy-TTL
             migration sites pass a per-partition ack counter so the backfill flush
             stall detector measures THIS partition's outstanding records rather
             than the shared producer's global queue depth.
@@ -701,17 +701,18 @@ class RecoveryManager:
                 )
 
             if rp.has_invalid_offset:
-                # #5 (review batch 4): check invalid-offset BEFORE
+                # Check invalid-offset BEFORE
                 # ``needs_recovery_check``. The latter is force-True whenever
-                # ``has_incomplete_ttl_migration()`` is True (the finding-2 hoist
-                # above), which broke the invariant that a partition can never be
+                # ``has_incomplete_ttl_migration()`` is True (the incomplete-
+                # migration hoist above), which broke the invariant that a
+                # partition can never be
                 # both "needs recovery" and "invalid offset" at once. A store
                 # mid-TTL-migration whose changelog was deleted+recreated
                 # (``highwater <= stored offset`` with ``highwater > 0``) would
                 # otherwise take the recovery branch, silently rebuild from a
                 # changelog that cannot reconstruct its state, and then cement the
                 # inconsistency with a done-marker. An invalid offset must always
-                # raise so the operator clears state. The finding-2 warm-completion
+                # raise so the operator clears state. The warm-completion
                 # path is preserved: a fully-truncated changelog has
                 # ``highwater == 0`` → ``has_invalid_offset`` early-returns False,
                 # and a caught-up warm store has ``offset == highwater - 1`` →

@@ -44,7 +44,7 @@ def _apply_state_log_level_override() -> None:
     root ``_DEFAULT_HANDLER`` (the earlier build lowered that shared handler's
     level — a global side effect this avoids).
 
-    Propagation is deliberately LEFT ENABLED (finding 3, review batch 4): a custom
+    Propagation is deliberately LEFT ENABLED: a custom
     handler an operator has attached to the ``quixstreams`` (or root) logger must
     keep receiving ``quixstreams.state.*`` records — including ERROR/CRITICAL —
     which is exactly when someone enables this env var to debug a migration. An
@@ -77,7 +77,7 @@ def _apply_state_log_level_override() -> None:
     state_logger = logging.getLogger(_STATE_LOGGER_NAME)
     state_logger.setLevel(level)
     # Keep propagation ON so any custom/upstream handler on ``quixstreams`` or the
-    # root logger still receives state records (finding 3). Set explicitly (rather
+    # root logger still receives state records. Set explicitly (rather
     # than relying on the default) so a re-run that follows an older
     # ``propagate = False`` build re-enables it idempotently.
     state_logger.propagate = True
@@ -117,7 +117,7 @@ def configure_logging(
     try:
         return _configure_root_logger(loglevel, name, pid)
     finally:
-        # #15 (review batch 3): the QUIXSTREAMS_STATE_LOG_LEVEL override is
+        # The QUIXSTREAMS_STATE_LOG_LEVEL override is
         # independent of the main-logger config (it attaches a dedicated handler to
         # ``quixstreams.state``), so it must run on EVERY return path — including
         # ``loglevel is None`` and the "app already owns the quixstreams handlers"
@@ -135,7 +135,7 @@ def _configure_root_logger(
 ) -> bool:
     """Configure the ``quixstreams`` root logger/handler. Returns True iff the
     config was (re)applied. Factored out of :func:`configure_logging` so the
-    ``quixstreams.state`` override can run on every return path (#15)."""
+    ``quixstreams.state`` override can run on every return path."""
     if loglevel is None:
         # Skipping logging configuration
         return False

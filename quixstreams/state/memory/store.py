@@ -47,7 +47,7 @@ class MemoryStore(Store):
             (parity with ``RocksDBOptions.max_evictions_per_flush``).
         """
         if max_evictions_per_flush <= 0:
-            # Fail-fast parity with ``RocksDBOptions`` (#4): reject a non-positive
+            # Fail-fast parity with ``RocksDBOptions``: reject a non-positive
             # cap at store construction so a store that never creates a partition
             # cannot silently hold an invalid value. ``MemoryStorePartition.__init__``
             # re-checks the value it actually receives, since direct partition
