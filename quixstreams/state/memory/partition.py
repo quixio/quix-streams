@@ -659,7 +659,30 @@ class MemoryStorePartition(StorePartition):
                         len(self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})),
                     )
                     return
-                # Not-all-past, 100%-stamped: provisional (reversible) auto-adopt.
+                if not self._census_covers_default_cf():
+                    # Completeness invariant (parity with RocksDB): adoption
+                    # flips read semantics STORE-WIDE (every default read strips
+                    # a leading 8-byte stamp once ``uses_ttl_stamps`` is set),
+                    # so the census must cover every key the flip will affect.
+                    # A subset census (default keys never censused this session)
+                    # would make every non-censused key read 8 bytes short. Stay
+                    # legacy, byte-identical; preserve the census (quarantine,
+                    # parity with the refusal exits above).
+                    logger.warning(
+                        "Refused cold v3.24.0 auto-adopt: the in-memory pending "
+                        "census covers %d of %d default key(s) — a partial "
+                        "census cannot prove the non-censused keys are "
+                        "v3.24.0-stamped, and adopting would flip reads "
+                        "store-wide. The store stays legacy, every value reads "
+                        "back byte-identical, and the census is preserved "
+                        "(quarantined). A full changelog replay that censuses "
+                        "every key auto-adopts safely.",
+                        len(self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})),
+                        len(self._state.get("default", {})),
+                    )
+                    return
+                # Not-all-past, 100%-stamped, full-coverage census: provisional
+                # (reversible) auto-adopt.
                 self._adopt_v3240_stamps()
                 return
             # Sub-100% "looks-like": genuine legacy — discard the orphan census so a
@@ -716,6 +739,10 @@ class MemoryStorePartition(StorePartition):
                         len(pending),
                     )
                     return
+                # No census-completeness gate here (unlike Branch B): the
+                # partition is ALREADY flipped by a header-true replay, so this
+                # adopt cannot change read semantics for any non-censused key —
+                # it only indexes the censused leftovers verbatim.
                 self._adopt_v3240_stamps()
                 return
             # else legacy_records_ttl set -> fall through to completion below.
@@ -1020,6 +1047,23 @@ class MemoryStorePartition(StorePartition):
         if max_stamp is None:
             return False
         return max_stamp <= now
+
+    def _census_covers_default_cf(self) -> bool:
+        """
+        Census-completeness proof for the cold auto-adopt (memory parity of
+        ``RocksDBStorePartition._census_covers_default_cf``). Return True iff
+        the pending census covers EVERY key in the in-RAM default dict.
+
+        Invariant: adoption flips read semantics store-wide, so the census it
+        is decided on must cover exactly the keys the flip will affect.
+        Precondition: :meth:`_all_pending_values_are_stamped` is True, which
+        verified a live default value for every censused key — the census is
+        therefore a subset of the default key set, so count equality is set
+        equality.
+        """
+        pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
+        default = self._state.get("default", {})
+        return len(pending) == len(default)
 
     def _rebuild_index_from_stamped_census(self) -> None:
         """

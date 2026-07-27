@@ -916,7 +916,38 @@ class RocksDBStorePartition(StorePartition):
                         self._count_backfill_pending(),
                     )
                     return
-                # Not-all-past, 100%-stamped: provisional (reversible) auto-adopt.
+                if not self._census_covers_default_cf():
+                    # Completeness invariant: adoption flips read semantics
+                    # STORE-WIDE (once ``uses_ttl_stamps`` is set, every
+                    # default-CF read strips a leading 8-byte stamp), so the
+                    # census the decision is based on must cover every key the
+                    # flip will affect. A warm restart behind its changelog
+                    # replays only the TAIL, censusing a strict SUBSET of the
+                    # default CF — flipping off that subset would make every
+                    # NON-censused key read 8 bytes short with no
+                    # ``__ttl_adopt_backup__`` entry to restore from. Stay
+                    # legacy, byte-identical; preserve the census (quarantine,
+                    # parity with the refusal exits above). A preserved census
+                    # can never cause a later false adopt: any future decision
+                    # re-proves both the quorum and this coverage against the
+                    # then-current default CF.
+                    logger.warning(
+                        "Refused cold v3.24.0 auto-adopt at path=%s: the pending "
+                        "census (%d key(s)) does not cover the whole default CF "
+                        "— a partial changelog replay (e.g. a warm restart "
+                        "behind the changelog) censuses only the replayed tail "
+                        "and cannot prove the non-censused keys are "
+                        "v3.24.0-stamped. The store stays legacy, every value "
+                        "reads back byte-identical, and the census is preserved "
+                        "(quarantined). A full cold rebuild (fresh state volume "
+                        "/ clear_state) replays and censuses the complete "
+                        "changelog and will auto-adopt safely.",
+                        self._path,
+                        self._count_backfill_pending(),
+                    )
+                    return
+                # Not-all-past, 100%-stamped, full-coverage census: provisional
+                # (reversible) auto-adopt.
                 self._adopt_v3240_stamps()
                 return
             # Sub-100% "looks-like": a v3.24.0 store would be 100% stamped, so a
@@ -993,6 +1024,11 @@ class RocksDBStorePartition(StorePartition):
                         self._count_backfill_pending(),
                     )
                     return
+                # No census-completeness gate here (unlike Branch B): the
+                # partition is ALREADY flipped on independent evidence (the
+                # persisted flag or a header-true replay), so this adopt cannot
+                # change read semantics for any non-censused key — it only
+                # backs up / indexes the censused leftovers verbatim.
                 self._adopt_v3240_stamps()
                 return
             # else: legacy_records_ttl is set -> the operator asserted legacy-
@@ -1419,6 +1455,34 @@ class RocksDBStorePartition(StorePartition):
         if max_stamp is None:
             return False
         return max_stamp <= now
+
+    def _census_covers_default_cf(self) -> bool:
+        """
+        Census-completeness proof for the cold auto-adopt (Branch B): return
+        True iff the pending census covers EVERY default-CF key.
+
+        Invariant: adoption flips read semantics store-wide, so the census it
+        is decided on must cover exactly the keys the flip will affect. Only a
+        complete replay (a cold restore on a fresh volume) censuses every
+        default-CF key; a warm restart behind the changelog censuses only the
+        replayed tail.
+
+        Precondition: :meth:`_all_pending_values_are_stamped` is True, which
+        point-verified a live default-CF value for every censused key — the
+        census is therefore a subset of the default-CF key set, so COUNT
+        equality is SET equality. The default-CF scan short-circuits as soon
+        as its count exceeds the census count, and it only runs after the
+        (rare) total stamp quorum has already passed — the 99% legacy path
+        never pays it.
+        """
+        pending_count = self._count_backfill_pending()
+        default_cf = self.get_or_create_column_family("default")
+        default_count = 0
+        for _ in default_cf.keys():
+            default_count += 1
+            if default_count > pending_count:
+                return False
+        return default_count == pending_count
 
     def _adopt_v3240_stamps(self) -> None:
         """
