@@ -817,7 +817,18 @@ class MemoryStorePartition(StorePartition):
             pending.pop(key, None)
 
         if produced and self._changelog_producer is not None:
-            self._changelog_producer.flush(migration=True)
+            # review round 5 / finding 1: confirm re-stamp delivery
+            # (changelog-first) BEFORE dropping the census and recording the
+            # done-marker. The bare ``flush(migration=True)`` here ignored its
+            # result, so a failed re-stamp delivery silently finalized the
+            # migration with the local store ahead of the changelog. A failed /
+            # timed-out delivery now raises :class:`ChangelogFlushError` and the
+            # next recovery retries. Mirrors the live-backfill and done-marker
+            # call sites.
+            self._confirm_migration_delivery_or_raise(
+                self._changelog_producer,
+                "legacy re-stamp changelog record(s) during recovery completion",
+            )
 
         # Drain the (now-empty) census.
         self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
@@ -839,12 +850,13 @@ class MemoryStorePartition(StorePartition):
         backends confirm delivery BEFORE the local commit so the local store never
         gets ahead of the changelog.
 
-        Fail loudly only on a concrete POSITIVE backlog; a non-int return (an
-        unconfigured test double) is treated as indeterminate and does NOT block. A
-        0 backlog means the shared producer's queue is drained, so no raise. #5
-        (review batch 3): on a positive backlog, base the decision on THIS
-        partition's own outstanding (``produced - acked``, driven by the flush
-        above) rather than the shared producer's GLOBAL count, so a sibling
+        A non-int return (an unconfigured test double) is treated as indeterminate
+        and does NOT block. A 0 backlog means the shared producer's queue is
+        drained — but a drained queue with THIS partition still unacked
+        (``produced > acked``) means a FAILED delivery, which also raises (see
+        below). #5 (review batch 3): on a positive backlog, base the decision on
+        THIS partition's own outstanding (``produced - acked``, driven by the
+        flush above) rather than the shared producer's GLOBAL count, so a sibling
         partition's wedged records never falsely raise here; fall back to the int
         return only when this partition produced nothing through the
         counter-tracked route. Raises :class:`ChangelogFlushError` on a positive
@@ -855,18 +867,42 @@ class MemoryStorePartition(StorePartition):
         unproduced = changelog_producer.flush(
             timeout=_MIGRATION_MARKER_FLUSH_TIMEOUT_S, migration=True
         )
-        if isinstance(unproduced, int) and unproduced > 0:
-            if self._backfill_produced > 0:
-                outstanding = self._backfill_produced - self._backfill_acked
-            else:
-                outstanding = unproduced
-            if outstanding > 0:
+        if not isinstance(unproduced, int):
+            # Indeterminate (unconfigured test double): do not block.
+            return
+        if unproduced == 0:
+            # review round 5 / finding 2 (M3 parity with
+            # ``RocksDBStorePartition._flush_backfill_changelog``): a 0 GLOBAL
+            # backlog means the shared queue is drained and every delivery
+            # callback served — so a still-unacked record on a partition that
+            # produced through the counter-tracked route means a FAILED delivery
+            # (``err != None`` never increments ``_backfill_acked``), e.g. a
+            # sibling drained the global queue while this partition's own record
+            # failed. Waiting is pointless (a failed delivery never acks), so
+            # raise rather than finalize locally ahead of the changelog. With
+            # ``_backfill_produced == 0`` (counter-less test doubles),
+            # ``produced > acked`` is False, so the pre-existing "0 backlog ->
+            # return" is preserved unchanged.
+            if self._backfill_produced > self._backfill_acked:
                 raise ChangelogFlushError(
-                    f"{outstanding} {context} still undelivered after "
-                    f"{_MIGRATION_MARKER_FLUSH_TIMEOUT_S}s; not finalizing the "
-                    "migration locally so the local store never gets ahead of the "
-                    "changelog (the next attempt retries)."
+                    f"{self._backfill_produced - self._backfill_acked} {context} "
+                    "drained from the shared producer queue WITHOUT delivery "
+                    "confirmation (a failed delivery never acks); not finalizing "
+                    "the migration locally so the local store never gets ahead of "
+                    "the changelog (the next attempt retries)."
                 )
+            return
+        if self._backfill_produced > 0:
+            outstanding = self._backfill_produced - self._backfill_acked
+        else:
+            outstanding = unproduced
+        if outstanding > 0:
+            raise ChangelogFlushError(
+                f"{outstanding} {context} still undelivered after "
+                f"{_MIGRATION_MARKER_FLUSH_TIMEOUT_S}s; not finalizing the "
+                "migration locally so the local store never gets ahead of the "
+                "changelog (the next attempt retries)."
+            )
 
     def _produce_migration_done_marker(self) -> None:
         """
@@ -1141,13 +1177,33 @@ class MemoryStorePartition(StorePartition):
     # ------------------------------------------------------------------
 
     def _load_high_water(self) -> None:
+        # NOTE: currently unwired (no call sites — memory is non-persistent);
+        # kept and clamped for parity with ``RocksDBStorePartition``.
         raw = self._state.get(METADATA_CF_NAME, {}).get(TTL_HIGH_WATER_KEY)
         if raw is None:
             return
         try:
-            self._high_water_ms = int_from_bytes(cast(bytes, raw))
+            loaded = int_from_bytes(cast(bytes, raw))
         except Exception:
             logger.warning("Failed to decode persisted TTL high-water; ignoring.")
+            return
+        if loaded >= _MAX_PLAUSIBLE_STAMP_MS:
+            # review round 5 / finding 3: H1 parity on the load path (mirrors
+            # ``RocksDBStorePartition._load_high_water``). A high-water persisted
+            # before the ``advance_high_water`` guard existed must not reload
+            # verbatim: every finite-stamped record would then read as
+            # already-expired and be swept. IGNORE it (leave the high-water
+            # undefined) so a poisoned store self-heals on reload.
+            logger.warning(
+                "Ignoring implausibly large persisted TTL high-water %d (>= %d); "
+                "loading it would poison the read-expiry filter and the sweep. "
+                "The high-water re-establishes from the next timestamped "
+                "read/write.",
+                loaded,
+                _MAX_PLAUSIBLE_STAMP_MS,
+            )
+            return
+        self._high_water_ms = loaded
 
     def _normalize_replay_value(self, value: bytes) -> tuple[bytes, int]:
         # Route through the same strict validator as the live read path;

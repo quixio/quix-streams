@@ -3393,13 +3393,35 @@ class RocksDBStorePartition(StorePartition):
         if raw is None:
             return
         try:
-            self._high_water_ms = int_from_bytes(cast(bytes, raw))
+            loaded = int_from_bytes(cast(bytes, raw))
         except Exception:
             logger.warning(
                 "Failed to decode persisted TTL high-water at %s; "
                 "treating it as undefined.",
                 self._path,
             )
+            return
+        if loaded >= _MAX_PLAUSIBLE_STAMP_MS:
+            # review round 5 / finding 3: H1 parity on the load path. A store
+            # poisoned by the pre-H1 bug (an implausibly large high-water
+            # persisted to ``TTL_HIGH_WATER_KEY`` before the
+            # ``advance_high_water`` guard existed) must not reload the poisoned
+            # value verbatim: every finite-stamped record would then read as
+            # already-expired (``stamp <= _high_water_ms``) and be swept on the
+            # next flush — the mass-eviction H1 exists to prevent, resurrected
+            # across a restart. IGNORE it (leave the high-water undefined) so
+            # the store self-heals on the first restart under the fixed build.
+            logger.warning(
+                "Ignoring implausibly large persisted TTL high-water %d (>= %d) "
+                "at path=%s; loading it would poison the read-expiry filter and "
+                "the sweep. The high-water re-establishes from the next "
+                "timestamped read/write.",
+                loaded,
+                _MAX_PLAUSIBLE_STAMP_MS,
+                self._path,
+            )
+            return
+        self._high_water_ms = loaded
 
     def _normalize_replay_value(self, value: bytes) -> tuple[bytes, int]:
         """
