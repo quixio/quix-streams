@@ -89,6 +89,7 @@ sdf = sdf.update(lambda message: print(f"Input:  {message}"))
 
 # Define a transformation to split incoming sentences
 # into words using a lambda function
+# expand=True means each item in the returned list is emitted as a separate message downstream
 sdf = sdf.apply(
     lambda message: [{"text": word} for word in message["text"].split()],
     expand=True,

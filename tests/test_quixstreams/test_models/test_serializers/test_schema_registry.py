@@ -134,7 +134,7 @@ deserializer = serializer = _inject_schema_registry
             partial(JSONSerializer, schema=JSONSCHEMA_TEST_SCHEMA),
             partial(JSONDeserializer, schema=JSONSCHEMA_TEST_SCHEMA),
             {"id": 10, "name": "foo"},
-            b'{"id": 10, "name": "foo"}',
+            b'{"id":10,"name":"foo"}',
             {"id": 10, "name": "foo"},
         ),
         (

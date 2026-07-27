@@ -1,49 +1,61 @@
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
-from quixstreams.sinks.base import SinkBatch
-from quixstreams.sinks.community.file.formats import Format
+from quixstreams.sinks import SinkBatch
 
-from .base import Destination
+from .base import FileSink
+from .formats import Format, FormatName
 
-__all__ = ("LocalDestination",)
+__all__ = ("LocalFileSink",)
 
 logger = logging.getLogger(__name__)
 
 
-class LocalDestination(Destination):
+class AppendNotSupported(Exception):
+    """Raised when append=True but specified format does not support it"""
+
+
+class LocalFileSink(FileSink):
     """A destination that writes data to the local filesystem.
 
     Handles writing data to local files with support for both creating new files
     and appending to existing ones.
     """
 
-    def __init__(self, append: bool = False) -> None:
+    def __init__(
+        self,
+        append: bool = False,
+        directory: str = "",
+        format: Union[FormatName, Format] = "json",
+    ) -> None:
         """Initialize the local destination.
 
         :param append: If True, append to existing files instead of creating new
-            ones. Defaults to False.
+            ones by selecting the lexicographical last file in the given directory
+            (or creates one).
+            Defaults to False.
+        :param directory: Base directory path for storing files. Defaults to
+            current directory.
+        :param format: Data serialization format, either as a string
+            ("json", "parquet") or a Format instance.
+
+        :raises AppendNotSupported: If append=True but given format does not support it.
         """
-        self._append = append
+        super().__init__(directory=directory, format=format)
+        if append and not self._format.supports_append:
+            raise AppendNotSupported(
+                f"File format {self._format.file_extension} does not support appending."
+            )
+
+        logger.debug("LocalFileSink initialized with append=%s", append)
         self._mode = "ab" if append else "wb"
-        logger.debug("LocalDestination initialized with append=%s", append)
+        self._append = append
 
     def setup(self):
         return
 
-    def set_extension(self, format: Format) -> None:
-        """Set the file extension and validate append mode compatibility.
-
-        :param format: The Format instance that defines the file extension.
-        :raises ValueError: If append mode is enabled but the format doesn't
-            support appending.
-        """
-        if self._append and not format.supports_append:
-            raise ValueError(f"`{format}` format does not support appending.")
-        super().set_extension(format)
-
-    def write(self, data: bytes, batch: SinkBatch) -> None:
+    def _write(self, data: bytes, batch: SinkBatch) -> None:
         """Write data to a local file.
 
         :param data: The serialized data to write.

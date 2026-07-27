@@ -44,3 +44,8 @@ __pycache__/
 
 # mkdocs
 site/
+
+# memories (local development notes)
+memories/
+
+.claude/

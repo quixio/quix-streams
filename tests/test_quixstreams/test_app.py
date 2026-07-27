@@ -1179,6 +1179,27 @@ def test_quix_app_state_dir_default(
     assert app._config.state_dir == Path(expected_state_dir)
 
 
+def test_quix_app_state_dir_from_deployment_state_path(
+    monkeypatch, quix_mock_config_builder_factory
+):
+    """Test that Quix__Deployment__State__Path takes priority"""
+    monkeypatch.setenv(QuixEnvironment.DEPLOYMENT_ID, "123")
+    monkeypatch.setenv(QuixEnvironment.STATE_PATH, "/custom/state/path")
+    app = Application(quix_config_builder=quix_mock_config_builder_factory())
+    assert app._config.state_dir == Path("/custom/state/path")
+
+
+def test_quix_app_state_dir_fallback_to_state_dir(
+    monkeypatch, quix_mock_config_builder_factory
+):
+    """Test fallback to Quix__State__Dir when STATE_PATH not set (with deprecation warning)"""
+    monkeypatch.setenv(QuixEnvironment.DEPLOYMENT_ID, "123")
+    monkeypatch.setenv(QuixEnvironment.STATE_DIR, "/legacy/state")
+    with pytest.warns(DeprecationWarning, match="Quix__State__Dir is deprecated"):
+        app = Application(quix_config_builder=quix_mock_config_builder_factory())
+    assert app._config.state_dir == Path("/legacy/state")
+
+
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestApplicationWithState:
     def _validate_state(

@@ -84,7 +84,8 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              request_timeout: float = 30,
              topic_create_timeout: float = 60,
              processing_guarantee: ProcessingGuarantee = "at-least-once",
-             max_partition_buffer_size: int = 10000)
+             max_partition_buffer_size: int = 10000,
+             broker_availability_timeout: float = 120.0)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L126)
@@ -156,9 +157,15 @@ Default - `True`
 - `processing_guarantee`: Use "exactly-once" or "at-least-once" processing.
 - `max_partition_buffer_size`: the maximum number of messages to buffer per topic partition to consider it full.
 The buffering is used to consume messages in-order between multiple partitions with the same number.
-    It is a soft limit, and the actual number of buffered messages can be up to x2 higher.
-    Lower value decreases the memory use, but increases the latency.
-    Default - `10000`.
+It is a soft limit, and the actual number of buffered messages can be up to x2 higher.
+Lower value decreases the memory use, but increases the latency.
+Default - `10000`.
+- `broker_availability_timeout`: timeout in seconds. If all Kafka brokers
+are unavailable for longer than this, the Application will raise a
+    ``KafkaBrokerUnavailableError`` to allow the orchestrator to restart
+    the application with fresh connections.
+    Set to ``0`` to disable the check.
+    Default - ``120.0``s (2 minutes).
 
 <br><br>***Error Handlers***<br>
 To handle errors, `Application` accepts callbacks triggered when
@@ -187,7 +194,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L398)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L412)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -210,7 +217,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L430)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L444)
 
 Create a topic definition.
 
@@ -292,7 +299,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L510)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L524)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -348,7 +355,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L566)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L580)
 
 Stop the internal poll loop and the message processing.
 
@@ -375,7 +382,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer(transactional: bool = False) -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L611)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L625)
 
 Create and return a pre-configured Producer instance.
 
@@ -420,7 +427,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L679)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L693)
 
 Create and return a pre-configured Consumer instance.
 
@@ -477,7 +484,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L728)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L742)
 
 Clear the state of the application.
 
@@ -491,7 +498,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L734)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L748)
 
 Add a source to the application.
 
@@ -522,7 +529,7 @@ def run(dataframe: Optional[StreamingDataFrame] = None,
         metadata: bool = False) -> list[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L767)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L782)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -598,7 +605,7 @@ Default - `False`.
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1125)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1156)
 
 Immutable object holding the application configuration
 
@@ -621,7 +628,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1161)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1192)
 
 Included to ignore reading/setting values from the environment
 
@@ -635,7 +642,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1205)
 
 Update the application config and return a copy
 
@@ -650,7 +657,7 @@ def resolve_transactional_id(transactional_id: Optional[str],
                              prefix: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1196)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1227)
 
 Utility function to resolve the transactional.id based
 on existing config and provided prefix.

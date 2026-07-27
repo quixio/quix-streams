@@ -3,9 +3,9 @@ from copy import deepcopy
 from unittest.mock import PropertyMock, call, create_autospec, patch
 
 import pytest
-from requests import HTTPError
 
 from quixstreams.kafka.configuration import ConnectionConfig
+from quixstreams.platforms.quix import QuixApiRequestFailure
 from quixstreams.platforms.quix.api import QuixPortalApiService
 from quixstreams.platforms.quix.config import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.exceptions import (
@@ -49,7 +49,9 @@ class TestQuixKafkaConfigsBuilder:
             workspace_id="12345", quix_portal_api_service=api
         )
         api.get_workspaces.return_value = api_data_stub
-        api.get_workspace.side_effect = HTTPError
+        api.get_workspace.side_effect = QuixApiRequestFailure(
+            url="fake.com", status_code=400
+        )
 
         result = cfg_builder.search_for_workspace(matching_ws)
         api.get_workspace.assert_called_with(

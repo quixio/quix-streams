@@ -1,5 +1,7 @@
 import functools
+import json
 import logging
+import time
 import typing
 from typing import Any, Callable, List, Optional, Tuple, Union, cast
 
@@ -20,7 +22,7 @@ from quixstreams.models.types import (
 )
 
 from .configuration import ConnectionConfig
-from .exceptions import KafkaConsumerException
+from .exceptions import KafkaBrokerUnavailableError, KafkaConsumerException
 
 __all__ = (
     "BaseConsumer",
@@ -35,6 +37,8 @@ OnCommitCallback = Callable[[Optional[KafkaError], List[TopicPartition]], None]
 AutoOffsetReset = typing.Literal["earliest", "latest", "error"]
 
 logger = logging.getLogger(__name__)
+
+_BROKER_PROBE_INTERVAL = 30.0
 
 
 def _default_error_cb(error: KafkaError):
@@ -124,11 +128,34 @@ class BaseConsumer:
         if isinstance(broker_address, str):
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)
 
+        self._broker_unavailable_since: Optional[float] = None
+        self._last_broker_probe: Optional[float] = None
+
+        # Per-broker connectivity tracking via stats_cb
+        self._broker_states: dict[str, str] = {}
+        self._brokers_seen_up: set[str] = set()
+
+        # Wrap the user-provided (or default) error callback so that broker
+        # availability tracking always runs, regardless of custom callbacks.
+        self._user_error_cb = error_callback
+        error_callback = self._error_cb
+
+        # Copy extra_config to avoid mutating the caller's dict, and extract
+        # user-provided stats_cb / statistics.interval.ms before spreading.
+        extra_config = dict(extra_config) if extra_config else {}
+        self._user_stats_cb = extra_config.pop("stats_cb", None)
+        user_stats_interval = extra_config.get("statistics.interval.ms", None)
+
+        # Default to 30s stats interval; respect user's value if lower or 0 (disabled).
+        if user_stats_interval is None:
+            extra_config["statistics.interval.ms"] = 30000
+        # If user explicitly set 0, stats_cb will never fire — that's fine.
+
         self._consumer_config = {
             # previous Quix Streams defaults
             "enable.auto.offset.store": False,
             "partition.assignment.strategy": "range",
-            **(extra_config or {}),
+            **extra_config,
             **broker_address.as_librdkafka_dict(),
             **{
                 "group.id": consumer_group,
@@ -136,12 +163,121 @@ class BaseConsumer:
                 "auto.offset.reset": auto_offset_reset,
                 "logger": logger,
                 "error_cb": error_callback,
+                "stats_cb": self._stats_cb,
                 "on_commit": functools.partial(
                     _default_on_commit_cb, on_commit=on_commit
                 ),
             },
         }
         self._inner_consumer: Optional[ConfluentConsumer] = None
+
+    def _error_cb(self, error: KafkaError):
+        """Instance-level error callback that tracks broker availability
+        and delegates to the user-provided (or default) error callback."""
+        error_code = error.code()
+        if error_code == KafkaError._ALL_BROKERS_DOWN:  # noqa: SLF001
+            if self._broker_unavailable_since is None:
+                self._broker_unavailable_since = time.monotonic()
+        self._user_error_cb(error)
+
+    def _stats_cb(self, stats_json: str):
+        """Track per-broker connectivity state transitions from librdkafka stats."""
+        try:
+            stats = json.loads(stats_json)
+            for broker_name, broker_info in stats.get("brokers", {}).items():
+                if broker_info.get("nodeid", -1) == -1:
+                    continue
+                state = broker_info.get("state", "")
+                node_id = broker_info["nodeid"]
+                prev_state = self._broker_states.get(broker_name)
+                self._broker_states[broker_name] = state
+
+                if prev_state is None:
+                    # First time seeing this broker
+                    if state == "UP":
+                        self._brokers_seen_up.add(broker_name)
+                elif prev_state == "UP" and state != "UP":
+                    others_up = sum(
+                        1
+                        for b, s in self._broker_states.items()
+                        if b != broker_name and s == "UP"
+                    )
+                    if others_up:
+                        logger.info(
+                            "Kafka consumer: broker %s (node %d) went down;"
+                            " %d other broker(s) still available",
+                            broker_name,
+                            node_id,
+                            others_up,
+                        )
+                elif prev_state != "UP" and state == "UP":
+                    if broker_name in self._brokers_seen_up:
+                        logger.info(
+                            "Kafka consumer: broker %s (node %d) is UP again (was %s)",
+                            broker_name,
+                            node_id,
+                            prev_state,
+                        )
+                    self._brokers_seen_up.add(broker_name)
+        except Exception:
+            logger.debug(
+                "Failed to parse stats JSON for broker tracking", exc_info=True
+            )
+        finally:
+            if self._user_stats_cb is not None:
+                self._user_stats_cb(stats_json)
+
+    def _broker_available(self):
+        """Reset the broker unavailability tracker."""
+        if self._broker_unavailable_since is not None:
+            elapsed = time.monotonic() - self._broker_unavailable_since
+            logger.info(
+                "Kafka consumer broker connectivity restored after %.1fs.",
+                elapsed,
+            )
+            self._broker_unavailable_since = None
+            self._last_broker_probe = None
+
+    def raise_if_broker_unavailable(self, timeout: float):
+        """Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
+
+        Periodically performs an active metadata probe to detect recovery
+        even when no messages are flowing (idle applications).
+
+        :param timeout: seconds of continuous unavailability before raising.
+        :raises KafkaBrokerUnavailableError: if the timeout has been exceeded.
+        """
+        if self._broker_unavailable_since is None:
+            return
+
+        now = time.monotonic()
+        elapsed = now - self._broker_unavailable_since
+
+        # Periodically probe to detect recovery, even before the timeout.
+        since_last_probe = (
+            now - self._last_broker_probe
+            if self._last_broker_probe is not None
+            else float("inf")
+        )
+        if since_last_probe >= _BROKER_PROBE_INTERVAL:
+            self._last_broker_probe = now
+            try:
+                self._consumer.list_topics(timeout=5.0)
+                # Probe succeeded — brokers are actually reachable.
+                self._broker_available()
+                return
+            except Exception:
+                logger.debug("Consumer broker availability probe failed", exc_info=True)
+
+        if elapsed >= timeout:
+            raise KafkaBrokerUnavailableError(
+                f"All Kafka brokers have been unavailable for "
+                f"{elapsed:.0f}s (timeout={timeout:.0f}s). "
+                f"The application cannot recover automatically; "
+                f"restarting is required. "
+                f"Adjust via Application(broker_availability_timeout=...) "
+                f"or set to 0 to disable."
+            )
 
     def poll(
         self, timeout: Optional[float] = None

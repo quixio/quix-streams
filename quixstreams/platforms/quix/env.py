@@ -15,7 +15,8 @@ class QuixEnvironment:
     WORKSPACE_ID = "Quix__Workspace__Id"
     DEPLOYMENT_ID = "Quix__Deployment__Id"
     STATE_MANAGEMENT_ENABLED = "Quix__Deployment__State__Enabled"
-    STATE_DIR = "Quix__State__Dir"
+    STATE_PATH = "Quix__Deployment__State__Path"  # Set by Quix platform
+    STATE_DIR = "Quix__State__Dir"  # User override
     CONSUMER_GROUP = "Quix__Consumer_Group"
 
     @property
@@ -50,9 +51,19 @@ class QuixEnvironment:
     def state_dir(self) -> Optional[str]:
         """
         Return application state directory on Quix.
+        Checks Quix__Deployment__State__Path first (set by platform),
+        then falls back to Quix__State__Dir (deprecated user override).
         :return: path to state dir
         """
-        return os.environ.get(self.STATE_DIR)
+        legacy = os.environ.get(self.STATE_DIR)
+        if legacy:
+            import warnings
+
+            warnings.warn(
+                "Quix__State__Dir is deprecated, use state.path in quix.yaml instead",
+                DeprecationWarning,
+            )
+        return os.environ.get(self.STATE_PATH) or legacy
 
     @property
     def portal_api(self) -> Optional[str]:

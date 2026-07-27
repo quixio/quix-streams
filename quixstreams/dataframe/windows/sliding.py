@@ -35,6 +35,7 @@ class SlidingWindow(FixedTimeWindow):
         value: Any,
         key: Any,
         timestamp_ms: int,
+        headers: Any,
         transaction: WindowedPartitionTransaction,
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         """

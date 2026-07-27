@@ -37,9 +37,13 @@ def session_window_definition_factory(state_manager, dataframe_factory):
     return factory
 
 
-def process(window, value, key, transaction, timestamp_ms):
+def process(window, value, key, transaction, timestamp_ms, headers=None):
     updated, expired = window.process_window(
-        value=value, key=key, transaction=transaction, timestamp_ms=timestamp_ms
+        value=value,
+        key=key,
+        timestamp_ms=timestamp_ms,
+        headers=headers,
+        transaction=transaction,
     )
     return list(updated), list(expired)
 
@@ -557,6 +561,42 @@ class TestSessionWindow:
                 name="test",
                 dataframe=dataframe_factory(),
             )
+
+    @pytest.mark.parametrize("callback_kwarg", ["before_update", "after_update"])
+    def test_session_window_def_init_rejects_trigger_callbacks(
+        self, callback_kwarg, dataframe_factory
+    ):
+        """
+        Session windows do not support trigger callbacks (`before_update` /
+        `after_update`), mirroring the sliding-window rejection at
+        `definitions.py` (introduced by PR #1044, "Early Window Expiration
+        with Triggers"). `sdf.session_window()` doesn't expose these kwargs,
+        so `SessionWindowDefinition` is constructed directly here.
+        """
+        with pytest.raises(ValueError, match="trigger callbacks"):
+            SessionWindowDefinition(
+                inactivity_gap_ms=10000,
+                grace_ms=0,
+                name="test",
+                dataframe=dataframe_factory(),
+                **{callback_kwarg: lambda *args: False},
+            )
+
+    def test_session_window_def_init_builds_without_trigger_callbacks(
+        self, dataframe_factory
+    ):
+        """A session window still builds normally when both `before_update`
+        and `after_update` are left `None` (the default)."""
+        window_def = SessionWindowDefinition(
+            inactivity_gap_ms=10000,
+            grace_ms=0,
+            name="test",
+            dataframe=dataframe_factory(),
+            before_update=None,
+            after_update=None,
+        )
+        window = window_def.sum()
+        assert window.name == "test_session_window_10000_sum"
 
     @pytest.mark.parametrize("expiration", ("key", "partition"))
     def test_session_window_process_timeout_behavior(

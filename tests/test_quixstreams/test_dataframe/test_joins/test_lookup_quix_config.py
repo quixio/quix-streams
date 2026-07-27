@@ -1,5 +1,6 @@
 import sys
 import time
+import uuid
 from datetime import datetime
 from typing import Optional
 from unittest.mock import Mock, patch
@@ -30,7 +31,7 @@ def lookup():
         patch(
             "quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.httpx.Client"
         ),
-        patch.object(Lookup, "_start"),
+        patch.object(Lookup, "_start_consumer_thread"),
     ):
         lookup = Lookup(
             topic=mock_topic,
@@ -59,36 +60,36 @@ def create_configuration_version(
     )
 
 
+def create_event(
+    id: str = "test-config",
+    version: int = 1,
+    valid_from: Optional[str] = None,
+    sha256sum: str = "test-hash",
+    content_url: str = "http://example.com/config",
+) -> Event:
+    """Helper method to create test events."""
+    return {
+        "id": id,
+        "event": "created",
+        "contentUrl": content_url,
+        "metadata": {
+            "type": "test-type",
+            "target_key": "test-key",
+            "valid_from": valid_from,
+            "category": "test-category",
+            "version": version,
+            "created_at": "2025-01-01T00:00:00Z",
+            "sha256sum": sha256sum,
+        },
+    }
+
+
 class TestConfiguration:
     """Test suite for the Configuration class."""
 
-    def create_event(
-        self,
-        id: str = "test-config",
-        version: int = 1,
-        valid_from: Optional[str] = None,
-        sha256sum: str = "test-hash",
-        content_url: str = "http://example.com/config",
-    ) -> Event:
-        """Helper method to create test events."""
-        return {
-            "id": id,
-            "event": "created",
-            "contentUrl": content_url,
-            "metadata": {
-                "type": "test-type",
-                "target_key": "test-key",
-                "valid_from": valid_from,
-                "category": "test-category",
-                "version": version,
-                "created_at": "2025-01-01T00:00:00Z",
-                "sha256sum": sha256sum,
-            },
-        }
-
     def test_from_event(self):
         """Test creating a Configuration from an Event."""
-        event = self.create_event(version=1, valid_from="2025-01-01T12:00:00Z")
+        event = create_event(version=1, valid_from="2025-01-01T12:00:00Z")
         config = Configuration.from_event(event)
 
         assert len(config.versions) == 1
@@ -469,10 +470,10 @@ class TestConfigurationVersion:
 
         # Should not be able to modify frozen fields
         with pytest.raises((AttributeError, TypeError)):
-            version.id = "modified"  # type: ignore
+            setattr(version, "id", "modified")
 
         with pytest.raises((AttributeError, TypeError)):
-            version.version = 2  # type: ignore
+            setattr(version, "version", 2)
 
         # But should be able to modify non-frozen fields via the methods
         version.failed()
@@ -1270,3 +1271,38 @@ class TestLookupJoin:
 
             # Verify new data is added
             assert value["binary_data"].decode("utf-8") == test_content
+
+
+class TestLookupInit:
+    """
+    Test that Lookup loads all available configurations from the config topic
+    on init.
+    """
+
+    def test_lookup_init_config_topic_empty(self, app_factory):
+        app = app_factory()
+        config_topic = app.topic("configs")
+
+        lookup = Lookup(
+            topic=config_topic,
+            app_config=app.config,
+        )
+        assert not lookup._configurations
+
+    def test_lookup_init_config_topic_not_empty(self, app_factory):
+        app = app_factory()
+        config_topic = app.topic("configs")
+
+        num_configs = 50
+        with app.get_producer() as producer:
+            for _ in range(num_configs):
+                config_event = create_event(id=str(uuid.uuid4()))
+                producer.produce(
+                    topic=config_topic.name, value=orjson.dumps(config_event)
+                )
+
+        lookup = Lookup(
+            topic=config_topic,
+            app_config=app.config,
+        )
+        assert len(lookup._configurations) == num_configs

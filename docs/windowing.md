@@ -11,7 +11,7 @@ With windows, you can calculate such aggregations as:
 - Maximum temperature of a sensor observed over 30 second ranges
 - Give a user a reward after 10 successful actions
 - Track user activity sessions on a website
-- Detect fraud patterns in financial transactions 
+- Detect fraud patterns in financial transactions
 
 
 ## Types of Time in Streaming
@@ -111,7 +111,7 @@ sdf = app.dataframe(...)
 
 sdf = (
     # Define a tumbling window of 10 seconds
-    .tumbling_window(timedelta(seconds=10))
+    sdf.tumbling_window(timedelta(seconds=10))
 
     # Calculate the minimum temperature 
     .agg(minimum_temperature=Min("temperature"))
@@ -187,7 +187,7 @@ sdf = app.dataframe(...)
 sdf = (
     # Define a tumbling window of 1 hour
     # You can also pass duration_ms as an integer of milliseconds
-    .tumbling_window(duration_ms=timedelta(hours=1))
+    sdf.tumbling_window(duration_ms=timedelta(hours=1))
 
     # Specify the "mean" aggregate function
     .agg(avg_temperature=Mean("temperature"))
@@ -200,7 +200,7 @@ sdf = (
 
 ## Count-based Tumbling Windows
 
-Count-based Tumbling Windows slice incoming events into batch of a fixed size.
+Count-based Tumbling Windows slice incoming events into batches of a fixed size.
 
 For example, a tumbling window configured with a count of 4 will batch and aggregate message 1 to 4, then 5 to 8, 9 to 12 and so on. 
 
@@ -254,7 +254,7 @@ sdf = app.dataframe(...)
 
 sdf = (
     # Define a count-based tumbling window of 3 events
-    .tumbling_count_window(count=3)
+    sdf.tumbling_count_window(count=3)
 
     # Specify the "collect" aggregate function
     .agg(data=Collect())
@@ -333,7 +333,7 @@ sdf = app.dataframe(...)
 sdf = (
     # Define a hopping window of 1h with 10m step
     # You can also pass duration_ms and step_ms as integers of milliseconds
-    .hopping_window(duration_ms=timedelta(hours=1), step_ms=timedelta(minutes=10))
+    sdf.hopping_window(duration_ms=timedelta(hours=1), step_ms=timedelta(minutes=10))
 
     # Specify the "mean" aggregate function
     .agg(avg_temperature=Mean("temperature"))
@@ -346,7 +346,7 @@ sdf = (
 
 ## Count-based Hopping Windows
 
-Count-based Hopping Windows slice incoming messages into overlapping batch of a fixed size with a fixed step.
+Count-based Hopping Windows slice incoming messages into overlapping batches of a fixed size with a fixed step.
 
 For example, a hopping windows of 6 messages with a step of 2 messages will generate the following windows:
 
@@ -425,7 +425,7 @@ sdf = app.dataframe(...)
 sdf = (
     # Define a sliding window of 1h
     # You can also pass duration_ms as integer of milliseconds
-    .sliding_window(duration_ms=timedelta(hours=1))
+    sdf.sliding_window(duration_ms=timedelta(hours=1))
 
     # Specify the "mean" aggregate function
     .agg(avg_temperature=Mean("temperature"))
@@ -491,7 +491,7 @@ sdf = app.dataframe(...)
 
 sdf = (
     # Define a count-based sliding window of 3 events
-    .sliding_count_window(count=3)
+    sdf.sliding_count_window(count=3)
 
     # Specify the "mean" aggregate function
     .agg(average=Mean("amount"))
@@ -806,6 +806,76 @@ if __name__ == '__main__':
 ```
 
 
+### Early window expiration with triggers
+!!! info New in v3.24.0
+
+To expire windows before their natural expiration time based on custom conditions, you can pass `before_update` or `after_update` callbacks to `.tumbling_window()` and `.hopping_window()` methods.
+
+This is useful when you want to emit results as soon as certain conditions are met, rather than waiting for the window to close naturally.
+
+**How it works**:
+
+- The `before_update` callback is invoked before the window aggregation is updated with a new value.
+- The `after_update` callback is invoked after the window aggregation has been updated with a new value.
+- Both callbacks receive: `aggregated` (current or updated aggregated value), `value` (incoming value), `key`, `timestamp`, and `headers`.
+- For `collect()` operations without aggregation, `aggregated` contains the list of collected values.
+- If either callback returns `True`, the window is immediately expired and emitted downstream.
+- The window metadata is deleted from state, but collected values (if using `.collect()`) remain until natural expiration.
+- This means a triggered window can be "resurrected" if new data arrives within its time range - a new window will be created with the previously collected values still present.
+
+**Example with after_update**:
+
+```python
+from typing import Any
+
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+
+def trigger_on_threshold(
+    aggregated: int, value: Any, key: Any, timestamp: int, headers: Any
+) -> bool:
+    """
+    Expire the window early when the sum exceeds 1000.
+    """
+    return aggregated > 1000
+
+
+# Define a 1-hour tumbling window with early expiration trigger
+sdf = (
+    sdf.tumbling_window(timedelta(hours=1), after_update=trigger_on_threshold)
+    .sum()
+    .final()
+)
+
+# Start the application
+if __name__ == '__main__':
+    app.run()
+
+```
+
+**Example with before_update**:
+
+```python
+def trigger_before_large_value(
+    aggregated: int, value: Any, key: Any, timestamp: int, headers: Any
+) -> bool:
+    """
+    Expire the window before adding a value if it would make the sum too large.
+    """
+    return (aggregated + value) > 1000
+
+
+sdf = (
+    sdf.tumbling_window(timedelta(hours=1), before_update=trigger_before_large_value)
+    .sum()
+    .final()
+)
+```
+
 
 ## Emitting results
 
@@ -837,7 +907,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).current()
 # -> Timestamp=102, value=1 -> emit {"start": 0, "end": 10000, "value": 3} 
 ```
 
-`.current()` methods instructs the window to return the aggregated result immediately after the message is processed, but the results themselves are not guaranteed to be final for the given interval.
+`.current()` method instructs the window to return the aggregated result immediately after the message is processed, but the results themselves are not guaranteed to be final for the given interval.
 
 The same window may receive another update in the future, and a new value with the same interval will be emitted.
 
@@ -946,7 +1016,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).final(closing_
 Windowed aggregations return aggregated results in the following format/schema:
 
 ```python
-{"start": <window start ms>, "end": <window end ms>, <aggregated result colum>: <aggregated value>}
+{"start": <window start ms>, "end": <window end ms>, <aggregated result column>: <aggregated value>}
 ```
 
 Since it is rather generic, you may need to transform it into your own schema.  

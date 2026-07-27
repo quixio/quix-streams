@@ -266,24 +266,33 @@ within the provided topic's folder structure.
 The default topic name the Application dumps to is based on the last folder name of 
 the `FileSource` `directory` as: `source__<last folder name>`.
 
-## Testing Locally
-
 Rather than connect to AWS, you can alternatively test your application using a local 
-emulated S3 host via Docker:
+emulated S3 host via Docker (using minio):
 
 1. Execute in terminal:
 
     ```bash
-    docker run --rm -d --name s3 \
-    -p 4566:4566 \
-    -e SERVICES=s3 \
-    -e EDGE_PORT=4566 \
-    -e DEBUG=1 \
-    localstack/localstack:latest
+    docker run --rm -d --name minio \
+    -p 9000-9001:9000-9001 \
+    -e MINIO_ROOT_USER=admin \
+    -e MINIO_ROOT_PASSWORD=admin_pw \
+    -v /data \
+    quay.io/minio/minio server /data --console-address ":9001"
     ```
+2. 
+    - Navigate to the UI at `http://localhost:9001`
+    - Authenticate with `username=admin`, `password=admin_pw`
+    - Create a bucket.
 
-2. Set `endpoint_url` for `S3Origin` _OR_ the `AWS_ENDPOINT_URL_S3` 
-    environment variable to `http://localhost:4566`
-
-3. Set all other `aws_` parameters for `S3Origin` to _any_ string. 
-They will not be used, but they must still be populated!
+3. Connect using the following:
+    ```python
+    from quixstreams.sources.community.file.s3 import S3FileSource
+    
+    S3FileSource(
+        bucket="<YOUR BUCKET NAME>",
+        aws_access_key_id='admin',
+        aws_secret_access_key='admin_pw',
+        region_name='us-east-1',
+        endpoint_url='http://localhost:9000',
+    )
+    ```

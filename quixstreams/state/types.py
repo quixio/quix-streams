@@ -441,13 +441,11 @@ class WindowedPartitionTransaction(Protocol[K, V]):
 
     def delete_window(self, start_ms: int, end_ms: int, prefix: bytes) -> None:
         """
-        Delete a specific window from RocksDB.
+        Delete a single window defined by start and end timestamps.
 
-        This method removes a single window entry with the specified start and end timestamps.
-
-        :param start_ms: The start timestamp of the window to delete
-        :param end_ms: The end timestamp of the window to delete
-        :param prefix: The key prefix for the window
+        :param start_ms: start of the window in milliseconds
+        :param end_ms: end of the window in milliseconds
+        :param prefix: a key prefix
         """
         ...
 

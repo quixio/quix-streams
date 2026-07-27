@@ -4,15 +4,12 @@
 In Quix Streams, aggregation operations are divided into two groups: **Aggregators** and **Collectors**. 
 
 ### Aggregators
-**Aggregators** incrementally combine the current value and the aggregated data and store the result to the state.   
-Use them when the aggregation operation can be performed in incremental way, like counting items. 
-
+**Aggregators** process each incoming message immediately and store only the running result (e.g. a running sum or count). The individual messages are not retained.
+Use them when the result can be computed incrementally without keeping all raw data, like counting items or summing values.
 
 ### Collectors
-**Collectors** accumulate individual values in the state before performing any aggregation.
-
-They can be used to batch items into a collection, or when the aggregation operation needs 
-the full dataset, like calculating a median.
+**Collectors** store every raw message value in state until the window closes, at which point a final computation runs over all collected items.
+Use them when the final calculation requires all data at once, like calculating a median or producing a sorted list.
 
 **Collectors** are optimized for storing individual values to the state and perform significantly better than **Aggregators** when you need to accumulate values into a list.
 
@@ -138,7 +135,7 @@ sdf = (
 #   'start': <window start>, 
 #   'end': <window end>, 
 #   'min_temperature': 9999  - minimum temperature
-# }****
+# }
 ```
 
 
@@ -241,7 +238,7 @@ Whenever the state key changes, the aggregation's state is reset.
 
 **Example 1. Power sum**
 
-Calculate the sum of the power of incoming data over a 10-minute tumbing window,.
+Calculate the sum of the power of incoming data over a 10-minute tumbling window.
 
 ```python
 from datetime import timedelta
@@ -317,7 +314,7 @@ class TemperatureAggregator(Aggregator):
         return {
             "min_temp": stored["min_temp"],
             "max_temp": stored["max_temp"],
-            "total_events": stored["total_events"]
+            "total_events": stored["total_events"],
             "avg_temp": stored["sum_temp"] / stored["total_events"]
         }
         
@@ -360,7 +357,7 @@ It is called when the window is closed with an iterable of all the collected ite
 
 By default, **Collectors** always store the full message.  
 
-If you only need in a specific column, you can override the [`column`](api-reference/quixstreams.md#basecollectorcolumn) property to specify which column needs to be stored.
+If you only need a specific column, you can override the [`column`](api-reference/quixstreams.md#basecollectorcolumn) property to specify which column needs to be stored.
 
 
 **Example:**

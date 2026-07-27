@@ -9,6 +9,8 @@ from quixstreams.state import (
 from .base import (
     MultiAggregationWindowMixin,
     SingleAggregationWindowMixin,
+    WindowAfterUpdateCallback,
+    WindowBeforeUpdateCallback,
     WindowKeyResult,
     WindowOnLateCallback,
 )
@@ -52,8 +54,23 @@ class SessionWindow(TimeWindow):
         name: str,
         dataframe: "StreamingDataFrame",
         on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ):
-        super().__init__(name=name, dataframe=dataframe, on_late=on_late)
+        # `before_update` / `after_update` are accepted to satisfy the common
+        # window constructor contract, but session windows do not support
+        # trigger callbacks yet: a bridging event has no single "current value"
+        # to offer `before_update` (it may match two sessions), and a forced
+        # early close breaks the "maximal, disjoint, non-adjacent" guarantee of
+        # the emitted sessions. `SessionWindowDefinition` rejects non-None
+        # callbacks at build time, mirroring the sliding-window guard.
+        super().__init__(
+            name=name,
+            dataframe=dataframe,
+            on_late=on_late,
+            before_update=before_update,
+            after_update=after_update,
+        )
 
         self._inactivity_gap_ms = inactivity_gap_ms
         self._grace_ms = grace_ms
@@ -63,6 +80,7 @@ class SessionWindow(TimeWindow):
         value: Any,
         key: Any,
         timestamp_ms: int,
+        headers: Any,
         transaction: WindowedPartitionTransaction,
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         state = transaction.as_state(prefix=key)
