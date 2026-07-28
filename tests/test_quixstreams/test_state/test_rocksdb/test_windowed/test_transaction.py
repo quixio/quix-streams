@@ -536,6 +536,43 @@ class TestIterWindows:
         assert first == ((0, 1), 0, prefix)
         spy.assert_not_called()
 
+    def test_prefix_leak_for_separator_extended_key(
+        self, windowed_rocksdb_store_factory
+    ):
+        """
+        Review finding F1: `_PREFIX_UPPER_BOUND` is meant to bound exactly one
+        prefix's windows, but a message key that is a SEPARATOR-extension of
+        another key (`b"user|123"` extends `b"user"`) serializes to a window
+        key that sorts *inside* `b"user"`'s bound (`b"user"` + SEPARATOR +
+        `<8 bytes>` + SEPARATOR + `<8 bytes>` sorts below `b"user"` +
+        `_PREFIX_UPPER_BOUND` because any real byte after the separator is far
+        below `0xff`). `iter_windows(prefix=b"user", ...)` must not leak
+        `b"user|123"`'s windows.
+        """
+        store = windowed_rocksdb_store_factory()
+        store.assign_partition(0)
+        prefix = b"user"
+        extended_prefix = b"user|123"
+
+        with store.start_partition_transaction(0) as tx:
+            tx.update_window(
+                start_ms=0, end_ms=1, value=1, timestamp_ms=0, prefix=prefix
+            )
+            tx.update_window(
+                start_ms=1000,
+                end_ms=1001,
+                value=2,
+                timestamp_ms=1000,
+                prefix=extended_prefix,
+            )
+
+        with store.start_partition_transaction(0) as tx:
+            result = list(
+                tx.iter_windows(prefix=prefix, start_from_ms=0, start_to_ms=None)
+            )
+
+        assert result == [((0, 1), 1, prefix)]
+
 
 class TestIterPrefixes:
     """Validates spec §7.5: `iter_prefixes` (B6 fix)."""
@@ -575,3 +612,40 @@ class TestIterPrefixes:
             prefixes = list(tx.iter_prefixes())
 
         assert prefixes == [key_a, key_b, key_c]
+
+    def test_iter_prefixes_skips_separator_extended_key(
+        self, windowed_rocksdb_store_factory
+    ):
+        """
+        Review finding F2: `_iter_db_prefixes` seeks to
+        `prefix + _PREFIX_UPPER_BOUND` after yielding a prefix, assuming that
+        skips exactly that prefix's keys and nothing else. For a message key
+        that is a SEPARATOR-extension of another key (`b"user|123"` extends
+        `b"user"`), that seek target sorts *above* the extended key's window
+        keys too (see the companion `test_prefix_leak_for_separator_extended_
+        key` in `TestIterWindows`), so the extended key's prefix is skipped
+        and never yielded - both prefixes must be committed to the DB, not
+        left in the uncommitted cache, or the cache-merge side of
+        `iter_prefixes` would rescue it and the test would prove nothing.
+        """
+        store = windowed_rocksdb_store_factory()
+        store.assign_partition(0)
+        prefix = b"user"
+        extended_prefix = b"user|123"
+
+        with store.start_partition_transaction(0) as tx:
+            tx.update_window(
+                start_ms=1000, end_ms=1001, value=1, timestamp_ms=1000, prefix=prefix
+            )
+            tx.update_window(
+                start_ms=1000,
+                end_ms=1001,
+                value=2,
+                timestamp_ms=1000,
+                prefix=extended_prefix,
+            )
+
+        with store.start_partition_transaction(0) as tx:
+            prefixes = list(tx.iter_prefixes())
+
+        assert prefixes == [prefix, extended_prefix]

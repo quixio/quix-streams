@@ -594,7 +594,8 @@ class SessionWindowDefinition(WindowDefinition):
     Session windows group events separated by no more than `inactivity_gap_ms`.
     A session starts with the first event and extends each time a new event arrives
     within the inactivity gap. The session closes once the watermark passes
-    `last event + inactivity_gap_ms + grace_ms`.
+    `last event + 2 * inactivity_gap_ms + grace_ms` - the point at which no
+    admissible out-of-order event can extend it any more.
     """
 
     def __init__(

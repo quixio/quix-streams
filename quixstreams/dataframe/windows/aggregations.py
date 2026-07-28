@@ -9,6 +9,8 @@ from typing import (
     Union,
 )
 
+from quixstreams.core.stream.exceptions import InvalidOperation
+
 __all__ = [
     "Collect",
     "Count",
@@ -441,7 +443,9 @@ class Reduce(Aggregator, Generic[R]):
     :param initializer: A function building the state from the first value.
     :param merger: A function combining two accumulated states, required only for
         session windows. The reducer cannot be reused for this because it takes a
-        raw value, not a second state. Default - `None`.
+        raw value, not a second state. Subclasses may override `merge()` directly
+        instead of passing `merger=`; supplying both is contradictory and is
+        rejected when a session window is built. Default - `None`.
     """
 
     def __init__(
@@ -474,7 +478,26 @@ class Reduce(Aggregator, Generic[R]):
 
     @property
     def mergeable(self) -> bool:
-        return self._merger is not None
+        """
+        Whether this aggregator can be used with session windows.
+
+        True when a `merger=` function was supplied or when a subclass
+        overrides `merge()` directly - both are valid ways to implement
+        merging, and either one must satisfy the session-window build gate.
+
+        Supplying *both* is contradictory: Python method resolution would
+        silently ignore the `merger=` function in favour of the override.
+        That conflict raises here, at window-definition time, instead of
+        surfacing mid-stream on the first bridging merge.
+        """
+        merge_overridden = type(self).merge is not Reduce.merge
+        if merge_overridden and self._merger is not None:
+            raise InvalidOperation(
+                f"{type(self).__name__} both overrides `merge()` and was given a "
+                f"`merger=` function; the `merge()` override would silently take "
+                f"precedence. Provide only one of the two."
+            )
+        return merge_overridden or self._merger is not None
 
 
 I = TypeVar("I")

@@ -506,7 +506,7 @@ sdf = (
 
 Session windows group events that are separated by no more than a configured inactivity gap. Unlike fixed-time windows (tumbling, hopping, sliding), session windows have dynamic durations based on the actual timing of events. This makes them ideal for user activity tracking, fraud detection, and other event-driven scenarios.
 
-A session starts with the first event and extends each time a new event arrives within `inactivity_gap_ms` of the session's current boundary. The session closes once the watermark advances past `last_event + inactivity_gap + grace`.
+A session starts with the first event and extends each time a new event arrives within `inactivity_gap_ms` of the session's current boundary. The session closes once the watermark advances past `last_event + 2 * inactivity_gap + grace`.
 
 Key characteristics of session windows:
 
@@ -524,9 +524,9 @@ Events:  A         B              C    D              E
 inactivity_gap_ms: 10 seconds
 grace_ms:           2 seconds
 
-Session 1: [0, 11)  - events A(0), B(10)    closes when the watermark passes 22
-Session 2: [25, 31) - events C(25), D(30)   closes when the watermark passes 42
-Session 3: [45, 46) - event E(45)           closes when the watermark passes 57
+Session 1: [0, 11)  - events A(0), B(10)    closes when the watermark passes 32
+Session 2: [25, 31) - events C(25), D(30)   closes when the watermark passes 52
+Session 3: [45, 46) - event E(45)           closes when the watermark passes 67
 ```
 
 In this example:
@@ -538,7 +538,7 @@ In this example:
 
 `end` is always **exclusive**: the last event's timestamp plus one. Session 1's `end` of 11 means it contains events with timestamps up to and including 10.
 
-A session closes when the watermark passes `last_event + inactivity_gap + grace`. With `grace_ms=0` there is still a full inactivity gap of out-of-order tolerance: an event is accepted as long as its timestamp falls within `gap` of an existing session boundary.
+A session closes when the watermark passes `last_event + 2 * inactivity_gap + grace`. The gap appears twice because an event is still admissible if it arrives within one gap of the session's last event — the session cannot close until that possibility has passed. With `grace_ms=0` there is still a full inactivity gap of out-of-order tolerance: an event is accepted as long as its timestamp falls within `gap` of an existing session boundary.
 
 ### Basic Session Window Example
 
@@ -687,7 +687,7 @@ sdf.session_window(inactivity_gap_ms=timedelta(minutes=20)).agg(
 
 ### Session Window Parameters
 
-- **`inactivity_gap_ms`**: The maximum gap between two consecutive events of the same session. If no new event arrives within this interval of an existing session's boundary, the session closes. Can be specified as either an `int` (milliseconds) or a `timedelta` object.
+- **`inactivity_gap_ms`**: The maximum gap between two consecutive events of the same session. The gap governs closing twice over: a session closes when the watermark passes `last_event + 2 * inactivity_gap + grace`. The doubling ensures a session stays open as long as a new event could still legally arrive within one gap of the last event. Can be specified as either an `int` (milliseconds) or a `timedelta` object.
 
 - **`grace_ms`**: Delays closing by this amount, giving late events extra time to arrive. An event is late only when its timestamp falls below `watermark - inactivity_gap - grace`. With `grace_ms=0` (the default) there is still a full inactivity gap of out-of-order tolerance. Can be specified as either an `int` (milliseconds) or a `timedelta` object.
 

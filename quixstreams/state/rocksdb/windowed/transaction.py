@@ -4,7 +4,7 @@ from quixstreams.state.base.transaction import (
     PartitionTransactionStatus,
     validate_transaction_status,
 )
-from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
+from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR, SEPARATOR_LENGTH
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.rocksdb.cache import Cache
 from quixstreams.state.rocksdb.transaction import (
@@ -39,15 +39,24 @@ if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
 
 # The `<start>|<end>` suffix of a window key: two 8-byte big-endian integers
-# joined by the separator. Used to recognise (and skip past) window keys without
-# deserializing them.
+# joined by the separator. Used to recognise window keys without deserializing
+# them.
 _TIMESTAMPS_SEGMENT = encode_integer_pair(MAX_UINT64, MAX_UINT64)
 _TIMESTAMPS_SEGMENT_LEN = len(_TIMESTAMPS_SEGMENT)
-# The smallest byte string that is strictly greater than every window key of a
-# given prefix: `<prefix>|<0xff * 8>|<0xff * 8>` plus one trailing byte.
-# Seeking to `prefix + _PREFIX_UPPER_BOUND` skips exactly that prefix's windows
-# and nothing else.
-_PREFIX_UPPER_BOUND = SEPARATOR + _TIMESTAMPS_SEGMENT + b"\x00"
+# Byte length of a full window key minus its message-key prefix:
+# `|<start>|<end>`.
+_WINDOW_KEY_SUFFIX_LEN = SEPARATOR_LENGTH + _TIMESTAMPS_SEGMENT_LEN
+# The byte successor of the separator: `prefix + _SEPARATOR_SUCCESSOR` is the
+# smallest byte string strictly greater than every key that starts with
+# `prefix + SEPARATOR`, so it is an exact exclusive upper bound for that range.
+# >***NOTE:*** the range is a *superset* of `prefix`'s window keys. When one
+# message key is a SEPARATOR-extension of another (`b"user"` and `b"user|123"`
+# - raw bytes is the default key deserializer), the extension's window keys
+# also start with `prefix + SEPARATOR` and sort inside the range, interleaved
+# with the shorter key's windows. No pair of range bounds can separate the two,
+# so consumers must additionally check the exact key length
+# (`len(prefix) + _WINDOW_KEY_SUFFIX_LEN`) before attributing a key to `prefix`.
+_SEPARATOR_SUCCESSOR = bytes([SEPARATOR[0] + 1])
 
 
 class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
@@ -220,7 +229,7 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
 
         lower_bound = append_integer(base_bytes=prefix, integer=start_from_ms)
         if start_to_ms is None:
-            upper_bound = prefix + _PREFIX_UPPER_BOUND
+            upper_bound = prefix + _SEPARATOR_SUCCESSOR
         else:
             upper_bound = append_integer(
                 base_bytes=prefix, integer=min(start_to_ms + 1, MAX_UINT64)
@@ -248,8 +257,15 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         )
         delete_cache = self._update_cache.get_deletes(cf_name="default")
 
+        # Window keys of `prefix` are exactly this long; window keys of a
+        # SEPARATOR-extended message key (`b"user|123"` for `prefix=b"user"`)
+        # fall inside the same byte range but are longer - the length check is
+        # what keeps them from being yielded under the wrong prefix (see the
+        # `_SEPARATOR_SUCCESSOR` note at the top of the module).
+        window_key_len = len(prefix) + _WINDOW_KEY_SUFFIX_LEN
+
         for key, value in _merge_sorted(iter(cached_items), db_items, backwards):
-            if key in delete_cache:
+            if key in delete_cache or len(key) != window_key_len:
                 continue
             _, start, end = parse_window_key(key)
             yield ((start, end), self._deserialize_value(value), prefix)
@@ -259,8 +275,8 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         Yield each distinct message-key prefix present in the store, in key order.
 
         This is the cheap replacement for `keys()` when only the set of prefixes is
-        needed: instead of visiting every window key it seeks from one prefix to
-        the next, so the cost is one seek per prefix rather than one per window.
+        needed: window keys are streamed once, without deserializing values or
+        merging the per-key update caches, and deduplicated into prefixes.
 
         Prefixes that exist only in the uncommitted update cache are merged in.
 
@@ -293,36 +309,38 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
 
     def _iter_db_prefixes(self, cf_name: str) -> Iterator[bytes]:
         """
-        Yield the distinct prefixes stored in RocksDB, in key order, by seeking
-        past the whole key range of every prefix that has been visited.
-        """
-        seek = b""
-        while True:
-            item = next(
-                self._partition.iter_items(lower_bound=seek, cf_name=cf_name),
-                None,
-            )
-            if item is None:
-                return
+        Yield the distinct message-key prefixes stored in RocksDB, each exactly
+        once, in the order their first window key appears in the DB.
 
-            key = item[0]
+        This is a linear pass over the window keys. No seek can step past a
+        visited prefix's whole key range without risking skipping other
+        prefixes: when one message key is a SEPARATOR-extension of another
+        (`b"user"` and `b"user|123"`), the extension's window keys live
+        *inside* the shorter key's byte range (see `_SEPARATOR_SUCCESSOR`).
+        For session stores the pass is cheap: closed sessions are deleted, so
+        the column family only holds the open sessions.
+
+        First-appearance order equals byte order for realistic data; it can
+        deviate only when an extended key's first extension byte is `0x00` or
+        a window start exceeds 2**56 ms. In those pathological cases the
+        sorted merge in `iter_prefixes` may repeat a prefix that also exists
+        in the update cache; the session expiry sweep tolerates that (a second
+        sweep of the same prefix finds nothing new to expire).
+        """
+        seen: set[bytes] = set()
+        for key, _ in self._partition.iter_items(lower_bound=b"", cf_name=cf_name):
             if len(key) <= _TIMESTAMPS_SEGMENT_LEN:
                 # A key too short to hold `<prefix>|<start>|<end>`. This includes
                 # windows of a message key that serializes to empty bytes, which
                 # the windowed store cannot address anyway (`get_windows` and
                 # `iter_windows` build their bounds with a leading separator that
-                # such keys do not have). Step over it one key at a time instead of
-                # guessing a prefix and seeking past unrelated keys.
-                seek = key + b"\x00"
+                # such keys do not have).
                 continue
 
             prefix, _, _ = parse_window_key(key)
-            yield prefix
-            # Strictly greater than every `<prefix>|<start>|<end>` key, and no
-            # greater than the first key of the next prefix.
-            next_seek = prefix + _PREFIX_UPPER_BOUND
-            # Defensive: never seek backwards, it would loop forever.
-            seek = next_seek if next_seek > key else key + b"\x00"
+            if prefix not in seen:
+                seen.add(prefix)
+                yield prefix
 
     def get_window(
         self,

@@ -40,11 +40,15 @@ class SessionWindow(TimeWindow):
     Sessions are stored and emitted half-open, `[start, end)`, like every other
     window type: `end` is the timestamp of the last event plus one.
 
-    A session closes once the watermark passes `last event + gap + grace`, and an
-    event is late only when `ts < watermark - gap - grace`. `grace_ms` therefore
-    plays no part in assigning events to sessions - it only delays closing - which
-    is what makes the default `grace_ms=0` safe: it still leaves a full inactivity
-    gap of out-of-order tolerance.
+    An event is late only when `ts < watermark - gap - grace`, and a session
+    closes once the watermark passes `last event + 2 * gap + grace`. The extra
+    `gap` in the closing rule is what keeps the two rules consistent: an
+    admissible event may arrive with a timestamp as low as
+    `watermark - gap - grace` and extend a session whose last event is up to one
+    gap before it, so a session may only close once no admissible event can
+    reach it any more. `grace_ms` plays no part in assigning events to sessions
+    - it only delays closing - which is what makes the default `grace_ms=0`
+    safe: it still leaves a full inactivity gap of out-of-order tolerance.
     """
 
     def __init__(
@@ -96,23 +100,43 @@ class SessionWindow(TimeWindow):
         #    persisted, so a key that goes silent keeps its watermark and the
         #    partition scope keeps a clock that is independent of any single key.
         if by_partition:
-            watermark = transaction.advance_partition_timestamp(timestamp_ms)
+            # The current key's persisted watermark is folded in so that
+            # history recorded under `closing_strategy="key"` keeps counting
+            # after a switch to `"partition"`: the partition slot starts at 0,
+            # and without the fold a replayed event could land inside a session
+            # that was already emitted under the key strategy and produce an
+            # overlapping duplicate. In steady partition-mode operation the
+            # fold is a no-op, because every per-key watermark was itself
+            # already observed through this very slot.
+            watermark = transaction.advance_partition_timestamp(
+                max(timestamp_ms, state.get_latest_timestamp() or 0)
+            )
         else:
             watermark = max(timestamp_ms, state.get_latest_timestamp() or 0)
 
-        # Sessions with `end <= close_before` are closed; events below it are late.
-        close_before = watermark - gap - grace
+        # Events below `late_before` are dropped as late; sessions with
+        # `end <= close_before` are closed. The two thresholds are one `gap`
+        # apart: an admissible event (`ts >= late_before`) can still extend a
+        # session whose last event is at most one gap before it, so a session
+        # may only close once even the earliest admissible event can no longer
+        # reach it - `last + gap < late_before`, i.e. `end <= late_before - gap`.
+        # Sharing a single threshold would let an event at exactly
+        # `ts == late_before` be accepted after its session was closed and open
+        # a second session less than one gap after it, breaking the
+        # non-adjacency guarantee documented above.
+        late_before = watermark - gap - grace
+        close_before = late_before - gap
 
         # 2. Lateness. Note that `gap` is part of the formula: with grace_ms=0
         #    there is still a full gap of out-of-order tolerance.
-        if timestamp_ms < close_before:
+        if timestamp_ms < late_before:
             self._on_expired_window(
                 value=value,
                 key=key,
                 start=timestamp_ms,
                 end=timestamp_ms + 1,
                 timestamp_ms=timestamp_ms,
-                late_by_ms=close_before - timestamp_ms,
+                late_by_ms=late_before - timestamp_ms,
             )
             return [], []
 
@@ -141,14 +165,21 @@ class SessionWindow(TimeWindow):
             session_end = max(following_end, timestamp_ms + 1)
             state.delete_window(previous_start, previous_end)
             state.delete_window(following_start, following_end)
-            aggregated = (
-                self._merge_values(
+            if aggregate:
+                # A session persisted by a collect-only window stores `None`.
+                # Treat it as "not initialized yet" - like `FixedTimeWindow`
+                # does - so that adding an aggregation to an existing store
+                # re-aggregates instead of crashing on the stored `None`.
+                if previous_agg is None:
+                    previous_agg = self._initialize_value()
+                if following_agg is None:
+                    following_agg = self._initialize_value()
+                aggregated = self._merge_values(
                     self._aggregate_value(previous_agg, value, timestamp_ms),
                     following_agg,
                 )
-                if aggregate
-                else None
-            )
+            else:
+                aggregated = None
         elif len(matched) == 1:
             (matched_start, matched_end), matched_agg, _ = matched[0]
             session_start = min(matched_start, timestamp_ms)
@@ -157,11 +188,13 @@ class SessionWindow(TimeWindow):
                 # The RocksDB key encodes (start, end), so a resized session is
                 # written under a new key and the old one must be removed.
                 state.delete_window(matched_start, matched_end)
-            aggregated = (
-                self._aggregate_value(matched_agg, value, timestamp_ms)
-                if aggregate
-                else None
-            )
+            if aggregate:
+                # See the `None` note in the two-match branch above.
+                if matched_agg is None:
+                    matched_agg = self._initialize_value()
+                aggregated = self._aggregate_value(matched_agg, value, timestamp_ms)
+            else:
+                aggregated = None
         else:
             session_start, session_end = timestamp_ms, timestamp_ms + 1
             aggregated = (
@@ -177,6 +210,17 @@ class SessionWindow(TimeWindow):
             session_start, session_end, value=aggregated, timestamp_ms=timestamp_ms
         )
 
+        # A configuration change across a restart (e.g. a larger `grace_ms`)
+        # can make an event admissible below this key's persisted expiry
+        # cursor and write a session that `expire_by_key`'s
+        # `scan_from = cursor + 1` would never see again. Re-lower the cursor
+        # so the new session stays visible to expiry. Within one configuration
+        # this never triggers: accepted events always sort above every expired
+        # session (see the cursor note in `expire_by_key`).
+        cursor = state.get_expiry_checkpoint()
+        if cursor is not None and session_start <= cursor:
+            state.set_expiry_checkpoint(session_start - 1)
+
         updated_windows: list[WindowKeyResult] = []
         if aggregate:
             updated_windows.append(
@@ -187,10 +231,15 @@ class SessionWindow(TimeWindow):
         expired_windows: list[WindowKeyResult]
         if by_partition:
             # Lower the partition checkpoint so that a brand-new key cannot be
-            # missed by the gate below. See `expire_by_partition`.
+            # missed by the gate below. An unset (`None`) checkpoint already
+            # means "sweep unconditionally" and must stay unset: replacing it
+            # with this session's own candidate - which always exceeds this
+            # message's watermark - would gate the very sweep this call is
+            # about to run and defer already-due sessions of other keys.
+            # See `expire_by_partition`.
             checkpoint = transaction.get_expiry_checkpoint()
-            expiry_candidate = session_end + gap + grace
-            if checkpoint is None or expiry_candidate < checkpoint:
+            expiry_candidate = session_end + 2 * gap + grace
+            if checkpoint is not None and expiry_candidate < checkpoint:
                 transaction.set_expiry_checkpoint(expiry_candidate)
             expired_windows = self.expire_by_partition(
                 transaction, watermark, close_before, collect
@@ -250,9 +299,12 @@ class SessionWindow(TimeWindow):
             if collect:
                 state.delete_from_collection(end=end, start=start)
 
-        # The cursor is the start of the last expired session. It can never skip a
-        # future session: any accepted event has `ts >= close_before > expired.last`,
-        # so no new or resized session can start at or below it.
+        # The cursor is the start of the last expired session. Within one
+        # configuration it can never skip a live session: any accepted event
+        # has `ts >= close_before + gap > expired.last`, so no new or resized
+        # session can start at or below it. If a configuration change (e.g. a
+        # larger `grace_ms`) makes an older event admissible again,
+        # `process_window` re-lowers the cursor when it writes below it.
         state.set_expiry_checkpoint(closing[-1][0][0])
         return results
 
@@ -268,12 +320,14 @@ class SessionWindow(TimeWindow):
 
         The sweep is gated by a persisted checkpoint - the earliest watermark value
         at which some session in the partition may close - so the common
-        per-message cost is `O(1)`. The checkpoint is only ever lowered between
-        sweeps and recomputed exactly at each sweep, so it is always at or below
-        the true minimum: a due close is never skipped, and a stale checkpoint
+        per-message cost is `O(1)`. An unset checkpoint means "sweep
+        unconditionally". Between sweeps the checkpoint is only ever lowered,
+        and each sweep recomputes it exactly, so it is always at or below the
+        true minimum: a due close is never skipped, and a stale checkpoint
         costs one extra sweep rather than a wrong result.
 
-        >***NOTE:*** A sweep itself costs one seek per message-key prefix. There is
+        >***NOTE:*** A sweep itself costs one pass over the stored window keys
+        (to enumerate prefixes) plus one seek per prefix (to expire). There is
         no cross-prefix ordering by window end in the primary key space, so no
         seek trick avoids it; the gate amortises it over a gap's worth of event
         time in the common "few keys, many events" case. A `(end, prefix, start)`
@@ -283,7 +337,10 @@ class SessionWindow(TimeWindow):
         if checkpoint is not None and watermark < checkpoint:
             return []
 
-        expire_after = self._inactivity_gap_ms + self._grace_ms
+        # A session with end `E` may close once `watermark - 2 * gap - grace
+        # >= E` (see the threshold note in `process_window`), so the earliest
+        # watermark at which it can close is `E + 2 * gap + grace`.
+        expire_after = 2 * self._inactivity_gap_ms + self._grace_ms
         results: list[WindowKeyResult] = []
         next_checkpoint = _NO_OPEN_SESSIONS
 
