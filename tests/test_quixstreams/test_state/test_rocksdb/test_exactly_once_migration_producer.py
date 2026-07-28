@@ -91,8 +91,8 @@ class TestCompletionUsesMigrationProducer:
         def _flush(*_a, **_k):
             # Fire every recorded ``on_delivery`` callback with a successful
             # delivery before reporting a drained (0) queue, mirroring a real
-            # producer serving its callbacks on flush. Without this,
-            # ``_backfill_acked`` never catches up to ``_backfill_produced``
+            # producer serving its callbacks on flush. Without this, the produce
+            # phase's acked count never catches up to its produced count
             # and the M3 drained-but-unacked check (partition.py) raises
             # ``ChangelogFlushError`` spuriously.
             for call in migration.produce.call_args_list:

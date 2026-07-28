@@ -11,6 +11,7 @@ from quixstreams.models import HeadersMapping
 from quixstreams.state import PartitionTransaction
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.base.migration_flush import (
+    MigrationDeliveryPhase,
     MigrationFlushVerdict,
     confirm_migration_delivery,
 )
@@ -227,21 +228,6 @@ class MemoryStorePartition(StorePartition):
         # ``RocksDBStorePartition._high_water_warned``).
         self._high_water_warned: bool = False
 
-        # Per-partition delivery accounting for the memory
-        # migration produce sites (live populated-legacy backfill, recovery-
-        # completion re-stamps, done-marker). Mirrors ``RocksDBStorePartition``:
-        # the done-marker flush confirmation compares THIS partition's
-        # ``produced - acked`` rather than the shared producer's GLOBAL flush
-        # count, so a sibling partition's wedged records cannot falsely raise on
-        # this partition's marker. Accounting is PHASE-LOCAL (parity):
-        # ``_produce_migration_done_marker`` zeroes both counters at the start of
-        # its phase so a stale skew from an earlier, already-adjudicated failure
-        # can never wedge a later marker. On the memory backend that stale-skew
-        # sequence is not currently reachable (see the reset comment there), so
-        # the reset is inert hygiene kept in lockstep with RocksDB.
-        self._backfill_produced: int = 0
-        self._backfill_acked: int = 0
-
         # Parity with ``RocksDBStorePartition``. A memory
         # partition is non-persistent (fresh ``_state`` every open), so this is
         # always False at construction — the ``_recovery_saw_migration_done``
@@ -331,17 +317,6 @@ class MemoryStorePartition(StorePartition):
         ``RocksDBStorePartition._now_ms``.
         """
         return int(time.time() * 1000)
-
-    def _on_backfill_delivery(
-        self, err: Optional[object], msg: Optional[object] = None
-    ) -> None:
-        """Chained delivery callback for the memory migration produce sites.
-        Counts a successful delivery so the done-marker flush confirmation can
-        measure THIS partition's own outstanding records instead of the shared
-        producer's global queue depth. Mirrors
-        ``RocksDBStorePartition._on_backfill_delivery``."""
-        if err is None:
-            self._backfill_acked += 1
 
     def close(self) -> None:
         self._closed = True
@@ -853,6 +828,10 @@ class MemoryStorePartition(StorePartition):
                 CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
             }
 
+        # ONE delivery-accounting phase for this whole re-stamp pass,
+        # constructed before the loop so the single confirm below judges every
+        # record this pass produced.
+        phase = MigrationDeliveryPhase()
         produced = False
         for key in list(pending.keys()):
             raw_value = default.get(key)
@@ -875,10 +854,10 @@ class MemoryStorePartition(StorePartition):
                     value=stamped,
                     headers=headers,
                     migration=True,
-                    # Per-partition delivery accounting.
-                    on_delivery=self._on_backfill_delivery,
+                    # Per-phase delivery accounting.
+                    on_delivery=phase.on_delivery,
                 )
-                self._backfill_produced += 1
+                phase.record_produced()
                 produced = True
             pending.pop(key, None)
 
@@ -932,6 +911,7 @@ class MemoryStorePartition(StorePartition):
             self._confirm_migration_delivery_or_raise(
                 self._changelog_producer,
                 "legacy re-stamp changelog record(s) during recovery completion",
+                phase,
             )
 
         # Drain the (now-empty) census.
@@ -945,9 +925,10 @@ class MemoryStorePartition(StorePartition):
         self,
         changelog_producer: Optional[ChangelogProducer],
         context: str,
+        phase: MigrationDeliveryPhase,
     ) -> None:
         """
-        Single bounded migration flush + per-partition confirm-or-raise, shared
+        Single bounded migration flush + per-phase confirm-or-raise, shared
         by the live in-RAM backfill, the recovery-completion re-stamp loop and
         the done-marker. Delegates to the shared helper
         (:func:`quixstreams.state.base.migration_flush.confirm_migration_delivery`,
@@ -959,21 +940,27 @@ class MemoryStorePartition(StorePartition):
 
         See the helper's module docstring for the decision table: a non-int
         flush return (an unconfigured test double) is indeterminate and does NOT
-        block; a drained global queue with THIS partition still unacked
+        block; a drained global queue with THIS PHASE still unacked
         (``produced > acked``) means a FAILED delivery and raises; a positive
-        backlog is judged on THIS partition's own ``produced - acked`` (falling
-        back to the producer's global int return only when this partition
+        backlog is judged on THIS PHASE's own ``produced - acked`` (falling
+        back to the producer's global int return only when this phase
         produced nothing through the counter-tracked route), so a sibling
         partition's wedged records never falsely raise here. Raises
-        :class:`ChangelogFlushError` on a positive per-partition outstanding
+        :class:`ChangelogFlushError` on a positive per-phase outstanding
         (the caller then retries).
+
+        :param phase: the :class:`MigrationDeliveryPhase` whose records the
+            caller produced — REQUIRED, with no default. A defaulted fresh phase
+            would report ``produced == 0`` for an un-migrated caller, which on a
+            drained queue confirms unconditionally and would silently disable
+            changelog-first for that caller.
         """
         outcome = confirm_migration_delivery(
             changelog_producer,
-            # A live (re-read per slice) view of this partition's delivery
-            # accounting: ``_backfill_acked`` is mutated by the delivery
+            # A live (re-read per slice) view of this phase's delivery
+            # accounting: the acked counter is mutated by the delivery
             # callbacks that ``flush()`` serves.
-            counters=lambda: (self._backfill_produced, self._backfill_acked),
+            counters=phase.counters,
             slice_timeout_s=_MIGRATION_MARKER_FLUSH_TIMEOUT_S,
             max_slices=1,
         )
@@ -1014,25 +1001,26 @@ class MemoryStorePartition(StorePartition):
         completion retries); the changelog-carried marker is what a cold rebuild
         learns "done, never redo" from (the in-RAM dict does not survive a
         restart).
+
+        **Why a memory-side marker anomaly is comparatively harmless** (recorded
+        because the previous justification — "the skew is unreachable on memory"
+        — was the weaker and wrong one): the local ``TTL_MIGRATION_DONE_KEY``
+        write is **durably meaningless** on a non-persistent backend. It is read
+        only by ``__init__``'s ``_migration_done_at_open`` probe, on a dict the
+        store never seeds, and by the replay latch in ``state/recovery.py``.
+        **Memory's sole durable artifact is the changelog** — which is exactly
+        what the changelog-first ordering above protects.
         """
         marker_value = int_to_bytes(STATE_FORMAT_VERSION)
         if self._changelog_producer is not None:
-            # PHASE-LOCAL delivery accounting (parity with
-            # ``RocksDBStorePartition._produce_migration_done_marker``): judge
-            # THIS marker's confirm on its own produce/ack pair only, so a stale
-            # ``produced > acked`` skew from an earlier, already-adjudicated
-            # phase can never wedge a later marker. On the memory backend every
-            # reachable call site already starts at ``produced == acked`` (the
-            # swallowed empty-census marker and ``corroborate_adoption`` are
-            # mutually exclusive on one instance — ``_adopt_provisional`` is
-            # only set by census branches that produce nothing, and a raise on
-            # the critical paths destroys the in-RAM partition with its
-            # process), so this reset is inert hygiene kept in lockstep with the
-            # RocksDB backend, where the skew IS reachable. It cannot mask an
-            # in-phase shortfall: the phase produces exactly one record, so a
-            # failed marker still shows ``produced=1 > acked=0`` and raises.
-            self._backfill_produced = 0
-            self._backfill_acked = 0
+            # PER-PHASE delivery accounting (identical structure to
+            # ``RocksDBStorePartition._produce_migration_done_marker``, for
+            # structural reasons on both backends — no reachability argument
+            # required on either side): this marker phase gets its own counter
+            # object, so its confirm judges only its own produce/ack pair. An ack
+            # from any earlier phase lands on that phase's object and cannot be
+            # observed here.
+            phase = MigrationDeliveryPhase()
             self._changelog_producer.produce(
                 key=TTL_MIGRATION_DONE_KEY,
                 value=marker_value,
@@ -1042,13 +1030,14 @@ class MemoryStorePartition(StorePartition):
                 },
                 # Non-transactional migration route (parity with RocksDB).
                 migration=True,
-                # Count this record against THIS partition's outstanding.
-                on_delivery=self._on_backfill_delivery,
+                # Count this record against THIS phase's outstanding.
+                on_delivery=phase.on_delivery,
             )
-            self._backfill_produced += 1
+            phase.record_produced()
             self._confirm_migration_delivery_or_raise(
                 self._changelog_producer,
                 "__ttl_migration_done__ marker record(s)",
+                phase,
             )
         self._state.setdefault(TTL_SYSTEM_CF_NAME, {})[TTL_MIGRATION_DONE_KEY] = (
             marker_value
@@ -2043,6 +2032,11 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         # NOTHING is written to the local RAM store yet — the changelog must be
         # confirmed first (below) so the local store never gets ahead of it.
         pending_restamps: list[tuple[bytes, bytes]] = []
+        # ONE delivery-accounting phase for this backfill, owned by THIS method
+        # as a local — the partition holds no migration counters, so nothing is
+        # reached into (and the two ``SLF001`` waivers that used to sit on the
+        # produce/increment pair below are gone with them).
+        phase = MigrationDeliveryPhase()
         produced = False
         for key in list(default.keys()):
             if key in staged_keys:
@@ -2058,9 +2052,9 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                     value=stamped,
                     headers=headers,
                     migration=True,
-                    on_delivery=partition._on_backfill_delivery,  # noqa: SLF001
+                    on_delivery=phase.on_delivery,
                 )
-                partition._backfill_produced += 1  # noqa: SLF001
+                phase.record_produced()
                 produced = True
 
         # Phase 2: confirm delivery (bounded) BEFORE the local commit. Raises
@@ -2070,6 +2064,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                 self._changelog_producer,
                 "legacy re-stamp changelog record(s) during the populated-legacy "
                 "live backfill",
+                phase,
             )
 
         # Phase 3: local commit — mutate the RAM store + secondary index only now

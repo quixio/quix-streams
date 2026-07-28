@@ -23,6 +23,7 @@ from quixstreams.state.base import (
     StorePartition,
 )
 from quixstreams.state.base.migration_flush import (
+    MigrationDeliveryPhase,
     MigrationFlushVerdict,
     confirm_migration_delivery,
 )
@@ -293,26 +294,6 @@ class RocksDBStorePartition(StorePartition):
         # rationale as ``_unstamped_read_warned``) so a stream of mis-scaled
         # timestamps logs once, not once per record.
         self._high_water_warned: bool = False
-
-        # Per-partition delivery accounting for the
-        # legacy-TTL migration produce sites (live backfill / recovery-completion
-        # / done-marker). ``_backfill_produced`` counts records THIS partition
-        # produced through the migration route; ``_backfill_acked`` is incremented
-        # by the chained delivery callback on successful delivery. The backfill
-        # flush stall detector then compares ``produced - acked`` (this
-        # partition's outstanding) instead of ``Producer.flush()``'s GLOBAL
-        # in-flight count, so another partition's wedged records on the SHARED
-        # migration producer cannot falsely abort this one. Accounting is
-        # PHASE-LOCAL, not lifetime-cumulative: the chunked backfill /
-        # recovery-completion loops accumulate across their own chunks (a single
-        # operation), but ``_produce_migration_done_marker`` zeroes both counters
-        # at the start of its phase — a marker can legitimately run after an
-        # earlier, already-adjudicated delivery failure on the same instance
-        # (the swallowed empty-census marker, a failed corroboration retried by
-        # a later ``ttl=`` write), and a stale skew from that earlier phase must
-        # not permanently wedge every later confirm.
-        self._backfill_produced: int = 0
-        self._backfill_acked: int = 0
 
         # Resolve the **runtime** TTL flag. Subclasses that nail
         # ``uses_ttl_stamps = False`` at the class level (windowed,
@@ -1237,25 +1218,14 @@ class RocksDBStorePartition(StorePartition):
         """
         marker_value = int_to_bytes(STATE_FORMAT_VERSION)
         if self._changelog_producer is not None:
-            # PHASE-LOCAL delivery accounting: judge THIS marker's confirm on
-            # its own produce/ack pair only. The marker is the one migration
-            # produce phase that can run AFTER an earlier, already-adjudicated
-            # phase on the same partition instance (the empty-census best-effort
-            # marker whose delivery failure ``complete_recovery`` swallowed, or
-            # a prior ``corroborate_adoption`` marker whose confirm raised and
-            # failed the transaction). Without this reset that stale
-            # ``produced > acked`` skew never closes and every later marker —
-            # even one whose own delivery acks — trips the drained-but-unacked
-            # check, permanently wedging corroboration (and with it the sweep).
-            # The reset cannot mask a genuine in-phase shortfall: this phase
-            # produces exactly one record, so a failed marker still shows
-            # ``produced=1 > acked=0`` and raises. The only cross-phase ack that
-            # can land after the reset is a late delivery of a PREVIOUS marker
-            # attempt — a byte-identical record (same reserved key, same value,
-            # same headers), whose delivery satisfies the changelog-first
-            # invariant just as well.
-            self._backfill_produced = 0
-            self._backfill_acked = 0
+            # PER-PHASE delivery accounting: this marker phase gets its own
+            # counter object, so its confirm judges only its own produce/ack
+            # pair. An ack from any earlier phase on this partition (the
+            # empty-census best-effort marker whose delivery failure
+            # ``complete_recovery`` swallowed, an earlier chunked backfill) is
+            # credited to THAT phase's object and cannot be observed here —
+            # neither to wedge this marker nor to falsely confirm it.
+            phase = MigrationDeliveryPhase()
             self._changelog_producer.produce(
                 key=TTL_MIGRATION_DONE_KEY,
                 value=marker_value,
@@ -1268,15 +1238,15 @@ class RocksDBStorePartition(StorePartition):
                 # migration route under exactly-once (a transactional produce
                 # outside a transaction is invalid).
                 migration=True,
-                # Count this record against THIS partition's outstanding.
-                on_delivery=self._on_backfill_delivery,
+                # Count this record against THIS phase's outstanding.
+                on_delivery=phase.on_delivery,
             )
-            self._backfill_produced += 1
+            phase.record_produced()
             # Confirm the marker is durably on the changelog BEFORE the local
             # write; a stuck broker raises rather than marking the store done
             # ahead of the changelog (which would defeat the once-only guarantee
             # on a later cold rebuild that never sees the marker).
-            self._flush_backfill_changelog(self._changelog_producer)
+            self._flush_backfill_changelog(self._changelog_producer, phase)
         batch = WriteBatch(raw_mode=True)
         batch.put(
             TTL_MIGRATION_DONE_KEY,
@@ -2203,21 +2173,6 @@ class RocksDBStorePartition(StorePartition):
                     last_stamp = stamp
             return last_stamp
 
-    def _on_backfill_delivery(
-        self, err: Optional[object], msg: Optional[object] = None
-    ) -> None:
-        """
-        Chained delivery callback for the legacy-TTL migration produce
-        sites. Increments this partition's acked counter on a successful
-        delivery so :meth:`_flush_backfill_changelog` can measure THIS partition's
-        own outstanding records rather than the shared producer's global queue
-        depth. Delivery errors are surfaced by the producer's internal callback and
-        the flush stall detector (a wedged record simply never acks and trips the
-        no-progress abort), so only successful acks are counted here.
-        """
-        if err is None:
-            self._backfill_acked += 1
-
     def _log_backfill_flush_progress(self, outstanding: int, slice_no: int) -> None:
         """
         Per-slice DEBUG progress line for :meth:`_flush_backfill_changelog`
@@ -2232,7 +2187,9 @@ class RocksDBStorePartition(StorePartition):
         )
 
     def _flush_backfill_changelog(
-        self, changelog_producer: Optional[ChangelogProducer]
+        self,
+        changelog_producer: Optional[ChangelogProducer],
+        phase: MigrationDeliveryPhase,
     ) -> None:
         """
         Confirm a backfill / recovery-completion chunk's changelog delivery via
@@ -2250,9 +2207,9 @@ class RocksDBStorePartition(StorePartition):
 
         The loop flushes in ``_BACKFILL_CHANGELOG_FLUSH_SLICE_S`` slices, up to
         ``_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES`` of them, and bases the stall
-        decision on THIS partition's ``produced - acked`` counters rather than
+        decision on this phase's ``produced - acked`` counters rather than
         the shared producer's GLOBAL queue depth — see the helper's module
-        docstring for the full decision table (per-partition vs global
+        docstring for the full decision table (per-phase vs global
         accounting, the drained-but-unacked failure signature, the non-int
         "indeterminate" test-double return). The timeout measures *lack of
         progress*, not *total time*, so it is robust to a large
@@ -2260,13 +2217,19 @@ class RocksDBStorePartition(StorePartition):
         path (the dedicated non-transactional producer under exactly-once, else
         the main producer), so a confirmed flush means durable BEFORE the
         caller's local commit.
+
+        :param phase: the :class:`MigrationDeliveryPhase` whose records were
+            produced above — REQUIRED, with no default. A defaulted fresh phase
+            would report ``produced == 0`` for an un-migrated caller, which on a
+            drained queue confirms unconditionally and would silently disable
+            changelog-first for that caller.
         """
         outcome = confirm_migration_delivery(
             changelog_producer,
-            # A live (re-read per slice) view of this partition's delivery
-            # accounting: ``_backfill_acked`` is mutated by the delivery
+            # A live (re-read per slice) view of this phase's delivery
+            # accounting: the acked counter is mutated by the delivery
             # callbacks that each ``flush()`` slice serves.
-            counters=lambda: (self._backfill_produced, self._backfill_acked),
+            counters=phase.counters,
             # Read from this module's globals at CALL time (not captured at
             # import time / as defaults): tests monkeypatch them on this module
             # to shrink the loop.
@@ -2452,6 +2415,13 @@ class RocksDBStorePartition(StorePartition):
             }
 
         stamped_count = 0
+        # ONE delivery-accounting phase for the whole completion operation,
+        # constructed BEFORE the chunk loop: accounting is CUMULATIVE across the
+        # chunks of a single operation, so each chunk's confirm sees
+        # ``produced - acked`` over every chunk produced so far (a per-chunk
+        # object would reset the count and stop detecting a stall carried over
+        # from an earlier chunk).
+        phase = MigrationDeliveryPhase()
         # Seek-based continuation cursor. ``seek_from`` is the last
         # key of the previous chunk; that chunk deleted it from the pending CF, so
         # an inclusive ``from_key`` seek lands on the next live key and the scan
@@ -2506,13 +2476,13 @@ class RocksDBStorePartition(StorePartition):
                         value=stamped,
                         headers=headers,
                         migration=True,
-                        # Per-partition delivery accounting.
-                        on_delivery=self._on_backfill_delivery,
+                        # Per-phase delivery accounting.
+                        on_delivery=phase.on_delivery,
                     )
-                    self._backfill_produced += 1
+                    phase.record_produced()
                 # Confirm the chunk is durably on the changelog BEFORE the local
                 # commit; a stuck broker raises rather than writing local-ahead.
-                self._flush_backfill_changelog(self._changelog_producer)
+                self._flush_backfill_changelog(self._changelog_producer, phase)
 
             # COMMIT atomically: default puts + index puts + pending deletes. The
             # pending deletes are the durable cursor — a crash before this commit
@@ -2885,6 +2855,14 @@ class RocksDBStorePartition(StorePartition):
         # the original resume bug).
         prior_stamped = self._load_backfill_progress()
 
+        # ONE delivery-accounting phase for the whole backfill operation,
+        # constructed BEFORE the chunk loop: accounting is CUMULATIVE across the
+        # chunks of a single operation, so each chunk's confirm sees
+        # ``produced - acked`` over every chunk produced so far (a per-chunk
+        # object would reset the count and stop detecting a stall carried over
+        # from an earlier chunk).
+        phase = MigrationDeliveryPhase()
+
         restamped = 0
         run_pos = 0
         while run_pos < total:
@@ -2932,11 +2910,11 @@ class RocksDBStorePartition(StorePartition):
                         value=stamped,
                         headers=headers,
                         migration=True,
-                        # Per-partition delivery accounting.
-                        on_delivery=self._on_backfill_delivery,
+                        # Per-phase delivery accounting.
+                        on_delivery=phase.on_delivery,
                     )
-                    self._backfill_produced += 1
-                self._flush_backfill_changelog(changelog_producer)
+                    phase.record_produced()
+                self._flush_backfill_changelog(changelog_producer, phase)
 
             # ADVANCE the observability counter IN THE SAME batch as the chunk's
             # puts. It is cumulative (prior runs + this run) so it never regresses

@@ -16,9 +16,18 @@ changed behavior are pinned here explicitly:
 - ``max_slices == 1`` must reproduce the memory backend's single-shot shape
   exactly (one flush, positive outstanding -> SLICES_EXHAUSTED, no extra
   flush call).
+
+Three further cases pin the ``MigrationDeliveryPhase`` contract, since every
+production call site now passes a bound ``phase.counters``: that the bound
+method satisfies the ``Callable[[], tuple[int, int]]`` parameter, that a failed
+delivery is never counted as an ack, and that ``acked > produced`` is total
+(``CONFIRMED``, no raise, no negative count) on BOTH branches — documenting that
+the ``<= 0`` comparisons are totality rather than a guard against a state
+per-phase attribution makes unreachable.
 """
 
 from quixstreams.state.base.migration_flush import (
+    MigrationDeliveryPhase,
     MigrationFlushVerdict,
     confirm_migration_delivery,
 )
@@ -167,6 +176,57 @@ class TestConfirmMigrationDelivery:
         assert outcome.outstanding == 5
         assert len(producer.flush_calls) == 1
         assert outcome.slices_used == 1
+
+    def test_bound_phase_counters_satisfy_the_contract(self):
+        # A bound ``MigrationDeliveryPhase.counters`` is what every production
+        # call site passes, so pin that it satisfies the helper's
+        # ``Callable[[], tuple[int, int]]`` contract and reads live values.
+        phase = MigrationDeliveryPhase()
+        for _ in range(3):
+            phase.record_produced()
+        assert phase.counters() == (3, 0)
+        for _ in range(3):
+            phase.on_delivery(None)
+        assert phase.counters() == (3, 3)
+        assert (phase.produced, phase.acked) == (3, 3)
+
+        producer = _FakeProducer([0])
+        outcome = _confirm(producer, counters=phase.counters)
+        assert outcome.verdict is MigrationFlushVerdict.CONFIRMED
+        assert outcome.outstanding == 0
+        assert len(producer.flush_calls) == 1
+
+    def test_failed_delivery_is_not_acked_by_the_phase(self):
+        # ``on_delivery`` counts SUCCESSFUL deliveries only, so a phase whose
+        # record failed delivery stays at produced > acked and the drained
+        # queue is adjudicated DRAINED_UNACKED (never a silent CONFIRMED).
+        phase = MigrationDeliveryPhase()
+        phase.record_produced()
+        phase.on_delivery(RuntimeError("simulated delivery failure"))
+        assert phase.counters() == (1, 0)
+
+        producer = _FakeProducer([0])
+        outcome = _confirm(producer, counters=phase.counters)
+        assert outcome.verdict is MigrationFlushVerdict.DRAINED_UNACKED
+        assert outcome.outstanding == 1
+
+    def test_acked_exceeding_produced_is_total_and_confirms(self):
+        # Totality, not a reachable state: per-phase attribution makes
+        # ``acked <= produced`` structurally guaranteed (a phase's callback is
+        # only ever handed to that phase's own produce calls). A caller that
+        # nevertheless reports acked > produced must not raise, must not print a
+        # negative count, and must fall straight to CONFIRMED on BOTH branches
+        # (drained and positive-backlog).
+        drained = _FakeProducer([0])
+        outcome = _confirm(drained, counters=lambda: (0, 5))
+        assert outcome.verdict is MigrationFlushVerdict.CONFIRMED
+        assert outcome.outstanding == 0
+
+        backlogged = _FakeProducer([7])
+        outcome = _confirm(backlogged, counters=lambda: (2, 5))
+        assert outcome.verdict is MigrationFlushVerdict.CONFIRMED
+        assert outcome.outstanding == 0
+        assert len(backlogged.flush_calls) == 1
 
     def test_progress_callback_called_per_progressing_slice(self):
         producer = _FakeProducer([10, 6, 2, 0])
