@@ -302,9 +302,15 @@ class RocksDBStorePartition(StorePartition):
         # flush stall detector then compares ``produced - acked`` (this
         # partition's outstanding) instead of ``Producer.flush()``'s GLOBAL
         # in-flight count, so another partition's wedged records on the SHARED
-        # migration producer cannot falsely abort this one. Cumulative for the
-        # partition's lifetime; a migration runs at most once per partition so the
-        # running difference is always this migration's own outstanding backlog.
+        # migration producer cannot falsely abort this one. Accounting is
+        # PHASE-LOCAL, not lifetime-cumulative: the chunked backfill /
+        # recovery-completion loops accumulate across their own chunks (a single
+        # operation), but ``_produce_migration_done_marker`` zeroes both counters
+        # at the start of its phase — a marker can legitimately run after an
+        # earlier, already-adjudicated delivery failure on the same instance
+        # (the swallowed empty-census marker, a failed corroboration retried by
+        # a later ``ttl=`` write), and a stale skew from that earlier phase must
+        # not permanently wedge every later confirm.
         self._backfill_produced: int = 0
         self._backfill_acked: int = 0
 
@@ -1231,6 +1237,25 @@ class RocksDBStorePartition(StorePartition):
         """
         marker_value = int_to_bytes(STATE_FORMAT_VERSION)
         if self._changelog_producer is not None:
+            # PHASE-LOCAL delivery accounting: judge THIS marker's confirm on
+            # its own produce/ack pair only. The marker is the one migration
+            # produce phase that can run AFTER an earlier, already-adjudicated
+            # phase on the same partition instance (the empty-census best-effort
+            # marker whose delivery failure ``complete_recovery`` swallowed, or
+            # a prior ``corroborate_adoption`` marker whose confirm raised and
+            # failed the transaction). Without this reset that stale
+            # ``produced > acked`` skew never closes and every later marker —
+            # even one whose own delivery acks — trips the drained-but-unacked
+            # check, permanently wedging corroboration (and with it the sweep).
+            # The reset cannot mask a genuine in-phase shortfall: this phase
+            # produces exactly one record, so a failed marker still shows
+            # ``produced=1 > acked=0`` and raises. The only cross-phase ack that
+            # can land after the reset is a late delivery of a PREVIOUS marker
+            # attempt — a byte-identical record (same reserved key, same value,
+            # same headers), whose delivery satisfies the changelog-first
+            # invariant just as well.
+            self._backfill_produced = 0
+            self._backfill_acked = 0
             self._changelog_producer.produce(
                 key=TTL_MIGRATION_DONE_KEY,
                 value=marker_value,

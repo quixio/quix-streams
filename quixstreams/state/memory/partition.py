@@ -233,7 +233,12 @@ class MemoryStorePartition(StorePartition):
         # the done-marker flush confirmation compares THIS partition's
         # ``produced - acked`` rather than the shared producer's GLOBAL flush
         # count, so a sibling partition's wedged records cannot falsely raise on
-        # this partition's marker.
+        # this partition's marker. Accounting is PHASE-LOCAL (parity):
+        # ``_produce_migration_done_marker`` zeroes both counters at the start of
+        # its phase so a stale skew from an earlier, already-adjudicated failure
+        # can never wedge a later marker. On the memory backend that stale-skew
+        # sequence is not currently reachable (see the reset comment there), so
+        # the reset is inert hygiene kept in lockstep with RocksDB.
         self._backfill_produced: int = 0
         self._backfill_acked: int = 0
 
@@ -1012,6 +1017,22 @@ class MemoryStorePartition(StorePartition):
         """
         marker_value = int_to_bytes(STATE_FORMAT_VERSION)
         if self._changelog_producer is not None:
+            # PHASE-LOCAL delivery accounting (parity with
+            # ``RocksDBStorePartition._produce_migration_done_marker``): judge
+            # THIS marker's confirm on its own produce/ack pair only, so a stale
+            # ``produced > acked`` skew from an earlier, already-adjudicated
+            # phase can never wedge a later marker. On the memory backend every
+            # reachable call site already starts at ``produced == acked`` (the
+            # swallowed empty-census marker and ``corroborate_adoption`` are
+            # mutually exclusive on one instance — ``_adopt_provisional`` is
+            # only set by census branches that produce nothing, and a raise on
+            # the critical paths destroys the in-RAM partition with its
+            # process), so this reset is inert hygiene kept in lockstep with the
+            # RocksDB backend, where the skew IS reachable. It cannot mask an
+            # in-phase shortfall: the phase produces exactly one record, so a
+            # failed marker still shows ``produced=1 > acked=0`` and raises.
+            self._backfill_produced = 0
+            self._backfill_acked = 0
             self._changelog_producer.produce(
                 key=TTL_MIGRATION_DONE_KEY,
                 value=marker_value,

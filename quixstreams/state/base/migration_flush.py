@@ -92,7 +92,16 @@ class MigrationFlushOutcome:
     """Verdict plus the accounting the caller needs for its error message."""
 
     verdict: MigrationFlushVerdict
-    # This partition's undelivered record count; 0 for CONFIRMED/INDETERMINATE.
+    # The undelivered record count backing the verdict; 0 for
+    # CONFIRMED/INDETERMINATE. Two cases (decision-table rows 3-4):
+    # - when this partition produced through the counter-tracked migration
+    #   route (``produced > 0``), it is THIS partition's own
+    #   ``produced - acked``;
+    # - on the ``produced == 0`` fallback (counter-less direct-call test
+    #   doubles), it is ``flush()``'s int return — the GLOBAL in-flight count
+    #   across every topic/partition on the shared migration producer, not a
+    #   per-partition figure. Callers embedding it in per-partition-scoped
+    #   error text inherit that imprecision on the fallback path.
     outstanding: int
     slices_used: int
 
@@ -109,9 +118,17 @@ def confirm_migration_delivery(
     Run the bounded, progress-based migration flush loop and return a verdict.
 
     See the module docstring for the full decision table and its rationale.
-    This function never raises on delivery problems — mapping a non-CONFIRMED
-    verdict onto :class:`quixstreams.state.exceptions.ChangelogFlushError`
-    (with backend-specific message wording) is the caller's job.
+    This function never converts a verdict into a raise — mapping a
+    non-CONFIRMED verdict onto
+    :class:`quixstreams.state.exceptions.ChangelogFlushError` (with
+    backend-specific message wording) is the caller's job. ``flush()`` itself
+    may still raise
+    :class:`quixstreams.kafka.exceptions.KafkaProducerDeliveryError` (a
+    latched delivery error re-raised by ``InternalProducer._raise_for_error``),
+    which propagates to the caller unhandled — intentionally: the critical
+    migration paths let it fail the operation, and the sole best-effort site
+    (the empty-census done-marker in ``complete_recovery``) catches it
+    alongside ``ChangelogFlushError`` at the call site.
 
     :param changelog_producer: the partition's changelog producer, or ``None``
         (no changelog configured -> ``CONFIRMED`` no-op).
