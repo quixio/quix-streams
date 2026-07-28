@@ -306,8 +306,9 @@ def test_late_ack_from_earlier_phase_cannot_confirm_a_later_phase(tmp_path):
             "the late ack landed on the EARLIER (now otherwise unreferenced) "
             "phase object — that is the design, not a leak"
         )
-        assert second.__self__.counters() == (1, 0), (
-            "the later phase must see only its own produce, still unacked"
-        )
+        assert second.__self__.counters() == (
+            1,
+            0,
+        ), "the later phase must see only its own produce, still unacked"
     finally:
         partition.close()
