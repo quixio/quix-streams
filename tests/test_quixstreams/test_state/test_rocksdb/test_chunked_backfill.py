@@ -87,7 +87,7 @@ def _capture_default_cf_changelog(changelog_producer_mock):
 
 class TestChunkSizeValidation:
     def test_default_is_10k(self):
-        assert RocksDBOptions().legacy_backfill_chunk_size == 10_000
+        assert RocksDBOptions().legacy_backfill_chunk_size == 150_000
 
     def test_zero_raises(self):
         with pytest.raises(ValueError, match="strictly positive int"):

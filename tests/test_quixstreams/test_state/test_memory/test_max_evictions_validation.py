@@ -43,7 +43,7 @@ class TestMemoryPartitionMaxEvictionsValidation:
 
     def test_default_is_positive(self):
         partition = MemoryStorePartition(changelog_producer=None)
-        assert partition.max_evictions_per_flush == 10_000
+        assert partition.max_evictions_per_flush == 150_000
 
 
 class TestMemoryStoreMaxEvictionsValidation:
@@ -61,4 +61,4 @@ class TestMemoryStoreMaxEvictionsValidation:
 
     def test_default_is_positive(self):
         store = MemoryStore(name="s", stream_id="t")
-        assert store.create_new_partition(0).max_evictions_per_flush == 10_000
+        assert store.create_new_partition(0).max_evictions_per_flush == 150_000

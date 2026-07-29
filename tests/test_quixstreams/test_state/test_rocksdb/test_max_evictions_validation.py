@@ -28,4 +28,4 @@ class TestMaxEvictionsPerFlushValidation:
         assert RocksDBOptions(max_evictions_per_flush=5).max_evictions_per_flush == 5
 
     def test_default_is_positive(self):
-        assert RocksDBOptions().max_evictions_per_flush == 10_000
+        assert RocksDBOptions().max_evictions_per_flush == 150_000

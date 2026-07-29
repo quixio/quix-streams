@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = ("MemoryStorePartition",)
 
-_DEFAULT_MAX_EVICTIONS_PER_FLUSH = 10_000
+_DEFAULT_MAX_EVICTIONS_PER_FLUSH = 150_000
 
 # Bounded flush timeout (seconds) for the done-marker changelog site, matching
 # ``RocksDBStorePartition._BACKFILL_CHANGELOG_FLUSH_TIMEOUT_S`` (below the 30 s

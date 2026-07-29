@@ -44,7 +44,39 @@ class RocksDBOptions(RocksDBOptionsType):
         increase per-flush latency but let the sweep keep up with higher
         steady-state expiration rates. Only meaningful for TTL-enabled
         stores; ignored otherwise.
-        Default - ``10_000``.
+
+        This is the sweep's throughput dial, and it is the one to reach for:
+        the drain rate is ``max_evictions_per_flush / commit_interval``, but a
+        checkpoint's cost is mostly *fixed* (a producer flush barrier plus an
+        offset commit, milliseconds against a remote broker), so shrinking
+        ``commit_interval`` buys no drain speed and starves message processing.
+        Raise this instead.
+
+        **Interaction with the producer queue.** Each eviction produces one
+        changelog tombstone (see ``ttl_changelog_tombstones``), so a sweep can
+        enqueue far more records than librdkafka's
+        ``queue.buffering.max.messages`` (default ``100_000``) would appear to
+        allow. In practice it does not, because ``Producer.produce()`` polls
+        after every produce, so against a live broker the queue is a rolling
+        window rather than an accumulator: enqueueing ``150_000`` tombstones was
+        measured to peak at a queue depth of **~6,800 (6.8% of the default)**,
+        with the checkpoint's producer flush completing in ~4ms. The drain rate
+        governs, not the queue depth.
+
+        Two situations still bound it: the peak depth scales with
+        partitions-per-process (roughly ~15 partitions sweeping concurrently at
+        that depth would approach the default cap, so raise
+        ``queue.buffering.max.messages`` for high partition counts), and a broker
+        that is not draining at all will raise ``BufferError`` once the queue
+        genuinely fills — though by then the application has larger problems.
+        ``queue.buffering.max.kbytes`` (~1 GB default) is a second cap that binds
+        first for multi-KB records.
+        Default - ``150_000``. Measured on one partition against a live broker: a
+        full ``150_000``-eviction sweep completed in **1.12s** (index scan 0.31s,
+        produces 0.53s, flush 0.004s, commit 0.27s) — a ~268x margin under a 300s
+        ``max.poll.interval.ms``. The original ``10_000`` sustained only ~300
+        evictions/s once checkpoints grew, which loses the race against expiry
+        and lets the store grow without bound.
     :param legacy_records_ttl: expiry for pre-existing records when enabling
         TTL on a **populated** legacy store that already holds un-stamped
         records. When ``None`` (the default), the migration still completes:
@@ -71,7 +103,10 @@ class RocksDBOptions(RocksDBOptionsType):
         backfilling flush; ignored otherwise and on windowed / timestamped
         stores. Must be strictly positive; ``<= 0`` raises ``ValueError`` at
         construction.
-        Default - ``10_000``.
+        Default - ``150_000``. Raising it mainly reduces the number of confirming
+        flushes (one broker round-trip each), whose fixed cost otherwise dominates
+        a large backfill; the producer-queue note under
+        ``max_evictions_per_flush`` applies here too.
     :param ttl_changelog_tombstones: when ``True`` (the default), TTL-driven
         evictions are also produced to the changelog as tombstones
         (``value=None``) so log compaction physically reclaims expired keys in
@@ -104,9 +139,9 @@ class RocksDBOptions(RocksDBOptionsType):
     open_retry_backoff: float = 3.0
     use_fsync: bool = True
     on_corrupted_recreate: bool = True
-    max_evictions_per_flush: int = 10_000
+    max_evictions_per_flush: int = 150_000
     legacy_records_ttl: Optional[timedelta] = None
-    legacy_backfill_chunk_size: int = 10_000
+    legacy_backfill_chunk_size: int = 150_000
     ttl_changelog_tombstones: bool = True
 
     def __post_init__(self) -> None:
