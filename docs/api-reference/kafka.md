@@ -144,6 +144,26 @@ None use producer default or -1 is infinite. Default: None
 
 number of messages remaining to flush
 
+<a id="quixstreams.kafka.producer.Producer.purge"></a>
+
+<br><br>
+
+#### Producer.purge
+
+```python
+def purge()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L260)
+
+Purge messages currently handled by the producer instance.
+
+Drops the queued messages; voids the in-flight (produced but
+unacknowledged) acks locally so their delivery becomes unknowable. Both
+fire delivery reports carrying ``_PURGE_QUEUE`` / ``_PURGE_INFLIGHT``
+errors. See ``InternalProducer.purge`` for the revoke-path policy and
+why swallowing those errors is safe.
+
 <a id="quixstreams.kafka.producer.Producer.raise_if_broker_unavailable"></a>
 
 <br><br>
@@ -154,7 +174,7 @@ number of messages remaining to flush
 def raise_if_broker_unavailable(timeout: float)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L335)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L347)
 
 Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
 

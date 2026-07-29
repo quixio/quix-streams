@@ -5223,6 +5223,20 @@ Default - `None`
 
 ## quixstreams.internal\_producer
 
+<a id="quixstreams.internal_producer.KafkaProducerTransactionAlreadyActive"></a>
+
+### KafkaProducerTransactionAlreadyActive
+
+```python
+class KafkaProducerTransactionAlreadyActive(QuixException)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L61)
+
+Raised when ``begin_transaction()`` hits librdkafka's ``_STATE`` error
+because a transaction is already open: a previous checkpoint left its
+transaction dangling (neither committed nor aborted).
+
 <a id="quixstreams.internal_producer.InternalProducer"></a>
 
 ### InternalProducer
@@ -5231,7 +5245,7 @@ Default - `None`
 class InternalProducer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L76)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L67)
 
 A producer class that is capable of serializing Rows to bytes and send them to Kafka.
 
@@ -5266,7 +5280,7 @@ def produce_row(row: Row,
                 timestamp: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L108)
 
 Serialize Row to bytes according to the Topic serialization settings
 
@@ -5290,7 +5304,7 @@ If this method fails, it will trigger the provided "on_error" callback.
 def poll(timeout: float = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L157)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L148)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -5308,9 +5322,34 @@ If `poll()` fails, it will trigger the provided "on_error" callback
 def raise_if_broker_unavailable(timeout: float)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L177)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L168)
 
 Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
+
+<a id="quixstreams.internal_producer.InternalProducer.purge"></a>
+
+#### InternalProducer.purge
+
+```python
+def purge()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L232)
+
+Purge all messages currently queued or in-flight in the producer.
+
+Used on the revoke path when a bounded flush could not confirm changelog
+delivery: the still-queued changelog/output messages cannot deliver after
+the partition is handed to the new owner. Already-transmitted in-flight
+requests may still be appended by the broker (their acknowledgements are
+only voided locally), so this reduces but does not fully eliminate zombie
+writes landing behind the new owner's own writes.
+
+Swallowing the purge-induced delivery errors is safe here: offsets were
+NOT committed, so the new owner reprocesses these messages from the last
+committed offset (at-least-once). The ``_PURGE`` reports are filtered by
+``_on_delivery``, so a genuine delivery error recorded before the purge
+still surfaces on the next checkpoint.
 
 <a id="quixstreams.internal_producer.InternalProducer.abort_transaction"></a>
 
@@ -5320,7 +5359,7 @@ Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
 def abort_transaction(timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L238)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L346)
 
 Attempt an abort if an active transaction.
 
@@ -5333,6 +5372,49 @@ and a cleanup abort is attempted.
 
 NOTE: under normal circumstances a transaction will be open due to how
 the Checkpoint inits another immediately after committing.
+
+``timeout`` is the OVERALL wall-clock budget (seconds) for the whole
+abort, retries included:
+
+* A finite ``timeout`` (the revoke path, inside the rebalance callback)
+  bounds both the budget AND the attempts, so it can never block past
+  ``max.poll.interval.ms``.
+* ``None`` (or negative) means "no deadline" -- a retriable error is
+  retried indefinitely per confluent-kafka's "call abort_transaction()
+  again to continue the abort" contract, waiting out a transient
+  coordinator outage instead of crashing on the first timeout. Callers
+  off the rebalance path pass a finite idle/shutdown budget instead of
+  relying on this (see ``Checkpoint._abort_transaction_if_eos``).
+
+On success ``_active_transaction`` is cleared; a non-retriable / fenced /
+fatal error, or retriable exhaustion of a finite budget, propagates and
+leaves ``_active_transaction`` ``True`` (the transaction is still open).
+
+<a id="quixstreams.internal_producer.InternalProducer.commit_transaction"></a>
+
+#### InternalProducer.commit\_transaction
+
+```python
+def commit_transaction(positions: List[TopicPartition],
+                       group_metadata: GroupMetadata,
+                       timeout: Optional[float] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L403)
+
+Send the consumer offsets into the open transaction and commit it.
+
+Some failure cases from sending offsets or committing a transaction are
+retriable, which is worth re-attempting since the transaction is almost
+complete (the changelog was flushed before attempting to commit).
+
+``timeout`` is the OVERALL wall-clock budget (seconds) shared by BOTH the
+send-offsets and the commit steps, so the whole operation is bounded by
+one budget rather than 2x it -- important on the revoke path, inside the
+rebalance callback. ``None`` (off the revoke path) means unbounded: each
+step keeps its legacy behavior (retry up to ``_ABORT_RETRY_ATTEMPTS``
+times, then raise ``KafkaProducerTransactionCommitFailed`` to trigger the
+Application shutdown).
 
 <a id="quixstreams.core.stream"></a>
 
@@ -5905,7 +5987,7 @@ between `Application` and `StreamingDataFrame` instances.
 def store_offset(topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L54)
 
 Store the offset of the processed message to the checkpoint.
 
@@ -5923,7 +6005,7 @@ Store the offset of the processed message to the checkpoint.
 def init_checkpoint()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L64)
 
 Initialize a new checkpoint
 
@@ -5932,10 +6014,10 @@ Initialize a new checkpoint
 #### ProcessingContext.commit\_checkpoint
 
 ```python
-def commit_checkpoint(force: bool = False)
+def commit_checkpoint(force: bool = False, revoking: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L80)
 
 Attempts finalizing the current Checkpoint only if the Checkpoint is "expired",
 
@@ -5947,6 +6029,8 @@ else just close it. A new Checkpoint is then created.
 **Arguments**:
 
 - `force`: if `True`, commit the Checkpoint before its expiration deadline.
+- `revoking`: if `True`, commit as part of a partition revoke, enabling
+"fast revoke" (skip the local state flush for changelog-backed stores).
 
 <a id="quixstreams.sinks.core.list"></a>
 
@@ -6945,6 +7029,8 @@ def __init__(host: str,
              statement_timeout_seconds: int = 30,
              primary_key_columns: PrimaryKeyColumns = (),
              upsert_on_primary_key: bool = False,
+             on_conflict_do_nothing: bool = False,
+             include_metadata: bool = True,
              on_client_connect_success: Optional[
                  ClientConnectSuccessCallback] = None,
              on_client_connect_failure: Optional[
@@ -6982,6 +7068,12 @@ It must include all currently defined primary key columns on a given table.
 - `upsert_on_primary_key`: Upsert based on the given `primary_key_columns`.
 If False, every message is treated as an independent entry, and any
 primary key collisions will consequently raise an exception.
+- `on_conflict_do_nothing`: If True, duplicate rows are silently ignored
+using `ON CONFLICT DO NOTHING`. Cannot be used together with
+`upsert_on_primary_key=True`.
+- `include_metadata`: If True (default), includes ``__key`` and ``timestamp``
+columns for every row written to PostgreSQL. Set to False to omit them.
+Defaults to True for backward compatibility.
 - `on_client_connect_success`: An optional callback made after successful
 client authentication, primarily for additional logging.
 - `on_client_connect_failure`: An optional callback made after failed
@@ -11018,7 +11110,7 @@ Generate a stream_id by combining names of the provided topics.
 class WindowedRocksDBStore(RocksDBStore)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/store.py#L9)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/store.py#L11)
 
 RocksDB-based windowed state store.
 
@@ -11035,10 +11127,12 @@ def __init__(
         stream_id: str,
         base_dir: str,
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
-        options: Optional[RocksDBOptionsType] = None)
+        options: Optional[RocksDBOptionsType] = None,
+        stop_event: Optional[Event] = None,
+        open_deadline: Optional[OpenDeadline] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/store.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/store.py#L19)
 
 **Arguments**:
 
@@ -11048,6 +11142,11 @@ def __init__(
 - `changelog_producer_factory`: a ChangelogProducerFactory instance
 if using changelogs
 - `options`: RocksDB options. If `None`, the default options will be used.
+- `stop_event`: an application stop signal shared with the store
+partitions so their open-retry loop can abort promptly on shutdown.
+- `open_deadline`: a shared per-assign open-time budget shared with
+the store partitions so their open-retry loop can honour the total
+RocksDB-open budget for a single rebalance assignment.
 
 <a id="quixstreams.state.rocksdb.windowed.partition"></a>
 
@@ -11602,7 +11701,7 @@ instance of `rocksdict.Options`
 class RocksDBStore(Store)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/store.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/store.py#L18)
 
 RocksDB-based state store.
 
@@ -11619,10 +11718,12 @@ def __init__(
         stream_id: Optional[str],
         base_dir: str,
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
-        options: Optional[RocksDBOptionsType] = None)
+        options: Optional[RocksDBOptionsType] = None,
+        stop_event: Optional[Event] = None,
+        open_deadline: Optional[OpenDeadline] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/store.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/store.py#L26)
 
 **Arguments**:
 
@@ -11632,6 +11733,11 @@ def __init__(
 - `changelog_producer_factory`: a ChangelogProducerFactory instance
 if using changelogs
 - `options`: RocksDB options. If `None`, the default options will be used.
+- `stop_event`: an application stop signal shared with the store
+partitions so their open-retry loop can abort promptly on shutdown.
+- `open_deadline`: a shared per-assign open-time budget shared with
+the store partitions so their open-retry loop can honour the total
+RocksDB-open budget for a single rebalance assignment.
 
 <a id="quixstreams.state.rocksdb.ttl_codec"></a>
 
@@ -11779,7 +11885,7 @@ Inverse of :func:`encode_index_key`.
 class RocksDBStorePartition(StorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L49)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L55)
 
 A base class to access state in RocksDB.
 
@@ -11811,7 +11917,7 @@ it will retry according to `open_max_retries` and `open_retry_backoff` options.
 def high_water_ms() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L126)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L136)
 
 Highest record event-time observed by any transaction on this
 partition since the process started, or ``None`` for cold start.
@@ -11825,7 +11931,7 @@ partition since the process started, or ``None`` for cold start.
 def max_evictions_per_flush() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L134)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L144)
 
 Cap on per-flush sweep evictions.
 
@@ -11837,7 +11943,7 @@ Cap on per-flush sweep evictions.
 def advance_high_water(timestamp: Optional[int]) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L138)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L148)
 
 Advance the partition's high-water mark monotonically. Called by the
 transaction layer on every TTL-aware ``set`` / ``get`` that carries a
@@ -11853,7 +11959,7 @@ def write(cache: PartitionTransactionCache,
           batch: Optional[WriteBatch] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L242)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L252)
 
 Write data to RocksDB.
 
@@ -11880,7 +11986,7 @@ attribute check.
 def main_cf_has_user_data() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L312)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L342)
 
 Return True if the default column family already contains at least one
 entry. Used by the transaction layer at flush time to decide between
@@ -11897,7 +12003,7 @@ the empty-store flip path and the populated-store rejection path.
 def estimated_main_cf_key_count(cap: int = 10_000) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L323)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L353)
 
 Best-effort count of the keys in the default CF, used in the
 rejection error message to give the operator a rough scale of the
@@ -11918,7 +12024,7 @@ documents 0 as "unknown but non-zero".
 def flip_into_ttl_mode(batch: WriteBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L347)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L377)
 
 Atomically flip this partition into TTL mode.
 
@@ -11946,7 +12052,7 @@ After this call:
 def reject_ttl_on_populated_store() -> "IncompatibleStateStoreError"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L378)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L408)
 
 Build (and log) the structured ERROR raised when a TTL write lands on
 a partition that has existing un-stamped data. The caller is expected
@@ -11965,7 +12071,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[bytes, Literal[Marker.UNDEFINED]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L413)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L443)
 
 Get a key from RocksDB.
 
@@ -11989,7 +12095,7 @@ def iter_items(lower_bound: bytes,
                cf_name: str = "default") -> Iterator[tuple[bytes, bytes]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L430)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L460)
 
 Iterate over key-value pairs within a specified range in a column family.
 
@@ -12014,7 +12120,7 @@ An iterator yielding (key, value) tuples.
 def exists(key: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L487)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L517)
 
 Check if a key is present in the DB.
 
@@ -12035,7 +12141,7 @@ Check if a key is present in the DB.
 def get_changelog_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L498)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L528)
 
 Get offset that the changelog is up-to-date with.
 
@@ -12051,7 +12157,7 @@ offset or `None` if there's no processed offset yet
 def write_changelog_offset(offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L510)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L540)
 
 Write a new changelog offset to the db.
 
@@ -12070,7 +12176,7 @@ the actual data.
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L523)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L553)
 
 Close the underlying RocksDB
 
@@ -12083,7 +12189,7 @@ Close the underlying RocksDB
 def path() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L536)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L607)
 
 Absolute path to RocksDB database folder
 
@@ -12100,7 +12206,7 @@ file path
 def destroy(cls, path: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L544)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L615)
 
 Delete underlying RocksDB database
 
@@ -12118,7 +12224,7 @@ The database must be closed first.
 def get_column_family_handle(cf_name: str) -> ColumnFamily
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L554)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L625)
 
 Get a column family handle to pass to it WriteBatch.
 
@@ -12141,7 +12247,7 @@ instance of `rocksdict.ColumnFamily`
 def get_or_create_column_family(cf_name: str) -> Rdict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L569)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L640)
 
 Get a column family instance.
 
@@ -12231,6 +12337,19 @@ changelog records from it), then delegate to the parent.
 
 ## quixstreams.state.rocksdb.exceptions
 
+<a id="quixstreams.state.rocksdb.exceptions.RocksDBOpenAborted"></a>
+
+### RocksDBOpenAborted
+
+```python
+class RocksDBOpenAborted(StateError)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/exceptions.py#L13)
+
+Raised when the open-retry loop is aborted because the application is
+stopping, instead of sleeping through the remaining retries.
+
 <a id="quixstreams.state.rocksdb.timestamped"></a>
 
 ## quixstreams.state.rocksdb.timestamped
@@ -12243,7 +12362,7 @@ changelog records from it), then delegate to the parent.
 class TimestampedPartitionTransaction(RocksDBPartitionTransaction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L35)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L37)
 
 A partition-specific transaction handler for the `TimestampedStore`.
 
@@ -12264,7 +12383,7 @@ def __init__(partition: "TimestampedStorePartition",
              changelog_producer: Optional[ChangelogProducer] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L44)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L46)
 
 Initializes a new `TimestampedPartitionTransaction`.
 
@@ -12286,7 +12405,7 @@ Initializes a new `TimestampedPartitionTransaction`.
 def get_latest(timestamp: int, prefix: Any) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L82)
 
 Get the latest value for a prefix up to a given timestamp.
 
@@ -12318,7 +12437,7 @@ The deserialized value if found, otherwise None.
 def set_for_timestamp(timestamp: int, value: Any, prefix: Any) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L148)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L150)
 
 Set a value for the timestamp.
 
@@ -12345,7 +12464,7 @@ expire old data.
 def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L176)
 
 This method first calls `_expire()` to remove outdated entries based on
 
@@ -12364,7 +12483,7 @@ their timestamps and grace periods, then calls the parent class's
 class TimestampedStorePartition(RocksDBStorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L260)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L269)
 
 Represents a single partition within a `TimestampedStore`.
 
@@ -12382,12 +12501,87 @@ opt out of the always-on per-write TTL stamp.
 class TimestampedStore(RocksDBStore)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L296)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L313)
 
 A RocksDB-backed state store implementation that manages key-value pairs
 associated with timestamps.
 
 Uses `TimestampedStorePartition` to manage individual partitions.
+
+<a id="quixstreams.state.rocksdb.open_deadline"></a>
+
+## quixstreams.state.rocksdb.open\_deadline
+
+<a id="quixstreams.state.rocksdb.open_deadline.OpenDeadline"></a>
+
+### OpenDeadline
+
+```python
+class OpenDeadline()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/open_deadline.py#L7)
+
+A tiny shared per-assign wall-clock budget for RocksDB opens.
+
+Armed at the start of ``Application._on_assign`` and shared (like the
+``stop_event``) with every store partition opened during that rebalance
+callback, so the *total* serial open time across all contended partitions is
+bounded. When the deadline is exceeded the open-retry loop stops and
+re-raises the underlying lock error, keeping today's failure semantics but
+triggering the restart sooner instead of overrunning ``max.poll.interval.ms``.
+
+Disarmed outside a rebalance so opens elsewhere (e.g. sources) stay
+unbounded. Uses a monotonic clock so it is immune to wall-clock changes.
+
+<a id="quixstreams.state.rocksdb.open_deadline.OpenDeadline.arm"></a>
+
+#### OpenDeadline.arm
+
+```python
+def arm(seconds: float) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/open_deadline.py#L25)
+
+Start the budget: opens must finish within ``seconds`` from now.
+
+<a id="quixstreams.state.rocksdb.open_deadline.OpenDeadline.disarm"></a>
+
+#### OpenDeadline.disarm
+
+```python
+def disarm() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/open_deadline.py#L29)
+
+Clear the budget; ``expired()`` is always ``False`` while disarmed.
+
+<a id="quixstreams.state.rocksdb.open_deadline.OpenDeadline.expired"></a>
+
+#### OpenDeadline.expired
+
+```python
+def expired() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/open_deadline.py#L33)
+
+``True`` once the armed deadline has passed; ``False`` while disarmed.
+
+<a id="quixstreams.state.rocksdb.open_deadline.OpenDeadline.remaining"></a>
+
+#### OpenDeadline.remaining
+
+```python
+def remaining() -> Optional[float]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/open_deadline.py#L39)
+
+Seconds left until the deadline, or ``None`` while disarmed. Used to
+decide whether the next retry backoff would cross the deadline.
 
 <a id="quixstreams.state.metadata"></a>
 
@@ -12881,7 +13075,7 @@ Recovery is attempted from the `Application` after any new partition assignment.
 def partitions() -> Dict[int, Dict[str, RecoveryPartition]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L369)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L370)
 
 Returns a mapping of assigned RecoveryPartitions in the following format:
 {<partition>: {<store_name>: <RecoveryPartition>}}
@@ -12895,7 +13089,7 @@ Returns a mapping of assigned RecoveryPartitions in the following format:
 def has_assignments() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L377)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L378)
 
 Whether the Application has assigned RecoveryPartitions
 
@@ -12912,7 +13106,7 @@ has assignments, as bool
 def recovering() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L386)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L387)
 
 Whether the Application is currently recovering
 
@@ -12929,7 +13123,7 @@ def register_changelog(stream_id: Optional[str], store_name: str,
                        topic_config: TopicConfig) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L394)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L395)
 
 Register a changelog Topic with the TopicManager.
 
@@ -12947,11 +13141,34 @@ Register a changelog Topic with the TopicManager.
 def do_recovery()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L413)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L414)
 
 If there are any active RecoveryPartitions, do a recovery procedure.
 
 After, will resume normal `Application` processing.
+
+<a id="quixstreams.state.recovery.RecoveryManager.resume_reassigned_data_partitions"></a>
+
+#### RecoveryManager.resume\_reassigned\_data\_partitions
+
+```python
+def resume_reassigned_data_partitions(
+        partitions: List[ConfluentPartition]) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L497)
+
+Resume data partitions still paused from a previous recovery generation.
+
+`assign_partition` resumes recovery-paused data partitions, but it only runs
+when a rebalance assigns at least one stateful store partition. A partition
+paused by recovery can be revoked and later reassigned in a rebalance that
+brings no stateful partition to this consumer (e.g. only stateless topics),
+in which case `assign_partition` never runs and the partition would stay
+paused indefinitely. Application calls this on every assignment to cover it.
+
+Skipped while a recovery is pending/active (`has_assignments`): those pauses
+are intentional and get resumed by `do_recovery`/`assign_partition`.
 
 <a id="quixstreams.state.recovery.RecoveryManager.assign_partition"></a>
 
@@ -12963,7 +13180,7 @@ def assign_partition(topic: Optional[str], partition: int,
                      store_partitions: Dict[str, StorePartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L485)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L550)
 
 Assigns `StorePartition`s (as `RecoveryPartition`s) ONLY IF recovery required.
 
@@ -12977,7 +13194,7 @@ Pauses active consumer partitions as needed.
 def revoke_partition(partition_num: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L570)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L636)
 
 revoke ALL StorePartitions (across all Stores) for a given partition number
 
@@ -13798,7 +14015,7 @@ with TTL enabled from the first replayed record.
 class StateStoreManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L35)
 
 Class for managing state stores and partitions.
 
@@ -13816,7 +14033,7 @@ StateStoreManager is responsible for:
 def stores() -> Dict[Optional[str], Dict[str, Store]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L81)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L88)
 
 Map of registered state stores
 
@@ -13833,7 +14050,7 @@ dict in format {stream_id: {store_name: store}}
 def recovery_required() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L89)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L96)
 
 Whether recovery needs to be done.
 
@@ -13846,7 +14063,7 @@ Whether recovery needs to be done.
 def using_changelogs() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L98)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L105)
 
 Whether the StateStoreManager is using changelog topics
 
@@ -13862,7 +14079,7 @@ using changelogs, as bool
 def do_recovery() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L117)
 
 Perform a state recovery, if necessary.
 
@@ -13874,7 +14091,7 @@ Perform a state recovery, if necessary.
 def stop_recovery() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L119)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L126)
 
 Stop recovery (called during app shutdown).
 
@@ -13887,7 +14104,7 @@ def get_store(stream_id: str,
               store_name: str = DEFAULT_STATE_STORE_NAME) -> Store
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L128)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L135)
 
 Get a store for given name and stream id
 
@@ -13911,7 +14128,7 @@ def register_store(stream_id: Optional[str],
                    changelog_config: Optional[TopicConfig] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L166)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L173)
 
 Register a state store to be managed by StateStoreManager.
 
@@ -13938,7 +14155,7 @@ def register_windowed_store(
         changelog_config: Optional[TopicConfig] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L241)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L252)
 
 Register a windowed state store to be managed by StateStoreManager.
 
@@ -13961,7 +14178,7 @@ Each window store can be registered only once for each stream_id.
 def clear_stores() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L279)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L292)
 
 Delete all state stores managed by StateStoreManager.
 
@@ -13975,7 +14192,7 @@ def on_partition_assign(
         committed_offsets: dict[str, int]) -> Dict[str, StorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L296)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L309)
 
 Assign store partitions for each registered store for the given stream_id
 
@@ -13992,6 +14209,22 @@ of all assigned topics for this partition number.
 
 list of assigned `StorePartition`
 
+<a id="quixstreams.state.manager.StateStoreManager.resume_reassigned_data_partitions"></a>
+
+#### StateStoreManager.resume\_reassigned\_data\_partitions
+
+```python
+def resume_reassigned_data_partitions(
+        partitions: List[ConfluentPartition]) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L338)
+
+Resume data partitions still paused from a previous recovery generation.
+
+Delegates to the RecoveryManager; no-op when state recovery is not enabled.
+See `RecoveryManager.resume_reassigned_data_partitions`.
+
 <a id="quixstreams.state.manager.StateStoreManager.on_partition_revoke"></a>
 
 #### StateStoreManager.on\_partition\_revoke
@@ -14000,7 +14233,7 @@ list of assigned `StorePartition`
 def on_partition_revoke(stream_id: str, partition: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L325)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L350)
 
 Revoke store partitions for each registered store
 
@@ -14019,7 +14252,7 @@ for the given stream_id and partition number.
 def destroy_partition_state(stream_id: str, partition: int) -> list[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L343)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L368)
 
 Destroy persisted state for all stores of a stream partition.
 
@@ -14040,7 +14273,7 @@ names of stores whose persisted state was destroyed.
 def init() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L358)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L383)
 
 Initialize `StateStoreManager` and create a store directory
 
@@ -14053,7 +14286,7 @@ Initialize `StateStoreManager` and create a store directory
 def close() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L365)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L390)
 
 Close all registered stores
 
@@ -15580,6 +15813,24 @@ None use producer default or -1 is infinite. Default: None
 
 number of messages remaining to flush
 
+<a id="quixstreams.kafka.producer.Producer.purge"></a>
+
+#### Producer.purge
+
+```python
+def purge()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L260)
+
+Purge messages currently handled by the producer instance.
+
+Drops the queued messages; voids the in-flight (produced but
+unacknowledged) acks locally so their delivery becomes unknowable. Both
+fire delivery reports carrying ``_PURGE_QUEUE`` / ``_PURGE_INFLIGHT``
+errors. See ``InternalProducer.purge`` for the revoke-path policy and
+why swallowing those errors is safe.
+
 <a id="quixstreams.kafka.producer.Producer.raise_if_broker_unavailable"></a>
 
 #### Producer.raise\_if\_broker\_unavailable
@@ -15588,7 +15839,7 @@ number of messages remaining to flush
 def raise_if_broker_unavailable(timeout: float)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L335)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L347)
 
 Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
 
@@ -16243,7 +16494,7 @@ Default: `None` (infinite).
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L90)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L101)
 
 The main Application class.
 
@@ -16318,7 +16569,7 @@ def __init__(
         broker_availability_timeout: float = 120.0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L128)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L139)
 
 **Arguments**:
 
@@ -16435,7 +16686,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L433)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L457)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -16456,7 +16707,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L465)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L489)
 
 Create a topic definition.
 
@@ -16528,7 +16779,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L545)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L569)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -16576,7 +16827,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L601)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L625)
 
 Stop the internal poll loop and the message processing.
 
@@ -16599,7 +16850,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer(transactional: bool = False) -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L646)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L672)
 
 Create and return a pre-configured Producer instance.
 
@@ -16638,7 +16889,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L714)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L740)
 
 Create and return a pre-configured Consumer instance.
 
@@ -16689,7 +16940,7 @@ Default - True
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L763)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L789)
 
 Clear the state of the application.
 
@@ -16701,7 +16952,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L769)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L795)
 
 Add a source to the application.
 
@@ -16728,7 +16979,7 @@ def run(dataframe: Optional[StreamingDataFrame] = None,
         metadata: bool = False) -> list[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L803)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L829)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -16800,7 +17051,7 @@ Default - `False`.
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1278)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1344)
 
 Immutable object holding the application configuration
 
@@ -16821,7 +17072,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1316)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1382)
 
 Included to ignore reading/setting values from the environment
 
@@ -16833,7 +17084,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1329)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1395)
 
 Update the application config and return a copy
 
@@ -16846,7 +17097,7 @@ def resolve_transactional_id(transactional_id: Optional[str],
                              prefix: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1351)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1421)
 
 Utility function to resolve the transactional.id based
 on existing config and provided prefix.
@@ -17025,7 +17276,11 @@ def close()
 
 Perform cleanup (when the checkpoint is empty) instead of committing.
 
-Needed for exactly-once, as Kafka transactions are timeboxed.
+Needed for exactly-once, as Kafka transactions are timeboxed. The abort
+is bounded by ``flush_timeout`` so it cannot block the source's rebalance
+callback past ``max.poll.interval.ms``: ``InternalProducer.abort_transaction``
+is a shared retry loop, so an unbounded abort here would otherwise retry
+for ~3x ``transaction.timeout.ms`` inside the callback.
 
 <a id="quixstreams.sources.core.kafka.checkpoint.Checkpoint.commit"></a>
 
@@ -17035,7 +17290,7 @@ Needed for exactly-once, as Kafka transactions are timeboxed.
 def commit()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/checkpoint.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/checkpoint.py#L54)
 
 Commit the checkpoint.
 
@@ -19162,7 +19417,7 @@ True if at least one process is alive
 class BaseCheckpoint()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L67)
 
 Base class to keep track of state updates and consumer offsets and to checkpoint these
 updates on schedule.
@@ -19179,7 +19434,7 @@ Two implementations exist:
 def expired() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L58)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L96)
 
 Returns `True` if checkpoint deadline has expired OR
 if the total number of processed offsets exceeded the "commit_every" limit
@@ -19193,7 +19448,7 @@ when it's defined.
 def empty() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L68)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L106)
 
 Returns `True` if checkpoint doesn't have any offsets stored yet.
 
@@ -19206,7 +19461,7 @@ Returns `True` if checkpoint doesn't have any offsets stored yet.
 def store_offset(topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L113)
 
 Store the offset of the processed message to the checkpoint.
 
@@ -19225,7 +19480,7 @@ Store the offset of the processed message to the checkpoint.
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L102)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L140)
 
 Perform cleanup (when the checkpoint is empty) instead of committing.
 
@@ -19240,7 +19495,7 @@ Needed for exactly-once, as Kafka transactions are timeboxed.
 def commit()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L148)
 
 Commit the checkpoint.
 
@@ -19252,7 +19507,7 @@ Commit the checkpoint.
 class Checkpoint(BaseCheckpoint)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L155)
 
 Checkpoint implementation used by the application
 
@@ -19267,7 +19522,7 @@ def get_store_transaction(
         store_name: str = DEFAULT_STATE_STORE_NAME) -> PartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L147)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L190)
 
 Get a PartitionTransaction for the given store, topic and partition.
 
@@ -19288,24 +19543,35 @@ instance of `PartitionTransaction`
 #### Checkpoint.close
 
 ```python
-def close()
+def close(*, revoking: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L172)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L215)
 
 Perform cleanup (when the checkpoint is empty) instead of committing.
 
-Needed for exactly-once, as Kafka transactions are timeboxed.
+Needed for exactly-once, as Kafka transactions are timeboxed. Delegates
+to the shared abort; on this empty-checkpoint path the transaction holds
+no messages, so a healthy abort is a fast EndTxn.
+
+**Arguments**:
+
+- `revoking`: set to ``True`` when closing as part of a partition
+revoke (rebalance handover) so the abort stays bounded by the revoke
+budget and cannot block the rebalance callback; ``False`` (idle /
+normal close) bounds it by ``_IDLE_ABORT_TIMEOUT`` instead, long
+enough to ride out a transient coordinator blip. See
+``_abort_transaction_if_eos``.
 
 <a id="quixstreams.checkpointing.checkpoint.Checkpoint.commit"></a>
 
 #### Checkpoint.commit
 
 ```python
-def commit()
+def commit(*, revoking: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L181)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L235)
 
 Commit the checkpoint.
 
@@ -19316,6 +19582,23 @@ This method will:
  4. Commit topic offsets.
  5. Flush each state store partition to the disk.
 
+**Arguments**:
+
+- `revoking`: set to `True` when committing as part of a partition
+revoke (rebalance handover). Enables "fast revoke": the local state
+flush (step 5) is skipped for stores that have a changelog, since
+the changelog already holds the delta and the new owner will replay
+it. This releases the RocksDB lock much sooner. Stores without a
+changelog are always flushed to avoid state loss.
+
+It also arms a single per-callback wall-clock budget (``deadline``)
+derived from ``revoke_flush_timeout`` and shared by every Kafka op on
+this path -- sink flush, producer flush, transaction abort, and
+transaction commit -- so their *combined* time is bounded by one
+budget rather than a multiple of it (which could itself exceed
+``max.poll.interval.ms``). ``None`` off the revoke path leaves every
+op with its legacy unbounded/normal behavior.
+
 <a id="quixstreams.checkpointing"></a>
 
 ## quixstreams.checkpointing
@@ -19323,6 +19606,74 @@ This method will:
 <a id="quixstreams.checkpointing.exceptions"></a>
 
 ## quixstreams.checkpointing.exceptions
+
+<a id="quixstreams.checkpointing.deadline"></a>
+
+## quixstreams.checkpointing.deadline
+
+<a id="quixstreams.checkpointing.deadline.Deadline"></a>
+
+### Deadline
+
+```python
+class Deadline()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/deadline.py#L7)
+
+A single per-callback monotonic wall-clock budget shared by every Kafka op
+on the revoke path (sink flush, producer flush, transaction abort, and
+transaction commit) so their *combined* time is bounded by one budget rather
+than a multiple of it: each op consumes the *remaining* budget via
+:meth:`remaining`.
+
+Modeled on ``quixstreams.state.rocksdb.OpenDeadline`` (the per-assign
+open budget), but kept in the ``checkpointing`` package because the revoke
+budget is a checkpointing concern shared by both the ``Application`` and the
+``KafkaReplicatorSource`` checkpoints. Uses a monotonic clock so it is immune
+to wall-clock changes.
+
+An "unbounded" budget is represented by ``None`` (see :meth:`from_timeout`):
+off the revoke path every op keeps its legacy blocking behavior.
+
+<a id="quixstreams.checkpointing.deadline.Deadline.from_timeout"></a>
+
+#### Deadline.from\_timeout
+
+```python
+@classmethod
+def from_timeout(cls, timeout: Optional[float]) -> Optional["Deadline"]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/deadline.py#L31)
+
+Build a ``Deadline`` that expires ``timeout`` seconds from now, or return
+``None`` (an unbounded budget) when ``timeout`` is ``None`` or negative
+(the ``-1.0`` librdkafka "infinite" sentinel).
+
+<a id="quixstreams.checkpointing.deadline.Deadline.remaining"></a>
+
+#### Deadline.remaining
+
+```python
+def remaining() -> float
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/deadline.py#L41)
+
+Seconds left until the deadline, clamped to ``>= 0``.
+
+<a id="quixstreams.checkpointing.deadline.Deadline.expired"></a>
+
+#### Deadline.expired
+
+```python
+def expired() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/deadline.py#L45)
+
+``True`` once the deadline has passed.
 
 <a id="quixstreams.internal_consumer"></a>
 
