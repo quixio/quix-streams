@@ -215,7 +215,7 @@ class StateStoreManager:
                 open_deadline=self._open_deadline,
             )
         elif store_type == MemoryStore:
-            # Fix 7 (review re-review): forward the app-wide TTL scalars so the
+            # Forward the app-wide TTL scalars so the
             # memory backend honors legacy_records_ttl / ttl_changelog_tombstones /
             # max_evictions_per_flush. The v3.24.0-stamp adoption is now automatic
             # (no flag) on both backends, so nothing adoption-related is forwarded.
@@ -406,11 +406,22 @@ class StateStoreManager:
 
     def close(self) -> None:
         """
-        Close all registered stores
+        Close all registered stores and flush the dedicated migration
+        producer, if one was ever used.
         """
         for stream_stores in self._stores.values():
             for store in stream_stores.values():
                 store.close()
+        # The manager owns the dedicated non-transactional migration producer
+        # (the app only creates it and hands it over), so it is flushed here on
+        # shutdown — mirroring how the main producer is flushed on teardown.
+        # The migration paths already flush after each chunk (changelog-first),
+        # so this is a safety net for records produced right before shutdown.
+        # Guarded on ``instantiated`` so the common no-migration case stays a
+        # no-op and does not spin up a librdkafka handle just to flush nothing.
+        migration_producer = self._migration_producer
+        if migration_producer is not None and migration_producer.instantiated:
+            migration_producer.flush()
 
     def __enter__(self):
         self.init()

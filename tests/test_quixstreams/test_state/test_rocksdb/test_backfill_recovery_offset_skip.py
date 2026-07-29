@@ -65,9 +65,9 @@ def _producer():
     def _flush(*args, **kwargs):
         # Fire every recorded ``on_delivery`` callback with a successful delivery
         # before reporting a drained (0) queue, mirroring a real producer serving
-        # its callbacks on flush. Without this, ``_backfill_acked`` never catches
-        # up to ``_backfill_produced`` and the M3 drained-but-unacked check
-        # (partition.py) raises ``ChangelogFlushError`` spuriously.
+        # its callbacks on flush. Without this, the produce phase's acked count
+        # never catches up to its produced count and the M3 drained-but-unacked
+        # check (partition.py) raises ``ChangelogFlushError`` spuriously.
         for call in producer.produce.call_args_list:
             on_delivery = call.kwargs.get("on_delivery")
             if on_delivery is not None:

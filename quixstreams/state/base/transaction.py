@@ -613,7 +613,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
         )
         source_tp_offset_header = json_dumps(processed_offsets)
         column_families = self._update_cache.get_column_families()
-        # Fix 6 (review re-review #6): deterministic production order with the
+        # Deterministic production order with the
         # ``__ttl_system__`` done-marker CF produced LAST. ``get_column_families``
         # returns a set, so the raw iteration order is non-deterministic and could
         # produce the marker before the data it certifies — under at-least-once a

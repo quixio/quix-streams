@@ -120,10 +120,12 @@ class StorePartition(ABC):
         partition has replayed every changelog message up to the high-watermark
         and before it is handed to live processing.
 
-        The default is a no-op. The RocksDB backend overrides this to complete an
-        interrupted legacy-TTL migration whose changelog replayed as MIXED
-        (some ``__ttl_stamped__``-header records + some header-absent legacy
-        records) — see ``RocksDBStorePartition.complete_recovery``.
+        The default is a no-op. The RocksDB and memory backends both override
+        this to complete an interrupted legacy-TTL migration whose changelog
+        replayed as MIXED (some ``__ttl_stamped__``-header records + some
+        header-absent legacy records) — see
+        ``RocksDBStorePartition.complete_recovery`` and
+        ``MemoryStorePartition.complete_recovery``.
         """
         return None
 

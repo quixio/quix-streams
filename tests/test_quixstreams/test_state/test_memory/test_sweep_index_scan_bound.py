@@ -8,13 +8,16 @@ materializes and sorts the ENTIRE ``__ttl_index__`` dict on every flush,
 regardless of ``max_evictions_per_flush``. A bounded-budget sweep should never
 pay O(N log N) to examine only ``budget`` entries.
 
-This test is deterministic (no timing): it monkeypatches the module-level
-``sorted`` name (the only in-scope ``sorted`` a function defined in this
-module resolves to) to record how many elements it is ever asked to sort
-during a single flush, and asserts that count is bounded -- NOT proportional
-to the full index size -- when the eviction budget is tiny and every index
-entry is still in the future (so none would ever be evicted, and a
-budget-bounded scan should barely look at the index at all).
+This test is deterministic (no timing): the sweep now pulls only the
+``budget`` smallest (oldest-expiry) index keys via ``heapq.nsmallest`` instead
+of fully sorting the entire index (see
+``MemoryStorePartition.sweep_expired_into_cache`` /
+``MemoryStorePartition._run_sweep``, ~lines 1398/1501). This test monkeypatches
+the module-level ``heapq.nsmallest`` to record the ``n`` (budget) argument it
+is ever called with during a single flush, and asserts that count is bounded
+-- NOT proportional to the full index size -- when the eviction budget is
+tiny and every index entry is still in the future (so none would ever be
+evicted, and a budget-bounded scan should barely look at the index at all).
 """
 
 from datetime import timedelta
@@ -50,28 +53,27 @@ def test_sweep_does_not_sort_full_index_when_budget_is_small(monkeypatch):
             )
     assert part.uses_ttl_stamps is True
 
-    sort_call_sizes = []
-    real_sorted = sorted
+    nsmallest_call_ns = []
+    real_nsmallest = memory_partition_module.heapq.nsmallest
 
-    def counting_sorted(iterable, *args, **kwargs):
-        items = list(iterable)
-        sort_call_sizes.append(len(items))
-        return real_sorted(items, *args, **kwargs)
+    def counting_nsmallest(n, iterable, *args, **kwargs):
+        nsmallest_call_ns.append(n)
+        return real_nsmallest(n, iterable, *args, **kwargs)
 
-    monkeypatch.setattr(
-        memory_partition_module, "sorted", counting_sorted, raising=False
-    )
+    monkeypatch.setattr(memory_partition_module.heapq, "nsmallest", counting_nsmallest)
 
     # A single additional write (non-empty cache) triggers the prepare-time
     # sweep (``sweep_expired_into_cache``) over the already-committed index.
     with part.begin() as tx:
         tx.set(key="trigger", value="x", prefix=PREFIX, timestamp=BASE_TS)
 
-    assert sort_call_sizes, "sanity: the sweep path called sorted() at least once"
-    max_sorted = max(sort_call_sizes)
-    assert max_sorted <= BOUND, (
-        "M5: the sweep must not fully sort the entire TTL index every flush "
-        f"(budget={BUDGET}, but sorted() was asked to order {max_sorted} "
-        f"elements out of {N_FUTURE_KEYS} -- an O(N) materialization "
-        "regardless of the eviction budget)"
+    assert (
+        nsmallest_call_ns
+    ), "sanity: the sweep path called heapq.nsmallest() at least once"
+    max_n = max(nsmallest_call_ns)
+    assert max_n <= BOUND, (
+        "M5: the sweep must pull only `budget` (oldest-expiry) index entries "
+        f"via heapq.nsmallest, not the full index (budget={BUDGET}, but "
+        f"nsmallest was asked for {max_n} elements out of {N_FUTURE_KEYS} -- "
+        "an O(N) materialization regardless of the eviction budget)"
     )

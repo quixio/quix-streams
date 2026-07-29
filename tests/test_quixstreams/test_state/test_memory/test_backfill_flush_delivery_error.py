@@ -3,33 +3,33 @@ Regression tests for findings 1 and 2 (batch4 code review of commit
 ``56be260b``), memory-backend counterparts of
 ``test_rocksdb/test_backfill_flush_delivery_error.py``.
 
-Finding 1 -- ``MemoryStorePartition.complete_recovery`` (~line 820): the
+Finding 1 -- ``MemoryStorePartition.complete_recovery``: the
 recovery-completion path produces the pending-census leftover re-stamps
-through the migration producer (incrementing ``_backfill_produced``), then
-issues a bare ``self._changelog_producer.flush(migration=True)`` whose return
-value is **ignored**, before dropping the census and writing the done-marker.
-It never calls ``_confirm_migration_delivery_or_raise``, so a re-stamp that
-failed delivery (the delivery callback fired with ``err is not None``, so
-``_backfill_produced > _backfill_acked``) is silently treated as
-successfully migrated -- the local store then marks "done" ahead of the
-changelog.
+through the migration producer (counted on the pass's
+``MigrationDeliveryPhase``), and must not then finalize the migration on a bare
+``flush(migration=True)`` whose return value is ignored. It has to call
+``_confirm_migration_delivery_or_raise`` with that phase, so a re-stamp that
+failed delivery (the delivery callback fired with ``err is not None``, leaving
+the phase at ``produced > acked``) is not silently treated as successfully
+migrated with the local store marked "done" ahead of the changelog.
 
 Finding 2 -- ``MemoryStorePartition._confirm_migration_delivery_or_raise``
-(~line 858): raises only when ``unproduced > 0``. When the shared producer's
-queue is fully drained (``unproduced == 0``) but this partition's own
-``_backfill_produced > _backfill_acked`` (a failed delivery that was drained
-without ever acking), it does **not** raise -- the exact drained-but-unacked
-case ``RocksDBStorePartition._flush_backfill_changelog`` was hardened against
+must not raise only when ``unproduced > 0``. When the shared producer's
+queue is fully drained (``unproduced == 0``) but the phase's own
+``produced > acked`` (a failed delivery that was drained without ever acking),
+it must still raise -- the exact drained-but-unacked case
+``RocksDBStorePartition._flush_backfill_changelog`` was hardened against
 (finding M3, batch4 re-review).
 
 The changelog-first invariant (documented on both methods) is that the local
 commit / local "done" state must never proceed while an unacked/failed record
-for this partition exists -- so both must raise ``ChangelogFlushError``, not
+of the current phase exists -- so both must raise ``ChangelogFlushError``, not
 return cleanly.
 """
 
 import pytest
 
+from quixstreams.state.base.migration_flush import MigrationDeliveryPhase
 from quixstreams.state.exceptions import ChangelogFlushError
 from quixstreams.state.memory import MemoryStorePartition
 from quixstreams.state.metadata import TTL_BACKFILL_PENDING_CF_NAME
@@ -105,8 +105,12 @@ class TestMemoryRecoveryCompletionIgnoresFlushResult:
             partition.complete_recovery()
 
         # The failed re-stamp really was produced through the counter-tracked
-        # route (sanity: the bug is not "nothing was produced").
-        assert partition._backfill_produced > partition._backfill_acked
+        # route (sanity: the bug is not "nothing was produced"). The phase
+        # object itself is a local inside ``complete_recovery`` and is
+        # deliberately unreachable from here, so assert on the producer double's
+        # own record of what it was asked to produce -- stronger evidence, and
+        # it survives future refactors of the accounting.
+        assert producer.produced_keys == [b"pfx|leftover"]
         partition.close()
 
 
@@ -120,21 +124,22 @@ class TestMemoryConfirmMigrationDeliveryMissingGuard:
 
         class _FlushZeroProducer:
             """A stub whose ``flush()`` reports a 0 GLOBAL backlog (queue
-            drained), even though THIS partition produced one record that
-            failed delivery (its callback fired with ``err is not None``,
-            which never increments ``_backfill_acked``)."""
+            drained), even though THIS phase produced one record that
+            failed delivery (its callback fired with ``err is not None``, so
+            ``MigrationDeliveryPhase.on_delivery`` never counted an ack)."""
 
             def flush(self, timeout=None, migration=False):
                 return 0
 
-        # Simulate: this partition produced 1 backfill record whose delivery
+        # Simulate: this phase produced 1 backfill record whose delivery
         # callback fired with an error (never acked).
-        partition._backfill_produced = 1
-        partition._backfill_acked = 0
+        phase = MigrationDeliveryPhase()
+        phase.record_produced()
+        assert phase.counters() == (1, 0)
 
         with pytest.raises(ChangelogFlushError):
             partition._confirm_migration_delivery_or_raise(
-                _FlushZeroProducer(), "test context"
+                _FlushZeroProducer(), "test context", phase
             )
 
         partition.close()

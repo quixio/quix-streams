@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import quixstreams.state.rocksdb.partition as partition_module
+from quixstreams.state.base.migration_flush import MigrationDeliveryPhase
 from quixstreams.state.exceptions import ChangelogFlushError
 from quixstreams.state.recovery import ChangelogProducer
 
@@ -24,41 +25,50 @@ def _producer(flush_returns):
 
 
 class TestBackfillFlushProgress:
+    """Every case here passes a FRESH ``MigrationDeliveryPhase`` and never
+    produces through it, so the phase stays at ``produced == 0`` and the helper
+    deliberately keys on ``flush()``'s int return (decision-table row 4's global
+    fallback) — that is exactly what the ``[10, 6, 2, 0]``-style sequences
+    exercise. A fresh phase per call makes that explicit rather than incidental.
+    """
+
     def test_slow_but_progressing_succeeds(self, store_partition):
         # 10 → 6 → 2 → 0: each slice strictly decreases, so the loop keeps going
         # and returns when it hits 0 — no raise despite >1 slice.
         producer = _producer([10, 6, 2, 0])
-        store_partition._flush_backfill_changelog(producer)
+        store_partition._flush_backfill_changelog(producer, MigrationDeliveryPhase())
         assert producer.flush.call_count == 4
 
     def test_immediate_delivery_single_slice(self, store_partition):
         producer = _producer([0])
-        store_partition._flush_backfill_changelog(producer)
+        store_partition._flush_backfill_changelog(producer, MigrationDeliveryPhase())
         assert producer.flush.call_count == 1
 
     def test_stuck_no_progress_raises(self, store_partition):
         # 10 → 10: the second full slice made no progress → raise.
         producer = _producer([10, 10])
+        phase = MigrationDeliveryPhase()
         with pytest.raises(ChangelogFlushError, match="no delivery progress"):
-            store_partition._flush_backfill_changelog(producer)
+            store_partition._flush_backfill_changelog(producer, phase)
         assert producer.flush.call_count == 2
 
     def test_indeterminate_return_does_not_block(self, store_partition):
         # A non-int return (unconfigured test double) → return without raising.
         producer = _producer(object())
-        store_partition._flush_backfill_changelog(producer)
+        store_partition._flush_backfill_changelog(producer, MigrationDeliveryPhase())
         assert producer.flush.call_count == 1
 
     def test_none_producer_is_noop(self, store_partition):
         # No changelog configured → no-op.
-        store_partition._flush_backfill_changelog(None)
+        store_partition._flush_backfill_changelog(None, MigrationDeliveryPhase())
 
     def test_runaway_cap_raises(self, store_partition, monkeypatch):
         # An ever-shrinking trickle that never reaches 0 terminates at the cap.
         monkeypatch.setattr(partition_module, "_BACKFILL_CHANGELOG_FLUSH_MAX_SLICES", 3)
         producer = _producer([10, 9, 8, 7, 6])
+        phase = MigrationDeliveryPhase()
         with pytest.raises(ChangelogFlushError, match="after 3 ×"):
-            store_partition._flush_backfill_changelog(producer)
+            store_partition._flush_backfill_changelog(producer, phase)
         assert producer.flush.call_count == 3
 
 
@@ -90,34 +100,39 @@ class _FakeSharedProducer:
 
 
 class TestPerPartitionFlushAccounting:
-    """#5: the stall detector must track THIS partition's delivery, not the shared
+    """#5: the stall detector must track THIS PHASE's delivery, not the shared
     producer's global queue depth."""
 
-    def _produce(self, partition, producer, n):
+    def _produce(self, producer, n) -> MigrationDeliveryPhase:
+        """Produce ``n`` records through a fresh phase and return that phase,
+        so the caller threads the SAME object into the confirm (exactly as the
+        production produce sites do)."""
+        phase = MigrationDeliveryPhase()
         for i in range(n):
             producer.produce(
                 key=f"k{i}".encode(),
                 value=b"v",
                 headers=None,
                 migration=True,
-                on_delivery=partition._on_backfill_delivery,
+                on_delivery=phase.on_delivery,
             )
-            partition._backfill_produced += 1
+            phase.record_produced()
+        return phase
 
     def test_sibling_backlog_does_not_abort_delivered_partition(self, store_partition):
         # A sibling partition holds 7 wedged records in the SHARED producer's
-        # global queue; THIS partition delivered all 3 of its own. HEAD keys on the
+        # global queue; THIS phase delivered all 3 of its own. HEAD keys on the
         # global int-return (7, 7, ...) and falsely aborts; the fix returns because
-        # this partition's own outstanding hits 0.
+        # this phase's own outstanding hits 0.
         producer = _FakeSharedProducer(global_backlog=7, deliver=True)
-        self._produce(store_partition, producer, 3)
-        store_partition._flush_backfill_changelog(producer)  # must NOT raise
-        assert store_partition._backfill_acked == 3
+        phase = self._produce(producer, 3)
+        store_partition._flush_backfill_changelog(producer, phase)  # must NOT raise
+        assert phase.counters() == (3, 3)
 
     def test_genuine_per_partition_stall_still_raises(self, store_partition):
-        # THIS partition's own records never deliver → outstanding stays == produced
+        # THIS phase's own records never deliver → outstanding stays == produced
         # slice-over-slice → ChangelogFlushError (genuine stall still detected).
         producer = _FakeSharedProducer(global_backlog=3, deliver=False)
-        self._produce(store_partition, producer, 3)
+        phase = self._produce(producer, 3)
         with pytest.raises(ChangelogFlushError, match="no delivery progress"):
-            store_partition._flush_backfill_changelog(producer)
+            store_partition._flush_backfill_changelog(producer, phase)

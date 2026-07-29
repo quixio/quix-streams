@@ -93,7 +93,7 @@ def clamp_additive_expiry(expiry_ms: int) -> int:
 
 def _check_stamp_range(expires_at_ms: int) -> None:
     """Reject a stamp outside the unsigned 8-byte domain with a descriptive
-    ``ValueError`` BEFORE it reaches the ``>Q`` packer (#12, review batch 3).
+    ``ValueError`` BEFORE it reaches the ``>Q`` packer.
 
     A negative expiry (Kafka ``NO_TIMESTAMP = -1`` / pre-epoch event-time flowing
     through ``timestamp + ttl``) or an out-of-range value would otherwise raise a

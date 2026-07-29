@@ -166,7 +166,11 @@ class TestPopulatedLegacyLiveBackfill:
         assert rebuilt.uses_ttl_stamps is True
         assert rebuilt._state.get(TTL_BACKFILL_PENDING_CF_NAME, {}) == {}
         # No completion / re-migration production happened on the rebuild.
-        assert rebuilt._backfill_produced == 0
+        # Asserted on the producer double rather than a delivery counter: the
+        # rebuild's replay (``recover_from_changelog_message``) never produces,
+        # and ``complete_recovery`` short-circuits on the replayed done-marker,
+        # so a single produce call here would mean the migration re-ran.
+        rebuilt_producer.produce.assert_not_called()
 
     def test_no_config_no_ttl_writes_stays_legacy(self):
         # Guard: a plain (no ttl=) write on a populated legacy store must NOT flip.
