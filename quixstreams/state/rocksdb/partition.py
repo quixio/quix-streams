@@ -11,7 +11,7 @@ from typing import (
     cast,
 )
 
-from rocksdict import AccessType, ColumnFamily, Rdict, ReadOptions, WriteBatch
+from rocksdict import AccessType, ColumnFamily, Options, Rdict, ReadOptions, WriteBatch
 
 from quixstreams.state.base import (
     PartitionTransactionCache,
@@ -947,9 +947,27 @@ class RocksDBStorePartition(StorePartition):
         options = self._rocksdb_options
         options.create_if_missing(True)
         options.create_missing_column_families(True)
+
+        def _existing_column_families() -> Dict[str, Options]:
+            # rocksdict applies the options passed to ``Rdict`` only to the
+            # column families it *creates*. Existing CFs must be listed in
+            # ``column_families=`` and handed the same options explicitly, or
+            # every reopen silently drops the configured block cache and bloom
+            # filter for them and falls back to rocksdict's defaults (8 MiB
+            # cache, no filter policy) — undoing every ``RocksDBOptions``
+            # tuning on the second and every subsequent open of a store.
+            try:
+                return {name: options for name in Rdict.list_cf(self._path, options)}
+            except Exception:
+                # No database at this path yet, or its CF list is unreadable.
+                # Nothing pre-exists, so the open below already applies
+                # ``options`` to every column family it creates.
+                return {}
+
         create_rdict = lambda: Rdict(
             path=self._path,
             options=options,
+            column_families=_existing_column_families(),
             access_type=AccessType.read_write(),
         )
         # TODO: Add docs

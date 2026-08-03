@@ -1,3 +1,4 @@
+import re
 import time
 from datetime import timedelta
 from pathlib import Path
@@ -114,13 +115,60 @@ class TestRocksDBStorePartition:
         store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=True))
 
     def test_db_corrupted_sst_file(self, store_partition_factory, tmp_path):
-        rdict = Rdict(path=tmp_path.as_posix())  # initialize db
+        # Initialize the db the way quixstreams does, so the CFs carry the same
+        # comparator the store partition will open them with. A bare
+        # `Rdict(path=...)` defaults to `raw_mode=False` and is not a store any
+        # quixstreams deployment can produce; opening it would fail on the
+        # comparator before the corruption is ever reached.
+        rdict = Rdict(path=tmp_path.as_posix(), options=RocksDBOptions().to_options())
         rdict[b"key"] = b"value"  # write something
         rdict.flush()  # flush creates .sst file
         rdict.close()  # required to release the lock
         next(tmp_path.glob("*.sst")).unlink()  # delete the .sst file
 
         store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=True))
+
+    def test_configured_table_options_survive_reopen(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        Reopening an existing store must apply the configured block cache and
+        bloom filter to the ALREADY-EXISTING column families, not just to the
+        ones created during this open.
+
+        rocksdict takes per-CF table options from its ``column_families``
+        mapping; when the argument is omitted, existing CFs are opened with
+        rocksdict's defaults (8 MiB cache, no filter policy) and every
+        ``RocksDBOptions`` tuning is silently discarded on every restart.
+
+        Asserted against RocksDB's own ``LOG``, which prints the effective
+        per-CF table options at open. RocksDB rotates ``LOG`` to
+        ``LOG.old.<ts>`` on each open, so after the reopen ``LOG`` describes
+        the reopen alone.
+        """
+        cache_size = 96 * 1024 * 1024
+        options = RocksDBOptions(
+            block_cache_size=cache_size, bloom_filter_bits_per_key=10
+        )
+
+        partition = store_partition_factory("db", options=options)
+        cf_names = partition.list_column_families()
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        # Every CF now pre-exists, so this open exercises the reopen path only.
+        partition = store_partition_factory("db", options=options)
+        partition.close()
+
+        log = (tmp_path / "db" / "LOG").read_text()
+        capacities = [int(c) for c in re.findall(r"capacity\s*:\s*(\d+)", log)]
+        filter_policies = set(re.findall(r"filter_policy:\s*(\S+)", log))
+
+        # One block-cache line per CF, all at the configured size.
+        assert len(capacities) >= len(cf_names)
+        assert set(capacities) == {cache_size}
+        assert filter_policies == {"bloomfilter"}
 
     def test_get_or_create_column_family(self, store_partition: RocksDBStorePartition):
         assert store_partition.get_or_create_column_family("cf")
