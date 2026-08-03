@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from threading import Event
 from typing import (
@@ -948,7 +949,7 @@ class RocksDBStorePartition(StorePartition):
         options.create_if_missing(True)
         options.create_missing_column_families(True)
 
-        def _existing_column_families() -> Dict[str, Options]:
+        def _existing_column_families() -> Optional[Dict[str, Options]]:
             # rocksdict applies the options passed to ``Rdict`` only to the
             # column families it *creates*. Existing CFs must be listed in
             # ``column_families=`` and handed the same options explicitly, or
@@ -956,35 +957,58 @@ class RocksDBStorePartition(StorePartition):
             # filter for them and falls back to rocksdict's defaults (8 MiB
             # cache, no filter policy) — undoing every ``RocksDBOptions``
             # tuning on the second and every subsequent open of a store.
+            #
+            # Returns ``None`` -- not ``{}`` -- when the CFs cannot be listed, so
+            # the caller omits the argument entirely. An empty map is NOT
+            # equivalent to omitting it: against a store that does hold CFs it
+            # fails with "Invalid argument: Column families not opened: <cf>",
+            # a message starting with neither "Corruption" nor "io error" and so
+            # matching no recovery path, which would turn a transient listing
+            # failure into an un-retried crash loop on a store that opens
+            # perfectly well without the argument.
             try:
                 return {name: options for name in Rdict.list_cf(self._path, options)}
             except Exception as exc:
                 # Broad by necessity: rocksdict raises a bare ``Exception`` here
                 # (an "IO error: No such file or directory" for a path with no
-                # database), so there is no narrower type to catch. Logged
-                # rather than silently swallowed, because the fallback below is
-                # the pre-existing behaviour in which the configured options do
-                # NOT reach existing column families -- if that ever happens to
-                # a store that really does exist, it must not be invisible.
-                logger.debug(
-                    "Could not list column families of the store at "
-                    '"%s" (%s); opening without an explicit column-family map.',
+                # database), so there is no narrower type to catch. A missing
+                # database is the ordinary cold start and must stay quiet; a
+                # listing failure against a path that *does* hold one means the
+                # configured options will not reach its existing column
+                # families, which must never be invisible.
+                log = logger.warning if os.path.exists(self._path) else logger.debug
+                log(
+                    "Could not list the column families of the store at "
+                    '"%s" (%s); opening without an explicit column-family map, '
+                    "so configured RocksDB options will not reach any "
+                    "pre-existing column family.",
                     self._path,
                     exc,
                 )
-                return {}
+                return None
 
-        # ``_existing_column_families()`` is called inside the lambda, NOT
+        # ``_existing_column_families()`` is called inside ``create_rdict``, NOT
         # hoisted: the corruption path below destroys the database and calls
         # ``create_rdict()`` again, and that second attempt must re-read the CF
-        # list (which is then empty) rather than reuse the pre-destroy one.
+        # list (now absent) rather than reuse the pre-destroy one.
         # ``_init_rocksdb`` likewise re-invokes this method per lock retry.
-        create_rdict = lambda: Rdict(
-            path=self._path,
-            options=options,
-            column_families=_existing_column_families(),
-            access_type=AccessType.read_write(),
-        )
+        def create_rdict() -> Rdict:
+            cfs = _existing_column_families()
+            if cfs is None:
+                # Pre-existing behaviour: a genuine IO fault then surfaces from
+                # inside ``Rdict`` as "IO error: ..." and is retried upstream.
+                return Rdict(
+                    path=self._path,
+                    options=options,
+                    access_type=AccessType.read_write(),
+                )
+            return Rdict(
+                path=self._path,
+                options=options,
+                column_families=cfs,
+                access_type=AccessType.read_write(),
+            )
+
         # TODO: Add docs
 
         try:

@@ -161,7 +161,9 @@ class TestRocksDBStorePartition:
         partition = store_partition_factory("db", options=options)
         partition.close()
 
-        log = (tmp_path / "db" / "LOG").read_text()
+        # errors="replace": the LOG embeds the absolute store path, which on a
+        # non-ASCII temp dir is undecodable under the Windows locale codepage.
+        log = (tmp_path / "db" / "LOG").read_text(encoding="utf-8", errors="replace")
         # Require whitespace around the colon: that is the block-cache line in
         # the block_based_table_factory section. An unrelated "capacity: 128"
         # (no leading space) appears elsewhere in RocksDB's log.
@@ -179,6 +181,32 @@ class TestRocksDBStorePartition:
         # options object, so a refactor to per-CF options would still satisfy the
         # assertions above while multiplying the real memory ceiling.
         assert len(cache_ids - {"0"}) == 1
+
+    def test_open_survives_transient_cf_listing_failure(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        Failing to LIST the column families must not turn into a fatal open.
+
+        Passing ``column_families={}`` is NOT equivalent to omitting the
+        argument: on a store that already holds CFs an empty map raises
+        ``Invalid argument: Column families not opened: __metadata__``. That
+        message starts with neither "Corruption" nor "io error", so it matches
+        no recovery path and escapes as a fatal assignment error -- turning a
+        transient listing failure into a crash loop on a store that opens fine
+        without the argument.
+        """
+        partition = store_partition_factory("db")
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        # The store now has more than the default CF, so an empty map is fatal.
+        with patch.object(
+            Rdict, "list_cf", side_effect=Exception("IO error: transient")
+        ):
+            reopened = store_partition_factory("db")
+        reopened.close()
 
     def test_get_or_create_column_family(self, store_partition: RocksDBStorePartition):
         assert store_partition.get_or_create_column_family("cf")
