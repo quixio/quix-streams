@@ -162,13 +162,23 @@ class TestRocksDBStorePartition:
         partition.close()
 
         log = (tmp_path / "db" / "LOG").read_text()
-        capacities = [int(c) for c in re.findall(r"capacity\s*:\s*(\d+)", log)]
+        # Require whitespace around the colon: that is the block-cache line in
+        # the block_based_table_factory section. An unrelated "capacity: 128"
+        # (no leading space) appears elsewhere in RocksDB's log.
+        capacities = [int(c) for c in re.findall(r"capacity\s+:\s+(\d+)", log)]
         filter_policies = set(re.findall(r"filter_policy:\s*(\S+)", log))
+        cache_ids = set(re.findall(r"block_cache:\s*(\w+)", log))
 
         # One block-cache line per CF, all at the configured size.
         assert len(capacities) >= len(cf_names)
         assert set(capacities) == {cache_size}
         assert filter_policies == {"bloomfilter"}
+        # All CFs must share ONE cache instance, not one each of the same size:
+        # the difference between a 96 MiB ceiling and len(cf_names) x 96 MiB.
+        # `to_options()` builds a single `Cache` and every CF is handed that same
+        # options object, so a refactor to per-CF options would still satisfy the
+        # assertions above while multiplying the real memory ceiling.
+        assert len(cache_ids - {"0"}) == 1
 
     def test_get_or_create_column_family(self, store_partition: RocksDBStorePartition):
         assert store_partition.get_or_create_column_family("cf")

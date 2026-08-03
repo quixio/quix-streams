@@ -958,12 +958,27 @@ class RocksDBStorePartition(StorePartition):
             # tuning on the second and every subsequent open of a store.
             try:
                 return {name: options for name in Rdict.list_cf(self._path, options)}
-            except Exception:
-                # No database at this path yet, or its CF list is unreadable.
-                # Nothing pre-exists, so the open below already applies
-                # ``options`` to every column family it creates.
+            except Exception as exc:
+                # Broad by necessity: rocksdict raises a bare ``Exception`` here
+                # (an "IO error: No such file or directory" for a path with no
+                # database), so there is no narrower type to catch. Logged
+                # rather than silently swallowed, because the fallback below is
+                # the pre-existing behaviour in which the configured options do
+                # NOT reach existing column families -- if that ever happens to
+                # a store that really does exist, it must not be invisible.
+                logger.debug(
+                    "Could not list column families of the store at "
+                    '"%s" (%s); opening without an explicit column-family map.',
+                    self._path,
+                    exc,
+                )
                 return {}
 
+        # ``_existing_column_families()`` is called inside the lambda, NOT
+        # hoisted: the corruption path below destroys the database and calls
+        # ``create_rdict()`` again, and that second attempt must re-read the CF
+        # list (which is then empty) rather than reuse the pre-destroy one.
+        # ``_init_rocksdb`` likewise re-invokes this method per lock retry.
         create_rdict = lambda: Rdict(
             path=self._path,
             options=options,
