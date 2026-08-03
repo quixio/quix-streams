@@ -169,7 +169,10 @@ class TestRocksDBStorePartition:
         # (no leading space) appears elsewhere in RocksDB's log.
         capacities = [int(c) for c in re.findall(r"capacity\s+:\s+(\d+)", log)]
         filter_policies = set(re.findall(r"filter_policy:\s*(\S+)", log))
-        cache_ids = set(re.findall(r"block_cache:\s*(\w+)", log))
+        # Anchored: an unanchored `block_cache:` also matches `no_block_cache: 0`
+        # and `prepopulate_block_cache: 0`, which happen to be 0 today — enabling
+        # either would fail this assertion for the wrong reason.
+        cache_ids = set(re.findall(r"^\s*block_cache:\s*(\w+)\s*$", log, re.M))
 
         # One block-cache line per CF, all at the configured size.
         assert len(capacities) >= len(cf_names)
@@ -183,7 +186,7 @@ class TestRocksDBStorePartition:
         assert len(cache_ids - {"0"}) == 1
 
     def test_open_survives_transient_cf_listing_failure(
-        self, store_partition_factory, tmp_path
+        self, store_partition_factory, tmp_path, caplog
     ):
         """
         Failing to LIST the column families must not turn into a fatal open.
@@ -202,11 +205,61 @@ class TestRocksDBStorePartition:
         partition.close()
 
         # The store now has more than the default CF, so an empty map is fatal.
-        with patch.object(
-            Rdict, "list_cf", side_effect=Exception("IO error: transient")
-        ):
+        with caplog.at_level("WARNING"):
+            with patch.object(
+                Rdict, "list_cf", side_effect=Exception("IO error: transient")
+            ):
+                reopened = store_partition_factory("db")
+        try:
+            # Opening is not enough: the store must be usable, and the operator
+            # must be told the configured options missed its existing CFs.
+            with reopened.begin() as tx:
+                assert tx.get("key", prefix=b"__key__") == "value"
+            assert any(
+                "Could not list the column families" in r.message
+                and r.levelname == "WARNING"
+                for r in caplog.records
+            )
+        finally:
+            reopened.close()
+
+    def test_open_retries_a_stale_column_family_list(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        A CF list that is merely STALE must be re-read, not fatal.
+
+        ``Rdict.list_cf`` takes no LOCK and column families are created lazily at
+        runtime, so a process sharing the store can add one between the listing
+        and the open. The open then fails with ``Column families not opened:
+        <cf>`` — a message matching neither the corruption nor the io-error retry
+        path, so without a re-read it is an un-retried fatal open, exactly the
+        failure the None-instead-of-empty-map fix was meant to remove but reached
+        through a different door.
+        """
+        partition = store_partition_factory("db")
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        real_list_cf = Rdict.list_cf
+        calls = []
+
+        def _stale_once(path, *args, **kwargs):
+            full = real_list_cf(path, *args, **kwargs)
+            calls.append(full)
+            # First call omits a CF that really exists, mimicking the race; the
+            # re-read returns the truth.
+            return ["default"] if len(calls) == 1 else full
+
+        with patch.object(Rdict, "list_cf", staticmethod(_stale_once)):
             reopened = store_partition_factory("db")
-        reopened.close()
+        try:
+            assert len(calls) == 2, "the stale list should have been re-read"
+            with reopened.begin() as tx:
+                assert tx.get("key", prefix=b"__key__") == "value"
+        finally:
+            reopened.close()
 
     def test_get_or_create_column_family(self, store_partition: RocksDBStorePartition):
         assert store_partition.get_or_create_column_family("cf")

@@ -976,7 +976,13 @@ class RocksDBStorePartition(StorePartition):
                 # listing failure against a path that *does* hold one means the
                 # configured options will not reach its existing column
                 # families, which must never be invisible.
-                log = logger.warning if os.path.exists(self._path) else logger.debug
+                # Probe for CURRENT, not the directory: the question is "does a
+                # database live here", and a leftover empty directory would
+                # otherwise warn about options missing column families that do
+                # not exist. The corruption path destroys the whole directory,
+                # so it correctly takes the debug branch.
+                db_exists = os.path.exists(os.path.join(self._path, "CURRENT"))
+                log = logger.warning if db_exists else logger.debug
                 log(
                     "Could not list the column families of the store at "
                     '"%s" (%s); opening without an explicit column-family map, '
@@ -992,8 +998,7 @@ class RocksDBStorePartition(StorePartition):
         # ``create_rdict()`` again, and that second attempt must re-read the CF
         # list (now absent) rather than reuse the pre-destroy one.
         # ``_init_rocksdb`` likewise re-invokes this method per lock retry.
-        def create_rdict() -> Rdict:
-            cfs = _existing_column_families()
+        def _open(cfs: Optional[Dict[str, Options]]) -> Rdict:
             if cfs is None:
                 # Pre-existing behaviour: a genuine IO fault then surfaces from
                 # inside ``Rdict`` as "IO error: ..." and is retried upstream.
@@ -1008,6 +1013,28 @@ class RocksDBStorePartition(StorePartition):
                 column_families=cfs,
                 access_type=AccessType.read_write(),
             )
+
+        def create_rdict() -> Rdict:
+            cfs = _existing_column_families()
+            try:
+                return _open(cfs)
+            except Exception as exc:
+                if cfs is None or "Column families not opened" not in str(exc):
+                    raise
+                # The list went stale between listing and opening: ``list_cf``
+                # takes no LOCK and column families are created lazily at
+                # runtime, so another process sharing this store can add one
+                # inside that window. The resulting message matches neither the
+                # corruption nor the io-error path, so without this it would be
+                # an un-retried fatal open. Re-read once; a second failure is
+                # not a race and propagates.
+                logger.warning(
+                    'Column-family list for the store at "%s" went stale '
+                    "between listing and opening (%s); re-reading and retrying.",
+                    self._path,
+                    exc,
+                )
+                return _open(_existing_column_families())
 
         # TODO: Add docs
 
@@ -1064,6 +1091,16 @@ class RocksDBStorePartition(StorePartition):
             except Exception as exc:
                 is_locked = str(exc).lower().startswith("io error")
                 if not is_locked:
+                    # Every other exit from this loop logs a warning naming the
+                    # path; without one here an unclassified open failure reaches
+                    # the operator as a PartitionAssignmentError whose message
+                    # may name a column family but never the store directory.
+                    logger.warning(
+                        'Failed to open rocksdb partition on "%s" with an '
+                        "unrecoverable error (%s); not retrying.",
+                        self._path,
+                        exc,
+                    )
                     raise
 
                 # Shared per-assign open budget: when the acquiring consumer has
