@@ -185,6 +185,40 @@ class TestRocksDBStorePartition:
         # assertions above while multiplying the real memory ceiling.
         assert len(cache_ids - {"0"}) == 1
 
+    def test_block_cache_is_shared_across_partitions(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        ``block_cache_size`` is an aggregate ceiling, not a per-partition budget.
+
+        One cache per partition would make the setting a multiplier: a
+        32-partition, 3-store application would reserve 96x the configured size,
+        which is a multi-gigabyte ceiling charged lazily — so it surfaces as an
+        OOM hours after an upgrade rather than at startup.
+
+        Asserted on the ``block_cache`` pointer RocksDB prints per column family:
+        two partitions sharing one cache report the SAME address.
+        """
+        cache_size = 96 * 1024 * 1024
+        options = RocksDBOptions(
+            block_cache_size=cache_size, bloom_filter_bits_per_key=10
+        )
+
+        pointers = set()
+        for name in ("p0", "p1"):
+            partition = store_partition_factory(name, options=options)
+            partition.close()
+            log = (tmp_path / name / "LOG").read_text(
+                encoding="utf-8", errors="replace"
+            )
+            assert set(re.findall(r"capacity\s+:\s+(\d+)", log)) == {str(cache_size)}
+            pointers |= set(re.findall(r"^\s*block_cache:\s*(\w+)\s*$", log, re.M))
+
+        assert len(pointers) == 1, (
+            f"each partition built its own cache ({pointers}), so "
+            f"block_cache_size is a per-partition multiplier"
+        )
+
     def test_open_survives_transient_cf_listing_failure(
         self, store_partition_factory, tmp_path, caplog
     ):
