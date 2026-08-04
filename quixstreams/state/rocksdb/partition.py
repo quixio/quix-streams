@@ -982,31 +982,52 @@ class RocksDBStorePartition(StorePartition):
                 # otherwise warn about options missing column families that do
                 # not exist. The corruption path destroys the whole directory,
                 # so it correctly takes the debug branch.
-                db_exists = os.path.exists(os.path.join(self._path, "CURRENT"))
-                # Past tense and no promise about the outcome: the caller may
-                # still recover by re-reading the list, and a warning that
-                # asserts the options were dropped is the string operators and
-                # alerts key on. Claiming it before the retry has run produced a
-                # false positive on a store that ended up correctly configured.
-                # ``strip()`` because rocksdict's message ends in a newline on
-                # Windows, which would split this into two log records and orphan
-                # the second half without its level or logger name.
-                if db_exists:
-                    logger.warning(
-                        'Could not list the column families of the store at "%s" '
-                        "(%s); retrying the open without an explicit "
-                        "column-family map.",
-                        self._path,
-                        str(exc).strip(),
-                    )
-                else:
+                # "Is there a database here?" -- and if we cannot tell, assume
+                # there is. ``os.path.exists`` returns False on ANY OSError, so a
+                # populated store that is momentarily unstattable (EACCES, a
+                # read-only remount, a too-long path) would otherwise be treated
+                # as a cold start and opened degraded.
+                try:
+                    os.stat(os.path.join(self._path, "CURRENT"))
+                    db_exists = True
+                except FileNotFoundError:
+                    db_exists = False
+                except OSError:
+                    db_exists = True
+
+                if not db_exists:
+                    # Ordinary cold start: this open creates the database, and
+                    # options apply to every column family it creates.
                     logger.debug(
                         'No column families to list for the store at "%s" (%s); '
                         "it will be created by this open.",
                         self._path,
                         str(exc).strip(),
                     )
-                return None
+                    return None
+
+                # There IS a database and we could not read its column families.
+                # Do NOT open without them: rocksdict would then derive them from
+                # the persisted OPTIONS file and apply its own defaults -- an
+                # 8 MiB block cache and no bloom filters for every existing
+                # column family, for the lifetime of the process. That is exactly
+                # the silent degradation this whole change exists to remove, and
+                # it is invisible once the open succeeds.
+                #
+                # Propagate instead. A listing failure is normally transient, and
+                # rocksdict reports it as "IO error: ...", which is what
+                # ``_init_rocksdb`` already retries with backoff -- so a blip
+                # self-heals on the next attempt with the options intact, and only
+                # a persistent fault fails the open, loudly.
+                logger.warning(
+                    'Could not list the column families of the store at "%s" '
+                    "(%s); not opening it without them, because the configured "
+                    "RocksDB options would not reach any pre-existing column "
+                    "family.",
+                    self._path,
+                    str(exc).strip(),
+                )
+                raise
 
         # ``_existing_column_families()`` is called inside ``create_rdict``, NOT
         # hoisted: the corruption path below destroys the database and calls

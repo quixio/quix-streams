@@ -219,43 +219,53 @@ class TestRocksDBStorePartition:
             f"block_cache_size is a per-partition multiplier"
         )
 
-    def test_open_survives_transient_cf_listing_failure(
-        self, store_partition_factory, tmp_path, caplog
+    def test_listing_failure_on_existing_store_is_retried_not_degraded(
+        self, store_partition_factory, tmp_path
     ):
         """
-        Failing to LIST the column families must not turn into a fatal open.
+        A store that exists must never be opened without its column families.
 
-        Passing ``column_families={}`` is NOT equivalent to omitting the
-        argument: on a store that already holds CFs an empty map raises
-        ``Invalid argument: Column families not opened: __metadata__``. That
-        message starts with neither "Corruption" nor "io error", so it matches
-        no recovery path and escapes as a fatal assignment error -- turning a
-        transient listing failure into a crash loop on a store that opens fine
-        without the argument.
+        Opening without them lets rocksdict derive the CFs from the persisted
+        OPTIONS file and apply its OWN defaults -- an 8 MiB block cache and no
+        bloom filters on every existing CF, for the life of the process. That is
+        the original bug, and it is invisible once the open succeeds, so a listing
+        failure must be propagated for the existing retry budget to handle rather
+        than papered over with a degraded open.
         """
-        partition = store_partition_factory("db")
+        cache_size = 96 * 1024 * 1024
+        options = RocksDBOptions(
+            block_cache_size=cache_size,
+            bloom_filter_bits_per_key=10,
+            open_max_retries=2,
+            open_retry_backoff=0.0,
+        )
+        partition = store_partition_factory("db", options=options)
         with partition.begin() as tx:
             tx.set("key", "value", prefix=b"__key__")
         partition.close()
 
-        # The store now has more than the default CF, so an empty map is fatal.
-        with caplog.at_level("WARNING"):
-            with patch.object(
-                Rdict, "list_cf", side_effect=Exception("IO error: transient")
-            ):
-                reopened = store_partition_factory("db")
+        real_list_cf = Rdict.list_cf
+        calls = []
+
+        def _fails_once(path, *args, **kwargs):
+            calls.append(path)
+            if len(calls) == 1:
+                raise Exception("IO error: transient")
+            return real_list_cf(path, *args, **kwargs)
+
+        with patch.object(Rdict, "list_cf", staticmethod(_fails_once)):
+            reopened = store_partition_factory("db", options=options)
         try:
-            # Opening is not enough: the store must be usable, and the operator
-            # must be told the configured options missed its existing CFs.
             with reopened.begin() as tx:
                 assert tx.get("key", prefix=b"__key__") == "value"
-            assert any(
-                "Could not list the column families" in r.message
-                and r.levelname == "WARNING"
-                for r in caplog.records
-            )
         finally:
             reopened.close()
+
+        # The point of the retry: the store came up with its configured options,
+        # not rocksdict's 8 MiB default.
+        log = (tmp_path / "db" / "LOG").read_text(encoding="utf-8", errors="replace")
+        assert set(re.findall(r"capacity\s+:\s+(\d+)", log)) == {str(cache_size)}
+        assert set(re.findall(r"filter_policy:\s*(\S+)", log)) == {"bloomfilter"}
 
     def test_reopen_applies_new_options_to_persisted_column_families(
         self, store_partition_factory, tmp_path
@@ -318,8 +328,14 @@ class TestRocksDBStorePartition:
                 raise Exception("IO error: transient")
             return real_list_cf(path, *args, **kwargs)
 
+        # Retries enabled: a listing failure on an existing store propagates so
+        # this budget can absorb it, rather than being papered over with a
+        # degraded open.
         with patch.object(Rdict, "list_cf", staticmethod(_fails_once)):
-            reopened = store_partition_factory("db")
+            reopened = store_partition_factory(
+                "db",
+                options=RocksDBOptions(open_max_retries=2, open_retry_backoff=0.0),
+            )
         try:
             assert len(calls) == 2, "the failed listing should have been retried"
             with reopened.begin() as tx:
@@ -331,14 +347,15 @@ class TestRocksDBStorePartition:
         self, store_partition_factory, tmp_path
     ):
         """
-        When the retry cannot list the column families either, fail — never open
-        without them.
+        A persistently unlistable store must fail, never open degraded.
 
-        An argument-less open of a store that HAS column families is exactly the
-        silent 8 MiB / no-bloom-filter degradation this change removes, so it must
-        not be used as a fallback. Pins the refusal: an `or`-instead-of-`raise`
-        slip here would turn a loud failure into a store quietly serving traffic
-        in the state the bug used to produce.
+        An argument-less open of a store that HAS column families succeeds while
+        applying rocksdict's 8 MiB / no-bloom-filter defaults to every one of
+        them — the original bug, invisible once the open returns. So when the
+        listing cannot be obtained, the open must fail rather than fall back to
+        it. A slip that reinstated that fallback would leave a store quietly
+        serving traffic with its configured cache and filters dropped, and the
+        only way to notice is that this test stops raising.
         """
         partition = store_partition_factory("db")
         with partition.begin() as tx:
@@ -347,19 +364,19 @@ class TestRocksDBStorePartition:
 
         calls = []
 
-        def _short_then_unlistable(path, *args, **kwargs):
+        def _never_lists(path, *args, **kwargs):
             calls.append(path)
-            if len(calls) == 1:
-                # A list this store will not open with -> triggers the retry.
-                return ["default"]
-            raise Exception("IO error: transient")
+            raise Exception("IO error: persistent")
 
-        with patch.object(Rdict, "list_cf", staticmethod(_short_then_unlistable)):
-            with pytest.raises(Exception, match="Column families not opened"):
+        with patch.object(Rdict, "list_cf", staticmethod(_never_lists)):
+            with pytest.raises(Exception, match="IO error: persistent"):
                 store_partition_factory(
-                    "db", options=RocksDBOptions(open_max_retries=0)
+                    "db",
+                    options=RocksDBOptions(open_max_retries=2, open_retry_backoff=0.0),
                 )
-        assert len(calls) == 2, "the list should have been re-read exactly once"
+        # Every attempt tried to list, and none resorted to opening without the
+        # column families.
+        assert len(calls) == 2
 
     def test_open_retries_a_stale_column_family_list(
         self, store_partition_factory, tmp_path
