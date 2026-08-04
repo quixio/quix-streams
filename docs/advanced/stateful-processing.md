@@ -214,6 +214,50 @@ sdf = sdf.apply(apply, stateful=True)
 ```
 
 
+## Memory: the RocksDB block cache
+
+State stores keep recently-read data blocks in a RocksDB block cache. Its size is
+set by `block_cache_size` on `RocksDBOptions` (default **1 GiB**):
+
+```python
+from quixstreams import Application
+from quixstreams.state.rocksdb.options import RocksDBOptions
+
+app = Application(
+    broker_address="localhost:9092",
+    rocksdb_options=RocksDBOptions(block_cache_size=256 * 1024 * 1024),
+)
+```
+
+Two properties matter when sizing a deployment:
+
+- **It is an aggregate ceiling for the whole process, not a per-partition budget.**
+  One cache of this size is shared by every store partition, so a 32-partition
+  application does not reserve 32 times this value. Size it against the memory
+  available to the process, not per store.
+- **It is filled lazily.** The cache is a ceiling rather than an allocation, so a
+  small store never realizes the full capacity, and memory use climbs gradually
+  as blocks are read rather than at startup.
+
+Index and bloom-filter blocks are held *outside* this budget, and every SST file
+stays open, so total RocksDB memory is roughly `block_cache_size` plus
+`bloom_filter_bits_per_key / 8` bytes per stored key. At the default of 10 bits
+that is about 1.25 MB per million keys per column family.
+
+!!! warning "Upgrading from a version before 3.25.1"
+
+    Earlier versions silently discarded `block_cache_size` (and bloom filters)
+    whenever a store was reopened, so every restart after the first ran with
+    RocksDB's 8 MiB default per partition regardless of configuration. Deployments
+    whose memory limits were sized from observed usage were therefore sized against
+    that degraded figure.
+
+    After upgrading, the configured cache actually applies and bloom filters exist
+    again, so steady-state memory rises. **Review your memory limits before
+    upgrading**, or set `block_cache_size` explicitly to keep the previous
+    footprint. Because the cache fills lazily, the increase appears over hours of
+    normal operation rather than immediately at startup.
+
 ## State TTL
 
 State TTL lets you attach an expiry duration to individual writes in a state store. You opt in per write by passing `ttl=timedelta(...)` to `state.set()`. Writes without a `ttl` argument never expire.
