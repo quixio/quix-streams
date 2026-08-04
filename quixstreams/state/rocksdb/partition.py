@@ -14,6 +14,7 @@ from typing import (
 
 from rocksdict import AccessType, ColumnFamily, Options, Rdict, ReadOptions, WriteBatch
 
+from quixstreams.exceptions.base import QuixException
 from quixstreams.state.base import (
     PartitionTransactionCache,
     StorePartition,
@@ -982,15 +983,29 @@ class RocksDBStorePartition(StorePartition):
                 # not exist. The corruption path destroys the whole directory,
                 # so it correctly takes the debug branch.
                 db_exists = os.path.exists(os.path.join(self._path, "CURRENT"))
-                log = logger.warning if db_exists else logger.debug
-                log(
-                    "Could not list the column families of the store at "
-                    '"%s" (%s); opening without an explicit column-family map, '
-                    "so configured RocksDB options will not reach any "
-                    "pre-existing column family.",
-                    self._path,
-                    exc,
-                )
+                # Past tense and no promise about the outcome: the caller may
+                # still recover by re-reading the list, and a warning that
+                # asserts the options were dropped is the string operators and
+                # alerts key on. Claiming it before the retry has run produced a
+                # false positive on a store that ended up correctly configured.
+                # ``strip()`` because rocksdict's message ends in a newline on
+                # Windows, which would split this into two log records and orphan
+                # the second half without its level or logger name.
+                if db_exists:
+                    logger.warning(
+                        'Could not list the column families of the store at "%s" '
+                        "(%s); retrying the open without an explicit "
+                        "column-family map.",
+                        self._path,
+                        str(exc).strip(),
+                    )
+                else:
+                    logger.debug(
+                        'No column families to list for the store at "%s" (%s); '
+                        "it will be created by this open.",
+                        self._path,
+                        str(exc).strip(),
+                    )
                 return None
 
         # ``_existing_column_families()`` is called inside ``create_rdict``, NOT
@@ -1027,28 +1042,42 @@ class RocksDBStorePartition(StorePartition):
             except Exception as exc:
                 if "Column families not opened" not in str(exc):
                     raise
-                # Two ways to land here, both recoverable by re-reading the list:
+                # Two ways to land here, and this message matches neither the
+                # corruption nor the io-error gate, so without a retry it is an
+                # un-retried fatal open:
                 #
                 # 1. The list went stale between listing and opening --
                 #    ``list_cf`` takes no LOCK and column families are created
                 #    lazily at runtime, so a process sharing this store can add
-                #    one inside that window.
+                #    one inside that window. Re-reading picks the new one up.
                 # 2. We opened WITHOUT the argument (``cfs is None``, the listing
                 #    having failed) and rocksdict could not read the persisted
                 #    OPTIONS, so it saw only the default CF. Supplying the list
-                #    explicitly recovers a store that the argument-less open
-                #    cannot open at all.
+                #    explicitly recovers a store the argument-less open cannot
+                #    open at all.
                 #
-                # Either way the message matches neither the corruption nor the
-                # io-error path, so without this it is an un-retried fatal open.
+                # The list is re-read ONCE. If that read fails, or still yields a
+                # list this store will not open with, the error propagates: the
+                # only remaining move would be an argument-less open, and on a
+                # store that has column families that is the silent 8 MiB /
+                # no-bloom-filter degradation this whole change exists to remove.
+                # Failing loudly on a store we cannot open correctly beats
+                # serving it in the state the bug used to produce.
                 retry = _existing_column_families()
-                if retry is None and cfs is None:
-                    # Nothing new to try: the listing failed both times and the
-                    # argument-less open has already been attempted.
+                if retry is None:
+                    logger.warning(
+                        'Could not open the store at "%s" (%s), and its column '
+                        "families could not be listed on the retry either; not "
+                        "falling back to an open without them, because that "
+                        "would silently drop the configured block cache and "
+                        "bloom filters for every existing column family.",
+                        self._path,
+                        str(exc).strip(),
+                    )
                     raise
                 logger.warning(
-                    'Could not open the store at "%s" with the column families '
-                    "listed for it (%s); re-reading the list and retrying once.",
+                    'Could not open the store at "%s" (%s); re-read its column '
+                    "families and retrying the open once.",
                     self._path,
                     str(exc).strip(),
                 )
@@ -1109,16 +1138,22 @@ class RocksDBStorePartition(StorePartition):
             except Exception as exc:
                 is_locked = str(exc).lower().startswith("io error")
                 if not is_locked:
-                    # Every other exit from this loop logs a warning naming the
-                    # path; without one here an unclassified open failure reaches
-                    # the operator as a PartitionAssignmentError whose message
-                    # may name a column family but never the store directory.
-                    logger.warning(
-                        'Failed to open rocksdb partition on "%s" with an '
-                        "unrecoverable error (%s); not retrying.",
-                        self._path,
-                        exc,
-                    )
+                    # Every other exit from this loop logs and names the path;
+                    # without this an unclassified open failure reaches the
+                    # operator as a PartitionAssignmentError whose message may
+                    # name a column family but never the store directory.
+                    #
+                    # ERROR, not WARNING: this is the terminal exit. Errors that
+                    # carry their own actionable message (``RocksDBCorruptedError``
+                    # says the store may be recoverable from the changelog) are
+                    # left to speak for themselves rather than being contradicted
+                    # by a line calling them unrecoverable.
+                    if not isinstance(exc, QuixException):
+                        logger.error(
+                            'Failed to open rocksdb partition on "%s": %s',
+                            self._path,
+                            str(exc).strip(),
+                        )
                     raise
 
                 # Shared per-assign open budget: when the acquiring consumer has

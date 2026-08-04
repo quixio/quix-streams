@@ -327,6 +327,40 @@ class TestRocksDBStorePartition:
         finally:
             reopened.close()
 
+    def test_open_refuses_to_fall_back_to_a_degraded_open(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        When the retry cannot list the column families either, fail — never open
+        without them.
+
+        An argument-less open of a store that HAS column families is exactly the
+        silent 8 MiB / no-bloom-filter degradation this change removes, so it must
+        not be used as a fallback. Pins the refusal: an `or`-instead-of-`raise`
+        slip here would turn a loud failure into a store quietly serving traffic
+        in the state the bug used to produce.
+        """
+        partition = store_partition_factory("db")
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        calls = []
+
+        def _short_then_unlistable(path, *args, **kwargs):
+            calls.append(path)
+            if len(calls) == 1:
+                # A list this store will not open with -> triggers the retry.
+                return ["default"]
+            raise Exception("IO error: transient")
+
+        with patch.object(Rdict, "list_cf", staticmethod(_short_then_unlistable)):
+            with pytest.raises(Exception, match="Column families not opened"):
+                store_partition_factory(
+                    "db", options=RocksDBOptions(open_max_retries=0)
+                )
+        assert len(calls) == 2, "the list should have been re-read exactly once"
+
     def test_open_retries_a_stale_column_family_list(
         self, store_partition_factory, tmp_path
     ):
