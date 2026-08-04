@@ -1000,8 +1000,14 @@ class RocksDBStorePartition(StorePartition):
         # ``_init_rocksdb`` likewise re-invokes this method per lock retry.
         def _open(cfs: Optional[Dict[str, Options]]) -> Rdict:
             if cfs is None:
-                # Pre-existing behaviour: a genuine IO fault then surfaces from
-                # inside ``Rdict`` as "IO error: ..." and is retried upstream.
+                # Omitting the argument is the pre-existing open. Note it is NOT
+                # a safe fallback in general: rocksdict then derives the column
+                # families from the persisted OPTIONS file, and if that read
+                # fails it silently degrades to default-CF-only, so the open
+                # fails with "Column families not opened" rather than an
+                # "IO error: ..." that the caller would retry. Supplying the
+                # list explicitly survives that, which is why the caller below
+                # re-reads and tries the other form.
                 return Rdict(
                     path=self._path,
                     options=options,
@@ -1019,22 +1025,34 @@ class RocksDBStorePartition(StorePartition):
             try:
                 return _open(cfs)
             except Exception as exc:
-                if cfs is None or "Column families not opened" not in str(exc):
+                if "Column families not opened" not in str(exc):
                     raise
-                # The list went stale between listing and opening: ``list_cf``
-                # takes no LOCK and column families are created lazily at
-                # runtime, so another process sharing this store can add one
-                # inside that window. The resulting message matches neither the
-                # corruption nor the io-error path, so without this it would be
-                # an un-retried fatal open. Re-read once; a second failure is
-                # not a race and propagates.
+                # Two ways to land here, both recoverable by re-reading the list:
+                #
+                # 1. The list went stale between listing and opening --
+                #    ``list_cf`` takes no LOCK and column families are created
+                #    lazily at runtime, so a process sharing this store can add
+                #    one inside that window.
+                # 2. We opened WITHOUT the argument (``cfs is None``, the listing
+                #    having failed) and rocksdict could not read the persisted
+                #    OPTIONS, so it saw only the default CF. Supplying the list
+                #    explicitly recovers a store that the argument-less open
+                #    cannot open at all.
+                #
+                # Either way the message matches neither the corruption nor the
+                # io-error path, so without this it is an un-retried fatal open.
+                retry = _existing_column_families()
+                if retry is None and cfs is None:
+                    # Nothing new to try: the listing failed both times and the
+                    # argument-less open has already been attempted.
+                    raise
                 logger.warning(
-                    'Column-family list for the store at "%s" went stale '
-                    "between listing and opening (%s); re-reading and retrying.",
+                    'Could not open the store at "%s" with the column families '
+                    "listed for it (%s); re-reading the list and retrying once.",
                     self._path,
-                    exc,
+                    str(exc).strip(),
                 )
-                return _open(_existing_column_families())
+                return _open(retry)
 
         # TODO: Add docs
 

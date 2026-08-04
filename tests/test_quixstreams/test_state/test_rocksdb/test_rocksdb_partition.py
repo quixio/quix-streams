@@ -257,6 +257,76 @@ class TestRocksDBStorePartition:
         finally:
             reopened.close()
 
+    def test_reopen_applies_new_options_to_persisted_column_families(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        The upgrade path: a store whose CFs were persisted under one
+        ``block_cache_size`` must adopt a different one on reopen.
+
+        This is the case where ``_open`` hands each column family options that
+        disagree with the store's own persisted OPTIONS file, and it is what an
+        operator actually does when they change the setting and restart.
+        """
+        small, large = 32 * 1024 * 1024, 96 * 1024 * 1024
+
+        partition = store_partition_factory(
+            "db", options=RocksDBOptions(block_cache_size=small)
+        )
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        reopened = store_partition_factory(
+            "db", options=RocksDBOptions(block_cache_size=large)
+        )
+        try:
+            with reopened.begin() as tx:
+                assert tx.get("key", prefix=b"__key__") == "value"
+        finally:
+            reopened.close()
+
+        log = (tmp_path / "db" / "LOG").read_text(encoding="utf-8", errors="replace")
+        assert set(re.findall(r"capacity\s+:\s+(\d+)", log)) == {str(large)}
+
+    def test_open_recovers_when_persisted_options_are_unreadable(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        A store whose persisted OPTIONS file is unreadable must still open.
+
+        Without the column-family argument rocksdict derives the CFs from that
+        file, and on failure silently sees only the default CF -- so the open
+        dies with ``Column families not opened``, which matches no recovery path.
+        Supplying the list explicitly survives it, so a listing that fails on the
+        first attempt and succeeds on the re-read must recover rather than crash.
+        """
+        partition = store_partition_factory("db")
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        for options_file in tmp_path.glob("db/OPTIONS-*"):
+            options_file.write_text("garbage")
+
+        real_list_cf = Rdict.list_cf
+        calls = []
+
+        def _fails_once(path, *args, **kwargs):
+            calls.append(path)
+            if len(calls) == 1:
+                raise Exception("IO error: transient")
+            return real_list_cf(path, *args, **kwargs)
+
+        with patch.object(Rdict, "list_cf", staticmethod(_fails_once)):
+            reopened = store_partition_factory("db")
+        try:
+            assert len(calls) == 2, "the failed listing should have been retried"
+            with reopened.begin() as tx:
+                assert tx.get("key", prefix=b"__key__") == "value"
+        finally:
+            reopened.close()
+
     def test_open_retries_a_stale_column_family_list(
         self, store_partition_factory, tmp_path
     ):
