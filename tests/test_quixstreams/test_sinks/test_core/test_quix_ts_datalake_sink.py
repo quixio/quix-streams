@@ -13,6 +13,7 @@ from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
@@ -1425,3 +1426,108 @@ class TestStreamTimeoutWiring:
         sink._timeout.check_now()
         sink._timeout.start()
         sink._timeout.stop()
+
+
+# =============================================================================
+# Column statistics (per-file min/max zone maps for query-time pruning)
+# =============================================================================
+
+
+class TestQuixTSDataLakeSinkColumnStats:
+    """Tests for per-file min/max stats computed in the sink."""
+
+    def test_compute_column_stats_numeric_and_timestamp(self, sink_factory):
+        sink = sink_factory()
+        table = pa.table(
+            {
+                "speed": pa.array([100, 50, 300], type=pa.int64()),
+                "temp": pa.array([1.5, 2.5, None], type=pa.float64()),
+                "ts": pa.array(
+                    [
+                        datetime(2026, 1, 1, tzinfo=timezone.utc),
+                        datetime(2026, 1, 3, tzinfo=timezone.utc),
+                        datetime(2026, 1, 2, tzinfo=timezone.utc),
+                    ]
+                ),
+                "name": pa.array(["a", "b", "c"]),  # string -> skipped
+                "__key": pa.array(["k1", "k2", "k3"]),  # internal -> skipped
+            }
+        )
+
+        stats = sink._compute_column_stats(table)
+
+        # String and internal columns are not tracked.
+        assert set(stats.keys()) == {"speed", "temp", "ts"}
+
+        assert stats["speed"] == {
+            "type": "numeric",
+            "min": 50.0,
+            "max": 300.0,
+            "null_count": 0,
+            "value_count": 3,
+        }
+        # One null in temp: min/max ignore it, counts reflect it.
+        assert stats["temp"]["type"] == "numeric"
+        assert stats["temp"]["min"] == 1.5
+        assert stats["temp"]["max"] == 2.5
+        assert stats["temp"]["null_count"] == 1
+        assert stats["temp"]["value_count"] == 2
+
+        assert stats["ts"]["type"] == "timestamp"
+        # ISO-8601 bounds, min/max by time (not input order).
+        assert stats["ts"]["min"].startswith("2026-01-01")
+        assert stats["ts"]["max"].startswith("2026-01-03")
+
+    def test_all_null_numeric_column_is_skipped(self, sink_factory):
+        sink = sink_factory()
+        table = pa.table({"x": pa.array([None, None], type=pa.float64())})
+        assert sink._compute_column_stats(table) == {}
+
+    def test_stats_columns_restricts_the_tracked_set(self, sink_factory):
+        sink = sink_factory(stats_columns=["speed"])
+        table = pa.table(
+            {
+                "speed": pa.array([1, 2], type=pa.int64()),
+                "temp": pa.array([1.0, 2.0], type=pa.float64()),
+            }
+        )
+        stats = sink._compute_column_stats(table)
+        assert set(stats.keys()) == {"speed"}
+
+    def test_safe_float_bounds_widen_for_large_ints(self, sink_factory):
+        sink = sink_factory()
+        # 2**53 + 1 is not exactly representable as float64 (rounds down).
+        v = 2**53 + 1
+        lo = sink._safe_float_min(v)
+        hi = sink._safe_float_max(v)
+        # Stored bounds must ENCLOSE the true value so pruning never wrongly
+        # skips a file: lo <= v <= hi.
+        assert lo <= v <= hi
+
+    def test_write_attaches_column_stats_to_manifest_payload(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        sink.write(sample_batch())
+
+        manifest_calls = [
+            call
+            for call in mock_catalog_client.post.call_args_list
+            if "manifest" in str(call)
+        ]
+        assert len(manifest_calls) == 1
+        files = manifest_calls[0].kwargs["json"]["files"]
+        assert len(files) == 1
+        cs = files[0]["column_stats"]
+
+        # Numeric data columns get zone maps; the string column and the
+        # internal __key column do not.
+        assert "field2" in cs and cs["field2"]["type"] == "numeric"
+        assert cs["field2"]["min"] == 100.0
+        assert cs["field2"]["max"] == 200.0
+        assert "ts_ms" in cs and cs["ts_ms"]["type"] == "numeric"
+        assert "field1" not in cs
+        assert "__key" not in cs

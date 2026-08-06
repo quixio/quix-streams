@@ -8,6 +8,7 @@ Uses quixportal for unified blob storage access (Azure, AWS S3, GCP, MinIO, loca
 """
 
 import logging
+import math
 import time
 import uuid
 from datetime import datetime, timezone
@@ -16,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional
 try:
     import pandas as pd
     import pyarrow as pa
+    import pyarrow.compute as pc
     import pyarrow.parquet as pq
 except ImportError as exc:
     raise ImportError(
@@ -112,6 +114,14 @@ class QuixTSDataLakeSink(BatchingSink):
     :param namespace: Catalog namespace (default: "default")
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
     :param max_workers: Maximum number of parallel upload threads (default: 10)
+    :param stats_columns: Optional list of column names to compute per-file
+        min/max statistics ("zone maps") for. These are sent to the REST
+        Catalog with each file and let the query layer skip files whose value
+        range cannot satisfy a WHERE/ORDER BY on the column. ``None`` (default)
+        computes stats for every numeric and timestamp column in each written
+        file (cheap — the batch is already in memory). Pass an explicit list to
+        restrict the set and bound catalog storage on very wide tables. String
+        columns are not supported yet and are always skipped.
     :param stream_timeout_ms: Optional **per-key** silence threshold in
         milliseconds. Paired with ``on_stream_timeout``; both must be
         provided to enable the feature. See
@@ -150,6 +160,7 @@ class QuixTSDataLakeSink(BatchingSink):
         namespace: str = "default",
         auto_create_bucket: bool = True,
         max_workers: int = 10,
+        stats_columns: Optional[List[str]] = None,
         stream_timeout_ms: Optional[int] = None,
         on_stream_timeout: Optional[Callable[[Any], None]] = None,
         silence_azure_http_logs: bool = True,
@@ -175,6 +186,15 @@ class QuixTSDataLakeSink(BatchingSink):
         self.auto_discover = auto_discover
         self.namespace = namespace
         self.table_registered = False
+
+        # Columns to compute per-file min/max zone maps for (data-skipping at
+        # query time). ``None`` (default) -> every numeric / timestamp column
+        # in each written file, which is nearly free here because the batch is
+        # already an in-memory Arrow table. Pass an explicit list to restrict
+        # the set (e.g. just the timestamp column) and bound catalog stats-row
+        # growth on very wide tables. Stats ride along with each add-files
+        # entry as ``column_stats`` and are consumed by the catalog's pruning.
+        self._stats_columns = set(stats_columns) if stats_columns else None
 
         # Blob storage client and bucket name will be initialized in setup()
         self._blob_client: Optional[BlobStorageClient] = None
@@ -427,6 +447,83 @@ class QuixTSDataLakeSink(BatchingSink):
         self._finalize_writes()
         return rows_written
 
+    @staticmethod
+    def _safe_float_min(value: Any) -> float:
+        """Largest float <= value. Widening the low bound downward guarantees
+        the stored zone map is a *superset* of the real range, so float
+        rounding of large ints/decimals (e.g. nanosecond epochs beyond 2**53)
+        can only cost pruning, never wrongly skip a matching file."""
+        f = float(value)
+        while f > value:
+            f = math.nextafter(f, float("-inf"))
+        return f
+
+    @staticmethod
+    def _safe_float_max(value: Any) -> float:
+        """Smallest float >= value (see _safe_float_min for the safety rationale)."""
+        f = float(value)
+        while f < value:
+            f = math.nextafter(f, float("inf"))
+        return f
+
+    def _compute_column_stats(self, table: "pa.Table") -> Dict[str, Dict[str, Any]]:
+        """Compute per-column min/max/null_count for a written Arrow table.
+
+        Numeric columns (int/float/decimal) are reported as ``type="numeric"``
+        with float bounds (floored min / ceiled max for safety); timestamp and
+        date columns as ``type="timestamp"`` with ISO-8601 bounds. Everything
+        else (strings, structs, the ``__key`` column) is skipped. Respects
+        ``self._stats_columns`` when set. Runs on the in-memory batch, so it is
+        just vectorised min/max — no re-read of the parquet footer.
+        """
+        stats: Dict[str, Dict[str, Any]] = {}
+        for field in table.schema:
+            name = field.name
+            if name == "__key":
+                continue
+            if self._stats_columns is not None and name not in self._stats_columns:
+                continue
+
+            t = field.type
+            if pa.types.is_integer(t) or pa.types.is_floating(t) or pa.types.is_decimal(t):
+                vtype = "numeric"
+            elif pa.types.is_timestamp(t) or pa.types.is_date(t):
+                vtype = "timestamp"
+            else:
+                continue
+
+            column = table.column(name)
+            null_count = column.null_count
+            if len(column) - null_count == 0:
+                # All-null column: no usable bound, skip (keeps files unpruned).
+                continue
+
+            try:
+                mm = pc.min_max(column)
+                vmin = mm["min"].as_py()
+                vmax = mm["max"].as_py()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Skipping stats for column %s: %s", name, exc)
+                continue
+            if vmin is None or vmax is None:
+                continue
+
+            if vtype == "numeric":
+                vmin = self._safe_float_min(vmin)
+                vmax = self._safe_float_max(vmax)
+            else:  # timestamp / date
+                vmin = vmin.isoformat()
+                vmax = vmax.isoformat()
+
+            stats[name] = {
+                "type": vtype,
+                "min": vmin,
+                "max": vmax,
+                "null_count": int(null_count),
+                "value_count": int(len(column) - null_count),
+            }
+        return stats
+
     def _write_parquet_to_storage(
         self,
         df: pd.DataFrame,
@@ -438,6 +535,12 @@ class QuixTSDataLakeSink(BatchingSink):
         # Convert to Arrow table and prepare buffer
         self._null_empty_dicts(df)
         table = pa.Table.from_pandas(df)
+
+        # Compute per-column min/max zone maps from the in-memory table BEFORE
+        # serialising — nearly free, and avoids re-reading the parquet footer
+        # from storage later. Carried through _pending_futures into the catalog
+        # add-files call (see _register_files_in_manifest).
+        column_stats = self._compute_column_stats(table)
 
         buf = pa.BufferOutputStream()
         pq.write_table(table, buf)
@@ -456,6 +559,7 @@ class QuixTSDataLakeSink(BatchingSink):
                 "file_size": len(parquet_bytes),
                 "partition_columns": partition_columns,
                 "partition_values": partition_values,
+                "column_stats": column_stats,
             }
         )
 
@@ -722,6 +826,7 @@ class QuixTSDataLakeSink(BatchingSink):
             file_size = item["file_size"]
             partition_columns = item["partition_columns"]
             partition_values = item["partition_values"]
+            column_stats = item.get("column_stats") or {}
 
             # Build file path as full S3 URI for catalog (API uses this with DuckDB)
             # Include workspace_id if set (for workspace-scoped storage)
@@ -746,15 +851,19 @@ class QuixTSDataLakeSink(BatchingSink):
                     partition_dict[col] = str(val)
 
             # Create file entry
-            file_entries.append(
-                {
-                    "file_path": file_path,
-                    "file_size": file_size,
-                    "last_modified": datetime.now(tz=timezone.utc).isoformat(),
-                    "partition_values": partition_dict,
-                    "row_count": row_count,
-                }
-            )
+            entry = {
+                "file_path": file_path,
+                "file_size": file_size,
+                "last_modified": datetime.now(tz=timezone.utc).isoformat(),
+                "partition_values": partition_dict,
+                "row_count": row_count,
+            }
+            # Attach per-column zone maps when computed (catalog stores them in
+            # column_stats for query-time file pruning). Omit the key entirely
+            # when empty so older catalogs simply ignore the absent field.
+            if column_stats:
+                entry["column_stats"] = column_stats
+            file_entries.append(entry)
 
         # Send all files to catalog in a single request
         response = self._catalog.post(
