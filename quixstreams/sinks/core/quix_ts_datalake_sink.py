@@ -114,6 +114,9 @@ class QuixTSDataLakeSink(BatchingSink):
         exposes ``driver`` as a virtual level. Virtual columns stay in the
         parquet data so queries can still filter rows by them.
     :param timestamp_column: Column containing timestamp to extract time partitions from
+    :param sort_column: Optional column recorded on the table (properties.sort_column)
+        that compaction orders files by, so ORDER BY / time-range queries can skip
+        files and stream. When None, the lakehouse falls back to timestamp_column.
     :param catalog_url: Optional REST Catalog URL for table registration
     :param catalog_auth_token: If using REST Catalog, the respective auth token for it
     :param auto_discover: Whether to auto-register table on first write
@@ -160,6 +163,7 @@ class QuixTSDataLakeSink(BatchingSink):
         workspace_id: str = "",
         hive_columns: Optional[List[str]] = None,
         timestamp_column: str = "ts_ms",
+        sort_column: Optional[str] = None,
         catalog_url: Optional[str] = None,
         catalog_auth_token: Optional[str] = None,
         auto_discover: bool = True,
@@ -196,6 +200,11 @@ class QuixTSDataLakeSink(BatchingSink):
             c[1:] if c.startswith("~") else c for c in _raw_hive
         ]
         self.timestamp_column = timestamp_column
+        # Preferred ordering column recorded on the table (properties.sort_column).
+        # Compaction writes files ordered by it so ORDER BY / range queries can
+        # skip files and stream. When None, the lakehouse falls back to the
+        # timestamp column automatically.
+        self.sort_column = sort_column or None
         self._catalog = (
             QuixTSDataLakeCatalogClient(catalog_url, catalog_auth_token)
             if catalog_url
@@ -710,6 +719,14 @@ class QuixTSDataLakeSink(BatchingSink):
             properties["virtual_partitions"] = self._virtual_columns.copy()
         else:
             partition_spec = []  # Empty spec for dynamic discovery
+
+        # Record the ordering columns so lakehouse compaction can write
+        # time-ordered, skippable files. sort_column (when set) takes precedence;
+        # timestamp_column is the automatic fallback, so persist it too.
+        if self.timestamp_column:
+            properties["timestamp_column"] = self.timestamp_column
+        if self.sort_column:
+            properties["sort_column"] = self.sort_column
 
         # Create table with minimal schema (will be inferred from data)
         create_response = self._catalog.put(

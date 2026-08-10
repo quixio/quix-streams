@@ -200,6 +200,7 @@ class TestQuixTSDataLakeSinkInit:
             workspace_id="ws-123",
             hive_columns=["year", "month", "day"],
             timestamp_column="event_time",
+            sort_column="seq",
             catalog_url="http://catalog:8080",
             catalog_auth_token="token123",
             auto_discover=False,
@@ -212,6 +213,7 @@ class TestQuixTSDataLakeSinkInit:
         assert sink.workspace_id == "ws-123"
         assert sink.hive_columns == ["year", "month", "day"]
         assert sink.timestamp_column == "event_time"
+        assert sink.sort_column == "seq"
         assert sink._catalog is not None
         assert sink.auto_discover is False
         assert sink.namespace == "production"
@@ -1620,3 +1622,33 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         # Full tree order sent up front (virtual can't be discovered from paths).
         assert body["partition_spec"] == ["year", "month", "driver"]
         assert body["properties"]["virtual_partitions"] == ["driver"]
+
+    def test_register_table_records_sort_and_timestamp_columns(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(
+            timestamp_column="ts_ms", sort_column="seq",
+            catalog_url="http://catalog:8080", auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink._register_table()
+
+        props = mock_catalog_client.put.call_args.kwargs["json"]["properties"]
+        assert props["sort_column"] == "seq"
+        assert props["timestamp_column"] == "ts_ms"
+
+    def test_register_table_omits_sort_column_when_unset(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(
+            timestamp_column="ts_ms",
+            catalog_url="http://catalog:8080", auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink._register_table()
+
+        props = mock_catalog_client.put.call_args.kwargs["json"]["properties"]
+        # No explicit sort_column -> omitted so the lakehouse falls back to the
+        # timestamp column (which is still recorded).
+        assert "sort_column" not in props
+        assert props["timestamp_column"] == "ts_ms"
