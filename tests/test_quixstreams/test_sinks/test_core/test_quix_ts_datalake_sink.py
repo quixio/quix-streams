@@ -1531,3 +1531,92 @@ class TestQuixTSDataLakeSinkColumnStats:
         assert "ts_ms" in cs and cs["ts_ms"]["type"] == "numeric"
         assert "field1" not in cs
         assert "__key" not in cs
+
+
+# =============================================================================
+# Virtual partition columns (~ prefix): navigate/filter without foldering/splitting
+# =============================================================================
+
+
+class TestQuixTSDataLakeSinkVirtualPartitions:
+    """Tests for ~-prefixed virtual partition columns."""
+
+    def _batch(self, records):
+        batch = SinkBatch(topic="test", partition=0)
+        for r in records:
+            batch.append(
+                value=r["value"], key=r["key"], timestamp=r["timestamp"],
+                headers=[], offset=r["offset"],
+            )
+        return batch
+
+    def _drivers_batch(self):
+        # Two drivers, same day -> would be one physical partition group.
+        return self._batch([
+            {"value": {"driver": "HAM", "speed": 100, "ts_ms": 1704067200000},
+             "key": "k1", "timestamp": 1704067200000, "offset": 0},
+            {"value": {"driver": "VER", "speed": 200, "ts_ms": 1704067200000},
+             "key": "k2", "timestamp": 1704067200000, "offset": 1},
+        ])
+
+    def test_tilde_prefix_parsing(self, sink_factory):
+        sink = sink_factory(hive_columns=["year", "month", "~driver"])
+        assert sink.hive_columns == ["year", "month"]          # physical only
+        assert sink._virtual_columns == ["driver"]
+        assert sink._partition_spec_order == ["year", "month", "driver"]
+
+    def test_virtual_column_does_not_split_files(self, sink_factory, mock_blob_client):
+        # physical=year, virtual=driver: two drivers in one year -> ONE file.
+        sink = sink_factory(hive_columns=["year", "~driver"])
+        sink.write(self._drivers_batch())
+        assert mock_blob_client.put_object_async.call_count == 1
+
+    def test_virtual_column_kept_in_data_physical_dropped(self, sink_factory, mock_blob_client):
+        sink = sink_factory(hive_columns=["year", "~driver"])
+        sink.write(self._drivers_batch())
+        parquet_bytes = mock_blob_client.put_object_async.call_args[0][1]
+        df = pq.read_table(io.BytesIO(parquet_bytes)).to_pandas()
+        assert "driver" in df.columns   # virtual column stays in the data
+        assert "year" not in df.columns  # physical partition column is foldered away
+        assert set(df["driver"]) == {"HAM", "VER"}
+
+    def test_compute_virtual_values(self, sink_factory):
+        sink = sink_factory(hive_columns=["~driver"])
+        df = pd.DataFrame({"driver": ["HAM", "VER", "HAM", None], "x": [1, 2, 3, 4]})
+        assert sink._compute_virtual_values(df) == {"driver": ["HAM", "VER"]}
+
+    def test_high_cardinality_virtual_column_skipped(self, sink_factory):
+        sink = sink_factory(hive_columns=["~id"])
+        df = pd.DataFrame({"id": [str(i) for i in range(50)]})
+        assert sink._compute_virtual_values(df, max_distinct=10) == {}
+
+    def test_add_files_payload_has_virtual_values(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(hive_columns=["year", "~driver"], catalog_url="http://catalog:8080")
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        sink.write(self._drivers_batch())
+
+        manifest_calls = [
+            c for c in mock_catalog_client.post.call_args_list if "manifest" in str(c)
+        ]
+        assert len(manifest_calls) == 1
+        files = manifest_calls[0].kwargs["json"]["files"]
+        assert len(files) == 1  # not split by driver
+        assert set(files[0]["virtual_values"]["driver"]) == {"HAM", "VER"}
+
+    def test_register_table_declares_virtual_partitions(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(
+            hive_columns=["year", "month", "~driver"],
+            catalog_url="http://catalog:8080", auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink._register_table()
+
+        body = mock_catalog_client.put.call_args.kwargs["json"]
+        # Full tree order sent up front (virtual can't be discovered from paths).
+        assert body["partition_spec"] == ["year", "month", "driver"]
+        assert body["properties"]["virtual_partitions"] == ["driver"]

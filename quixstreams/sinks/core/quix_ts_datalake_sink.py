@@ -106,7 +106,13 @@ class QuixTSDataLakeSink(BatchingSink):
     :param workspace_id: Workspace ID for workspace-scoped storage paths
         (auto-injected by platform)
     :param hive_columns: List of columns to use for Hive partitioning. Include
-        'year', 'month', 'day', 'hour' to extract these from timestamp_column
+        'year', 'month', 'day', 'hour' to extract these from timestamp_column.
+        Prefix an entry with ``~`` to make it a VIRTUAL partition: it appears in
+        the partition tree and is filterable, but is NOT written as a physical
+        ``key=value/`` folder and does not split files (a file keeps every value
+        of it). E.g. ``["year", "month", "~driver"]`` folders by year/month and
+        exposes ``driver`` as a virtual level. Virtual columns stay in the
+        parquet data so queries can still filter rows by them.
     :param timestamp_column: Column containing timestamp to extract time partitions from
     :param catalog_url: Optional REST Catalog URL for table registration
     :param catalog_auth_token: If using REST Catalog, the respective auth token for it
@@ -176,7 +182,19 @@ class QuixTSDataLakeSink(BatchingSink):
         self.s3_prefix = s3_prefix
         self.table_name = table_name
         self.workspace_id = workspace_id
-        self.hive_columns = hive_columns or []
+        # A ``~``-prefixed entry in hive_columns marks a VIRTUAL partition: it
+        # appears in the partition tree and is filterable, but is NOT written as
+        # a physical ``key=value/`` folder and does NOT group/split files (a
+        # single file keeps every value of it). We split the incoming list into:
+        #   * self.hive_columns          — physical columns (grouped + foldered)
+        #   * self._virtual_columns      — virtual columns (indexed, kept in data)
+        #   * self._partition_spec_order — full tree order (names, no prefix)
+        _raw_hive = hive_columns or []
+        self._virtual_columns = [c[1:] for c in _raw_hive if c.startswith("~")]
+        self.hive_columns = [c for c in _raw_hive if not c.startswith("~")]
+        self._partition_spec_order = [
+            c[1:] if c.startswith("~") else c for c in _raw_hive
+        ]
         self.timestamp_column = timestamp_column
         self._catalog = (
             QuixTSDataLakeCatalogClient(catalog_url, catalog_auth_token)
@@ -524,6 +542,40 @@ class QuixTSDataLakeSink(BatchingSink):
             }
         return stats
 
+    def _compute_virtual_values(
+        self, df: pd.DataFrame, max_distinct: int = 10000
+    ) -> Dict[str, List[str]]:
+        """Distinct values of each configured virtual column present in this
+        file's data, as ``{column: ["v1", "v2", ...]}``.
+
+        Virtual columns are not foldered or grouped, so a file can carry many
+        of their values; the catalog indexes these so the partition tree can
+        enumerate them and queries can prune to files that contain a value. A
+        column with more than ``max_distinct`` values in a single file is
+        skipped (a guard against accidentally marking a high-cardinality column
+        virtual, which would bloat the index and make the tree unusable).
+        """
+        if not self._virtual_columns:
+            return {}
+        out: Dict[str, List[str]] = {}
+        for col in self._virtual_columns:
+            if col not in df.columns:
+                continue
+            try:
+                values = df[col].dropna().unique()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Skipping virtual values for column %s: %s", col, exc)
+                continue
+            if len(values) > max_distinct:
+                logger.warning(
+                    "Virtual column '%s' has %d distinct values in one file "
+                    "(> %d) — skipping its index for this file.",
+                    col, len(values), max_distinct,
+                )
+                continue
+            out[col] = sorted({str(v) for v in values})
+        return out
+
     def _write_parquet_to_storage(
         self,
         df: pd.DataFrame,
@@ -541,6 +593,10 @@ class QuixTSDataLakeSink(BatchingSink):
         # from storage later. Carried through _pending_futures into the catalog
         # add-files call (see _register_files_in_manifest).
         column_stats = self._compute_column_stats(table)
+        # Distinct values of any virtual partition columns present in this file
+        # (they aren't foldered, so a file can hold many). Cheap on the
+        # in-memory frame; carried to the catalog's file_virtual_values index.
+        virtual_values = self._compute_virtual_values(df)
 
         buf = pa.BufferOutputStream()
         pq.write_table(table, buf)
@@ -560,6 +616,7 @@ class QuixTSDataLakeSink(BatchingSink):
                 "partition_columns": partition_columns,
                 "partition_values": partition_values,
                 "column_stats": column_stats,
+                "virtual_values": virtual_values,
             }
         )
 
@@ -638,10 +695,21 @@ class QuixTSDataLakeSink(BatchingSink):
         else:
             location = f"s3://{self.s3_bucket}/{self.s3_prefix}/{self.table_name}"
 
-        # Define partition spec based on configuration
-        # For dynamic partition discovery, create table without partition spec
-        # The partition spec will be set when first files are added
-        partition_spec = []  # Empty spec for dynamic discovery
+        # Physical-only tables keep the historical dynamic-discovery behaviour
+        # (empty spec; the catalog derives it from the first files' paths). When
+        # any VIRTUAL column is configured it can't be discovered from paths, so
+        # we send the full intended tree order up front and declare which
+        # entries are virtual in properties.
+        properties = {
+            "created_by": "quixstreams-quix-lake-sink",
+            "auto_discovered": "false",
+            "expected_partitions": self._partition_spec_order.copy(),
+        }
+        if self._virtual_columns:
+            partition_spec = self._partition_spec_order.copy()
+            properties["virtual_partitions"] = self._virtual_columns.copy()
+        else:
+            partition_spec = []  # Empty spec for dynamic discovery
 
         # Create table with minimal schema (will be inferred from data)
         create_response = self._catalog.put(
@@ -649,11 +717,7 @@ class QuixTSDataLakeSink(BatchingSink):
             json={
                 "location": location,
                 "partition_spec": partition_spec,
-                "properties": {
-                    "created_by": "quixstreams-quix-lake-sink",
-                    "auto_discovered": "false",
-                    "expected_partitions": self.hive_columns.copy(),
-                },
+                "properties": properties,
             },
             timeout=30,
         )
@@ -827,6 +891,7 @@ class QuixTSDataLakeSink(BatchingSink):
             partition_columns = item["partition_columns"]
             partition_values = item["partition_values"]
             column_stats = item.get("column_stats") or {}
+            virtual_values = item.get("virtual_values") or {}
 
             # Build file path as full S3 URI for catalog (API uses this with DuckDB)
             # Include workspace_id if set (for workspace-scoped storage)
@@ -863,6 +928,11 @@ class QuixTSDataLakeSink(BatchingSink):
             # when empty so older catalogs simply ignore the absent field.
             if column_stats:
                 entry["column_stats"] = column_stats
+            # Attach virtual-partition value sets (catalog indexes them in
+            # file_virtual_values for tree navigation + pruning). Omitted when
+            # empty so older catalogs ignore the absent field.
+            if virtual_values:
+                entry["virtual_values"] = virtual_values
             file_entries.append(entry)
 
         # Send all files to catalog in a single request
