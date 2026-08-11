@@ -1,3 +1,4 @@
+import re
 import time
 from datetime import timedelta
 from pathlib import Path
@@ -114,13 +115,311 @@ class TestRocksDBStorePartition:
         store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=True))
 
     def test_db_corrupted_sst_file(self, store_partition_factory, tmp_path):
-        rdict = Rdict(path=tmp_path.as_posix())  # initialize db
+        # Initialize the db the way quixstreams does, so the CFs carry the same
+        # comparator the store partition will open them with. A bare
+        # `Rdict(path=...)` defaults to `raw_mode=False` and is not a store any
+        # quixstreams deployment can produce; opening it would fail on the
+        # comparator before the corruption is ever reached.
+        rdict = Rdict(path=tmp_path.as_posix(), options=RocksDBOptions().to_options())
         rdict[b"key"] = b"value"  # write something
         rdict.flush()  # flush creates .sst file
         rdict.close()  # required to release the lock
         next(tmp_path.glob("*.sst")).unlink()  # delete the .sst file
 
         store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=True))
+
+    def test_configured_table_options_survive_reopen(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        Reopening an existing store must apply the configured block cache and
+        bloom filter to the ALREADY-EXISTING column families, not just to the
+        ones created during this open.
+
+        rocksdict takes per-CF table options from its ``column_families``
+        mapping; when the argument is omitted, existing CFs are opened with
+        rocksdict's defaults (8 MiB cache, no filter policy) and every
+        ``RocksDBOptions`` tuning is silently discarded on every restart.
+
+        Asserted against RocksDB's own ``LOG``, which prints the effective
+        per-CF table options at open. RocksDB rotates ``LOG`` to
+        ``LOG.old.<ts>`` on each open, so after the reopen ``LOG`` describes
+        the reopen alone.
+        """
+        cache_size = 96 * 1024 * 1024
+        options = RocksDBOptions(
+            block_cache_size=cache_size, bloom_filter_bits_per_key=10
+        )
+
+        partition = store_partition_factory("db", options=options)
+        cf_names = partition.list_column_families()
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        # Every CF now pre-exists, so this open exercises the reopen path only.
+        partition = store_partition_factory("db", options=options)
+        partition.close()
+
+        # errors="replace": the LOG embeds the absolute store path, which on a
+        # non-ASCII temp dir is undecodable under the Windows locale codepage.
+        log = (tmp_path / "db" / "LOG").read_text(encoding="utf-8", errors="replace")
+        # Require whitespace around the colon: that is the block-cache line in
+        # the block_based_table_factory section. An unrelated "capacity: 128"
+        # (no leading space) appears elsewhere in RocksDB's log.
+        capacities = [int(c) for c in re.findall(r"capacity\s+:\s+(\d+)", log)]
+        filter_policies = set(re.findall(r"filter_policy:\s*(\S+)", log))
+        # Anchored: an unanchored `block_cache:` also matches `no_block_cache: 0`
+        # and `prepopulate_block_cache: 0`, which happen to be 0 today — enabling
+        # either would fail this assertion for the wrong reason.
+        cache_ids = set(re.findall(r"^\s*block_cache:\s*(\w+)\s*$", log, re.M))
+
+        # One block-cache line per CF, all at the configured size.
+        assert len(capacities) >= len(cf_names)
+        assert set(capacities) == {cache_size}
+        assert filter_policies == {"bloomfilter"}
+        # All CFs must share ONE cache instance, not one each of the same size:
+        # the difference between a 96 MiB ceiling and len(cf_names) x 96 MiB.
+        # `to_options()` builds a single `Cache` and every CF is handed that same
+        # options object, so a refactor to per-CF options would still satisfy the
+        # assertions above while multiplying the real memory ceiling.
+        assert len(cache_ids - {"0"}) == 1
+
+    def test_block_cache_is_shared_across_partitions(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        ``block_cache_size`` is an aggregate ceiling, not a per-partition budget.
+
+        One cache per partition would make the setting a multiplier: a
+        32-partition, 3-store application would reserve 96x the configured size,
+        which is a multi-gigabyte ceiling charged lazily — so it surfaces as an
+        OOM hours after an upgrade rather than at startup.
+
+        Asserted on the ``block_cache`` pointer RocksDB prints per column family:
+        two partitions sharing one cache report the SAME address.
+        """
+        cache_size = 96 * 1024 * 1024
+        options = RocksDBOptions(
+            block_cache_size=cache_size, bloom_filter_bits_per_key=10
+        )
+
+        pointers = set()
+        for name in ("p0", "p1"):
+            partition = store_partition_factory(name, options=options)
+            partition.close()
+            log = (tmp_path / name / "LOG").read_text(
+                encoding="utf-8", errors="replace"
+            )
+            assert set(re.findall(r"capacity\s+:\s+(\d+)", log)) == {str(cache_size)}
+            pointers |= set(re.findall(r"^\s*block_cache:\s*(\w+)\s*$", log, re.M))
+
+        assert len(pointers) == 1, (
+            f"each partition built its own cache ({pointers}), so "
+            f"block_cache_size is a per-partition multiplier"
+        )
+
+    def test_listing_failure_on_existing_store_is_retried_not_degraded(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        A store that exists must never be opened without its column families.
+
+        Opening without them lets rocksdict derive the CFs from the persisted
+        OPTIONS file and apply its OWN defaults -- an 8 MiB block cache and no
+        bloom filters on every existing CF, for the life of the process. That is
+        the original bug, and it is invisible once the open succeeds, so a listing
+        failure must be propagated for the existing retry budget to handle rather
+        than papered over with a degraded open.
+        """
+        cache_size = 96 * 1024 * 1024
+        options = RocksDBOptions(
+            block_cache_size=cache_size,
+            bloom_filter_bits_per_key=10,
+            open_max_retries=2,
+            open_retry_backoff=0.0,
+        )
+        partition = store_partition_factory("db", options=options)
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        real_list_cf = Rdict.list_cf
+        calls = []
+
+        def _fails_once(path, *args, **kwargs):
+            calls.append(path)
+            if len(calls) == 1:
+                raise Exception("IO error: transient")
+            return real_list_cf(path, *args, **kwargs)
+
+        with patch.object(Rdict, "list_cf", staticmethod(_fails_once)):
+            reopened = store_partition_factory("db", options=options)
+        try:
+            with reopened.begin() as tx:
+                assert tx.get("key", prefix=b"__key__") == "value"
+        finally:
+            reopened.close()
+
+        # The point of the retry: the store came up with its configured options,
+        # not rocksdict's 8 MiB default.
+        log = (tmp_path / "db" / "LOG").read_text(encoding="utf-8", errors="replace")
+        assert set(re.findall(r"capacity\s+:\s+(\d+)", log)) == {str(cache_size)}
+        assert set(re.findall(r"filter_policy:\s*(\S+)", log)) == {"bloomfilter"}
+
+    def test_reopen_applies_new_options_to_persisted_column_families(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        The upgrade path: a store whose CFs were persisted under one
+        ``block_cache_size`` must adopt a different one on reopen.
+
+        This is the case where ``_open`` hands each column family options that
+        disagree with the store's own persisted OPTIONS file, and it is what an
+        operator actually does when they change the setting and restart.
+        """
+        small, large = 32 * 1024 * 1024, 96 * 1024 * 1024
+
+        partition = store_partition_factory(
+            "db", options=RocksDBOptions(block_cache_size=small)
+        )
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        reopened = store_partition_factory(
+            "db", options=RocksDBOptions(block_cache_size=large)
+        )
+        try:
+            with reopened.begin() as tx:
+                assert tx.get("key", prefix=b"__key__") == "value"
+        finally:
+            reopened.close()
+
+        log = (tmp_path / "db" / "LOG").read_text(encoding="utf-8", errors="replace")
+        assert set(re.findall(r"capacity\s+:\s+(\d+)", log)) == {str(large)}
+
+    def test_open_recovers_when_persisted_options_are_unreadable(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        A store whose persisted OPTIONS file is unreadable must still open.
+
+        Without the column-family argument rocksdict derives the CFs from that
+        file, and on failure silently sees only the default CF -- so the open
+        dies with ``Column families not opened``, which matches no recovery path.
+        Supplying the list explicitly survives it, so a listing that fails on the
+        first attempt and succeeds on the re-read must recover rather than crash.
+        """
+        partition = store_partition_factory("db")
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        for options_file in tmp_path.glob("db/OPTIONS-*"):
+            options_file.write_text("garbage")
+
+        real_list_cf = Rdict.list_cf
+        calls = []
+
+        def _fails_once(path, *args, **kwargs):
+            calls.append(path)
+            if len(calls) == 1:
+                raise Exception("IO error: transient")
+            return real_list_cf(path, *args, **kwargs)
+
+        # Retries enabled: a listing failure on an existing store propagates so
+        # this budget can absorb it, rather than being papered over with a
+        # degraded open.
+        with patch.object(Rdict, "list_cf", staticmethod(_fails_once)):
+            reopened = store_partition_factory(
+                "db",
+                options=RocksDBOptions(open_max_retries=2, open_retry_backoff=0.0),
+            )
+        try:
+            # >= 2: the listing was retried. Not an equality — a TTL-enabled
+            # partition probes its column families again after opening, so the
+            # total call count is not a measure of the open path.
+            assert len(calls) >= 2, "the failed listing should have been retried"
+            with reopened.begin() as tx:
+                assert tx.get("key", prefix=b"__key__") == "value"
+        finally:
+            reopened.close()
+
+    def test_open_refuses_to_fall_back_to_a_degraded_open(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        A persistently unlistable store must fail, never open degraded.
+
+        An argument-less open of a store that HAS column families succeeds while
+        applying rocksdict's 8 MiB / no-bloom-filter defaults to every one of
+        them — the original bug, invisible once the open returns. So when the
+        listing cannot be obtained, the open must fail rather than fall back to
+        it. A slip that reinstated that fallback would leave a store quietly
+        serving traffic with its configured cache and filters dropped, and the
+        only way to notice is that this test stops raising.
+        """
+        partition = store_partition_factory("db")
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        calls = []
+
+        def _never_lists(path, *args, **kwargs):
+            calls.append(path)
+            raise Exception("IO error: persistent")
+
+        with patch.object(Rdict, "list_cf", staticmethod(_never_lists)):
+            with pytest.raises(Exception, match="IO error: persistent"):
+                store_partition_factory(
+                    "db",
+                    options=RocksDBOptions(open_max_retries=2, open_retry_backoff=0.0),
+                )
+        # Every attempt tried to list, and none resorted to opening without the
+        # column families.
+        assert len(calls) == 2
+
+    def test_open_retries_a_stale_column_family_list(
+        self, store_partition_factory, tmp_path
+    ):
+        """
+        A CF list that is merely STALE must be re-read, not fatal.
+
+        ``Rdict.list_cf`` takes no LOCK and column families are created lazily at
+        runtime, so a process sharing the store can add one between the listing
+        and the open. The open then fails with ``Column families not opened:
+        <cf>`` — a message matching neither the corruption nor the io-error retry
+        path, so without a re-read it is an un-retried fatal open, exactly the
+        failure the None-instead-of-empty-map fix was meant to remove but reached
+        through a different door.
+        """
+        partition = store_partition_factory("db")
+        with partition.begin() as tx:
+            tx.set("key", "value", prefix=b"__key__")
+        partition.close()
+
+        real_list_cf = Rdict.list_cf
+        calls = []
+
+        def _stale_once(path, *args, **kwargs):
+            full = real_list_cf(path, *args, **kwargs)
+            calls.append(full)
+            # First call omits a CF that really exists, mimicking the race; the
+            # re-read returns the truth.
+            return ["default"] if len(calls) == 1 else full
+
+        with patch.object(Rdict, "list_cf", staticmethod(_stale_once)):
+            reopened = store_partition_factory("db")
+        try:
+            # >= 2 for the same reason as above: post-open TTL probes also
+            # call list_cf, so only the lower bound describes the open.
+            assert len(calls) >= 2, "the stale list should have been re-read"
+            with reopened.begin() as tx:
+                assert tx.get("key", prefix=b"__key__") == "value"
+        finally:
+            reopened.close()
 
     def test_get_or_create_column_family(self, store_partition: RocksDBStorePartition):
         assert store_partition.get_or_create_column_family("cf")
