@@ -244,9 +244,9 @@ stays open, so total RocksDB memory is roughly `block_cache_size` plus
 `bloom_filter_bits_per_key / 8` bytes per stored key. At the default of 10 bits
 that is about 1.25 MB per million keys per column family.
 
-!!! warning "Upgrading from a version before 3.25.1"
+!!! warning "Memory use increases when upgrading from an older version"
 
-    Earlier versions silently discarded `block_cache_size` (and bloom filters)
+    Older versions silently discarded `block_cache_size` (and bloom filters)
     whenever a store was reopened, so every restart after the first ran with
     RocksDB's 8 MiB default per partition regardless of configuration. Deployments
     whose memory limits were sized from observed usage were therefore sized against
