@@ -283,7 +283,17 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             except ValueError:
                 self._status = PartitionTransactionStatus.FAILED
                 raise
-            self._batch_has_ttl_writes = True
+            # Only a write that can ANCHOR the flip may trigger it. A negative
+            # event-time (Kafka NO_TIMESTAMP is -1) is not a position in event
+            # time, and ``advance_high_water`` ignores it, so such a write would
+            # mark the batch as flip-triggering while leaving the high-water
+            # unset -- and the backfill then raises IncompatibleStateStoreError
+            # out of the flush, uncommitted and redelivered forever. The write
+            # itself still succeeds and is still re-stamped if some OTHER write
+            # in this batch carries a real timestamp and flips the store; only
+            # the flip trigger is withheld.
+            if timestamp is not None and timestamp >= 0:
+                self._batch_has_ttl_writes = True
             self._track_batch_ttl_ms(ttl)
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._pending_stamps[(prefix, key_serialized)] = stamp
@@ -355,7 +365,17 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             except ValueError:
                 self._status = PartitionTransactionStatus.FAILED
                 raise
-            self._batch_has_ttl_writes = True
+            # Only a write that can ANCHOR the flip may trigger it. A negative
+            # event-time (Kafka NO_TIMESTAMP is -1) is not a position in event
+            # time, and ``advance_high_water`` ignores it, so such a write would
+            # mark the batch as flip-triggering while leaving the high-water
+            # unset -- and the backfill then raises IncompatibleStateStoreError
+            # out of the flush, uncommitted and redelivered forever. The write
+            # itself still succeeds and is still re-stamped if some OTHER write
+            # in this batch carries a real timestamp and flips the store; only
+            # the flip trigger is withheld.
+            if timestamp is not None and timestamp >= 0:
+                self._batch_has_ttl_writes = True
             self._track_batch_ttl_ms(ttl)
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._pending_stamps[(prefix, key_serialized)] = stamp

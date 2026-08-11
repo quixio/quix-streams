@@ -768,7 +768,25 @@ class MemoryStorePartition(StorePartition):
             # seeded into the live ``_high_water_ms`` clock (removed for parity).
             if self._recovery_now_ms is None:
                 self._recovery_now_ms = self._now_ms()
-            expires_at_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+            # Clamp the ADDITIVE sum, exactly as the RocksDB twin does
+            # (``RocksDBStorePartition`` recovery-completion). An individually
+            # valid ``legacy_records_ttl`` can still sum past
+            # ``_MAX_PLAUSIBLE_STAMP_MS``, and the strict read validator refuses
+            # such a stamp on EVERY read -- StateSerializationError per key, with
+            # the index entry never sweeping. Clamping keeps the record readable
+            # and never mass-deleted, which is the point of the migration.
+            raw_expiry_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+            expires_at_ms = clamp_additive_expiry(raw_expiry_ms)
+            if expires_at_ms != raw_expiry_ms:
+                logger.warning(
+                    "Recovery-completion expiry wallclock(%d) + legacy_records_ttl "
+                    "= %d exceeds the maximum readable stamp (%d) in memory; "
+                    "clamping to never-expire (SENTINEL) so the leftover legacy "
+                    "record(s) stay readable.",
+                    self._recovery_now_ms,
+                    raw_expiry_ms,
+                    _MAX_PLAUSIBLE_STAMP_MS,
+                )
             logger.info(
                 "Recovery: completing interrupted legacy-TTL migration in "
                 "memory; %d leftover legacy record(s) stamped with expiry=%d "
@@ -1691,7 +1709,14 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             except ValueError:
                 self._status = PartitionTransactionStatus.FAILED
                 raise
-            self._batch_has_ttl_writes = True
+            # Parity with ``RocksDBPartitionTransaction``: only a write that can
+            # ANCHOR the flip may trigger it. A negative event-time (Kafka
+            # NO_TIMESTAMP is -1) is ignored by ``advance_high_water``, so such a
+            # write would mark the batch as flip-triggering while leaving the
+            # high-water unset, and the backfill would then raise
+            # IncompatibleStateStoreError out of the flush.
+            if timestamp is not None and timestamp >= 0:
+                self._batch_has_ttl_writes = True
             self._track_batch_ttl_ms(ttl)
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._pending_stamps[(prefix, key_serialized)] = stamp
@@ -1752,7 +1777,14 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             except ValueError:
                 self._status = PartitionTransactionStatus.FAILED
                 raise
-            self._batch_has_ttl_writes = True
+            # Parity with ``RocksDBPartitionTransaction``: only a write that can
+            # ANCHOR the flip may trigger it. A negative event-time (Kafka
+            # NO_TIMESTAMP is -1) is ignored by ``advance_high_water``, so such a
+            # write would mark the batch as flip-triggering while leaving the
+            # high-water unset, and the backfill would then raise
+            # IncompatibleStateStoreError out of the flush.
+            if timestamp is not None and timestamp >= 0:
+                self._batch_has_ttl_writes = True
             self._track_batch_ttl_ms(ttl)
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._pending_stamps[(prefix, key_serialized)] = stamp
