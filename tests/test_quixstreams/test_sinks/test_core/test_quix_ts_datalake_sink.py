@@ -885,6 +885,25 @@ class TestPartitionValidation:
         with pytest.raises(ValueError, match="Partition strategy mismatch"):
             sink._validate_partition_strategy(table_metadata)
 
+    def test_validate_catalog_partition_matches_with_virtual_on_restart(
+        self, sink_factory, mock_catalog_client
+    ):
+        """RESTART to an existing virtual-partitioned table must NOT raise.
+
+        The catalog stores the full spec (physical + virtual) as the sink
+        registers it; validation must compare against the full tree order, not
+        the physical-only hive_columns (which previously caused a spurious
+        'Partition strategy mismatch' on every restart of a ~-virtual sink)."""
+        sink = sink_factory(
+            hive_columns=["year", "month", "~driver"],
+            catalog_url="http://catalog:8080",
+        )
+        sink._catalog = mock_catalog_client
+
+        table_metadata = {"partition_spec": ["year", "month", "driver"]}  # phys + virtual
+        # Should NOT raise.
+        sink._validate_partition_strategy(table_metadata)
+
 
 # =============================================================================
 # 6. Catalog Integration Tests

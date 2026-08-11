@@ -818,8 +818,13 @@ class QuixTSDataLakeSink(BatchingSink):
         """Validate that the sink's partition strategy matches the existing table."""
         existing_partition_spec = table_metadata.get("partition_spec", [])
 
-        # Build expected partition spec from sink configuration
-        expected_partition_spec = self.hive_columns.copy()
+        # Build expected partition spec from sink configuration. Use the FULL tree
+        # order (physical + virtual, `~` stripped) — that's what the sink registers
+        # for a table with virtual columns (partition_spec = physical + virtual).
+        # Comparing against hive_columns (physical only) here would see the virtual
+        # columns as a spurious mismatch and wrongly reject the sink on RESTART to
+        # an existing table.
+        expected_partition_spec = self._partition_spec_order.copy()
 
         # Special case: If table has no partition spec yet (empty list),
         # it will be set when first files are added
