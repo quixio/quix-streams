@@ -551,40 +551,6 @@ class QuixTSDataLakeSink(BatchingSink):
             }
         return stats
 
-    def _compute_virtual_values(
-        self, df: pd.DataFrame, max_distinct: int = 10000
-    ) -> Dict[str, List[str]]:
-        """Distinct values of each configured virtual column present in this
-        file's data, as ``{column: ["v1", "v2", ...]}``.
-
-        Virtual columns are not foldered or grouped, so a file can carry many
-        of their values; the catalog indexes these so the partition tree can
-        enumerate them and queries can prune to files that contain a value. A
-        column with more than ``max_distinct`` values in a single file is
-        skipped (a guard against accidentally marking a high-cardinality column
-        virtual, which would bloat the index and make the tree unusable).
-        """
-        if not self._virtual_columns:
-            return {}
-        out: Dict[str, List[str]] = {}
-        for col in self._virtual_columns:
-            if col not in df.columns:
-                continue
-            try:
-                values = df[col].dropna().unique()
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.debug("Skipping virtual values for column %s: %s", col, exc)
-                continue
-            if len(values) > max_distinct:
-                logger.warning(
-                    "Virtual column '%s' has %d distinct values in one file "
-                    "(> %d) — skipping its index for this file.",
-                    col, len(values), max_distinct,
-                )
-                continue
-            out[col] = sorted({str(v) for v in values})
-        return out
-
     def _compute_partition_combinations(
         self,
         df: pd.DataFrame,
@@ -595,15 +561,13 @@ class QuixTSDataLakeSink(BatchingSink):
         """Distinct full partition tuples (physical + virtual) in this file, for
         the catalog's ``table_partition_combinations`` dictionary.
 
-        ``_compute_virtual_values`` records each virtual column's values
-        INDEPENDENTLY, which cross-products them in the partition tree (folders
-        for value combinations that share no rows). This records which values
-        actually CO-OCCUR: the file's physical partition values (constant per
-        file) combined with each distinct virtual-value tuple
-        (``df[virtual].drop_duplicates()``). The catalog stores the DISTINCT set
-        across files, so the tree shows only real combinations and multi-column
-        queries prune. Skipped for a file with more than ``max_distinct`` distinct
-        tuples (a high-cardinality guard, matching ``_compute_virtual_values``).
+        Records which virtual values actually CO-OCCUR: the file's physical
+        partition values (constant per file) combined with each distinct
+        virtual-value tuple (``df[virtual].drop_duplicates()``). The catalog
+        stores the DISTINCT set across files (table_partition_combinations — the
+        sole virtual index), so the tree shows only real combinations and
+        multi-column queries prune. Skipped for a file with more than
+        ``max_distinct`` distinct tuples (a high-cardinality guard).
         """
         if not self._virtual_columns:
             return []
@@ -653,13 +617,10 @@ class QuixTSDataLakeSink(BatchingSink):
         # from storage later. Carried through _pending_futures into the catalog
         # add-files call (see _register_files_in_manifest).
         column_stats = self._compute_column_stats(table)
-        # Distinct values of any virtual partition columns present in this file
-        # (they aren't foldered, so a file can hold many). Cheap on the
-        # in-memory frame; carried to the catalog's file_virtual_values index.
-        virtual_values = self._compute_virtual_values(df)
         # Distinct full partition tuples (physical + virtual) that CO-OCCUR in
-        # this file, for the catalog's combination dictionary (exact tree + query
-        # pruning). Deduplicated across the batch in _register_files_in_manifest.
+        # this file, for the catalog's combination dictionary — the sole virtual
+        # index (exact tree + query pruning). Deduplicated across the batch in
+        # _register_files_in_manifest.
         partition_combinations = self._compute_partition_combinations(
             df, partition_columns, partition_values
         )
@@ -682,7 +643,6 @@ class QuixTSDataLakeSink(BatchingSink):
                 "partition_columns": partition_columns,
                 "partition_values": partition_values,
                 "column_stats": column_stats,
-                "virtual_values": virtual_values,
                 "partition_combinations": partition_combinations,
             }
         )
@@ -966,7 +926,6 @@ class QuixTSDataLakeSink(BatchingSink):
             partition_columns = item["partition_columns"]
             partition_values = item["partition_values"]
             column_stats = item.get("column_stats") or {}
-            virtual_values = item.get("virtual_values") or {}
 
             # Build file path as full S3 URI for catalog (API uses this with DuckDB)
             # Include workspace_id if set (for workspace-scoped storage)
@@ -1003,11 +962,6 @@ class QuixTSDataLakeSink(BatchingSink):
             # when empty so older catalogs simply ignore the absent field.
             if column_stats:
                 entry["column_stats"] = column_stats
-            # Attach virtual-partition value sets (catalog indexes them in
-            # file_virtual_values for tree navigation + pruning). Omitted when
-            # empty so older catalogs ignore the absent field.
-            if virtual_values:
-                entry["virtual_values"] = virtual_values
             file_entries.append(entry)
 
         # Aggregate the DISTINCT full partition tuples across this batch for the

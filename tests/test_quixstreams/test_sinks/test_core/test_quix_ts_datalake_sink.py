@@ -1582,31 +1582,12 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         assert "year" not in df.columns  # physical partition column is foldered away
         assert set(df["driver"]) == {"HAM", "VER"}
 
-    def test_compute_virtual_values(self, sink_factory):
-        sink = sink_factory(hive_columns=["~driver"])
-        df = pd.DataFrame({"driver": ["HAM", "VER", "HAM", None], "x": [1, 2, 3, 4]})
-        assert sink._compute_virtual_values(df) == {"driver": ["HAM", "VER"]}
-
-    def test_high_cardinality_virtual_column_skipped(self, sink_factory):
-        sink = sink_factory(hive_columns=["~id"])
-        df = pd.DataFrame({"id": [str(i) for i in range(50)]})
-        assert sink._compute_virtual_values(df, max_distinct=10) == {}
-
-    def test_add_files_payload_has_virtual_values(
-        self, sink_factory, mock_blob_client, mock_catalog_client
-    ):
-        sink = sink_factory(hive_columns=["year", "~driver"], catalog_url="http://catalog:8080")
-        sink._catalog = mock_catalog_client
-        sink.table_registered = True
+    def test_virtual_column_not_split_stays_single_file(self, sink_factory, mock_blob_client):
+        # A virtual column is kept in the data, not foldered -> one file per
+        # physical group regardless of how many virtual values it holds.
+        sink = sink_factory(hive_columns=["year", "~driver"])
         sink.write(self._drivers_batch())
-
-        manifest_calls = [
-            c for c in mock_catalog_client.post.call_args_list if "manifest" in str(c)
-        ]
-        assert len(manifest_calls) == 1
-        files = manifest_calls[0].kwargs["json"]["files"]
-        assert len(files) == 1  # not split by driver
-        assert set(files[0]["virtual_values"]["driver"]) == {"HAM", "VER"}
+        assert mock_blob_client.put_object_async.call_count == 1
 
     def test_compute_partition_combinations(self, sink_factory):
         sink = sink_factory(hive_columns=["year", "~driver", "~channel"])
