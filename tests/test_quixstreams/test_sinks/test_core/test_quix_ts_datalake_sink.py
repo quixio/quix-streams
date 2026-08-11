@@ -1608,6 +1608,49 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         assert len(files) == 1  # not split by driver
         assert set(files[0]["virtual_values"]["driver"]) == {"HAM", "VER"}
 
+    def test_compute_partition_combinations(self, sink_factory):
+        sink = sink_factory(hive_columns=["year", "~driver", "~channel"])
+        # HAM only ever on radio, VER only on tv — they never share a row.
+        df = pd.DataFrame({
+            "driver": ["HAM", "HAM", "VER"],
+            "channel": ["radio", "radio", "tv"],
+            "x": [1, 2, 3],
+        })
+        combos = sink._compute_partition_combinations(df, ["year"], ("2024",))
+        # Only the tuples that CO-OCCUR — NOT the cross-product (no HAM/tv, VER/radio).
+        assert {tuple(sorted(c.items())) for c in combos} == {
+            (("channel", "radio"), ("driver", "HAM"), ("year", "2024")),
+            (("channel", "tv"), ("driver", "VER"), ("year", "2024")),
+        }
+
+    def test_compute_partition_combinations_no_virtual_columns(self, sink_factory):
+        sink = sink_factory(hive_columns=["year"])  # physical only
+        df = pd.DataFrame({"x": [1, 2]})
+        assert sink._compute_partition_combinations(df, ["year"], ("2024",)) == []
+
+    def test_high_cardinality_combinations_skipped(self, sink_factory):
+        sink = sink_factory(hive_columns=["~id"])
+        df = pd.DataFrame({"id": [str(i) for i in range(50)]})
+        assert sink._compute_partition_combinations(df, [], (), max_distinct=10) == []
+
+    def test_add_files_payload_has_partition_combinations(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(hive_columns=["year", "~driver"], catalog_url="http://catalog:8080")
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        sink.write(self._drivers_batch())
+
+        manifest_calls = [
+            c for c in mock_catalog_client.post.call_args_list if "manifest" in str(c)
+        ]
+        body = manifest_calls[0].kwargs["json"]
+        combos = body["partition_combinations"]
+        # year (from ts_ms) x {HAM, VER}; deduped across the batch.
+        assert len(combos) == 2
+        assert {c["driver"] for c in combos} == {"HAM", "VER"}
+        assert all("year" in c for c in combos)
+
     def test_register_table_declares_virtual_partitions(
         self, sink_factory, mock_blob_client, mock_catalog_client
     ):

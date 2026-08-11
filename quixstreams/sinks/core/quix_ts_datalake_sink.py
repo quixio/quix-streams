@@ -585,6 +585,57 @@ class QuixTSDataLakeSink(BatchingSink):
             out[col] = sorted({str(v) for v in values})
         return out
 
+    def _compute_partition_combinations(
+        self,
+        df: pd.DataFrame,
+        partition_columns: List[str],
+        partition_values: tuple,
+        max_distinct: int = 50000,
+    ) -> List[Dict[str, str]]:
+        """Distinct full partition tuples (physical + virtual) in this file, for
+        the catalog's ``table_partition_combinations`` dictionary.
+
+        ``_compute_virtual_values`` records each virtual column's values
+        INDEPENDENTLY, which cross-products them in the partition tree (folders
+        for value combinations that share no rows). This records which values
+        actually CO-OCCUR: the file's physical partition values (constant per
+        file) combined with each distinct virtual-value tuple
+        (``df[virtual].drop_duplicates()``). The catalog stores the DISTINCT set
+        across files, so the tree shows only real combinations and multi-column
+        queries prune. Skipped for a file with more than ``max_distinct`` distinct
+        tuples (a high-cardinality guard, matching ``_compute_virtual_values``).
+        """
+        if not self._virtual_columns:
+            return []
+        present = [c for c in self._virtual_columns if c in df.columns]
+        if not present:
+            return []
+        physical: Dict[str, str] = {}
+        for col, val in zip(partition_columns or [], partition_values or ()):
+            if val is not None:
+                physical[str(col)] = str(val)
+        try:
+            distinct = df[present].drop_duplicates()
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Skipping partition combinations: %s", exc)
+            return []
+        if len(distinct) > max_distinct:
+            logger.warning(
+                "File has %d distinct virtual combinations (> %d) — skipping the "
+                "combination index for this file.",
+                len(distinct), max_distinct,
+            )
+            return []
+        combos: List[Dict[str, str]] = []
+        for row in distinct.itertuples(index=False):
+            combo = dict(physical)
+            for col, v in zip(present, row):
+                if v is None or (isinstance(v, float) and v != v):  # NULL / NaN
+                    continue
+                combo[str(col)] = str(v)
+            combos.append(combo)
+        return combos
+
     def _write_parquet_to_storage(
         self,
         df: pd.DataFrame,
@@ -606,6 +657,12 @@ class QuixTSDataLakeSink(BatchingSink):
         # (they aren't foldered, so a file can hold many). Cheap on the
         # in-memory frame; carried to the catalog's file_virtual_values index.
         virtual_values = self._compute_virtual_values(df)
+        # Distinct full partition tuples (physical + virtual) that CO-OCCUR in
+        # this file, for the catalog's combination dictionary (exact tree + query
+        # pruning). Deduplicated across the batch in _register_files_in_manifest.
+        partition_combinations = self._compute_partition_combinations(
+            df, partition_columns, partition_values
+        )
 
         buf = pa.BufferOutputStream()
         pq.write_table(table, buf)
@@ -626,6 +683,7 @@ class QuixTSDataLakeSink(BatchingSink):
                 "partition_values": partition_values,
                 "column_stats": column_stats,
                 "virtual_values": virtual_values,
+                "partition_combinations": partition_combinations,
             }
         )
 
@@ -952,10 +1010,27 @@ class QuixTSDataLakeSink(BatchingSink):
                 entry["virtual_values"] = virtual_values
             file_entries.append(entry)
 
+        # Aggregate the DISTINCT full partition tuples across this batch for the
+        # catalog's combination dictionary. The same tuples repeat across files,
+        # so the deduped set stays small; the catalog upserts them (additive) so
+        # the tree/pruning stay exact for newly-ingested data without a reindex.
+        combo_seen: set = set()
+        partition_combinations: List[Dict[str, str]] = []
+        for item in file_items:
+            for combo in item.get("partition_combinations") or []:
+                key = tuple(sorted(combo.items()))
+                if key not in combo_seen:
+                    combo_seen.add(key)
+                    partition_combinations.append(combo)
+
         # Send all files to catalog in a single request
+        body: Dict[str, Any] = {"files": file_entries}
+        # Omitted when empty so older catalogs simply ignore the absent field.
+        if partition_combinations:
+            body["partition_combinations"] = partition_combinations
         response = self._catalog.post(
             f"/namespaces/{self.namespace}/tables/{self.table_name}/manifest/add-files",
-            json={"files": file_entries},
+            json=body,
             timeout=10,
         )
 
