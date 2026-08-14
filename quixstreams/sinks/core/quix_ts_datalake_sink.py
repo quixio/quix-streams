@@ -130,7 +130,18 @@ class QuixTSDataLakeSink(BatchingSink):
         computes stats for every numeric and timestamp column in each written
         file (cheap — the batch is already in memory). Pass an explicit list to
         restrict the set and bound catalog storage on very wide tables. String
-        columns are not supported yet and are always skipped.
+        columns are not supported here — use ``auto_index_max_cardinality`` for
+        those.
+    :param auto_index_max_cardinality: Auto-index low-cardinality non-numeric
+        columns (strings/bools/categoricals — the ones ``stats_columns`` can't
+        cover) so ``WHERE col = 'x'`` prunes files without marking the column
+        virtual (``~``). For each written file, any such column whose distinct
+        count in that file is <= this value has its distinct values recorded in
+        the catalog's file_virtual_values index; a column over the cap is skipped
+        for that file only (safe — the file is kept and rows are filtered at read
+        time). Default 100; set 0 to disable. Only worthwhile for CLUSTERED
+        columns (each file holds a small, distinct subset) — an un-clustered
+        column costs storage for no pruning, so keep the cap modest on wide tables.
     :param stream_timeout_ms: Optional **per-key** silence threshold in
         milliseconds. Paired with ``on_stream_timeout``; both must be
         provided to enable the feature. See
@@ -171,6 +182,7 @@ class QuixTSDataLakeSink(BatchingSink):
         auto_create_bucket: bool = True,
         max_workers: int = 10,
         stats_columns: Optional[List[str]] = None,
+        auto_index_max_cardinality: int = 100,
         stream_timeout_ms: Optional[int] = None,
         on_stream_timeout: Optional[Callable[[Any], None]] = None,
         silence_azure_http_logs: bool = True,
@@ -222,6 +234,20 @@ class QuixTSDataLakeSink(BatchingSink):
         # growth on very wide tables. Stats ride along with each add-files
         # entry as ``column_stats`` and are consumed by the catalog's pruning.
         self._stats_columns = set(stats_columns) if stats_columns else None
+
+        # Auto-indexing of low-cardinality NON-numeric columns (strings, bools,
+        # categoricals) that column_stats can't prune. For each written file we
+        # record the distinct values of every such column whose per-file distinct
+        # count is <= this cap into the catalog's file_virtual_values index, so
+        # ``WHERE col = 'x'`` prunes files even without marking the column
+        # virtual (``~``). PER-COLUMN + PER-FILE: a column over the cap in a
+        # given file is simply skipped for that file (never taints other columns
+        # or other files). 0 disables. Numeric/timestamp columns are excluded —
+        # they already prune via column_stats. NOTE: only pays off for CLUSTERED
+        # columns (each file holds a small, distinct subset); an un-clustered
+        # column costs storage for no pruning, so keep the cap modest and prefer
+        # an explicit set on very wide tables.
+        self._auto_index_max_cardinality = max(0, int(auto_index_max_cardinality))
 
         # Blob storage client and bucket name will be initialized in setup()
         self._blob_client: Optional[BlobStorageClient] = None
@@ -638,6 +664,50 @@ class QuixTSDataLakeSink(BatchingSink):
             ]
         return out
 
+    def _compute_auto_index_values(self, df: pd.DataFrame) -> Dict[str, List[str]]:
+        """Per-file distinct values of low-cardinality NON-numeric columns for
+        the catalog's file_virtual_values PRUNING index — the "auto-index" lane.
+
+        Covers exactly the columns column_stats can't (strings, bools,
+        categoricals); numeric/timestamp are skipped (they prune via min/max).
+        PER-COLUMN, PER-FILE: each eligible column is included independently iff
+        its distinct count in THIS file is within
+        ``self._auto_index_max_cardinality``; an over-cap column is skipped for
+        this file only (safe — the catalog keeps such files and DuckDB
+        row-filters). Virtual (``~``) and physical partition columns are excluded
+        (handled elsewhere / not in the data). Returns ``{col: [values]}`` or {}.
+        """
+        cap = self._auto_index_max_cardinality
+        if cap <= 0:
+            return {}
+        skip = set(self._virtual_columns) | set(self.hive_columns) | {"__key", self.timestamp_column}
+        out: Dict[str, List[str]] = {}
+        for col in df.columns:
+            if col in skip:
+                continue
+            s = df[col]
+            # Only column kinds column_stats does NOT already cover.
+            is_indexable = (
+                pd.api.types.is_string_dtype(s)
+                or pd.api.types.is_object_dtype(s)
+                or pd.api.types.is_bool_dtype(s)
+                or isinstance(s.dtype, pd.CategoricalDtype)
+            )
+            if not is_indexable:
+                continue
+            try:
+                vals = s.dropna().unique()
+            except Exception as exc:  # pragma: no cover - defensive (unhashable)
+                logger.debug("Skipping auto-index (col %s): %s", col, exc)
+                continue
+            if len(vals) == 0 or len(vals) > cap:
+                continue  # nothing to index / over cap -> skip THIS column for THIS file
+            # Skip complex/object values (dicts, lists) — only scalar categoricals.
+            if any(isinstance(v, (dict, list, set, tuple)) for v in vals):
+                continue
+            out[str(col)] = sorted({str(v) for v in vals})
+        return out
+
     def _write_parquet_to_storage(
         self,
         df: pd.DataFrame,
@@ -666,6 +736,10 @@ class QuixTSDataLakeSink(BatchingSink):
         # file_virtual_values index (file-grain query pruning). Empty unless all
         # virtual columns are covered (see _compute_virtual_values).
         virtual_values = self._compute_virtual_values(df)
+        # Auto-index lane: per-file distinct values of low-cardinality
+        # non-numeric columns (not marked virtual) so their equality filters also
+        # prune. Per-column/per-file, independent of the virtual all-or-nothing.
+        indexed_values = self._compute_auto_index_values(df)
 
         buf = pa.BufferOutputStream()
         pq.write_table(table, buf)
@@ -687,6 +761,7 @@ class QuixTSDataLakeSink(BatchingSink):
                 "column_stats": column_stats,
                 "partition_combinations": partition_combinations,
                 "virtual_values": virtual_values,
+                "indexed_values": indexed_values,
             }
         )
 
@@ -1017,6 +1092,12 @@ class QuixTSDataLakeSink(BatchingSink):
             virtual_values = item.get("virtual_values") or {}
             if virtual_values:
                 entry["virtual_values"] = virtual_values
+            # Auto-index lane -> also file_virtual_values, but PER-COLUMN
+            # (prune-only, not tree). Independent of virtual_values, so a file
+            # can carry these even when it isn't fully virtual-indexed.
+            indexed_values = item.get("indexed_values") or {}
+            if indexed_values:
+                entry["indexed_values"] = indexed_values
             file_entries.append(entry)
 
         # Aggregate the DISTINCT full partition tuples across this batch for the

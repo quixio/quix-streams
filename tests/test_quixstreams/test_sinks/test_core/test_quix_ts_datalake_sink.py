@@ -1744,3 +1744,77 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         # timestamp column (which is still recorded).
         assert "sort_column" not in props
         assert props["timestamp_column"] == "ts_ms"
+
+
+# =============================================================================
+# Auto-indexing of low-cardinality non-numeric columns (prune without ~)
+# =============================================================================
+
+
+class TestQuixTSDataLakeSinkAutoIndex:
+    """Tests for _compute_auto_index_values (the auto-index lane)."""
+
+    def _df(self):
+        return pd.DataFrame({
+            "machine": ["A", "B", "A"],       # low-card string -> indexed
+            "region": ["EU", "EU", "US"],      # low-card string -> indexed
+            "speed": [1, 2, 3],                # numeric -> column_stats, not here
+            "ts_ms": [1, 2, 3],                # timestamp col -> excluded
+            "__key": ["k1", "k2", "k3"],       # internal -> excluded
+        })
+
+    def test_indexes_low_cardinality_strings_only(self, sink_factory):
+        sink = sink_factory()  # default cap 100
+        out = sink._compute_auto_index_values(self._df())
+        assert set(out.keys()) == {"machine", "region"}
+        assert out["machine"] == ["A", "B"]      # sorted distinct
+        assert out["region"] == ["EU", "US"]
+        assert "speed" not in out and "ts_ms" not in out and "__key" not in out
+
+    def test_over_cap_column_skipped_per_column(self, sink_factory):
+        # cap=2: 'region' (2 distinct) kept, 'machine' would need <=2 too — make
+        # machine exceed the cap and confirm only it is dropped, region stays.
+        sink = sink_factory(auto_index_max_cardinality=2)
+        df = pd.DataFrame({
+            "machine": ["A", "B", "C"],   # 3 distinct > cap -> skipped
+            "region": ["EU", "US", "EU"], # 2 distinct <= cap -> kept
+        })
+        out = sink._compute_auto_index_values(df)
+        assert "machine" not in out
+        assert out["region"] == ["EU", "US"]
+
+    def test_disabled_when_cap_zero(self, sink_factory):
+        sink = sink_factory(auto_index_max_cardinality=0)
+        assert sink._compute_auto_index_values(self._df()) == {}
+
+    def test_excludes_virtual_and_partition_columns(self, sink_factory):
+        # 'region' is a ~virtual column and 'machine' physical -> neither should
+        # be auto-indexed (handled by their own lanes / dropped from data).
+        sink = sink_factory(hive_columns=["machine", "~region"])
+        out = sink._compute_auto_index_values(self._df())
+        assert "region" not in out   # virtual lane
+        assert "machine" not in out  # physical partition
+
+    def test_write_attaches_indexed_values_to_manifest(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080")
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        records = [
+            {"value": {"machine": "A", "speed": 1, "ts_ms": 1704067200000},
+             "key": "k1", "timestamp": 1704067200000, "offset": 0},
+            {"value": {"machine": "B", "speed": 2, "ts_ms": 1704067260000},
+             "key": "k2", "timestamp": 1704067260000, "offset": 1},
+        ]
+        batch = SinkBatch(topic="t", partition=0)
+        for r in records:
+            batch.append(value=r["value"], key=r["key"], timestamp=r["timestamp"],
+                         headers=[], offset=r["offset"])
+        sink.write(batch)
+
+        files = [c for c in mock_catalog_client.post.call_args_list
+                 if "manifest" in str(c)][0].kwargs["json"]["files"]
+        assert set(files[0]["indexed_values"]["machine"]) == {"A", "B"}
+        # numeric columns are NOT in the auto-index lane (they use column_stats)
+        assert "speed" not in files[0].get("indexed_values", {})
