@@ -600,6 +600,44 @@ class QuixTSDataLakeSink(BatchingSink):
             combos.append(combo)
         return combos
 
+    def _compute_virtual_values(
+        self, df: pd.DataFrame, max_distinct: int = 50000
+    ) -> Dict[str, List[str]]:
+        """Distinct values of each virtual column present in THIS file, for the
+        catalog's per-file virtual index (``file_virtual_values``) that powers
+        query PRUNING at file grain. Returns ``{col: [distinct values]}``.
+
+        Returned ONLY when EVERY virtual column is fully covered (present in the
+        file and within ``max_distinct``). The catalog marks a file
+        ``virtual_indexed`` with a single flag (not per-column), so a partially
+        covered file must stay un-indexed — otherwise a query on the missing
+        column would wrongly prune it. When we return ``{}`` the file is left
+        un-indexed (safety: never pruned; DuckDB still row-filters).
+        """
+        if not self._virtual_columns:
+            return {}
+        out: Dict[str, List[str]] = {}
+        for col in self._virtual_columns:
+            if col not in df.columns:
+                return {}   # not all virtual columns present -> don't index
+            try:
+                vals = df[col].dropna().unique()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Skipping virtual values (col %s): %s", col, exc)
+                return {}
+            if len(vals) > max_distinct:
+                logger.warning(
+                    "Virtual column %s has %d distinct values (> %d) in a file — "
+                    "leaving the file un-indexed (safety).",
+                    col, len(vals), max_distinct,
+                )
+                return {}
+            out[str(col)] = [
+                str(v) for v in vals
+                if v is not None and not (isinstance(v, float) and v != v)
+            ]
+        return out
+
     def _write_parquet_to_storage(
         self,
         df: pd.DataFrame,
@@ -624,6 +662,10 @@ class QuixTSDataLakeSink(BatchingSink):
         partition_combinations = self._compute_partition_combinations(
             df, partition_columns, partition_values
         )
+        # Per-file distinct values of each virtual column -> the catalog's
+        # file_virtual_values index (file-grain query pruning). Empty unless all
+        # virtual columns are covered (see _compute_virtual_values).
+        virtual_values = self._compute_virtual_values(df)
 
         buf = pa.BufferOutputStream()
         pq.write_table(table, buf)
@@ -644,6 +686,7 @@ class QuixTSDataLakeSink(BatchingSink):
                 "partition_values": partition_values,
                 "column_stats": column_stats,
                 "partition_combinations": partition_combinations,
+                "virtual_values": virtual_values,
             }
         )
 
@@ -967,6 +1010,13 @@ class QuixTSDataLakeSink(BatchingSink):
             # when empty so older catalogs simply ignore the absent field.
             if column_stats:
                 entry["column_stats"] = column_stats
+            # Per-file virtual values -> file_virtual_values (file-grain pruning).
+            # Present only when all virtual columns are covered; the catalog marks
+            # the file virtual_indexed and prunes on it. Omitted otherwise (file
+            # stays un-indexed -> safety-kept).
+            virtual_values = item.get("virtual_values") or {}
+            if virtual_values:
+                entry["virtual_values"] = virtual_values
             file_entries.append(entry)
 
         # Aggregate the DISTINCT full partition tuples across this batch for the

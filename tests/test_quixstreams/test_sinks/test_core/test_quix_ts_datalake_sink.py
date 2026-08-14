@@ -1651,6 +1651,55 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         assert {c["driver"] for c in combos} == {"HAM", "VER"}
         assert all("year" in c for c in combos)
 
+    def test_compute_virtual_values(self, sink_factory):
+        sink = sink_factory(hive_columns=["year", "~driver", "~channel"])
+        df = pd.DataFrame({
+            "driver": ["HAM", "HAM", "VER"],
+            "channel": ["radio", "radio", "tv"],
+            "x": [1, 2, 3],
+        })
+        vv = sink._compute_virtual_values(df)
+        assert set(vv.keys()) == {"driver", "channel"}
+        assert sorted(vv["driver"]) == ["HAM", "VER"]
+        assert sorted(vv["channel"]) == ["radio", "tv"]
+
+    def test_compute_virtual_values_no_virtual_columns(self, sink_factory):
+        sink = sink_factory(hive_columns=["year"])  # physical only
+        assert sink._compute_virtual_values(pd.DataFrame({"x": [1, 2]})) == {}
+
+    def test_compute_virtual_values_partial_coverage_returns_empty(self, sink_factory):
+        # A file missing one virtual column must NOT be marked indexed (the
+        # catalog's virtual_indexed flag is per-file, not per-column) — otherwise
+        # a query on the missing column would wrongly prune it.
+        sink = sink_factory(hive_columns=["year", "~driver", "~channel"])
+        df = pd.DataFrame({"driver": ["HAM"], "x": [1]})  # channel absent
+        assert sink._compute_virtual_values(df) == {}
+
+    def test_compute_virtual_values_high_cardinality_returns_empty(self, sink_factory):
+        sink = sink_factory(hive_columns=["~id"])
+        df = pd.DataFrame({"id": [str(i) for i in range(50)]})
+        assert sink._compute_virtual_values(df, max_distinct=10) == {}
+
+    def test_add_files_payload_has_virtual_values(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(hive_columns=["year", "~driver"], catalog_url="http://catalog:8080")
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        sink.write(self._drivers_batch())
+
+        manifest_calls = [
+            c for c in mock_catalog_client.post.call_args_list if "manifest" in str(c)
+        ]
+        entries = manifest_calls[0].kwargs["json"]["files"]
+        # driver is virtual (not split), so each file carries its per-file distinct
+        # driver values; the union across files is {HAM, VER}.
+        assert all("virtual_values" in e for e in entries)
+        seen = set()
+        for e in entries:
+            seen |= set(e["virtual_values"]["driver"])
+        assert seen == {"HAM", "VER"}
+
     def test_register_table_declares_virtual_partitions(
         self, sink_factory, mock_blob_client, mock_catalog_client
     ):
