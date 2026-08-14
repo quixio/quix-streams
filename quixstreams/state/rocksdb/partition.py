@@ -1954,6 +1954,24 @@ class RocksDBStorePartition(StorePartition):
             # drop the 8-byte stamp the flipped write path prepended so the value
             # reads back as legacy user bytes rather than the stale backup or
             # stamp-prefixed garbage.
+            #
+            # Strip ONLY when the value actually carries a stamp. The same strict
+            # validator the read path uses decides, because "differs from the
+            # backup" does not imply "stamped": a value absent from the backup
+            # snapshot can be a plain legacy value, and blindly removing eight
+            # bytes destroys it -- json_dumps(1) is b'1', which would become b''.
+            # That matters most here of all places: rollback is the mitigation for
+            # a legacy store that was falsely adopted, and such a store is exactly
+            # the one full of short un-stamped values.
+            if _safe_decode_stamp(current_value) is None:
+                logger.warning(
+                    "Rollback at path=%s: a default-CF value carries no readable "
+                    "TTL stamp; leaving it verbatim rather than stripping bytes "
+                    "off a value that was never stamped.",
+                    self._path,
+                )
+                kept += 1
+                continue
             reverted_puts.append((raw_key, current_value[TTL_STAMP_BYTES:]))
 
         # Only the stamp-stripped post-adoption writes need rewriting; untouched
