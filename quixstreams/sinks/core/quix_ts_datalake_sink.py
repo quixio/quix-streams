@@ -261,6 +261,10 @@ class QuixTSDataLakeSink(BatchingSink):
 
         # Batch upload tracking
         self._pending_futures: List[Dict[str, Any]] = []
+        # Virtual-index SIDECAR uploads (one per data file, written to _vindex/).
+        # Tracked separately from data files so _finalize_writes waits on them but
+        # does NOT register them in the manifest (they are metadata, not data).
+        self._pending_sidecar_futures: List[Dict[str, Any]] = []
 
         # Stream-timeout tracking (opt-in, per-key silence detector).
         # All state, threading, and validation live inside the
@@ -725,21 +729,6 @@ class QuixTSDataLakeSink(BatchingSink):
         # from storage later. Carried through _pending_futures into the catalog
         # add-files call (see _register_files_in_manifest).
         column_stats = self._compute_column_stats(table)
-        # Distinct full partition tuples (physical + virtual) that CO-OCCUR in
-        # this file, for the catalog's combination dictionary — the sole virtual
-        # index (exact tree + query pruning). Deduplicated across the batch in
-        # _register_files_in_manifest.
-        partition_combinations = self._compute_partition_combinations(
-            df, partition_columns, partition_values
-        )
-        # Per-file distinct values of each virtual column -> the catalog's
-        # file_virtual_values index (file-grain query pruning). Empty unless all
-        # virtual columns are covered (see _compute_virtual_values).
-        virtual_values = self._compute_virtual_values(df)
-        # Auto-index lane: per-file distinct values of low-cardinality
-        # non-numeric columns (not marked virtual) so their equality filters also
-        # prune. Per-column/per-file, independent of the virtual all-or-nothing.
-        indexed_values = self._compute_auto_index_values(df)
 
         buf = pa.BufferOutputStream()
         pq.write_table(table, buf)
@@ -759,15 +748,77 @@ class QuixTSDataLakeSink(BatchingSink):
                 "partition_columns": partition_columns,
                 "partition_values": partition_values,
                 "column_stats": column_stats,
-                "partition_combinations": partition_combinations,
-                "virtual_values": virtual_values,
-                "indexed_values": indexed_values,
             }
         )
+
+        # The VIRTUAL index for this file goes to a blob ``_vindex/`` sidecar
+        # (navigation + query pruning read it via DuckDB) — the SOLE virtual index;
+        # nothing virtual is sent to Postgres anymore. column_stats (zone maps)
+        # still go to the catalog above.
+        self._write_virtual_sidecar(df, storage_key, partition_columns, partition_values)
+
+    def _catalog_file_path(self, storage_key: str) -> str:
+        """The full ``s3://`` URI a data/sidecar file is registered under — same
+        construction as _register_files_in_manifest (workspace-scoped)."""
+        if self.workspace_id:
+            return f"s3://{self.s3_bucket}/{self.workspace_id}/{storage_key}"
+        return f"s3://{self.s3_bucket}/{storage_key}"
+
+    def _sidecar_key(self, storage_key: str) -> str:
+        """Blob key of a data file's virtual-index sidecar: in a ``.vidx/``
+        SUBFOLDER of the data file's own Hive partition folder (data
+        ``.../region=EU/data_<uuid>.parquet`` -> index
+        ``.../region=EU/.vidx/data_<uuid>.parquet``). Co-located with the data so
+        compaction rewrites a partition's data and its index together, but in a
+        dedicated dot-dir: a ``.vidx`` folder has no ``key=value`` and so is
+        naturally skipped by partition discovery, keeping sidecars out of the data
+        set. Navigation globs ``.../<physical path>/.vidx/*.parquet``."""
+        folder, _, basename = storage_key.rpartition("/")
+        return f"{folder}/.vidx/{basename}" if folder else f".vidx/{basename}"
+
+    def _write_virtual_sidecar(self, df: pd.DataFrame, storage_key: str,
+                               partition_columns: List[str], partition_values: tuple):
+        """Write this data file's virtual-index sidecar Parquet to ``_vindex/``.
+
+        Content: one row per DISTINCT tuple of the table's VIRTUAL columns present
+        in this file, with the file's PHYSICAL partition values added as constant
+        columns, plus ``__file`` = the data file's catalog URI. Carrying the
+        physical columns in the content means readers need no ``hive_partitioning``
+        — a single ``read_parquet('{root}/_vindex/**')`` yields full (physical +
+        virtual) tuples. Navigation aggregates these
+        (``SELECT DISTINCT <col> WHERE <ancestors>``) into the folder tree;
+        query-pruning selects ``__file`` for a virtual filter. Both via DuckDB over
+        blob — no Postgres. No-op when the table has no virtual columns or none are
+        present in this file. Never raises (the index is a hint, not the data).
+        """
+        present = [c for c in self._virtual_columns if c in df.columns]
+        if not present or self._blob_client is None:
+            return
+        try:
+            vdf = df[present].drop_duplicates().reset_index(drop=True)
+            if vdf.empty:
+                return
+            # Physical partition values are constant for this file (one Hive
+            # folder) -> add them as constant columns so the sidecar holds the
+            # FULL partition tuple.
+            for col, val in zip(partition_columns or [], partition_values or ()):
+                vdf[col] = str(val)
+            vdf["__file"] = self._catalog_file_path(storage_key)
+            buf = pa.BufferOutputStream()
+            pq.write_table(pa.Table.from_pandas(vdf, preserve_index=False), buf)
+            sidecar_key = self._sidecar_key(storage_key)
+            future = self._blob_client.put_object_async(
+                sidecar_key, buf.getvalue().to_pybytes())
+            self._pending_sidecar_futures.append(
+                {"future": future, "key": sidecar_key, "row_count": len(vdf)})
+        except Exception as e:
+            logger.warning("Failed to write virtual sidecar for %s: %s", storage_key, e)
 
     def _finalize_writes(self):
         """Wait for all pending uploads to complete and register files in catalog."""
         if not self._pending_futures:
+            # Still drain any sidecars (defensive; normally paired with data).
+            self._await_sidecar_uploads()
             return
 
         count = len(self._pending_futures)
@@ -792,11 +843,35 @@ class QuixTSDataLakeSink(BatchingSink):
 
             logger.info(f"Successfully uploaded {count} file(s)")
 
+            # Virtual-index sidecars ride alongside the data files. Wait for them
+            # too so the tree is queryable the moment the batch is acknowledged
+            # (a sidecar failure only degrades the index, never blocks the data).
+            self._await_sidecar_uploads()
+
             # Register all files in catalog manifest if configured
             if self._catalog and self.table_registered:
                 self._register_files_in_manifest()
         finally:
             self._pending_futures.clear()
+
+    def _await_sidecar_uploads(self):
+        """Block on the virtual-index sidecar uploads. Best-effort: a failed
+        sidecar is logged but never raised — the data is already safe and the
+        index self-heals on the next write/reindex."""
+        if not self._pending_sidecar_futures:
+            return
+        try:
+            ok = 0
+            for item in self._pending_sidecar_futures:
+                try:
+                    item["future"].result()
+                    ok += 1
+                except Exception as e:
+                    logger.warning("Virtual sidecar upload failed (%s): %s", item["key"], e)
+            logger.debug("Uploaded %d/%d virtual sidecar(s)", ok,
+                         len(self._pending_sidecar_futures))
+        finally:
+            self._pending_sidecar_futures.clear()
 
     def _null_empty_dicts(self, df: pd.DataFrame):
         """
@@ -1085,39 +1160,15 @@ class QuixTSDataLakeSink(BatchingSink):
             # when empty so older catalogs simply ignore the absent field.
             if column_stats:
                 entry["column_stats"] = column_stats
-            # Per-file virtual values -> file_virtual_values (file-grain pruning).
-            # Present only when all virtual columns are covered; the catalog marks
-            # the file virtual_indexed and prunes on it. Omitted otherwise (file
-            # stays un-indexed -> safety-kept).
-            virtual_values = item.get("virtual_values") or {}
-            if virtual_values:
-                entry["virtual_values"] = virtual_values
-            # Auto-index lane -> also file_virtual_values, but PER-COLUMN
-            # (prune-only, not tree). Independent of virtual_values, so a file
-            # can carry these even when it isn't fully virtual-indexed.
-            indexed_values = item.get("indexed_values") or {}
-            if indexed_values:
-                entry["indexed_values"] = indexed_values
+            # NOTE: the VIRTUAL index (per-file virtual values + co-occurrence
+            # tuples) is no longer sent to the catalog/Postgres — it lives entirely
+            # in the blob ``_vindex/`` sidecars written by _write_virtual_sidecar.
+            # Only column_stats (zone maps) still ride along in the manifest.
             file_entries.append(entry)
 
-        # Aggregate the DISTINCT full partition tuples across this batch for the
-        # catalog's combination dictionary. The same tuples repeat across files,
-        # so the deduped set stays small; the catalog upserts them (additive) so
-        # the tree/pruning stay exact for newly-ingested data without a reindex.
-        combo_seen: set = set()
-        partition_combinations: List[Dict[str, str]] = []
-        for item in file_items:
-            for combo in item.get("partition_combinations") or []:
-                key = tuple(sorted(combo.items()))
-                if key not in combo_seen:
-                    combo_seen.add(key)
-                    partition_combinations.append(combo)
-
-        # Send all files to catalog in a single request
+        # Send all files to catalog in a single request (files + column_stats
+        # only; the virtual index is in blob sidecars now, not Postgres).
         body: Dict[str, Any] = {"files": file_entries}
-        # Omitted when empty so older catalogs simply ignore the absent field.
-        if partition_combinations:
-            body["partition_combinations"] = partition_combinations
         response = self._catalog.post(
             f"/namespaces/{self.namespace}/tables/{self.table_name}/manifest/add-files",
             json=body,
