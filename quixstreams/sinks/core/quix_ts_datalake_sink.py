@@ -782,14 +782,13 @@ class QuixTSDataLakeSink(BatchingSink):
 
         Content: one row per DISTINCT tuple of the table's VIRTUAL columns present
         in this file, with the file's PHYSICAL partition values added as constant
-        columns, plus ``__file`` = the data file's catalog URI. Carrying the
-        physical columns in the content means readers need no ``hive_partitioning``
-        — a single ``read_parquet('{root}/_vindex/**')`` yields full (physical +
-        virtual) tuples. Navigation aggregates these
-        (``SELECT DISTINCT <col> WHERE <ancestors>``) into the folder tree;
-        query-pruning selects ``__file`` for a virtual filter. Both via DuckDB over
-        blob — no Postgres. No-op when the table has no virtual columns or none are
-        present in this file. Never raises (the index is a hint, not the data).
+        columns. Carrying the physical columns in the content means readers need no
+        ``hive_partitioning`` — a single ``read_parquet('{root}/.../.vidx/*')``
+        yields full (physical + virtual) tuples that navigation aggregates
+        (``SELECT DISTINCT <col> WHERE <ancestors>``) into the folder tree. The
+        index is navigation-only (no query pruning), so no per-file back-reference
+        is stored. No-op when the table has no virtual columns or none are present
+        in this file. Never raises (the index is a hint, not the data).
         """
         present = [c for c in self._virtual_columns if c in df.columns]
         if not present or self._blob_client is None:
@@ -803,7 +802,6 @@ class QuixTSDataLakeSink(BatchingSink):
             # FULL partition tuple.
             for col, val in zip(partition_columns or [], partition_values or ()):
                 vdf[col] = str(val)
-            vdf["__file"] = self._catalog_file_path(storage_key)
             buf = pa.BufferOutputStream()
             pq.write_table(pa.Table.from_pandas(vdf, preserve_index=False), buf)
             sidecar_key = self._sidecar_key(storage_key)
