@@ -129,19 +129,7 @@ class QuixTSDataLakeSink(BatchingSink):
         range cannot satisfy a WHERE/ORDER BY on the column. ``None`` (default)
         computes stats for every numeric and timestamp column in each written
         file (cheap — the batch is already in memory). Pass an explicit list to
-        restrict the set and bound catalog storage on very wide tables. String
-        columns are not supported here — use ``auto_index_max_cardinality`` for
-        those.
-    :param auto_index_max_cardinality: Auto-index low-cardinality non-numeric
-        columns (strings/bools/categoricals — the ones ``stats_columns`` can't
-        cover) so ``WHERE col = 'x'`` prunes files without marking the column
-        virtual (``~``). For each written file, any such column whose distinct
-        count in that file is <= this value has its distinct values recorded in
-        the catalog's file_virtual_values index; a column over the cap is skipped
-        for that file only (safe — the file is kept and rows are filtered at read
-        time). Default 100; set 0 to disable. Only worthwhile for CLUSTERED
-        columns (each file holds a small, distinct subset) — an un-clustered
-        column costs storage for no pruning, so keep the cap modest on wide tables.
+        restrict the set and bound catalog storage on very wide tables.
     :param stream_timeout_ms: Optional **per-key** silence threshold in
         milliseconds. Paired with ``on_stream_timeout``; both must be
         provided to enable the feature. See
@@ -182,7 +170,6 @@ class QuixTSDataLakeSink(BatchingSink):
         auto_create_bucket: bool = True,
         max_workers: int = 10,
         stats_columns: Optional[List[str]] = None,
-        auto_index_max_cardinality: int = 100,
         stream_timeout_ms: Optional[int] = None,
         on_stream_timeout: Optional[Callable[[Any], None]] = None,
         silence_azure_http_logs: bool = True,
@@ -235,20 +222,6 @@ class QuixTSDataLakeSink(BatchingSink):
         # entry as ``column_stats`` and are consumed by the catalog's pruning.
         self._stats_columns = set(stats_columns) if stats_columns else None
 
-        # Auto-indexing of low-cardinality NON-numeric columns (strings, bools,
-        # categoricals) that column_stats can't prune. For each written file we
-        # record the distinct values of every such column whose per-file distinct
-        # count is <= this cap into the catalog's file_virtual_values index, so
-        # ``WHERE col = 'x'`` prunes files even without marking the column
-        # virtual (``~``). PER-COLUMN + PER-FILE: a column over the cap in a
-        # given file is simply skipped for that file (never taints other columns
-        # or other files). 0 disables. Numeric/timestamp columns are excluded —
-        # they already prune via column_stats. NOTE: only pays off for CLUSTERED
-        # columns (each file holds a small, distinct subset); an un-clustered
-        # column costs storage for no pruning, so keep the cap modest and prefer
-        # an explicit set on very wide tables.
-        self._auto_index_max_cardinality = max(0, int(auto_index_max_cardinality))
-
         # Blob storage client and bucket name will be initialized in setup()
         self._blob_client: Optional[BlobStorageClient] = None
         self._s3_bucket: Optional[str] = None
@@ -261,7 +234,7 @@ class QuixTSDataLakeSink(BatchingSink):
 
         # Batch upload tracking
         self._pending_futures: List[Dict[str, Any]] = []
-        # Virtual-index SIDECAR uploads (one per data file, written to _vindex/).
+        # Virtual-index SIDECAR uploads (one per data file, written to .vidx/).
         # Tracked separately from data files so _finalize_writes waits on them but
         # does NOT register them in the manifest (they are metadata, not data).
         self._pending_sidecar_futures: List[Dict[str, Any]] = []
@@ -581,137 +554,6 @@ class QuixTSDataLakeSink(BatchingSink):
             }
         return stats
 
-    def _compute_partition_combinations(
-        self,
-        df: pd.DataFrame,
-        partition_columns: List[str],
-        partition_values: tuple,
-        max_distinct: int = 50000,
-    ) -> List[Dict[str, str]]:
-        """Distinct full partition tuples (physical + virtual) in this file, for
-        the catalog's ``table_partition_combinations`` dictionary.
-
-        Records which virtual values actually CO-OCCUR: the file's physical
-        partition values (constant per file) combined with each distinct
-        virtual-value tuple (``df[virtual].drop_duplicates()``). The catalog
-        stores the DISTINCT set across files (table_partition_combinations — the
-        sole virtual index), so the tree shows only real combinations and
-        multi-column queries prune. Skipped for a file with more than
-        ``max_distinct`` distinct tuples (a high-cardinality guard).
-        """
-        if not self._virtual_columns:
-            return []
-        present = [c for c in self._virtual_columns if c in df.columns]
-        if not present:
-            return []
-        physical: Dict[str, str] = {}
-        for col, val in zip(partition_columns or [], partition_values or ()):
-            if val is not None:
-                physical[str(col)] = str(val)
-        try:
-            distinct = df[present].drop_duplicates()
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.debug("Skipping partition combinations: %s", exc)
-            return []
-        if len(distinct) > max_distinct:
-            logger.warning(
-                "File has %d distinct virtual combinations (> %d) — skipping the "
-                "combination index for this file.",
-                len(distinct), max_distinct,
-            )
-            return []
-        combos: List[Dict[str, str]] = []
-        for row in distinct.itertuples(index=False):
-            combo = dict(physical)
-            for col, v in zip(present, row):
-                if v is None or (isinstance(v, float) and v != v):  # NULL / NaN
-                    continue
-                combo[str(col)] = str(v)
-            combos.append(combo)
-        return combos
-
-    def _compute_virtual_values(
-        self, df: pd.DataFrame, max_distinct: int = 50000
-    ) -> Dict[str, List[str]]:
-        """Distinct values of each virtual column present in THIS file, for the
-        catalog's per-file virtual index (``file_virtual_values``) that powers
-        query PRUNING at file grain. Returns ``{col: [distinct values]}``.
-
-        Returned ONLY when EVERY virtual column is fully covered (present in the
-        file and within ``max_distinct``). The catalog marks a file
-        ``virtual_indexed`` with a single flag (not per-column), so a partially
-        covered file must stay un-indexed — otherwise a query on the missing
-        column would wrongly prune it. When we return ``{}`` the file is left
-        un-indexed (safety: never pruned; DuckDB still row-filters).
-        """
-        if not self._virtual_columns:
-            return {}
-        out: Dict[str, List[str]] = {}
-        for col in self._virtual_columns:
-            if col not in df.columns:
-                return {}   # not all virtual columns present -> don't index
-            try:
-                vals = df[col].dropna().unique()
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.debug("Skipping virtual values (col %s): %s", col, exc)
-                return {}
-            if len(vals) > max_distinct:
-                logger.warning(
-                    "Virtual column %s has %d distinct values (> %d) in a file — "
-                    "leaving the file un-indexed (safety).",
-                    col, len(vals), max_distinct,
-                )
-                return {}
-            out[str(col)] = [
-                str(v) for v in vals
-                if v is not None and not (isinstance(v, float) and v != v)
-            ]
-        return out
-
-    def _compute_auto_index_values(self, df: pd.DataFrame) -> Dict[str, List[str]]:
-        """Per-file distinct values of low-cardinality NON-numeric columns for
-        the catalog's file_virtual_values PRUNING index — the "auto-index" lane.
-
-        Covers exactly the columns column_stats can't (strings, bools,
-        categoricals); numeric/timestamp are skipped (they prune via min/max).
-        PER-COLUMN, PER-FILE: each eligible column is included independently iff
-        its distinct count in THIS file is within
-        ``self._auto_index_max_cardinality``; an over-cap column is skipped for
-        this file only (safe — the catalog keeps such files and DuckDB
-        row-filters). Virtual (``~``) and physical partition columns are excluded
-        (handled elsewhere / not in the data). Returns ``{col: [values]}`` or {}.
-        """
-        cap = self._auto_index_max_cardinality
-        if cap <= 0:
-            return {}
-        skip = set(self._virtual_columns) | set(self.hive_columns) | {"__key", self.timestamp_column}
-        out: Dict[str, List[str]] = {}
-        for col in df.columns:
-            if col in skip:
-                continue
-            s = df[col]
-            # Only column kinds column_stats does NOT already cover.
-            is_indexable = (
-                pd.api.types.is_string_dtype(s)
-                or pd.api.types.is_object_dtype(s)
-                or pd.api.types.is_bool_dtype(s)
-                or isinstance(s.dtype, pd.CategoricalDtype)
-            )
-            if not is_indexable:
-                continue
-            try:
-                vals = s.dropna().unique()
-            except Exception as exc:  # pragma: no cover - defensive (unhashable)
-                logger.debug("Skipping auto-index (col %s): %s", col, exc)
-                continue
-            if len(vals) == 0 or len(vals) > cap:
-                continue  # nothing to index / over cap -> skip THIS column for THIS file
-            # Skip complex/object values (dicts, lists) — only scalar categoricals.
-            if any(isinstance(v, (dict, list, set, tuple)) for v in vals):
-                continue
-            out[str(col)] = sorted({str(v) for v in vals})
-        return out
-
     def _write_parquet_to_storage(
         self,
         df: pd.DataFrame,
@@ -751,18 +593,11 @@ class QuixTSDataLakeSink(BatchingSink):
             }
         )
 
-        # The VIRTUAL index for this file goes to a blob ``_vindex/`` sidecar
-        # (navigation + query pruning read it via DuckDB) — the SOLE virtual index;
-        # nothing virtual is sent to Postgres anymore. column_stats (zone maps)
-        # still go to the catalog above.
+        # The VIRTUAL index for this file goes to a blob ``.vidx/`` sidecar
+        # (navigation reads it via DuckDB) — the SOLE virtual index; nothing
+        # virtual is sent to Postgres anymore. column_stats (zone maps) still go
+        # to the catalog above.
         self._write_virtual_sidecar(df, storage_key, partition_columns, partition_values)
-
-    def _catalog_file_path(self, storage_key: str) -> str:
-        """The full ``s3://`` URI a data/sidecar file is registered under — same
-        construction as _register_files_in_manifest (workspace-scoped)."""
-        if self.workspace_id:
-            return f"s3://{self.s3_bucket}/{self.workspace_id}/{storage_key}"
-        return f"s3://{self.s3_bucket}/{storage_key}"
 
     def _sidecar_key(self, storage_key: str) -> str:
         """Blob key of a data file's virtual-index sidecar: in a ``.vidx/``
@@ -778,7 +613,7 @@ class QuixTSDataLakeSink(BatchingSink):
 
     def _write_virtual_sidecar(self, df: pd.DataFrame, storage_key: str,
                                partition_columns: List[str], partition_values: tuple):
-        """Write this data file's virtual-index sidecar Parquet to ``_vindex/``.
+        """Write this data file's virtual-index sidecar Parquet to ``.vidx/``.
 
         Content: one row per DISTINCT tuple of the table's VIRTUAL columns present
         in this file, with the file's PHYSICAL partition values added as constant
@@ -1160,7 +995,7 @@ class QuixTSDataLakeSink(BatchingSink):
                 entry["column_stats"] = column_stats
             # NOTE: the VIRTUAL index (per-file virtual values + co-occurrence
             # tuples) is no longer sent to the catalog/Postgres — it lives entirely
-            # in the blob ``_vindex/`` sidecars written by _write_virtual_sidecar.
+            # in the blob ``.vidx/`` sidecars written by _write_virtual_sidecar.
             # Only column_stats (zone maps) still ride along in the manifest.
             file_entries.append(entry)
 
