@@ -18,6 +18,7 @@ the main producer, and (2) the recovery-completion path produces via the migrati
 producer with the per-chunk flush ordered BEFORE the local write.
 """
 
+import ssl
 from datetime import timedelta
 from unittest.mock import MagicMock
 
@@ -163,7 +164,7 @@ class TestEOSInternalProducerStripsTransactionalId:
     InternalProducer (the migration producer, or a Sources producer) must NOT
     inherit it — that would corrupt the id for itself and any later transactional
     producer. ``_get_internal_producer(transactional=False)`` must strip it on a
-    deepcopy without mutating the shared config. Construction-level (no broker)."""
+    copy without mutating the shared config. Construction-level (no broker)."""
 
     def _eos_app(self, tmp_path) -> Application:
         # A dummy broker address: Application construction does not connect
@@ -207,8 +208,32 @@ class TestEOSInternalProducerStripsTransactionalId:
         app = self._eos_app(tmp_path)
         before = dict(app._config.producer_extra_config)
         # Building non-transactional producers must not mutate the shared config
-        # (Fix 1 uses copy.deepcopy + pop).
+        # (the strip copies the dict, then pops from the copy).
         app._get_internal_producer(transactional=False)
         app._get_internal_producer(transactional=False)
         assert app._config.producer_extra_config == before
         assert "transactional.id" in app._config.producer_extra_config
+
+    def test_unpicklable_extra_config_does_not_break_construction(self, tmp_path):
+        """A legitimate NON-picklable value in ``producer_extra_config`` (an
+        ``ssl.SSLContext``, a lock, a client handle) must not break the app.
+
+        RED: stripping on a ``copy.deepcopy`` deep-copies every VALUE, so such a
+        value raises ``TypeError: cannot pickle ...`` straight out of
+        ``Application.__init__`` -- which builds the default, NON-transactional
+        app producer via ``_get_internal_producer`` (``app.py:396``). This hits
+        every app that is not exactly-once, i.e. the default.
+
+        GREEN: only the top-level dict is copied, which is all the ``pop`` needs,
+        and the values are carried through by identity."""
+        ssl_ctx = ssl.create_default_context()
+        app = Application(
+            broker_address="localhost:9092",
+            consumer_group="fix1-unpicklable",
+            state_dir=(tmp_path / "state").as_posix(),
+            producer_extra_config={"ssl.context": ssl_ctx, "linger.ms": 10},
+        )
+        # Carried through by REFERENCE, not copied: a deep copy of a config value
+        # would hand librdkafka a different object than the caller configured.
+        non_tx = app._get_internal_producer(transactional=False)
+        assert non_tx._producer._producer_config["ssl.context"] is ssl_ctx

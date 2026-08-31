@@ -683,10 +683,15 @@ class Application:
             # into ``producer_extra_config`` under exactly-once (see __init__): a
             # non-transactional producer carrying a transactional.id corrupts it
             # for itself and for any transactional producer created afterwards.
-            # Strip it on a deepcopy so the shared config dict is never mutated
-            # (mirrors ``get_producer``). The transactional path keeps the config
-            # verbatim (its id resolves as before).
-            extra_config = copy.deepcopy(extra_config)
+            # Strip it on a SHALLOW copy: the only mutation is this top-level
+            # ``pop``, so copying the dict is enough to leave the shared config
+            # untouched. Deep-copying would also copy every VALUE, which breaks
+            # any legitimately non-picklable entry (an ``ssl.SSLContext``, a lock,
+            # a client handle) with ``TypeError: cannot pickle ...`` -- and this
+            # runs from ``__init__`` for every non-transactional app producer.
+            # The transactional path keeps the config verbatim (id resolves as
+            # before).
+            extra_config = dict(extra_config)
             extra_config.pop("transactional.id", None)
 
         return InternalProducer(
