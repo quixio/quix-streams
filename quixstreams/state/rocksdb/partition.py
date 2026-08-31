@@ -58,6 +58,7 @@ from .metadata import (
     STATE_FORMAT_VERSION,
     STATE_FORMAT_VERSION_KEY,
     TTL_ADOPT_PENDING_KEY,
+    TTL_BACKFILL_IN_PROGRESS_KEY,
     TTL_BACKFILL_PENDING_CF_NAME,
     TTL_BACKFILL_PROGRESS_KEY,
     TTL_BACKFILL_STAMPED_CF_NAME,
@@ -415,7 +416,10 @@ class RocksDBStorePartition(StorePartition):
         # Snapshot ONCE, at the end of ``__init__`` and
         # AFTER the open-time ``_cleanup_completed_backfill_bookkeeping`` above,
         # whether this partition opened with a non-empty live-backfill ledger —
-        # the interrupted-live-backfill signature. Consulted by
+        # ONE HALF of the interrupted-live-backfill signature (the other half is
+        # the ``__ttl_backfill_in_progress__`` marker snapshotted just below, which
+        # covers the first-chunk window where no chunk committed and this ledger is
+        # therefore still empty). Consulted by
         # :meth:`recover_from_changelog_message` to ledger a replayed crash-window
         # chunk so the resume census cannot double-wrap it.
         #
@@ -436,6 +440,30 @@ class RocksDBStorePartition(StorePartition):
         self._ledger_nonempty_at_open: bool = (
             TTL_BACKFILL_STAMPED_CF_NAME in self.list_column_families()
             and self._live_backfill_ledger_has_any()
+        )
+
+        # Snapshot the durable ``__ttl_backfill_in_progress__`` marker at open —
+        # the SECOND half of the interrupted-live-backfill signature, and the only
+        # half that exists when the crash landed inside the FIRST chunk's
+        # produce→commit window: nothing committed locally there, so the ledger
+        # above is still EMPTY while that chunk is already durable on the
+        # changelog. Consulted alongside ``_ledger_nonempty_at_open`` by
+        # :meth:`recover_from_changelog_message` to ledger the replayed
+        # crash-window records, which is what lets the ledger-driven resume in
+        # :meth:`complete_recovery` fire at all — and what stops it re-wrapping
+        # the records that just replayed.
+        #
+        # The marker lives in ``__metadata__`` (a ``LOCAL_ONLY_CFS`` member, never
+        # produced to the changelog), so a fresh-volume COLD restore always opens
+        # without it → snapshot False → replay ledgers nothing → the adopt /
+        # survivor-derived / offset-skip cold-restore paths are byte-for-byte
+        # unchanged. Only a live backfill that ran on THIS volume and never
+        # finished leaves it set. Snapshot-at-open (not a live re-probe) mirrors
+        # the ledger snapshot above and is taken AFTER the open-time
+        # ``_cleanup_completed_backfill_bookkeeping``, which clears the marker on a
+        # genuinely-completed migration.
+        self._backfill_in_progress_at_open: bool = (
+            class_uses_ttl_stamps and self._backfill_in_progress()
         )
 
         # Snapshot whether the durable migration done-marker
@@ -632,22 +660,32 @@ class RocksDBStorePartition(StorePartition):
                 # a later stamped write supersedes it (compaction ordering).
                 self._recovery_saw_stamped = True
                 batch.delete(key, pending_handle)
-                if self._ledger_nonempty_at_open:
-                    # This partition opened with a non-empty
-                    # live-backfill ledger (interrupted-live-backfill signature).
+                if self._ledger_nonempty_at_open or self._backfill_in_progress_at_open:
+                    # This partition opened carrying the
+                    # interrupted-live-backfill signature: a non-empty
+                    # ``__ttl_backfill_stamped__`` ledger, OR the durable
+                    # ``__ttl_backfill_in_progress__`` marker that a live
+                    # :meth:`backfill_legacy_records` arms before its first
+                    # chunk's produce.
                     # A crash between a chunk's changelog flush-confirm and its
                     # local write leaves that chunk on the changelog but absent
                     # from the ledger — so replaying it here would otherwise leave
                     # the census invariant (``on-disk − staged − ledger``) broken
                     # and the resume would re-census and DOUBLE-WRAP the (now
-                    # already-stamped) key. Ledger the replayed key in the SAME
+                    # already-stamped) key. The MARKER term is what covers the
+                    # FIRST chunk's window specifically, where the ledger is still
+                    # EMPTY because no chunk ever committed locally: ledgering the
+                    # replayed keys here is what makes :meth:`complete_recovery`'s
+                    # ledger-driven resume branch fire for that window, and drives
+                    # it over the correct (not-yet-stamped) complement.
+                    # Ledger the replayed key in the SAME
                     # WriteBatch as the value apply + index rebuild + offset
                     # advance (committed at the end of this method), restoring the
                     # invariant atomically. Idempotent (re-ledgering an existing
-                    # member is a no-op put); never inspects value content. The
-                    # handle is warm — the open-time ledger probe created/cached
-                    # it whenever this gate is True. Gate False (cold restore on a
-                    # fresh volume) skips this entirely.
+                    # member is a no-op put); never inspects value content. Both
+                    # terms are LOCAL_ONLY facts about THIS volume, so a cold
+                    # restore on a fresh volume has neither → gate False → skipped
+                    # entirely.
                     batch.put(
                         key,
                         b"",
@@ -799,8 +837,12 @@ class RocksDBStorePartition(StorePartition):
 
         - if NOT ``_recovery_saw_stamped`` → all-legacy first-enablement;
           the live first-``ttl=``-write backfill owns it. No-op.
-        - if the pending CF is empty → all-stamped / fully-migrated;
-          nothing to complete. No-op.
+        - if the pending CF is empty AND no live backfill is durably marked in
+          flight (``__ttl_backfill_in_progress__`` absent) → all-stamped /
+          fully-migrated; nothing to complete beyond recording the done-marker.
+          With that marker still armed the empty census proves nothing (a crash in
+          the first backfill chunk's produce→commit window censuses nothing at
+          all), so the done-marker is NOT latched — see the guard on that branch.
         - else (stamped seen AND pending non-empty) → incomplete migration;
           **auto-finish** (revised from the removed reject):
           chunk-backfill exactly the pending keys, stamping each with a uniform
@@ -889,10 +931,19 @@ class RocksDBStorePartition(StorePartition):
             # ``__ttl_backfill_stamped__`` ledger with NO done-marker (the
             # done-marker case already returned above): the exact signature of an
             # in-place live :meth:`backfill_legacy_records` that was interrupted
-            # (some chunks committed + produced) and then flipped via changelog
-            # replay on a warm restart, leaving un-stamped legacy leftovers below
-            # the replayed offset range that were never censused. Resume the
+            # and then flipped via changelog replay on a warm restart, leaving
+            # un-stamped legacy leftovers below the replayed offset range that were
+            # never censused. Resume the
             # backfill over the ledger complement and finish the migration.
+            #
+            # The ledger reaches here two ways, and the complement is the correct
+            # key set for both: chunks that COMMITTED locally ledgered themselves,
+            # and — when the crash landed in a chunk's produce→commit window, up to
+            # and including the FIRST chunk (nothing committed, ledger empty at
+            # open) — :meth:`recover_from_changelog_message` ledgered the replayed
+            # crash-window records under the ``__ttl_backfill_in_progress__``
+            # marker. Either way every already-stamped key is a ledger member and
+            # is excluded from the resumed census, so nothing is double-wrapped.
             #
             # Ordered ABOVE the all-stamped gate on purpose: a warm restart
             # re-replays the stored
@@ -1006,8 +1057,43 @@ class RocksDBStorePartition(StorePartition):
 
         pending_count = self._count_backfill_pending()
         if pending_count == 0:
+            if self._backfill_in_progress():
+                # DEFENSIVE: the census is empty AND the ledger is empty (the
+                # resume branch above already tested it and fell through), yet a
+                # live backfill is durably marked in flight. An empty census
+                # cannot be read as "fully migrated" here, so do NOT latch the
+                # done-marker — latching it would permanently strand any
+                # un-stamped legacy leftover on a flipped store with "never redo".
+                #
+                # Nothing is repaired either: the ledger is the only sound driver
+                # for a resume (its complement is exactly the not-yet-stamped
+                # keys), and an empty one would drive the resume over the WHOLE
+                # default CF and double-wrap anything already stamped. Refusing to
+                # lie is non-destructive and leaves the store re-completable; a
+                # value-sniffing full-CF scan is not an option on this path.
+                #
+                # This should be unreachable: the ledger is written in the same
+                # WriteBatch as every value the backfill stamps, and while this
+                # marker is set changelog replay ledgers every header-true
+                # default-CF record it applies — so a flipped store with this
+                # marker cannot have an empty ledger unless something stamped a
+                # value outside both paths.
+                logger.warning(
+                    "Recovery at path=%s: the __ttl_backfill_pending__ census is "
+                    "empty but __ttl_backfill_in_progress__ is set with an EMPTY "
+                    "__ttl_backfill_stamped__ ledger — an interrupted live "
+                    "backfill with no usable resume cursor. NOT producing the "
+                    "migration-done marker (it would latch 'done, never redo' "
+                    "over any un-stamped leftover); leaving the store "
+                    "re-completable. Re-seed the state from source if reads look "
+                    "truncated.",
+                    self._path,
+                )
+                return
             # Fully-migrated MIXED changelog: the census drained to empty during
-            # replay. The migration IS complete but no done-marker was ever
+            # replay and no live backfill is durably in flight (the guard above),
+            # so the empty census really does mean "nothing left to stamp". The
+            # migration IS complete but no done-marker was ever
             # produced, so every future cold restore would re-walk the census.
             # Produce the marker now to record "done, never redo".
             # Best-effort: this session stamped nothing, so a failed marker flush
@@ -1261,11 +1347,18 @@ class RocksDBStorePartition(StorePartition):
         Resume an interrupted in-place live legacy backfill after a warm restart.
         Entered from :meth:`complete_recovery` when the store is flipped, the
         ``__ttl_backfill_stamped__`` ledger is non-empty, and no done-marker
-        exists — an in-place :meth:`backfill_legacy_records` that committed some
-        chunks (stamps + ledger + produced records) but crashed before the
-        flag-last flip, then flipped via changelog replay on this warm restart. The
+        exists — an in-place :meth:`backfill_legacy_records` that produced some
+        chunks to the changelog but crashed before the flag-last flip, then flipped
+        via changelog replay on this warm restart. The
         un-stamped legacy leftovers sit below the replayed offset range and were
         never censused, so they must be finished here.
+
+        The ledger it drives off is populated by committed chunks AND — for a
+        chunk lost in its produce→commit window, including the very FIRST chunk,
+        where nothing committed and the ledger opened EMPTY — by
+        :meth:`recover_from_changelog_message`, which ledgers replayed header-true
+        records while ``__ttl_backfill_in_progress__`` is armed. Both routes leave
+        the same invariant: ledger == the keys already stamped on disk.
 
         Re-invokes the existing :meth:`backfill_legacy_records` over the ledger
         complement (its census excludes ledger members, so it re-stamps exactly the
@@ -2057,6 +2150,42 @@ class RocksDBStorePartition(StorePartition):
         metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
         return metadata_cf.get(TTL_ADOPT_PENDING_KEY, default=None) is not None
 
+    def _backfill_in_progress(self) -> bool:
+        """Whether the durable ``__ttl_backfill_in_progress__`` marker is set on
+        disk (metadata CF). Present == a live
+        :meth:`backfill_legacy_records` armed it before its first chunk reached
+        the changelog and has not cleared it, so chunks may be durable on the
+        changelog while nothing has committed locally yet.
+
+        Reads the ``__metadata__`` CF unguarded (parity with
+        :meth:`_load_adopt_pending_flag` / :meth:`_load_ttl_enabled_flag`): every
+        opened store already has it and, unlike the TTL bookkeeping CFs, its mere
+        existence is NOT a classification signal, so this probe cannot perturb
+        :meth:`_has_warm_ttl_artifacts`."""
+        metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
+        return metadata_cf.get(TTL_BACKFILL_IN_PROGRESS_KEY, default=None) is not None
+
+    def _set_backfill_in_progress(self, in_progress: bool) -> None:
+        """Arm (``True``) or clear (``False``) the durable
+        ``__ttl_backfill_in_progress__`` marker in its own committed batch.
+
+        Committed through the raw ``self._db.write`` rather than :meth:`_write`
+        on purpose: :meth:`_write` is the per-CHUNK commit seam of
+        :meth:`backfill_legacy_records` — its call sequence during a backfill IS
+        the chunk-commit sequence — and this marker is not a chunk. It is a
+        pre-flight / teardown bookkeeping write that must land independently of,
+        and outside, any chunk commit.
+
+        Both directions are idempotent: re-arming an armed marker is a no-op put,
+        clearing an absent one is a no-op delete."""
+        batch = WriteBatch(raw_mode=True)
+        metadata_handle = self.get_column_family_handle(METADATA_CF_NAME)
+        if in_progress:
+            batch.put(TTL_BACKFILL_IN_PROGRESS_KEY, b"\x01", metadata_handle)
+        else:
+            batch.delete(TTL_BACKFILL_IN_PROGRESS_KEY, metadata_handle)
+        self._db.write(batch)
+
     def _count_backfill_pending(self) -> int:
         """Count keys currently in the ``__ttl_backfill_pending__`` census CF."""
         pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
@@ -2128,7 +2257,15 @@ class RocksDBStorePartition(StorePartition):
         - the partition is persisted-flipped into TTL mode (``uses_ttl_stamps``
           loaded True at open — the cheap gate that no-ops the 99% legacy path);
         - no durable "migration done" marker exists (else the migration is done);
-        - AND either completion track still has work:
+        - AND any completion track still has work:
+          - the ``__ttl_backfill_in_progress__`` metadata marker is set: a live
+            :meth:`backfill_legacy_records` armed it BEFORE its first chunk's
+            produce and never cleared it. A crash inside that FIRST chunk's
+            produce→commit window leaves BOTH CF-based tracks empty — the ledger
+            only becomes non-empty once a chunk commits locally, and the
+            never-produced leftovers never replay and so never enter the census —
+            while the replayed chunk still flips the store store-wide. Without
+            this marker that strand is invisible to every completion track; OR
           - the ``__ttl_backfill_pending__`` census holds ≥1 leftover key (the
             recovery-completion / MIXED-changelog track); OR
           - the ``__ttl_backfill_stamped__`` ledger holds ≥1 key: an
@@ -2140,20 +2277,27 @@ class RocksDBStorePartition(StorePartition):
             (:meth:`_resume_interrupted_live_backfill`).
 
         Ordered cheapest-first with short-circuits: a legacy store returns on the
-        first check with no CF scans; the pending probe runs before the ledger
-        probe (either satisfies the OR).
+        first check with no CF scans; the in-progress marker (a single metadata
+        point-get) is probed before either CF scan, then pending, then the ledger
+        (any one satisfies the OR).
 
         Read-only end to end: every sub-probe treats an absent bookkeeping CF
         (``__ttl_system__`` / ``__ttl_backfill_pending__`` /
         ``__ttl_backfill_stamped__``) as its empty/False answer without creating
         it, so probing a store with no migration activity leaves it
-        byte-identical (CF existence is a classification signal elsewhere).
+        byte-identical (CF existence is a classification signal elsewhere). The
+        marker probe reads ``__metadata__``, which every opened store already has
+        and whose existence is not a classification signal.
         """
         if not self.uses_ttl_stamps:
             return False
         if self._has_local_migration_done_marker():
             return False
-        return self._backfill_pending_has_any() or self._live_backfill_ledger_has_any()
+        return (
+            self._backfill_in_progress()
+            or self._backfill_pending_has_any()
+            or self._live_backfill_ledger_has_any()
+        )
 
     def _max_index_stamp_ms(self) -> Optional[int]:
         """
@@ -2333,13 +2477,15 @@ class RocksDBStorePartition(StorePartition):
     def _cleanup_completed_backfill_bookkeeping(self) -> None:
         """
         One-time post-migration cleanup, run on the first open of a partition
-        that is already flipped into TTL mode. A completed in-place live backfill
-        (:meth:`backfill_legacy_records`) leaves two dead artifacts behind: the
-        ``__ttl_backfill_stamped__`` ledger CF and the ``__ttl_backfill_progress__``
-        counter. Once the migration is genuinely done the backfill never re-runs,
-        so neither is ever consulted again; drop them so a migrated store carries
-        no lasting overhead (parallels the pending-CF hygiene on the recovery
-        path).
+        that is already flipped into TTL mode. An in-place live backfill
+        (:meth:`backfill_legacy_records`) leaves dead artifacts behind: the
+        ``__ttl_backfill_stamped__`` ledger CF, the ``__ttl_backfill_progress__``
+        counter and — only when it died before its first chunk committed — the
+        ``__ttl_backfill_in_progress__`` marker (a clean finish clears that one
+        itself). Once the migration is genuinely done the backfill never re-runs,
+        so none of them is ever consulted again; drop them so a migrated store
+        carries no lasting overhead (parallels the pending-CF hygiene on the
+        recovery path).
 
         Gated FIRST on the durable "migration done" marker: a flipped store
         may be an *interrupted* live backfill whose flip landed via changelog
@@ -2355,23 +2501,34 @@ class RocksDBStorePartition(StorePartition):
         the marker before invoking this cleanup, so an already-completed migration
         (marker present at open) still cleans up exactly as before — no regression.
 
-        Then gated on the progress counter's presence so the common path
-        (empty-store flip / already-cleaned) does exactly one extra metadata read
-        and no-ops, and the work runs at most once (the counter is deleted here).
+        Then gated on the progress counter / in-progress marker being present, so
+        the common path (empty-store flip / already-cleaned) does two metadata
+        point-gets and no-ops, and the work runs at most once (both keys are
+        deleted here).
         """
         if not self._has_local_migration_done_marker():
             # Interrupted (flipped-but-unfinished) migration: keep the resume
-            # ledger + progress counter for :meth:`complete_recovery`.
+            # ledger + progress counter + in-progress marker for
+            # :meth:`complete_recovery`.
             return
         metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
-        if metadata_cf.get(TTL_BACKFILL_PROGRESS_KEY, default=None) is None:
+        progress = metadata_cf.get(TTL_BACKFILL_PROGRESS_KEY, default=None)
+        in_progress = metadata_cf.get(TTL_BACKFILL_IN_PROGRESS_KEY, default=None)
+        if progress is None and in_progress is None:
             return
         self._drop_local_cf_if_exists(TTL_BACKFILL_STAMPED_CF_NAME)
         batch = WriteBatch(raw_mode=True)
-        batch.delete(
-            TTL_BACKFILL_PROGRESS_KEY,
-            self.get_column_family_handle(METADATA_CF_NAME),
-        )
+        metadata_handle = self.get_column_family_handle(METADATA_CF_NAME)
+        if progress is not None:
+            batch.delete(TTL_BACKFILL_PROGRESS_KEY, metadata_handle)
+        if in_progress is not None:
+            # Backstop clear for a backfill that armed the marker and died before
+            # its first chunk committed (so it never reached its own disarm) on a
+            # store that has since been genuinely completed. This is the last
+            # writer of the marker's lifecycle: with the done-marker present it
+            # can never be needed again, and leaving it would keep
+            # :meth:`has_incomplete_ttl_migration` reporting True forever.
+            batch.delete(TTL_BACKFILL_IN_PROGRESS_KEY, metadata_handle)
         self._write(batch)
 
     def _complete_pending_backfill(
@@ -2722,6 +2879,22 @@ class RocksDBStorePartition(StorePartition):
         so it is never re-read and never re-wrapped (no double-wrap). No integer
         index into a re-sorted list is ever consulted for resume.
 
+        **In-progress marker (first-chunk crash window).** The ledger above only
+        becomes non-empty once a chunk COMMITS LOCALLY, but this method is
+        changelog-first (produce + flush-confirm, THEN commit). A crash inside the
+        FIRST chunk's produce→commit window therefore leaves that chunk durable on
+        the changelog with an empty ledger, an empty pending census (the leftovers
+        were never produced, so they never replay and never get censused) and a
+        still-legacy store — and the next warm restart replays the chunk, flips
+        the store STORE-WIDE, and finds nothing to complete. To keep that window
+        detectable, the durable local-only ``__ttl_backfill_in_progress__`` marker
+        is armed in its OWN commit BEFORE the chunk loop and cleared after the
+        last chunk commits. While it is set,
+        :meth:`recover_from_changelog_message` ledgers every header-true
+        default-CF record it replays, which rebuilds the resume cursor for that
+        window; :meth:`has_incomplete_ttl_migration` and
+        :meth:`complete_recovery` both consult it too.
+
         **Overwritten-key rule.** A ledger key that is *overwritten by a plain
         (non-``ttl=``) legacy write during the crash→resume gap* is left as that
         raw value (it stays a ledger member and is excluded from the resumed
@@ -2882,6 +3055,16 @@ class RocksDBStorePartition(StorePartition):
         # from an earlier chunk).
         phase = MigrationDeliveryPhase()
 
+        # ARM the durable in-progress marker in its OWN commit, BEFORE the first
+        # chunk is produced, so it is on disk ahead of anything this backfill puts
+        # on the changelog. This is the only artifact that survives a crash inside
+        # the first chunk's produce→commit window (see the docstring). Skipped for
+        # an empty census: there is no chunk to crash in, and the unconditional
+        # clear below still covers a marker left by an earlier interrupted run.
+        # Idempotent — a resume re-arms an already-armed marker as a no-op put.
+        if total:
+            self._set_backfill_in_progress(True)
+
         restamped = 0
         run_pos = 0
         while run_pos < total:
@@ -2962,6 +3145,15 @@ class RocksDBStorePartition(StorePartition):
 
             # RELEASE: drop the chunk's structures before the next iteration.
             del batch, produce
+
+        # DISARM: every census key is now stamped BOTH locally and on the
+        # changelog, so the crash window the marker guards is closed. Cleared here
+        # rather than after the caller's flag-last flip because the flip's own
+        # crash window is already covered by the (now fully populated) ledger: a
+        # replay-driven flip re-enters this method and censuses the empty
+        # complement. Leaving it armed would make every later restart of a
+        # migrated store re-report an incomplete migration.
+        self._set_backfill_in_progress(False)
 
         # FINISHED bracket (lifecycle log). Closes the STARTED line above after
         # the last chunk has committed and before returning to the caller. The

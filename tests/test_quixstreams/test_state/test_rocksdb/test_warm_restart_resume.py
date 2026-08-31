@@ -19,6 +19,16 @@ warm restart, with no new user-facing config:
   (flipped + ``__ttl_backfill_stamped__`` ledger non-empty + no done-marker) and
   resumes by re-invoking ``backfill_legacy_records`` over the ledger complement,
   then produces the done-marker and cleans up.
+- Part C: the ledger only becomes non-empty once a chunk commits LOCALLY, so a
+  crash inside the FIRST chunk's produce->commit window would leave that Part B
+  signature invisible (empty ledger AND empty census) while the replayed chunk
+  still flips the store. A durable local-only ``__ttl_backfill_in_progress__``
+  metadata marker, armed before the first produce, is the replay-independent half
+  of the signature: it widens ``has_incomplete_ttl_migration``, makes changelog
+  replay ledger the crash-window records (restoring the Part B ledger predicate
+  and its single-stamp protection for that window), and stops
+  ``complete_recovery`` latching a false done-marker. See
+  ``TestFirstChunkCrashStrand``.
 """
 
 import struct
@@ -925,5 +935,112 @@ class TestResumeGateAboveAdoptionGate:
         assert _done_marker_present(p2) is True
         assert _ledger_keys(p2) == set()
         assert _progress_counter(p2) is None
+        assert _pending_keys(p2) == set()
+        p2.close()
+
+
+class TestFirstChunkCrashStrand:
+    """The crash window in the FIRST backfill chunk.
+
+    Chunk 1 produces + flush-confirms to the changelog BEFORE its local commit
+    (``partition.py`` changelog-first ordering), so a crash in that window leaves
+    the changelog ahead of an EMPTY ``__ttl_backfill_stamped__`` ledger. The
+    module-level Part B predicate keys on the ledger being NON-empty, which only
+    happens once a chunk has committed locally — so every sibling test kills at
+    ``kill_chunk=2`` and none exercises this window.
+
+    Both completion tracks are therefore blind here: the pending census is empty
+    because the leftovers were never produced (so never replayed, never
+    censused), and the ledger is empty because nothing committed.
+    """
+
+    def _opts(self):
+        return RocksDBOptions(
+            legacy_records_ttl=timedelta(days=7), legacy_backfill_chunk_size=2
+        )
+
+    def _crash_in_first_chunk(self, store_partition_factory, ttl, ts):
+        """Build the empty-ledger divergence and warm-replay it to the flip.
+
+        Returns the reopened, replay-flipped partition sitting exactly where
+        ``complete_recovery`` is about to make its decision.
+        """
+        p1, _producer1, captured_all = _interrupt_live_backfill_at_chunk_local_write(
+            store_partition_factory,
+            name="db",
+            ttl=ttl,
+            ts=ts,
+            n=5,
+            chunk=2,
+            kill_chunk=1,
+        )
+        # Chunk 1 (k0,k1) is durable on the changelog; nothing committed locally.
+        assert _ledger_keys(p1) == set()
+        assert len(captured_all) == 2
+        p1.close()
+
+        # Warm reopen (still legacy) + replay of the produced tail.
+        p2 = store_partition_factory(
+            name="db", options=self._opts(), changelog_producer=_producer()
+        )
+        assert p2.uses_ttl_stamps is False
+        _replay_default(p2, captured_all, now_ms=ts)
+        # The stamped chunk-1 records flip the store store-wide. k2,k3,k4 were
+        # never produced, so they neither replay nor land in the census.
+        assert p2.uses_ttl_stamps is True
+        assert p2._recovery_saw_stamped is True
+        assert _pending_keys(p2) == set()
+        return p2
+
+    def test_first_chunk_crash_is_detected_as_incomplete(self, store_partition_factory):
+        """RED (HEAD): ``has_incomplete_ttl_migration()`` is False — the ledger
+        probe and the census probe are both empty, so a flipped-but-unfinished
+        migration is invisible to every resume path and an offset-caught-up
+        restart skips the completion pass.
+
+        GREEN: an interrupted live backfill stays detectable with an empty
+        ledger.
+        """
+        p2 = self._crash_in_first_chunk(
+            store_partition_factory, timedelta(days=7), 1_000_000_000_000
+        )
+        assert p2.has_incomplete_ttl_migration() is True
+        p2.close()
+
+    def test_first_chunk_crash_completes_instead_of_latching_done(
+        self, store_partition_factory
+    ):
+        """RED (HEAD): ``complete_recovery`` takes BRANCH A, reads
+        ``pending_count == 0`` as "fully migrated MIXED changelog" and produces
+        the done-marker. k2,k3,k4 stay raw legacy on a flipped store — never
+        indexed, never swept, never expiring — while the marker latches "done,
+        never redo" so no later restart repairs them. On a flipped store their
+        read path also strips 8 bytes as an expiry, making read-back
+        value-dependent.
+
+        GREEN: the leftovers are stamped at the cohort's uniform expiry, the
+        index covers all 5, and the done-marker records a migration that
+        actually finished.
+        """
+        ttl, ts = timedelta(days=7), 1_000_000_000_000
+        uniform_expiry = ts + 7 * DAY_MS
+        p2 = self._crash_in_first_chunk(store_partition_factory, ttl, ts)
+
+        p2.complete_recovery()
+
+        # The strand: no raw legacy value may survive on a flipped store.
+        assert _unstamped_default_records(p2) == []
+        decoded = _decode_default_cf(p2)
+        assert len(decoded) == 5
+        for _key, (expires_at, payload) in decoded.items():
+            assert expires_at == uniform_expiry
+            assert payload.startswith(b'"legacy-value-')
+            assert _safe_decode_stamp(payload) is None  # not double-wrapped
+        index = _index_cf(p2)
+        assert len(index) == 5
+        for user_key in decoded:
+            assert index[user_key] == uniform_expiry
+        assert _done_marker_present(p2) is True
+        assert _ledger_keys(p2) == set()
         assert _pending_keys(p2) == set()
         p2.close()

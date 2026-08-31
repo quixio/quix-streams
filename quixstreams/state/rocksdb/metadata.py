@@ -77,3 +77,30 @@ TTL_ROLLBACK_ENV_VAR = "QUIXSTREAMS_STATE_TTL_ROLLBACK"
 # bump). Lives in the metadata CF, which is in ``LOCAL_ONLY_CFS`` and is never
 # produced to the changelog.
 TTL_BACKFILL_PROGRESS_KEY = b"__ttl_backfill_progress__"
+
+# Durable "a live legacy backfill is in flight on this volume" marker, armed by
+# ``RocksDBStorePartition.backfill_legacy_records`` in its OWN commit BEFORE the
+# first chunk is produced to the changelog, and cleared once the last chunk has
+# committed locally. It is the replay-independent half of the
+# interrupted-live-backfill signature.
+#
+# Why the stamped ledger alone is not enough: ``__ttl_backfill_stamped__`` is
+# written in the SAME WriteBatch as a chunk's stamped values, and the backfill is
+# changelog-FIRST (produce + flush-confirm, then commit locally). A crash inside
+# the FIRST chunk's produce->commit window therefore leaves that chunk durable on
+# the changelog with an EMPTY ledger and an un-flipped store. On the next warm
+# restart the replayed chunk flips the partition store-wide, while the leftovers
+# -- never produced, so never replayed and never censused into
+# ``__ttl_backfill_pending__`` -- stay raw legacy under a read path that now
+# strips 8 bytes as an expiry. Both CF-based completion tracks are empty, so the
+# migration looks finished and the done-marker would latch "done, never redo".
+# This marker is the only on-disk fact that survives that window.
+#
+# Lives in the metadata CF (a ``LOCAL_ONLY_CFS`` member), so it never rides the
+# changelog and a fresh-volume cold restore never sees it -- which is also why it
+# is a safe discriminator: only this build's own backfill ever writes it, so a
+# stock v3.24.0 store can never carry it and the v3.24.0 detection / adoption
+# paths can never be reached through it. Additive: legacy and already-migrated
+# stores simply never have it (no format-version bump). The value is a presence
+# flag; only presence is ever read.
+TTL_BACKFILL_IN_PROGRESS_KEY = b"__ttl_backfill_in_progress__"
