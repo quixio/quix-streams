@@ -16,9 +16,10 @@ The fix has two parts:
      forces the check when it is True.
   2. ``complete_recovery`` treats a partition ALREADY persisted-flipped at open as
      saw-stamped-equivalent, so its census is COMPLETED (not discarded even though
-     ``_recovery_saw_stamped`` stays False with no replay this session). Config-
-     absent completion with no replayed survivor derives the expiry from the max
-     on-disk ``__ttl_index__`` stamp.
+     ``_recovery_saw_stamped`` stays False with no replay this session). With no
+     replayed survivor the cohort evidence is the max on-disk ``__ttl_index__``
+     stamp: config-absent completion uses it directly, and config-present
+     completion takes the later of it and ``wallclock + legacy_records_ttl``.
 """
 
 from datetime import timedelta
@@ -135,7 +136,11 @@ class TestOffsetCaughtUpCompletion:
         changelog_producer_mock.produce.reset_mock()
         run2.complete_recovery()
 
-        expected_expiry = now_ms + 7 * DAY_MS
+        # Cohort expiry. There is NO replay this session, so the evidence is the
+        # max on-disk __ttl_index__ stamp run 1 wrote for the survivors
+        # (now + 30d); it beats the configured now + 7d and the leftovers land on
+        # it, sharing their cohort's expiry.
+        expected_expiry = now_ms + 30 * DAY_MS
         decoded = {k: decode_ttl_value(v) for k, v in _default_cf(run2).items()}
         index = _index_cf(run2)
         for key, raw in legacy_values.items():
@@ -239,8 +244,10 @@ class TestOffsetCaughtUpCompletion:
         changelog_producer_mock.produce.reset_mock()
         run2.complete_recovery()
 
-        # Legacy leftovers are stamped at wallclock + TTL.
-        expected_expiry = now_ms + 7 * DAY_MS
+        # Legacy leftovers are stamped at the cohort expiry: with no replay this
+        # session the max on-disk __ttl_index__ stamp (now + 30d) beats the
+        # configured now + 7d.
+        expected_expiry = now_ms + 30 * DAY_MS
         decoded = {k: decode_ttl_value(v) for k, v in _default_cf(run2).items()}
         index = _index_cf(run2)
         for key, raw in legacy_values.items():

@@ -593,8 +593,11 @@ class MemoryStorePartition(StorePartition):
           pending census and no-op (hygiene parity).
         - pending empty → all-stamped / fully migrated: no-op.
         - else (MIXED) → stamp exactly the pending leftovers with:
-            - ``legacy_records_ttl`` set → ``wallclock_now + legacy_records_ttl``
-              (parity; explicit config wins);
+            - ``legacy_records_ttl`` set → ``max(wallclock_now +
+              legacy_records_ttl, survivor_evidence)`` (parity): the LATER of the
+              two fully-formed EXPIRIES, so the leftovers expire WITH their
+              stamped cohort rather than before it. The cohort term is already an
+              expiry and is compared, never used as a base for another ttl;
             - absent → the survivor-derived expiry, or ``SENTINEL_NEVER``
               (never-expire) + a WARN in the all-expired fallback.
         """
@@ -763,36 +766,75 @@ class MemoryStorePartition(StorePartition):
 
         legacy_records_ttl = self._legacy_records_ttl
         if legacy_records_ttl is not None:
-            # Explicit config wins (parity): wallclock-at-rebuild + ttl.
-            # The wallclock derives this completion expiry only; it is NOT
-            # seeded into the live ``_high_water_ms`` clock (removed for parity).
+            # The leftovers get the LATER of two fully-formed EXPIRIES (parity
+            # with the RocksDB twin): the configured ``wallclock + ttl``, and the
+            # surviving cohort's own latest expiry
+            # (``_recovery_max_survivor_expiry_ms``). Both terms are EXPIRIES, so
+            # they are COMPARED, not summed — a survivor stamp is already
+            # ``survivor_event_time + survivor_ttl``, and adding another ttl on top
+            # would grant the leftovers a whole extra ttl of life their cohort
+            # never had.
+            # COHORT UNIFORMITY is the invariant: the survivors and the leftovers
+            # are one cohort in one store, so the leftovers must expire no EARLIER
+            # than the cohort's latest known expiry — and no later. Both sweep
+            # paths and the read filter judge them on ``_high_water_ms`` (EVENT
+            # time, which replay never advances), so a wallclock-only expiry on an
+            # event-ahead store sits BELOW the survivors' stamps and the next sweep
+            # deletes the leftovers while their cohort-mates live on. The wallclock
+            # derives expiries only; it is NOT seeded into ``_high_water_ms``
+            # (removed for parity). Absent or past-dated evidence loses the max,
+            # leaving exactly ``wallclock + legacy_records_ttl``.
             if self._recovery_now_ms is None:
                 self._recovery_now_ms = self._now_ms()
-            # Clamp the ADDITIVE sum, exactly as the RocksDB twin does
-            # (``RocksDBStorePartition`` recovery-completion). An individually
-            # valid ``legacy_records_ttl`` can still sum past
+            recovery_now_ms = self._recovery_now_ms
+            # ``_max_index_stamp_ms()`` is structurally unreachable here on the
+            # always-full-replay memory backend (a replay that saw a stamped
+            # record also set ``_recovery_max_survivor_expiry_ms`` unless every
+            # survivor was sentinel-stamped); kept for parity and defence.
+            survivor_evidence_ms = (
+                self._recovery_max_survivor_expiry_ms
+                if self._recovery_max_survivor_expiry_ms is not None
+                else self._max_index_stamp_ms()
+            )
+            config_expiry_ms = recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+            raw_expiry_ms = config_expiry_ms
+            basis = "wallclock-at-rebuild + legacy_records_ttl"
+            if (
+                survivor_evidence_ms is not None
+                and survivor_evidence_ms > raw_expiry_ms
+            ):
+                raw_expiry_ms = survivor_evidence_ms
+                basis = "max-surviving-cohort-stamp"
+            # Clamp the winner, exactly as the RocksDB twin does
+            # (``RocksDBStorePartition`` recovery-completion). Only the ADDITIVE
+            # config side can overflow; an individually valid
+            # ``legacy_records_ttl`` can still sum past
             # ``_MAX_PLAUSIBLE_STAMP_MS``, and the strict read validator refuses
             # such a stamp on EVERY read -- StateSerializationError per key, with
             # the index entry never sweeping. Clamping keeps the record readable
             # and never mass-deleted, which is the point of the migration.
-            raw_expiry_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
             expires_at_ms = clamp_additive_expiry(raw_expiry_ms)
             if expires_at_ms != raw_expiry_ms:
                 logger.warning(
-                    "Recovery-completion expiry wallclock(%d) + legacy_records_ttl "
-                    "= %d exceeds the maximum readable stamp (%d) in memory; "
-                    "clamping to never-expire (SENTINEL) so the leftover legacy "
-                    "record(s) stay readable.",
-                    self._recovery_now_ms,
+                    "Recovery-completion expiry %d (basis: %s) exceeds the "
+                    "maximum readable stamp (%d) in memory; clamping to "
+                    "never-expire (SENTINEL) so the leftover legacy record(s) "
+                    "stay readable.",
                     raw_expiry_ms,
+                    basis,
                     _MAX_PLAUSIBLE_STAMP_MS,
                 )
             logger.info(
                 "Recovery: completing interrupted legacy-TTL migration in "
                 "memory; %d leftover legacy record(s) stamped with expiry=%d "
-                "(wallclock-at-rebuild + legacy_records_ttl).",
+                "(basis: %s; the later of wallclock+legacy_records_ttl=%d and the "
+                "max surviving cohort stamp %s, so the leftovers expire WITH "
+                "their cohort and never before it).",
                 len(pending),
                 expires_at_ms,
+                basis,
+                config_expiry_ms,
+                survivor_evidence_ms,
             )
         else:
             # Config absent: derive from the surviving stamped cohort, CLAMPED

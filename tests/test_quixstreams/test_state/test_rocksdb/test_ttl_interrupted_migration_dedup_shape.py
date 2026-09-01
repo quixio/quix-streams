@@ -233,12 +233,14 @@ def test_ambiguous_future_legacy_ttl_completes(tmp_path):
 
     partition.complete_recovery()  # must NOT raise (operator asserted legacy intent)
 
-    expected = NOW_MS + 7 * DAY_MS
+    # Cohort expiry: the 3 future survivors carry STAMP_EXPIRY (NOW + 30d), which
+    # beats the configured NOW + 7d, so the wrapped leftovers land on it.
+    expected = NOW_MS + 30 * DAY_MS
     for raw_key, verbatim in future_leftovers.items():
         stamp, payload = decode_ttl_value(
             bytes(partition.get(raw_key, cf_name="default"))
         )
-        assert stamp == expected  # wrapped once at wallclock + ttl
+        assert stamp == expected  # wrapped once at the surviving cohort's expiry
         assert payload == verbatim  # the WHOLE original value is the payload
     assert _pending_keys(partition) == set()
     partition.close()

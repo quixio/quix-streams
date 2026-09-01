@@ -468,7 +468,24 @@ class TestContractHolds:
 
     def test_e1_mixed_replay_with_config_completes(self, tmp_path):
         """E.1: Changelog replay of a MIXED store with legacy_records_ttl
-        configured completes without error; leftovers expire per config."""
+        configured completes without error, and the leftovers land on their
+        cohort's expiry.
+
+        CONTRACT. A leftover legacy record is granted ``legacy_records_ttl`` of
+        EVENT-TIME life, and never expires before the stamped records it was
+        migrated alongside. Concretely the expiry is
+        ``max(wallclock_at_rebuild + legacy_records_ttl, latest surviving
+        stamp)``: here the survivors sit 30 days out, so the leftovers join them
+        at ``now + 30d`` rather than taking the configured ``now + 7d``.
+
+        WHY NOT WALLCLOCK. The sweep and the read filter expire records against
+        the EVENT-time high-water, which changelog replay never advances. A
+        wallclock-derived expiry therefore grants only "ttl minus the
+        event/wallclock skew" of real life -- which is NEGATIVE on an
+        event-ahead store, so the first live write swept every leftover the
+        migration had just rescued while its stamped cohort-mates lived on. See
+        ``test_rocksdb/test_completion_expiry_event_ahead.py``.
+        """
         producer = _make_changelog_producer_mock()
         now_ms = 1_780_000_000_000
         legacy_ttl = timedelta(days=7)
@@ -484,14 +501,16 @@ class TestContractHolds:
         _replay_msgs(partition, msgs, now_ms=now_ms)
         partition.complete_recovery()
 
-        expected_expiry = now_ms + 7 * DAY_MS
+        # The cohort expiry (now + 30d) beats the configured now + 7d.
+        expected_expiry = now_ms + 30 * DAY_MS
         decoded = _decode_default_cf_rocksdb(partition)
         for key, raw in legacy_values.items():
             exp, payload = decoded[key]
             assert payload == raw, f"Legacy record {key!r} payload must be intact"
-            assert (
-                exp == expected_expiry
-            ), f"Legacy record {key!r} should expire at {expected_expiry}"
+            assert exp == expected_expiry, (
+                f"Legacy record {key!r} should expire at {expected_expiry} -- the "
+                f"expiry its surviving cohort carries -- not before it"
+            )
         partition.close()
 
     def test_e2_mixed_replay_without_config_completes(self, tmp_path):
@@ -565,7 +584,15 @@ class TestContractHolds:
 
     def test_i1_memory_mixed_replay_with_config(self):
         """I.1: MemoryStorePartition MIXED replay + complete_recovery with
-        legacy_records_ttl configured stamps leftovers correctly."""
+        legacy_records_ttl configured stamps leftovers at the cohort expiry,
+        byte-identically to the RocksDB backend (E.1).
+
+        Same contract as E.1: ``legacy_records_ttl`` buys EVENT-TIME life, and
+        the leftovers never expire before the stamped cohort they were migrated
+        with -- ``max(wallclock + legacy_records_ttl, latest surviving stamp)``,
+        which is ``now + 30d`` here. The two backends must agree exactly;
+        diverging expiries for one changelog is itself the bug.
+        """
         producer = _make_changelog_producer_mock()
         now_ms = 1_780_000_000_000
         legacy_ttl = timedelta(days=7)
@@ -579,16 +606,18 @@ class TestContractHolds:
         _replay_msgs(partition, msgs, now_ms=now_ms)
         partition.complete_recovery()
 
-        expected_expiry = now_ms + 7 * DAY_MS
+        # The cohort expiry (now + 30d) beats the configured now + 7d.
+        expected_expiry = now_ms + 30 * DAY_MS
         decoded = _decode_default_cf_memory(partition)
         for key, raw in legacy_values.items():
             exp, payload = decoded[key]
             assert (
                 payload == raw
             ), f"Memory legacy record {key!r} payload must be intact"
-            assert (
-                exp == expected_expiry
-            ), f"Memory legacy record {key!r} should expire at {expected_expiry}"
+            assert exp == expected_expiry, (
+                f"Memory legacy record {key!r} should expire at {expected_expiry} "
+                f"-- the expiry its surviving cohort carries -- not before it"
+            )
         partition.close()
 
     def test_i2_memory_mixed_replay_without_config(self):

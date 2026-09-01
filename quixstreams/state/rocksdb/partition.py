@@ -850,9 +850,17 @@ class RocksDBStorePartition(StorePartition):
           header-bearing stamped record to the changelog, and deleting the key
           from the pending CF as the chunk commits (the delete IS the durable
           progress cursor). The uniform expiry is:
-            - ``legacy_records_ttl`` set → ``self._recovery_now_ms +
-              _ttl_to_ms(legacy_records_ttl)`` (wallclock-at-rebuild;
-              explicit config unchanged and always wins);
+            - ``legacy_records_ttl`` set → ``max(self._recovery_now_ms +
+              _ttl_to_ms(legacy_records_ttl), survivor_evidence)``: the LATER of
+              the two fully-formed EXPIRIES — the configured
+              wallclock-at-rebuild window, and the surviving cohort's own latest
+              expiry (``_recovery_max_survivor_expiry_ms``, else
+              ``_max_index_stamp_ms()``). The cohort term is already an expiry,
+              so it is compared, never used as a base to add the ttl to. This
+              enforces cohort uniformity: the sweep and the read filter judge the
+              leftovers on ``_high_water_ms`` — event time, which replay never
+              advances — so a wallclock-only expiry lets an event-ahead store
+              sweep them while their stamped cohort-mates live on;
             - ``legacy_records_ttl`` absent → the survivor-derived expiry
               ``self._recovery_max_survivor_expiry_ms`` (a future stamp shared
               with the leftovers' backfill cohort), or ``SENTINEL_NEVER`` +
@@ -1161,42 +1169,84 @@ class RocksDBStorePartition(StorePartition):
 
         legacy_records_ttl = self._legacy_records_ttl
         if legacy_records_ttl is not None:
-            # Explicit config wins (unchanged): wallclock-at-rebuild + ttl.
-            # ``_recovery_now_ms`` was captured on the first stamped default-CF
-            # replay (exactly when ``_recovery_saw_stamped`` was set), so it is
-            # normally populated here; capture defensively if a stamped record was
-            # seen but no non-sentinel stamp ever set it. The recovery
-            # wallclock is used ONLY to derive this recovery-completion expiry, it
-            # is NOT seeded into the live ``_high_water_ms`` clock (that seed is
-            # removed so an event-time-lagging workload never over-expires its own
-            # post-recovery writes).
+            # The leftovers get the LATER of two fully-formed EXPIRIES:
+            #   - the configured one, ``_recovery_now_ms + legacy_records_ttl``.
+            #     ``_recovery_now_ms`` was captured on the first stamped
+            #     default-CF replay (exactly when ``_recovery_saw_stamped`` was
+            #     set), so it is normally populated here; it is captured
+            #     defensively below if a stamped record was seen but no
+            #     non-sentinel stamp ever set it. It derives expiries ONLY and is
+            #     NOT seeded into the live ``_high_water_ms`` clock (that seed is
+            #     removed so an event-time-lagging workload never over-expires its
+            #     own post-recovery writes);
+            #   - the surviving cohort's own latest expiry: the max stamp the
+            #     replayed survivors carried (``_recovery_max_survivor_expiry_ms``),
+            #     or the max on-disk ``__ttl_index__`` stamp when there was no
+            #     replay this session (the offset-caught-up restart).
+            # Both terms are EXPIRIES, so they are COMPARED, not summed: a
+            # survivor stamp is already ``survivor_event_time + survivor_ttl``, and
+            # adding another ttl on top of it would grant the leftovers a whole
+            # extra ttl of life their cohort never had.
+            # COHORT UNIFORMITY is the invariant. The survivors and the leftovers
+            # are one cohort in one store, so the leftovers must expire no EARLIER
+            # than the cohort's latest known expiry — and no later. Both sweep
+            # paths and the read filter judge them on ``_high_water_ms`` (EVENT
+            # time, which replay never advances), so a wallclock-only expiry on an
+            # event-ahead store sits BELOW the survivors' stamps: advancing the
+            # event clock to any point between the two sweeps the leftovers while
+            # their cohort-mates live on — completion destroying exactly the
+            # records it exists to preserve. Taking the max removes that asymmetry
+            # without extending the cohort's life. Evidence that is absent, or
+            # past-dated after long downtime, simply loses the max, leaving
+            # exactly ``wallclock + legacy_records_ttl``.
             if self._recovery_now_ms is None:
                 self._recovery_now_ms = self._now_ms()
-            # Clamp the ADDITIVE sum: mirror the backfill /
-            # per-write bound so a large legacy_records_ttl cannot push the
-            # recovery-completion expiry ``>= _MAX_PLAUSIBLE_STAMP_MS`` and strand
-            # the leftover records as unreadable over-range stamps. Over-range
-            # clamps to never-expire (readable, never mass-deleted).
-            raw_expiry_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+            recovery_now_ms = self._recovery_now_ms
+            survivor_evidence_ms = (
+                self._recovery_max_survivor_expiry_ms
+                if self._recovery_max_survivor_expiry_ms is not None
+                else self._max_index_stamp_ms()
+            )
+            config_expiry_ms = recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+            raw_expiry_ms = config_expiry_ms
+            basis = "wallclock-at-rebuild + legacy_records_ttl"
+            if (
+                survivor_evidence_ms is not None
+                and survivor_evidence_ms > raw_expiry_ms
+            ):
+                raw_expiry_ms = survivor_evidence_ms
+                basis = "max-surviving-cohort-stamp"
+            # Clamp the winner: only the ADDITIVE config side can overflow (a
+            # survivor stamp is an already-written value, held below
+            # ``_MAX_PLAUSIBLE_STAMP_MS`` by the write-side reject). Mirrors the
+            # backfill / per-write bound so a large legacy_records_ttl cannot
+            # strand the leftover records as unreadable over-range stamps.
+            # Over-range clamps to never-expire (readable, never mass-deleted).
             expires_at_ms = clamp_additive_expiry(raw_expiry_ms)
             if expires_at_ms != raw_expiry_ms:
                 logger.warning(
-                    "Recovery-completion expiry wallclock(%d) + legacy_records_ttl "
-                    "= %d exceeds the maximum readable stamp (%d) at path=%s; "
-                    "clamping to never-expire (SENTINEL) so the leftover legacy "
-                    "record(s) stay readable.",
-                    self._recovery_now_ms,
+                    "Recovery-completion expiry %d (basis: %s) exceeds the "
+                    "maximum readable stamp (%d) at path=%s; clamping to "
+                    "never-expire (SENTINEL) so the leftover legacy record(s) "
+                    "stay readable.",
                     raw_expiry_ms,
+                    basis,
                     _MAX_PLAUSIBLE_STAMP_MS,
                     self._path,
                 )
             logger.info(
                 "Recovery: completing interrupted legacy-TTL migration at "
                 "path=%s; %d leftover legacy record(s) will be stamped with "
-                "expiry=%d (wallclock-at-rebuild + legacy_records_ttl).",
+                "expiry=%d (basis: %s; the later of "
+                "wallclock+legacy_records_ttl=%d and the max surviving cohort "
+                "stamp %s, so the leftovers expire WITH their cohort and never "
+                "before it).",
                 self._path,
                 pending_count,
                 expires_at_ms,
+                basis,
+                config_expiry_ms,
+                survivor_evidence_ms,
             )
         else:
             # Config absent: derive a uniform expiry from the surviving stamped

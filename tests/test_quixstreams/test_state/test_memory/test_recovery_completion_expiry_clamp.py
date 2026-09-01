@@ -3,10 +3,11 @@ Red-first coverage for the unclamped recovery-completion expiry on the memory
 backend.
 
 ``complete_recovery`` finishes an interrupted legacy-TTL migration by stamping
-the leftover legacy records with ``wallclock-at-rebuild + legacy_records_ttl``.
-That sum is ADDITIVE, so an individually valid ``legacy_records_ttl`` can still
-land ``>= _MAX_PLAUSIBLE_STAMP_MS`` — beyond what the strict read validator
-``_safe_decode_stamp`` will accept.
+the leftover legacy records with the later of ``wallclock-at-rebuild +
+legacy_records_ttl`` and the surviving cohort's own expiry. The configured side
+of that comparison is ADDITIVE, so an individually valid ``legacy_records_ttl``
+can still land ``>= _MAX_PLAUSIBLE_STAMP_MS`` — beyond what the strict read
+validator ``_safe_decode_stamp`` will accept.
 
 RocksDB routes that sum through ``clamp_additive_expiry``, which turns an
 over-range result into ``SENTINEL_NEVER`` (readable, never mass-deleted) and
@@ -104,6 +105,11 @@ class TestRecoveryCompletionExpiryClamp:
         """
         The clamp must not touch an ordinary expiry -- otherwise leftover legacy
         records would silently become permanent.
+
+        The fixture's lone survivor is stamped at ``BASE_TS + 30d``, which beats
+        the configured 7-day window, so the in-range expiry under test is the
+        cohort expiry ``BASE_TS + 30d`` and the clamp must pass it through
+        untouched.
         """
         partition = _build_interrupted_migration(timedelta(days=7))
 
@@ -112,4 +118,4 @@ class TestRecoveryCompletionExpiryClamp:
         stored = partition._state["default"][b"pfx|leftover"]
         expires_at, payload = decode_ttl_value(stored)
         assert payload == b"legacy-value"
-        assert expires_at == BASE_TS + 7 * DAY_MS
+        assert expires_at == BASE_TS + 30 * DAY_MS

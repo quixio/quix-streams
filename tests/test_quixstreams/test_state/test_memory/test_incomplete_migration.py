@@ -95,20 +95,21 @@ class TestMixedChangelogCompletion:
     ``TestMixedChangelogCompletion`` in
     ``test_rocksdb/test_incomplete_migration_recovery.py``."""
 
-    def test_leftover_legacy_completed_at_wallclock_expiry(
-        self, changelog_producer_mock
-    ):
+    def test_leftover_legacy_completed_at_cohort_expiry(self, changelog_producer_mock):
         """After a MIXED replay with ``legacy_records_ttl`` configured,
         ``complete_recovery()`` must stamp leftover legacy records with
-        ``wallclock_now + legacy_records_ttl``.
+        ``max(wallclock_now + legacy_records_ttl, max surviving stamp)``.
 
         Mirrors ``TestMixedChangelogCompletion.
-        test_leftover_legacy_completed_at_wallclock_expiry`` in
+        test_leftover_legacy_completed_at_cohort_expiry`` in
         ``test_rocksdb/test_incomplete_migration_recovery.py``.
 
-        The ``legacy_records_ttl`` config surface is wired into
-        ``MemoryStorePartition``, so the config-present completion path stamps
-        leftovers at ``wallclock_now + legacy_records_ttl``.
+        The survivors here are stamped 30 days out, so the cohort expiry beats the
+        configured 7-day window and the leftovers land on it: they expire WITH
+        their cohort. A wallclock-only expiry would sit below the survivors'
+        stamps, and since the sweep judges both on the EVENT-time high-water, any
+        live write in between would delete the leftovers while the survivors
+        lived on.
         """
         now_ms = 1_780_000_000_000
         legacy_ttl = timedelta(days=7)
@@ -139,7 +140,7 @@ class TestMixedChangelogCompletion:
 
         recovered.complete_recovery()
 
-        expected_expiry = now_ms + 7 * DAY_MS
+        expected_expiry = now_ms + 30 * DAY_MS
         decoded = _decode_default(recovered)
 
         # Leftover legacy records must have the correct finite expiry and

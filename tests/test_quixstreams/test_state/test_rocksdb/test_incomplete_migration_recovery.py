@@ -19,11 +19,14 @@ into the local-only ``__ttl_backfill_pending__`` CF (delete on stamped
 supersession); at end of recovery, if a stamped record was seen AND pending is
 non-empty, run a chunked completion backfill that stamps exactly the leftover keys
 at a uniform expiry and produces header-bearing stamped records, leaving the
-pending CF empty. Config-present → ``wallclock_now + legacy_records_ttl`` (the
-latest-record-wins recovery-drop filter, evaluated at rebuild). Config-absent →
-auto-finish at the survivor-derived default (the max surviving future stamp; the
-earlier reject behavior was removed). All-legacy / all-stamped changelogs do NOT
-enter completion.
+pending CF empty. Config-present → ``max(wallclock_now + legacy_records_ttl,
+max_surviving_stamp)``: the later of the two fully-formed expiries, so the
+leftovers expire WITH their stamped cohort and never before it. The sweep and the
+read filter judge them on the EVENT-time high-water, which replay never advances,
+so a wallclock-only expiry lets an event-ahead store sweep the leftovers while
+their cohort-mates live on. Config-absent → auto-finish at the survivor-derived
+default (the max surviving future stamp; the earlier reject behavior was
+removed). All-legacy / all-stamped changelogs do NOT enter completion.
 """
 
 from datetime import timedelta
@@ -111,9 +114,26 @@ def _captured_stamped_produces(changelog_producer_mock):
 
 
 class TestMixedChangelogCompletion:
-    def test_leftover_legacy_completed_at_wallclock_expiry(
+    def test_leftover_legacy_completed_at_cohort_expiry(
         self, store_partition_factory, changelog_producer_mock
     ):
+        """Completion stamps the leftovers at ``max(wallclock +
+        legacy_records_ttl, max surviving stamp)`` -- the later of the two
+        expiries, never a sum of the two.
+
+        The survivors here are stamped 30 days ahead of the rebuild wallclock, so
+        the cohort expiry (``now + 30d``) beats the configured ``now + 7d`` and
+        the leftovers join it exactly. They expire WITH their cohort: not before
+        it, and not a further ttl after it.
+
+        The earlier contract used the wallclock alone (``now + 7d``) and was
+        UNSAFE: both sweep paths and the read filter expire on the EVENT-time
+        ``_high_water_ms``, which replay never advances. Any live write between
+        ``now + 7d`` and ``now + 30d`` -- e.g. an event-ahead stream at
+        ``now + 10d`` -- swept the leftovers while all four survivors lived on,
+        so completion destroyed exactly the records it exists to preserve. See
+        ``test_completion_expiry_event_ahead.py`` for that asymmetry.
+        """
         now_ms = 1_780_000_000_000
         legacy_ttl = timedelta(days=7)
         # Stamped records far in the future so the recovery-drop filter keeps them.
@@ -136,10 +156,13 @@ class TestMixedChangelogCompletion:
         changelog_producer_mock.produce.reset_mock()
         recovered.complete_recovery()
 
-        expected_expiry = now_ms + 7 * DAY_MS
+        # The cohort expiry (now + 30d) beats the configured now + 7d, so the
+        # leftovers land ON it -- the same stamp their surviving cohort-mates
+        # carry, not a further ttl beyond it.
+        expected_expiry = now_ms + 30 * DAY_MS
         decoded = {k: decode_ttl_value(v) for k, v in _default_cf(recovered).items()}
 
-        # Leftovers now stamped at wallclock + ttl, with index entries.
+        # Leftovers now stamped at the cohort expiry, with index entries.
         index = _index_cf(recovered)
         for key, raw in legacy_values.items():
             assert decoded[key] == (expected_expiry, raw)
@@ -214,7 +237,9 @@ class TestMixedChangelogCompletion:
         legacy_ttl = timedelta(days=7)
         stamp_expiry = now_ms + 30 * DAY_MS
         msgs, legacy_values = _mixed_changelog(1, 5, stamp_expiry)
-        expected_expiry = now_ms + 7 * DAY_MS
+        # Cohort expiry: the surviving stamp (now + 30d) beats the configured
+        # now + 7d, so both completion passes must land on it.
+        expected_expiry = now_ms + 30 * DAY_MS
 
         # Pass 1: interrupt completion after the first chunk (chunk_size=2) by
         # capping the loop via a small chunk and stopping after one commit.
@@ -254,8 +279,9 @@ class TestMixedChangelogCompletion:
         completed = recovered.complete_recovery()  # noqa: F841 (returns None)
         decoded = {k: decode_ttl_value(v) for k, v in _default_cf(recovered).items()}
 
-        # Every leftover stamped exactly once at the wallclock expiry; no double
-        # wrap (decode would fail / expiry would differ on a double-wrap).
+        # Every leftover stamped exactly once at the cohort expiry; no double
+        # wrap (decode would fail / expiry would differ on a double-wrap). The
+        # resumed pass must derive the SAME value as the interrupted one.
         for key, raw in legacy_values.items():
             assert decoded[key] == (expected_expiry, raw)
         assert _pending_keys(recovered) == set()
