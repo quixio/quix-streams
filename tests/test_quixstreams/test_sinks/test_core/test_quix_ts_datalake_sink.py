@@ -1515,15 +1515,25 @@ class TestQuixTSDataLakeSinkColumnStats:
         stats = sink._compute_column_stats(table)
         assert set(stats.keys()) == {"speed"}
 
-    def test_safe_float_bounds_widen_for_large_ints(self, sink_factory):
+    @pytest.mark.parametrize("value", [2**53 + 1, 2**53 + 3])
+    def test_safe_float_bounds_widen_for_large_ints(self, sink_factory, value):
+        # Neither value is exactly representable as float64, and they round in
+        # OPPOSITE directions: 2**53+1 rounds DOWN (only _safe_float_max has to
+        # widen) and 2**53+3 rounds UP (only _safe_float_min has to). Covering
+        # both is what exercises both widening loops.
         sink = sink_factory()
-        # 2**53 + 1 is not exactly representable as float64 (rounds down).
-        v = 2**53 + 1
-        lo = sink._safe_float_min(v)
-        hi = sink._safe_float_max(v)
+        assert float(value) != value  # precondition: this value really is lossy
+
+        lo = sink._safe_float_min(value)
+        hi = sink._safe_float_max(value)
+
         # Stored bounds must ENCLOSE the true value so pruning never wrongly
-        # skips a file: lo <= v <= hi.
-        assert lo <= v <= hi
+        # skips a file holding matching rows.
+        assert lo <= value <= hi
+        # ...and STRICTLY bracket it: an unrepresentable int can equal neither
+        # bound, so a naive float() would have been wrong on one side. Without
+        # this the test would still pass if a widening loop were deleted.
+        assert lo < value < hi
 
     def test_write_attaches_column_stats_to_manifest_payload(
         self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
@@ -1629,6 +1639,75 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         vdf = pq.read_table(io.BytesIO(payload)).to_pandas()
         assert set(vdf["driver"]) == {"HAM", "VER"}
         assert set(vdf["year"]) == {"2024"}
+
+    # -- Durability of the sidecar lane -------------------------------------
+    # Both handlers below back an explicit promise in the sink: the virtual
+    # index is a HINT, not the data, so a sidecar failure is logged and never
+    # raised. write() retries a failed batch 3x, so "exactly one data upload"
+    # is also the assertion that no retry was triggered.
+
+    @staticmethod
+    def _split_futures(mock_blob_client, sidecar_future):
+        """Route .vidx uploads to `sidecar_future`, data uploads to a good one."""
+        ok = MagicMock()
+        ok.result.return_value = None
+
+        def route(key, _payload):
+            if "/.vidx/" in key:
+                if isinstance(sidecar_future, Exception):
+                    raise sidecar_future
+                return sidecar_future
+            return ok
+
+        mock_blob_client.put_object_async.side_effect = route
+
+    def _assert_data_write_unaffected(self, mock_blob_client, mock_catalog_client):
+        data, sidecars = self._uploads(mock_blob_client)
+        # Exactly one -> the data file landed AND write() did not retry.
+        assert len(data) == 1
+        manifest_calls = [
+            c for c in mock_catalog_client.post.call_args_list if "manifest" in str(c)
+        ]
+        assert len(manifest_calls) == 1
+        assert len(manifest_calls[0].kwargs["json"]["files"]) == 1
+        return data, sidecars
+
+    def test_sidecar_submit_failure_does_not_fail_the_write(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        # The sidecar upload CALL itself raises (_write_virtual_sidecar's except).
+        self._split_futures(mock_blob_client, RuntimeError("sidecar submit failed"))
+        sink = sink_factory(hive_columns=["year", "~driver"],
+                            catalog_url="http://catalog:8080")
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        sink.write(self._drivers_batch())  # must not raise
+
+        self._assert_data_write_unaffected(mock_blob_client, mock_catalog_client)
+        # Nothing was queued to await, so the tracking list is clean for next batch.
+        assert sink._pending_sidecar_futures == []
+
+    def test_sidecar_upload_failure_does_not_fail_the_write(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        # Submit succeeds; the future raises when awaited (_await_sidecar_uploads).
+        bad = MagicMock()
+        bad.result.side_effect = RuntimeError("sidecar upload failed")
+        self._split_futures(mock_blob_client, bad)
+        sink = sink_factory(hive_columns=["year", "~driver"],
+                            catalog_url="http://catalog:8080")
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        sink.write(self._drivers_batch())  # must not raise
+
+        _, sidecars = self._assert_data_write_unaffected(
+            mock_blob_client, mock_catalog_client)
+        assert len(sidecars) == 1   # it was submitted; only the await failed
+        bad.result.assert_called_once()
+        # Drained even though it failed — a stale future must not be re-awaited.
+        assert sink._pending_sidecar_futures == []
 
     def test_register_table_declares_virtual_partitions(
         self, sink_factory, mock_blob_client, mock_catalog_client
