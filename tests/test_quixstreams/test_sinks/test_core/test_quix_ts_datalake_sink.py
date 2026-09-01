@@ -900,7 +900,9 @@ class TestPartitionValidation:
         )
         sink._catalog = mock_catalog_client
 
-        table_metadata = {"partition_spec": ["year", "month", "driver"]}  # phys + virtual
+        table_metadata = {
+            "partition_spec": ["year", "month", "driver"]
+        }  # phys + virtual
         # Should NOT raise.
         sink._validate_partition_strategy(table_metadata)
 
@@ -1576,23 +1578,36 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         batch = SinkBatch(topic="test", partition=0)
         for r in records:
             batch.append(
-                value=r["value"], key=r["key"], timestamp=r["timestamp"],
-                headers=[], offset=r["offset"],
+                value=r["value"],
+                key=r["key"],
+                timestamp=r["timestamp"],
+                headers=[],
+                offset=r["offset"],
             )
         return batch
 
     def _drivers_batch(self):
         # Two drivers, same day -> would be one physical partition group.
-        return self._batch([
-            {"value": {"driver": "HAM", "speed": 100, "ts_ms": 1704067200000},
-             "key": "k1", "timestamp": 1704067200000, "offset": 0},
-            {"value": {"driver": "VER", "speed": 200, "ts_ms": 1704067200000},
-             "key": "k2", "timestamp": 1704067200000, "offset": 1},
-        ])
+        return self._batch(
+            [
+                {
+                    "value": {"driver": "HAM", "speed": 100, "ts_ms": 1704067200000},
+                    "key": "k1",
+                    "timestamp": 1704067200000,
+                    "offset": 0,
+                },
+                {
+                    "value": {"driver": "VER", "speed": 200, "ts_ms": 1704067200000},
+                    "key": "k2",
+                    "timestamp": 1704067200000,
+                    "offset": 1,
+                },
+            ]
+        )
 
     def test_tilde_prefix_parsing(self, sink_factory):
         sink = sink_factory(hive_columns=["year", "month", "~driver"])
-        assert sink.hive_columns == ["year", "month"]          # physical only
+        assert sink.hive_columns == ["year", "month"]  # physical only
         assert sink._virtual_columns == ["driver"]
         assert sink._partition_spec_order == ["year", "month", "driver"]
 
@@ -1618,12 +1633,14 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         assert len(data) == 1
         assert len(sidecars) == 1
 
-    def test_virtual_column_kept_in_data_physical_dropped(self, sink_factory, mock_blob_client):
+    def test_virtual_column_kept_in_data_physical_dropped(
+        self, sink_factory, mock_blob_client
+    ):
         sink = sink_factory(hive_columns=["year", "~driver"])
         sink.write(self._drivers_batch())
         data, _ = self._uploads(mock_blob_client)
         df = pq.read_table(io.BytesIO(data[0][0][1])).to_pandas()
-        assert "driver" in df.columns   # virtual column stays in the data
+        assert "driver" in df.columns  # virtual column stays in the data
         assert "year" not in df.columns  # physical partition column is foldered away
         assert set(df["driver"]) == {"HAM", "VER"}
 
@@ -1677,8 +1694,9 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
     ):
         # The sidecar upload CALL itself raises (_write_virtual_sidecar's except).
         self._split_futures(mock_blob_client, RuntimeError("sidecar submit failed"))
-        sink = sink_factory(hive_columns=["year", "~driver"],
-                            catalog_url="http://catalog:8080")
+        sink = sink_factory(
+            hive_columns=["year", "~driver"], catalog_url="http://catalog:8080"
+        )
         sink._catalog = mock_catalog_client
         sink.table_registered = True
 
@@ -1695,16 +1713,18 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         bad = MagicMock()
         bad.result.side_effect = RuntimeError("sidecar upload failed")
         self._split_futures(mock_blob_client, bad)
-        sink = sink_factory(hive_columns=["year", "~driver"],
-                            catalog_url="http://catalog:8080")
+        sink = sink_factory(
+            hive_columns=["year", "~driver"], catalog_url="http://catalog:8080"
+        )
         sink._catalog = mock_catalog_client
         sink.table_registered = True
 
         sink.write(self._drivers_batch())  # must not raise
 
         _, sidecars = self._assert_data_write_unaffected(
-            mock_blob_client, mock_catalog_client)
-        assert len(sidecars) == 1   # it was submitted; only the await failed
+            mock_blob_client, mock_catalog_client
+        )
+        assert len(sidecars) == 1  # it was submitted; only the await failed
         bad.result.assert_called_once()
         # Drained even though it failed — a stale future must not be re-awaited.
         assert sink._pending_sidecar_futures == []
@@ -1714,7 +1734,8 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
     ):
         sink = sink_factory(
             hive_columns=["year", "month", "~driver"],
-            catalog_url="http://catalog:8080", auto_discover=True,
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
         )
         sink._catalog = mock_catalog_client
         sink._register_table()
@@ -1728,8 +1749,10 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         self, sink_factory, mock_blob_client, mock_catalog_client
     ):
         sink = sink_factory(
-            timestamp_column="ts_ms", sort_column="seq",
-            catalog_url="http://catalog:8080", auto_discover=True,
+            timestamp_column="ts_ms",
+            sort_column="seq",
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
         )
         sink._catalog = mock_catalog_client
         sink._register_table()
@@ -1743,7 +1766,8 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
     ):
         sink = sink_factory(
             timestamp_column="ts_ms",
-            catalog_url="http://catalog:8080", auto_discover=True,
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
         )
         sink._catalog = mock_catalog_client
         sink._register_table()

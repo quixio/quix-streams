@@ -515,7 +515,11 @@ class QuixTSDataLakeSink(BatchingSink):
                 continue
 
             t = field.type
-            if pa.types.is_integer(t) or pa.types.is_floating(t) or pa.types.is_decimal(t):
+            if (
+                pa.types.is_integer(t)
+                or pa.types.is_floating(t)
+                or pa.types.is_decimal(t)
+            ):
                 vtype = "numeric"
             elif pa.types.is_timestamp(t) or pa.types.is_date(t):
                 vtype = "timestamp"
@@ -597,7 +601,9 @@ class QuixTSDataLakeSink(BatchingSink):
         # (navigation reads it via DuckDB) — the SOLE virtual index; nothing
         # virtual is sent to Postgres anymore. column_stats (zone maps) still go
         # to the catalog above.
-        self._write_virtual_sidecar(df, storage_key, partition_columns, partition_values)
+        self._write_virtual_sidecar(
+            df, storage_key, partition_columns, partition_values
+        )
 
     def _sidecar_key(self, storage_key: str) -> str:
         """Blob key of a data file's virtual-index sidecar: in a ``.vidx/``
@@ -611,8 +617,13 @@ class QuixTSDataLakeSink(BatchingSink):
         folder, _, basename = storage_key.rpartition("/")
         return f"{folder}/.vidx/{basename}" if folder else f".vidx/{basename}"
 
-    def _write_virtual_sidecar(self, df: pd.DataFrame, storage_key: str,
-                               partition_columns: List[str], partition_values: tuple):
+    def _write_virtual_sidecar(
+        self,
+        df: pd.DataFrame,
+        storage_key: str,
+        partition_columns: List[str],
+        partition_values: tuple,
+    ):
         """Write this data file's virtual-index sidecar Parquet to ``.vidx/``.
 
         Content: one row per DISTINCT tuple of the table's VIRTUAL columns present
@@ -641,9 +652,11 @@ class QuixTSDataLakeSink(BatchingSink):
             pq.write_table(pa.Table.from_pandas(vdf, preserve_index=False), buf)
             sidecar_key = self._sidecar_key(storage_key)
             future = self._blob_client.put_object_async(
-                sidecar_key, buf.getvalue().to_pybytes())
+                sidecar_key, buf.getvalue().to_pybytes()
+            )
             self._pending_sidecar_futures.append(
-                {"future": future, "key": sidecar_key, "row_count": len(vdf)})
+                {"future": future, "key": sidecar_key, "row_count": len(vdf)}
+            )
         except Exception as e:
             logger.warning("Failed to write virtual sidecar for %s: %s", storage_key, e)
 
@@ -700,9 +713,14 @@ class QuixTSDataLakeSink(BatchingSink):
                     item["future"].result()
                     ok += 1
                 except Exception as e:
-                    logger.warning("Virtual sidecar upload failed (%s): %s", item["key"], e)
-            logger.debug("Uploaded %d/%d virtual sidecar(s)", ok,
-                         len(self._pending_sidecar_futures))
+                    logger.warning(
+                        "Virtual sidecar upload failed (%s): %s", item["key"], e
+                    )
+            logger.debug(
+                "Uploaded %d/%d virtual sidecar(s)",
+                ok,
+                len(self._pending_sidecar_futures),
+            )
         finally:
             self._pending_sidecar_futures.clear()
 
