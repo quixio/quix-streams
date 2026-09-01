@@ -59,6 +59,108 @@ Records must be dictionaries. If your values are not dicts, convert them before 
 
 Blob credentials are read automatically from the `Quix__BlobStorage__Connection__Json` environment variable when running on Quix Cloud; for local runs, the filesystem is inferred from the `quixportal` configuration.
 
+## Partition Columns
+
+`hive_columns` accepts two kinds of entry.
+
+A plain entry is a **physical** partition. It becomes a real `key=value/` folder in storage, it groups the batch (each distinct value gets its own file), and the column is dropped from the Parquet data because its value is already in the path.
+
+An entry prefixed with `~` is a **virtual** partition. It appears in the partition tree and is filterable, but it gets no folder and does not split files — one file keeps every value of it. The column stays in the Parquet data so queries can still filter rows by it.
+
+```python
+sink = QuixTSDataLakeSink(
+    s3_prefix="data-lake/time-series",
+    table_name="telemetry",
+    hive_columns=["year", "month", "~driver"],
+    timestamp_column="ts_ms",
+)
+```
+
+That folders by `year=YYYY/month=MM/` and exposes `driver` as a third, virtual level:
+
+```
+data-lake/time-series/telemetry/year=2024/month=01/data_<uuid>.parquet        # every driver, one file
+data-lake/time-series/telemetry/year=2024/month=01/.vidx/data_<uuid>.parquet  # its virtual index
+```
+
+Use a virtual column when you want a value to be navigable and filterable but do not want it to fragment storage — high-cardinality identifiers such as a driver, device, or session are the typical case. A physical partition on the same column would produce one small file per value per batch.
+
+### The `.vidx` sidecar index
+
+Each data file gets a virtual-index sidecar Parquet written to a `.vidx/` subfolder of that file's own Hive partition folder. The sidecar holds one row per distinct tuple of the virtual columns present in the file, with the file's physical partition values added as constant columns — so a reader gets full (physical + virtual) tuples from the content alone, with no `hive_partitioning` needed:
+
+```sql
+SELECT DISTINCT driver
+FROM read_parquet('s3://bucket/data-lake/time-series/telemetry/*/*/.vidx/*.parquet')
+WHERE year = '2024' AND month = '01';
+```
+
+Sidecars are co-located with the data so compaction rewrites a partition's data and its index together, but the `.vidx` folder name carries no `key=value`, so partition discovery skips it and it never joins the data set.
+
+The sink writes one sidecar per data file, incrementally. On reindex or compaction the lakehouse collapses a folder's sidecars into a single consolidated `.vidx/index.parquet` holding the distinct tuples deduped across all of that folder's data files, so read paths should glob `.vidx/*.parquet` rather than assume either layout.
+
+The index is navigation-only — it is not used for query pruning, so it is a hint rather than data. Sidecar uploads are awaited alongside the data files (the tree is queryable as soon as the batch is acknowledged), but a sidecar failure is logged and never raised, and the index self-heals on the next write.
+
+### Catalog registration
+
+A physical-only table registers with an empty `partition_spec` and lets the catalog derive the spec from the first files' paths. As soon as any virtual column is configured, the spec cannot be discovered from paths, so the sink sends the full intended tree order up front and declares which entries are virtual in `properties.virtual_partitions`. On restart against an existing table, the sink validates against that same full order.
+
+### Caveats
+
+- A virtual column must be a field your records actually carry. Unlike a physical partition, it is not derived and not reconstructible from the path: reads use `hive_partitioning=true`, which rebuilds physical columns from `key=value/` folders but has nothing to rebuild a virtual column from. The column has to be in the Parquet data for `WHERE driver = 'HAM'` to resolve, and for the lakehouse's sidecar reindex to read its values back out.
+- For that reason `year`, `month`, `day`, and `hour` are supported as **physical** partitions only — they are derived from `timestamp_column`, so a virtual `~hour` would mean the sink inventing a column your records never contained. Use `hour`, not `~hour`; time-range pruning is already provided by the per-file statistics below.
+- A virtual column missing from a given batch is not an error. Files that lack it simply contribute nothing to the tree for that column.
+
+## File Statistics (Zone Maps)
+
+The sink computes per-file min/max statistics and sends them to the REST Catalog with each file as `column_stats`. The query layer uses them to skip files whose value range cannot satisfy a `WHERE` or `ORDER BY` on the column.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `stats_columns` | `Optional[List[str]]` | `None` | Columns to compute statistics for. `None` computes them for every numeric and timestamp column in each written file. Pass an explicit list to restrict the set. |
+
+Statistics are computed from the in-memory Arrow batch before serialization, so they cost a vectorized min/max over data that is already in memory — the Parquet footer is never re-read from storage.
+
+Each entry records `type` (`numeric` or `timestamp`), `min`, `max`, `null_count`, and `value_count` (non-null rows). Integer, float, and decimal columns are reported as `numeric` with float bounds; timestamp and date columns as `timestamp` with ISO-8601 bounds.
+
+Skipped automatically: the internal `__key` column, anything that is neither numeric nor temporal (strings, structs), and all-null columns — an all-null column has no usable bound, so omitting it leaves the file unpruned rather than wrongly pruned. When no column qualifies, the `column_stats` key is omitted from the manifest entry entirely, so older catalogs simply ignore the absent field.
+
+Numeric bounds are widened outward to the nearest representable float (`min` rounds down, `max` rounds up). This guarantees the stored range is a superset of the real one, so float rounding of large integers — nanosecond epochs beyond 2^53, for example — can only cost some pruning and can never wrongly skip a file that holds matching rows.
+
+The default is deliberate: statistics are nearly free to compute here, and they benefit any range query. Restrict `stats_columns` when a table is wide enough that per-file, per-column stats rows become a meaningful cost in the catalog:
+
+```python
+sink = QuixTSDataLakeSink(
+    s3_prefix="data-lake/time-series",
+    table_name="wide_telemetry",
+    hive_columns=["year", "month", "day"],
+    timestamp_column="ts_ms",
+    stats_columns=["ts_ms"],          # 400-column table: only index the time column
+    catalog_url="https://iceberg-catalog.example.com",
+)
+```
+
+## Sort Column
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `sort_column` | `Optional[str]` | `None` | Column recorded on the table as `properties.sort_column`, which compaction orders files by. When `None`, the lakehouse falls back to `timestamp_column`. |
+
+Compaction writes files ordered by this column so that `ORDER BY` and time-range queries can skip files and stream results instead of sorting the whole table. The sink records `properties.timestamp_column` on every registration and adds `properties.sort_column` only when you set it explicitly, so the fallback stays available.
+
+This parameter is table metadata for the lakehouse to act on. The sink itself does not reorder rows within a file.
+
+```python
+sink = QuixTSDataLakeSink(
+    s3_prefix="data-lake/time-series",
+    table_name="sensor_readings",
+    hive_columns=["year", "month", "day"],
+    timestamp_column="ts_ms",
+    sort_column="seq",                # order by sequence number, not wall clock
+    catalog_url="https://iceberg-catalog.example.com",
+)
+```
+
 ## Per-Key Silence Detection
 
 The sink can detect when individual Kafka message keys go quiet and fire a callback for each one. The canonical use case is sensor drop-out detection: if `sensor-a` stops publishing while `sensor-b` continues, the callback fires only for `sensor-a`.

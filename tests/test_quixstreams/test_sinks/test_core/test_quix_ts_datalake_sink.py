@@ -13,6 +13,7 @@ from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
@@ -199,6 +200,7 @@ class TestQuixTSDataLakeSinkInit:
             workspace_id="ws-123",
             hive_columns=["year", "month", "day"],
             timestamp_column="event_time",
+            sort_column="seq",
             catalog_url="http://catalog:8080",
             catalog_auth_token="token123",
             auto_discover=False,
@@ -211,6 +213,7 @@ class TestQuixTSDataLakeSinkInit:
         assert sink.workspace_id == "ws-123"
         assert sink.hive_columns == ["year", "month", "day"]
         assert sink.timestamp_column == "event_time"
+        assert sink.sort_column == "seq"
         assert sink._catalog is not None
         assert sink.auto_discover is False
         assert sink.namespace == "production"
@@ -882,6 +885,27 @@ class TestPartitionValidation:
         with pytest.raises(ValueError, match="Partition strategy mismatch"):
             sink._validate_partition_strategy(table_metadata)
 
+    def test_validate_catalog_partition_matches_with_virtual_on_restart(
+        self, sink_factory, mock_catalog_client
+    ):
+        """RESTART to an existing virtual-partitioned table must NOT raise.
+
+        The catalog stores the full spec (physical + virtual) as the sink
+        registers it; validation must compare against the full tree order, not
+        the physical-only hive_columns (which previously caused a spurious
+        'Partition strategy mismatch' on every restart of a ~-virtual sink)."""
+        sink = sink_factory(
+            hive_columns=["year", "month", "~driver"],
+            catalog_url="http://catalog:8080",
+        )
+        sink._catalog = mock_catalog_client
+
+        table_metadata = {
+            "partition_spec": ["year", "month", "driver"]
+        }  # phys + virtual
+        # Should NOT raise.
+        sink._validate_partition_strategy(table_metadata)
+
 
 # =============================================================================
 # 6. Catalog Integration Tests
@@ -1425,3 +1449,331 @@ class TestStreamTimeoutWiring:
         sink._timeout.check_now()
         sink._timeout.start()
         sink._timeout.stop()
+
+
+# =============================================================================
+# Column statistics (per-file min/max zone maps for query-time pruning)
+# =============================================================================
+
+
+class TestQuixTSDataLakeSinkColumnStats:
+    """Tests for per-file min/max stats computed in the sink."""
+
+    def test_compute_column_stats_numeric_and_timestamp(self, sink_factory):
+        sink = sink_factory()
+        table = pa.table(
+            {
+                "speed": pa.array([100, 50, 300], type=pa.int64()),
+                "temp": pa.array([1.5, 2.5, None], type=pa.float64()),
+                "ts": pa.array(
+                    [
+                        datetime(2026, 1, 1, tzinfo=timezone.utc),
+                        datetime(2026, 1, 3, tzinfo=timezone.utc),
+                        datetime(2026, 1, 2, tzinfo=timezone.utc),
+                    ]
+                ),
+                "name": pa.array(["a", "b", "c"]),  # string -> skipped
+                "__key": pa.array(["k1", "k2", "k3"]),  # internal -> skipped
+            }
+        )
+
+        stats = sink._compute_column_stats(table)
+
+        # String and internal columns are not tracked.
+        assert set(stats.keys()) == {"speed", "temp", "ts"}
+
+        assert stats["speed"] == {
+            "type": "numeric",
+            "min": 50.0,
+            "max": 300.0,
+            "null_count": 0,
+            "value_count": 3,
+        }
+        # One null in temp: min/max ignore it, counts reflect it.
+        assert stats["temp"]["type"] == "numeric"
+        assert stats["temp"]["min"] == 1.5
+        assert stats["temp"]["max"] == 2.5
+        assert stats["temp"]["null_count"] == 1
+        assert stats["temp"]["value_count"] == 2
+
+        assert stats["ts"]["type"] == "timestamp"
+        # ISO-8601 bounds, min/max by time (not input order).
+        assert stats["ts"]["min"].startswith("2026-01-01")
+        assert stats["ts"]["max"].startswith("2026-01-03")
+
+    def test_all_null_numeric_column_is_skipped(self, sink_factory):
+        sink = sink_factory()
+        table = pa.table({"x": pa.array([None, None], type=pa.float64())})
+        assert sink._compute_column_stats(table) == {}
+
+    def test_stats_columns_restricts_the_tracked_set(self, sink_factory):
+        sink = sink_factory(stats_columns=["speed"])
+        table = pa.table(
+            {
+                "speed": pa.array([1, 2], type=pa.int64()),
+                "temp": pa.array([1.0, 2.0], type=pa.float64()),
+            }
+        )
+        stats = sink._compute_column_stats(table)
+        assert set(stats.keys()) == {"speed"}
+
+    @pytest.mark.parametrize("value", [2**53 + 1, 2**53 + 3])
+    def test_safe_float_bounds_widen_for_large_ints(self, sink_factory, value):
+        # Neither value is exactly representable as float64, and they round in
+        # OPPOSITE directions: 2**53+1 rounds DOWN (only _safe_float_max has to
+        # widen) and 2**53+3 rounds UP (only _safe_float_min has to). Covering
+        # both is what exercises both widening loops.
+        sink = sink_factory()
+        assert float(value) != value  # precondition: this value really is lossy
+
+        lo = sink._safe_float_min(value)
+        hi = sink._safe_float_max(value)
+
+        # Stored bounds must ENCLOSE the true value so pruning never wrongly
+        # skips a file holding matching rows.
+        assert lo <= value <= hi
+        # ...and STRICTLY bracket it: an unrepresentable int can equal neither
+        # bound, so a naive float() would have been wrong on one side. Without
+        # this the test would still pass if a widening loop were deleted.
+        assert lo < value < hi
+
+    def test_write_attaches_column_stats_to_manifest_payload(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        sink.write(sample_batch())
+
+        manifest_calls = [
+            call
+            for call in mock_catalog_client.post.call_args_list
+            if "manifest" in str(call)
+        ]
+        assert len(manifest_calls) == 1
+        files = manifest_calls[0].kwargs["json"]["files"]
+        assert len(files) == 1
+        cs = files[0]["column_stats"]
+
+        # Numeric data columns get zone maps; the string column and the
+        # internal __key column do not.
+        assert "field2" in cs and cs["field2"]["type"] == "numeric"
+        assert cs["field2"]["min"] == 100.0
+        assert cs["field2"]["max"] == 200.0
+        assert "ts_ms" in cs and cs["ts_ms"]["type"] == "numeric"
+        assert "field1" not in cs
+        assert "__key" not in cs
+
+
+# =============================================================================
+# Virtual partition columns (~ prefix): navigate/filter without foldering/splitting
+# =============================================================================
+
+
+class TestQuixTSDataLakeSinkVirtualPartitions:
+    """Tests for ~-prefixed virtual partition columns."""
+
+    def _batch(self, records):
+        batch = SinkBatch(topic="test", partition=0)
+        for r in records:
+            batch.append(
+                value=r["value"],
+                key=r["key"],
+                timestamp=r["timestamp"],
+                headers=[],
+                offset=r["offset"],
+            )
+        return batch
+
+    def _drivers_batch(self):
+        # Two drivers, same day -> would be one physical partition group.
+        return self._batch(
+            [
+                {
+                    "value": {"driver": "HAM", "speed": 100, "ts_ms": 1704067200000},
+                    "key": "k1",
+                    "timestamp": 1704067200000,
+                    "offset": 0,
+                },
+                {
+                    "value": {"driver": "VER", "speed": 200, "ts_ms": 1704067200000},
+                    "key": "k2",
+                    "timestamp": 1704067200000,
+                    "offset": 1,
+                },
+            ]
+        )
+
+    def test_tilde_prefix_parsing(self, sink_factory):
+        sink = sink_factory(hive_columns=["year", "month", "~driver"])
+        assert sink.hive_columns == ["year", "month"]  # physical only
+        assert sink._virtual_columns == ["driver"]
+        assert sink._partition_spec_order == ["year", "month", "driver"]
+
+    @staticmethod
+    def _uploads(mock_blob_client):
+        """Split put_object_async calls into (data files, .vidx sidecars).
+
+        Every data file is accompanied by a virtual-index sidecar upload, so a
+        raw ``call_count`` conflates the two. Assertions about file *splitting*
+        must look at data files only.
+        """
+        calls = mock_blob_client.put_object_async.call_args_list
+        data = [c for c in calls if "/.vidx/" not in c[0][0]]
+        sidecars = [c for c in calls if "/.vidx/" in c[0][0]]
+        return data, sidecars
+
+    def test_virtual_column_does_not_split_files(self, sink_factory, mock_blob_client):
+        # physical=year, virtual=driver: two drivers in one year -> ONE data file,
+        # plus its .vidx sidecar (metadata, not a data split).
+        sink = sink_factory(hive_columns=["year", "~driver"])
+        sink.write(self._drivers_batch())
+        data, sidecars = self._uploads(mock_blob_client)
+        assert len(data) == 1
+        assert len(sidecars) == 1
+
+    def test_virtual_column_kept_in_data_physical_dropped(
+        self, sink_factory, mock_blob_client
+    ):
+        sink = sink_factory(hive_columns=["year", "~driver"])
+        sink.write(self._drivers_batch())
+        data, _ = self._uploads(mock_blob_client)
+        df = pq.read_table(io.BytesIO(data[0][0][1])).to_pandas()
+        assert "driver" in df.columns  # virtual column stays in the data
+        assert "year" not in df.columns  # physical partition column is foldered away
+        assert set(df["driver"]) == {"HAM", "VER"}
+
+    def test_sidecar_carries_full_partition_tuple(self, sink_factory, mock_blob_client):
+        # The sidecar holds one row per distinct VIRTUAL tuple, with the file's
+        # PHYSICAL partition values added as constant columns, so a reader gets
+        # the full tuple without hive_partitioning.
+        sink = sink_factory(hive_columns=["year", "~driver"])
+        sink.write(self._drivers_batch())
+        _, sidecars = self._uploads(mock_blob_client)
+        key, payload = sidecars[0][0]
+        assert "/.vidx/" in key
+        vdf = pq.read_table(io.BytesIO(payload)).to_pandas()
+        assert set(vdf["driver"]) == {"HAM", "VER"}
+        assert set(vdf["year"]) == {"2024"}
+
+    # -- Durability of the sidecar lane -------------------------------------
+    # Both handlers below back an explicit promise in the sink: the virtual
+    # index is a HINT, not the data, so a sidecar failure is logged and never
+    # raised. write() retries a failed batch 3x, so "exactly one data upload"
+    # is also the assertion that no retry was triggered.
+
+    @staticmethod
+    def _split_futures(mock_blob_client, sidecar_future):
+        """Route .vidx uploads to `sidecar_future`, data uploads to a good one."""
+        ok = MagicMock()
+        ok.result.return_value = None
+
+        def route(key, _payload):
+            if "/.vidx/" in key:
+                if isinstance(sidecar_future, Exception):
+                    raise sidecar_future
+                return sidecar_future
+            return ok
+
+        mock_blob_client.put_object_async.side_effect = route
+
+    def _assert_data_write_unaffected(self, mock_blob_client, mock_catalog_client):
+        data, sidecars = self._uploads(mock_blob_client)
+        # Exactly one -> the data file landed AND write() did not retry.
+        assert len(data) == 1
+        manifest_calls = [
+            c for c in mock_catalog_client.post.call_args_list if "manifest" in str(c)
+        ]
+        assert len(manifest_calls) == 1
+        assert len(manifest_calls[0].kwargs["json"]["files"]) == 1
+        return data, sidecars
+
+    def test_sidecar_submit_failure_does_not_fail_the_write(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        # The sidecar upload CALL itself raises (_write_virtual_sidecar's except).
+        self._split_futures(mock_blob_client, RuntimeError("sidecar submit failed"))
+        sink = sink_factory(
+            hive_columns=["year", "~driver"], catalog_url="http://catalog:8080"
+        )
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        sink.write(self._drivers_batch())  # must not raise
+
+        self._assert_data_write_unaffected(mock_blob_client, mock_catalog_client)
+        # Nothing was queued to await, so the tracking list is clean for next batch.
+        assert sink._pending_sidecar_futures == []
+
+    def test_sidecar_upload_failure_does_not_fail_the_write(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        # Submit succeeds; the future raises when awaited (_await_sidecar_uploads).
+        bad = MagicMock()
+        bad.result.side_effect = RuntimeError("sidecar upload failed")
+        self._split_futures(mock_blob_client, bad)
+        sink = sink_factory(
+            hive_columns=["year", "~driver"], catalog_url="http://catalog:8080"
+        )
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        sink.write(self._drivers_batch())  # must not raise
+
+        _, sidecars = self._assert_data_write_unaffected(
+            mock_blob_client, mock_catalog_client
+        )
+        assert len(sidecars) == 1  # it was submitted; only the await failed
+        bad.result.assert_called_once()
+        # Drained even though it failed — a stale future must not be re-awaited.
+        assert sink._pending_sidecar_futures == []
+
+    def test_register_table_declares_virtual_partitions(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(
+            hive_columns=["year", "month", "~driver"],
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink._register_table()
+
+        body = mock_catalog_client.put.call_args.kwargs["json"]
+        # Full tree order sent up front (virtual can't be discovered from paths).
+        assert body["partition_spec"] == ["year", "month", "driver"]
+        assert body["properties"]["virtual_partitions"] == ["driver"]
+
+    def test_register_table_records_sort_and_timestamp_columns(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(
+            timestamp_column="ts_ms",
+            sort_column="seq",
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink._register_table()
+
+        props = mock_catalog_client.put.call_args.kwargs["json"]["properties"]
+        assert props["sort_column"] == "seq"
+        assert props["timestamp_column"] == "ts_ms"
+
+    def test_register_table_omits_sort_column_when_unset(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(
+            timestamp_column="ts_ms",
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink._register_table()
+
+        props = mock_catalog_client.put.call_args.kwargs["json"]["properties"]
+        # No explicit sort_column -> omitted so the lakehouse falls back to the
+        # timestamp column (which is still recorded).
+        assert "sort_column" not in props
+        assert props["timestamp_column"] == "ts_ms"
