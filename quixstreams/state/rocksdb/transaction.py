@@ -562,20 +562,21 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
         raw_bytes = cast(bytes, raw)
 
-        # A value shorter than the stamp prefix cannot be a real stamp AND
-        # cannot carry a stripped payload — preserve the existing
-        # ``ValueError → UNDEFINED`` handling (treat as missing) rather than
-        # returning a sub-stamp blob raw. This branch is unchanged from before
-        # the fail-safe decode (decode_ttl_value raised only for len < 8).
-        if len(raw_bytes) < TTL_STAMP_BYTES:
-            return Marker.UNDEFINED
-
         # Fail-safe decode: only
         # strip the 8-byte stamp when a strict validator confirms the prefix is
         # a real stamp. A genuine un-stamped legacy value in a flipped partition
-        # (the live-incident corruption: a long JSON value whose first 8 bytes
-        # are NOT a plausible stamp) must NOT be mis-stripped — degrade by
-        # returning it RAW (treat as never-expires), log once, never corrupt.
+        # (the live-incident corruption: a JSON value whose first 8 bytes are NOT
+        # a plausible stamp) must NOT be mis-stripped — degrade by returning it
+        # RAW (treat as never-expires), log once, never corrupt.
+        #
+        # A value SHORTER than the 8-byte prefix routes here too, and must: it
+        # cannot be a stamp, so it is necessarily an un-stamped legacy payload —
+        # precisely the class this fail-safe protects. ``_safe_decode_stamp``
+        # already returns None for ``len < TTL_STAMP_BYTES``, so short values
+        # degrade raw alongside long ones. An earlier length check used to return
+        # ``Marker.UNDEFINED`` here, silently reading every sub-8-byte legacy
+        # survivor (``1``, ``true``, ``null``, ``"ab"``) back as MISSING while its
+        # long counterpart survived.
         decoded = _safe_decode_stamp(raw_bytes)
         if decoded is None:
             # Warn once PER PARTITION: the guard lives on the

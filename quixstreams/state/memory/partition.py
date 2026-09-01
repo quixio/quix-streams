@@ -47,7 +47,6 @@ from quixstreams.state.rocksdb.transaction import _safe_decode_stamp, _ttl_to_ms
 from quixstreams.state.rocksdb.ttl_codec import (
     _MAX_PLAUSIBLE_STAMP_MS,
     SENTINEL_NEVER,
-    TTL_STAMP_BYTES,
     clamp_additive_expiry,
     decode_index_key,
     decode_ttl_value,
@@ -2274,15 +2273,18 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             return raw
 
         raw_bytes = cast(bytes, raw)
-        if len(raw_bytes) < TTL_STAMP_BYTES:
-            return Marker.UNDEFINED
 
         # Fail-safe decode through the strict validator, mirroring
         # ``RocksDBPartitionTransaction._get_bytes``: only strip the
         # 8-byte stamp when it robustly looks like one. A value that does not
         # validate (raw legacy value, zero/out-of-range prefix) degrades to raw
         # (never-expires) rather than being mis-stripped or mis-expired, so reads,
-        # the sweep, and recovery all agree.
+        # the sweep, and recovery all agree. A value SHORTER than the prefix
+        # routes here too and must: it cannot be a stamp, so it is necessarily an
+        # un-stamped legacy payload — the class this fail-safe protects.
+        # ``_safe_decode_stamp`` already returns None below the 8-byte prefix;
+        # an earlier length check returned ``Marker.UNDEFINED`` instead, losing
+        # every sub-8-byte legacy survivor while its long counterpart survived.
         decoded = _safe_decode_stamp(raw_bytes)
         if decoded is None:
             # Warn once per PARTITION, not per checkpoint tx.
