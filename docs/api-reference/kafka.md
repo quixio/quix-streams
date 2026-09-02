@@ -117,6 +117,26 @@ Polls the producer for events and calls `on_delivery` callbacks.
 - `timeout`: poll timeout seconds; Default: 0 (unlike others)
 > NOTE: -1 will hang indefinitely if there are no messages to acknowledge
 
+<a id="quixstreams.kafka.producer.Producer.instantiated"></a>
+
+<br><br>
+
+#### Producer.instantiated
+
+```python
+@property
+def instantiated() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L225)
+
+Whether the underlying confluent producer has been created.
+
+It is created lazily on first use, so this stays ``False`` for a
+producer that never produced — callers can use it to skip teardown
+work (e.g. a shutdown ``flush()``) without spinning up a librdkafka
+handle just to flush nothing.
+
 <a id="quixstreams.kafka.producer.Producer.flush"></a>
 
 <br><br>
@@ -127,7 +147,7 @@ Polls the producer for events and calls `on_delivery` callbacks.
 def flush(timeout: Optional[float] = None) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L247)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L259)
 
 Wait for all messages in the Producer queue to be delivered.
 
@@ -154,7 +174,7 @@ number of messages remaining to flush
 def purge()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L260)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L272)
 
 Purge messages currently handled by the producer instance.
 
@@ -174,7 +194,7 @@ why swallowing those errors is safe.
 def raise_if_broker_unavailable(timeout: float)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L347)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L359)
 
 Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
 
