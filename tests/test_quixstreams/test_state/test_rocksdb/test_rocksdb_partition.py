@@ -337,7 +337,10 @@ class TestRocksDBStorePartition:
                 options=RocksDBOptions(open_max_retries=2, open_retry_backoff=0.0),
             )
         try:
-            assert len(calls) == 2, "the failed listing should have been retried"
+            # >= 2: the listing was retried. Not an equality — a TTL-enabled
+            # partition probes its column families again after opening, so the
+            # total call count is not a measure of the open path.
+            assert len(calls) >= 2, "the failed listing should have been retried"
             with reopened.begin() as tx:
                 assert tx.get("key", prefix=b"__key__") == "value"
         finally:
@@ -410,7 +413,9 @@ class TestRocksDBStorePartition:
         with patch.object(Rdict, "list_cf", staticmethod(_stale_once)):
             reopened = store_partition_factory("db")
         try:
-            assert len(calls) == 2, "the stale list should have been re-read"
+            # >= 2 for the same reason as above: post-open TTL probes also
+            # call list_cf, so only the lower bound describes the open.
+            assert len(calls) >= 2, "the stale list should have been re-read"
             with reopened.begin() as tx:
                 assert tx.get("key", prefix=b"__key__") == "value"
         finally:

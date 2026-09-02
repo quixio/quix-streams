@@ -1,5 +1,6 @@
 import dataclasses
 import threading
+from datetime import timedelta
 from typing import Dict, Mapping, Optional
 
 import rocksdict
@@ -88,7 +89,81 @@ class RocksDBOptions(RocksDBOptionsType):
         increase per-flush latency but let the sweep keep up with higher
         steady-state expiration rates. Only meaningful for TTL-enabled
         stores; ignored otherwise.
-        Default - ``10_000``.
+
+        This is the sweep's throughput dial, and it is the one to reach for:
+        the drain rate is ``max_evictions_per_flush / commit_interval``, but a
+        checkpoint's cost is mostly *fixed* (a producer flush barrier plus an
+        offset commit, milliseconds against a remote broker), so shrinking
+        ``commit_interval`` buys no drain speed and starves message processing.
+        Raise this instead.
+
+        **Interaction with the producer queue.** Each eviction produces one
+        changelog tombstone (see ``ttl_changelog_tombstones``), so a sweep can
+        enqueue far more records than librdkafka's
+        ``queue.buffering.max.messages`` (default ``100_000``) would appear to
+        allow. In practice it does not, because ``Producer.produce()`` polls
+        after every produce, so against a live broker the queue is a rolling
+        window rather than an accumulator: enqueueing ``150_000`` tombstones was
+        measured to peak at a queue depth of **~6,800 (6.8% of the default)**,
+        with the checkpoint's producer flush completing in ~4ms. The drain rate
+        governs, not the queue depth.
+
+        Two situations still bound it: the peak depth scales with
+        partitions-per-process (roughly ~15 partitions sweeping concurrently at
+        that depth would approach the default cap, so raise
+        ``queue.buffering.max.messages`` for high partition counts), and a broker
+        that is not draining at all will raise ``BufferError`` once the queue
+        genuinely fills — though by then the application has larger problems.
+        ``queue.buffering.max.kbytes`` (~1 GB default) is a second cap that binds
+        first for multi-KB records.
+        Default - ``150_000``. Measured on one partition against a live broker: a
+        full ``150_000``-eviction sweep completed in **1.12s** (index scan 0.31s,
+        produces 0.53s, flush 0.004s, commit 0.27s) — a ~268x margin under a 300s
+        ``max.poll.interval.ms``. The original ``10_000`` sustained only ~300
+        evictions/s once checkpoints grew, which loses the race against expiry
+        and lets the store grow without bound.
+    :param legacy_records_ttl: expiry for pre-existing records when enabling
+        TTL on a **populated** legacy store that already holds un-stamped
+        records. When ``None`` (the default), the migration still completes:
+        the pre-existing records are backfilled using the ttl the service
+        itself uses (the max ``ttl=`` in the triggering flush) and a WARNING
+        names the implicit value. When set to a strictly positive
+        ``timedelta``, that value is used instead: the partition **backfills**
+        its pre-existing un-stamped records with a uniform expiry of
+        ``high_water + legacy_records_ttl`` (event-time high-water at the
+        enable moment) and flips into TTL mode in place — no state deletion.
+        New records keep getting their true event-time expiry. The backfill
+        runs exactly once; a redeploy / restart never re-runs it. Ignored for
+        windowed / timestamped stores (they opt out of the TTL stamp
+        machinery at the class level). Must be strictly positive if set;
+        ``<= 0`` raises ``ValueError`` at construction.
+        Default - ``None``.
+    :param legacy_backfill_chunk_size: number of pre-existing records re-stamped
+        per write-batch during the one-time legacy backfill (see
+        ``legacy_records_ttl``). The backfill iterates the populated default CF
+        in chunks of this size; each chunk is re-stamped, produced to the
+        changelog, flushed, and committed before the next chunk is read, so peak
+        transient memory is bounded to one chunk regardless of total store size.
+        Lower it on memory-constrained deployments. Only meaningful on the single
+        backfilling flush; ignored otherwise and on windowed / timestamped
+        stores. Must be strictly positive; ``<= 0`` raises ``ValueError`` at
+        construction.
+        Default - ``150_000``. Raising it mainly reduces the number of confirming
+        flushes (one broker round-trip each), whose fixed cost otherwise dominates
+        a large backfill; the producer-queue note under
+        ``max_evictions_per_flush`` applies here too.
+    :param ttl_changelog_tombstones: when ``True`` (the default), TTL-driven
+        evictions are also produced to the changelog as tombstones
+        (``value=None``) so log compaction physically reclaims expired keys in
+        step with the local store — ``cleanup.policy=compact`` alone then shrinks
+        the changelog as keys expire (no ``delete`` policy / retention tuning
+        needed to reclaim). When ``False``, evictions are local-only (the
+        pre-change behavior): the changelog keeps each expired key's last record
+        until compacted by other means, and rebuilds rely on the read-time
+        expiry filter. Read-time consistency is identical either way. Only
+        meaningful for TTL-enabled stores; ignored for windowed / timestamped
+        stores and for no-``ttl=`` workloads.
+        Default - ``True``.
 
     Please see `rocksdict.Options` for a complete description of other options.
     """
@@ -109,7 +184,55 @@ class RocksDBOptions(RocksDBOptionsType):
     open_retry_backoff: float = 3.0
     use_fsync: bool = True
     on_corrupted_recreate: bool = True
-    max_evictions_per_flush: int = 10_000
+    max_evictions_per_flush: int = 150_000
+    legacy_records_ttl: Optional[timedelta] = None
+    legacy_backfill_chunk_size: int = 150_000
+    ttl_changelog_tombstones: bool = True
+
+    def __post_init__(self) -> None:
+        if self.legacy_records_ttl is not None and self.legacy_records_ttl <= timedelta(
+            0
+        ):
+            raise ValueError(
+                "legacy_records_ttl must be a strictly positive timedelta or "
+                f"None, got {self.legacy_records_ttl!r}"
+            )
+        if self.legacy_records_ttl is not None:
+            # Symmetric upper bound: the backfill expiry is
+            # ``enable_time + legacy_records_ttl`` and ``enable_time`` is unknown
+            # at config time, so bound the ttl magnitude itself. A ttl of
+            # ~31,600 years would derive a backfill stamp above
+            # ``_MAX_PLAUSIBLE_STAMP_MS`` that the read validator refuses on every
+            # read (permanently unreadable). Reject the ``timedelta.max`` /
+            # unit-mistake config here, before it can produce such a stamp. Local
+            # imports mirror the codebase's circular-import avoidance (options is
+            # imported early by the rocksdb package).
+            from .transaction import _ttl_to_ms
+            from .ttl_codec import _MAX_PLAUSIBLE_STAMP_MS
+
+            if _ttl_to_ms(self.legacy_records_ttl) >= _MAX_PLAUSIBLE_STAMP_MS:
+                raise ValueError(
+                    "legacy_records_ttl is implausibly large "
+                    f"({self.legacy_records_ttl!r}): its millisecond magnitude "
+                    f"({_ttl_to_ms(self.legacy_records_ttl)}) meets or exceeds "
+                    f"the maximum representable TTL stamp ({_MAX_PLAUSIBLE_STAMP_MS}"
+                    "), so the derived backfill expiry would be unreadable. Use a "
+                    "ttl below ~31,600 years (check for a unit mistake)."
+                )
+        if self.legacy_backfill_chunk_size <= 0:
+            raise ValueError(
+                "legacy_backfill_chunk_size must be a strictly positive int, "
+                f"got {self.legacy_backfill_chunk_size!r}"
+            )
+        if self.max_evictions_per_flush <= 0:
+            # A 0/negative cap silently disables the per-flush
+            # TTL sweep AND the tombstone reclamation that rides on it, so expired
+            # records accumulate unbounded with no error. Reject at construction,
+            # mirroring the other bound checks above.
+            raise ValueError(
+                "max_evictions_per_flush must be a strictly positive int, "
+                f"got {self.max_evictions_per_flush!r}"
+            )
 
     def to_options(self) -> rocksdict.Options:
         """

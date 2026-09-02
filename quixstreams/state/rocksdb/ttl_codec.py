@@ -29,6 +29,7 @@ __all__ = (
     "encode_index_key",
     "decode_index_key",
     "is_sentinel",
+    "clamp_additive_expiry",
 )
 
 
@@ -46,10 +47,68 @@ TTL_STAMP_BYTES = _stamp_packer.size
 # ``stamp <= now`` read-time filter for any plausible event-time clock.
 SENTINEL_NEVER: int = 0xFFFFFFFFFFFFFFFF
 
+# Inclusive bounds of the unsigned 8-byte stamp domain. ``_stamp_pack`` is a
+# ``>Q`` (unsigned) packer, so anything outside ``[0, 2**64-1]`` raises a raw
+# ``struct.error``. ``SENTINEL_NEVER`` is the upper bound and stays valid.
+_MIN_STAMP = 0
+_MAX_STAMP = 0xFFFFFFFFFFFFFFFF
+
+# Upper bound (exclusive) for a "plausible" epoch-ms expiry stamp: ~year 33658,
+# far beyond any realistic event-time clock. Single source of truth for the
+# read-side strict validator (``_safe_decode_stamp``), the write-side
+# ``_compute_stamp`` reject (both backends), and ``RocksDBOptions`` validation,
+# so a stamp that encodes fine (``< 2**64-1``) but exceeds this bound can never
+# be written — such a value is refused symmetrically at write time rather than
+# becoming a permanently-unreadable record. Lives here (with the codec) because
+# the read-side validator conceptually belongs with the codec.
+_MAX_PLAUSIBLE_STAMP_MS = 10**15
+
 
 def is_sentinel(stamp: int) -> bool:
     """Return ``True`` if ``stamp`` is the never-expires sentinel."""
     return stamp == SENTINEL_NEVER
+
+
+def clamp_additive_expiry(expiry_ms: int) -> int:
+    """
+    Clamp an *additive* legacy-backfill / recovery-completion expiry
+    (``enable_time + ttl``) to :data:`SENTINEL_NEVER` when it would land
+    ``>= _MAX_PLAUSIBLE_STAMP_MS`` and therefore be refused by the read-side
+    strict validator (``_safe_decode_stamp``) on every subsequent read.
+
+    The per-write ``_compute_stamp`` path *rejects* an implausible stamp — there
+    it is a caller error. The backfill / completion paths instead derive the
+    expiry additively from an operator-supplied ``legacy_records_ttl`` (or the
+    batch-implicit ttl) plus the enable-time high-water, so an individually
+    plausible ttl can still sum past the readable bound. Rejecting there would
+    strand the entire migration (and every legacy record with it); instead the
+    record is kept never-expiring — still readable, and never mass-deleted,
+    honoring the no-state-reset guarantee. Callers emit a WARN when the clamp
+    fires. Returns ``expiry_ms`` unchanged when it is already below the bound.
+    """
+    if expiry_ms >= _MAX_PLAUSIBLE_STAMP_MS:
+        return SENTINEL_NEVER
+    return expiry_ms
+
+
+def _check_stamp_range(expires_at_ms: int) -> None:
+    """Reject a stamp outside the unsigned 8-byte domain with a descriptive
+    ``ValueError`` BEFORE it reaches the ``>Q`` packer.
+
+    A negative expiry (Kafka ``NO_TIMESTAMP = -1`` / pre-epoch event-time flowing
+    through ``timestamp + ttl``) or an out-of-range value would otherwise raise a
+    bare ``struct.error`` that recurs on every replay of the offending record — a
+    crash-loop with no diagnosable cause. Callers that compute expiries
+    (``_compute_stamp``) reject negatives earlier; this is defense-in-depth so any
+    future caller gets a named, catchable error naming the offending value.
+    """
+    if not (_MIN_STAMP <= expires_at_ms <= _MAX_STAMP):
+        raise ValueError(
+            f"TTL expiry stamp {expires_at_ms} is outside the valid unsigned "
+            f"8-byte range [{_MIN_STAMP}, {_MAX_STAMP}]; a negative expiry "
+            "(e.g. from a pre-epoch event-time or Kafka NO_TIMESTAMP) or an "
+            "out-of-range value cannot be encoded."
+        )
 
 
 def encode_ttl_value(expires_at_ms: int, value: bytes) -> bytes:
@@ -60,7 +119,9 @@ def encode_ttl_value(expires_at_ms: int, value: bytes) -> bytes:
         :data:`SENTINEL_NEVER` for entries that should never expire.
     :param value: already-serialized value bytes.
     :return: stamped blob suitable for writing to the main CF.
+    :raises ValueError: if ``expires_at_ms`` is outside ``[0, 2**64-1]``.
     """
+    _check_stamp_range(expires_at_ms)
     return _stamp_pack(expires_at_ms) + value
 
 
@@ -97,7 +158,9 @@ def encode_index_key(expires_at_ms: int, user_key: bytes) -> bytes:
     :param user_key: serialized user key (already prefix-encoded by the
         transaction layer).
     :return: index-CF key bytes.
+    :raises ValueError: if ``expires_at_ms`` is outside ``[0, 2**64-1]``.
     """
+    _check_stamp_range(expires_at_ms)
     return _stamp_pack(expires_at_ms) + user_key
 
 

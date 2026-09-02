@@ -221,6 +221,18 @@ class Producer:
     def transactional(self) -> bool:
         return self._transactional
 
+    @property
+    def instantiated(self) -> bool:
+        """
+        Whether the underlying confluent producer has been created.
+
+        It is created lazily on first use, so this stays ``False`` for a
+        producer that never produced — callers can use it to skip teardown
+        work (e.g. a shutdown ``flush()``) without spinning up a librdkafka
+        handle just to flush nothing.
+        """
+        return self._inner_producer is not None
+
     @ensure_transactional
     def begin_transaction(self):
         self._producer.begin_transaction()
