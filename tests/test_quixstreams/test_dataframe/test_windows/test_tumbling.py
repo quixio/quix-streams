@@ -16,6 +16,7 @@ def tumbling_window_definition_factory(state_manager, dataframe_factory):
         grace_ms: int = 0,
         before_update=None,
         after_update=None,
+        close_on_idle: bool = False,
     ) -> TumblingTimeWindowDefinition:
         sdf = dataframe_factory(
             state_manager=state_manager, registry=DataFrameRegistry()
@@ -26,6 +27,7 @@ def tumbling_window_definition_factory(state_manager, dataframe_factory):
             dataframe=sdf,
             before_update=before_update,
             after_update=after_update,
+            close_on_idle=close_on_idle,
         )
         return window_def
 
@@ -1395,3 +1397,94 @@ class TestCountTumblingWindow:
             )
             assert expired[0][1]["value"] == [4, 5, 6]
             assert len(updated) == 0
+
+
+class TestTumblingWindowCloseOnIdle:
+    def test_expire_idle_closes_window_on_wall_clock(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        # A single message opens window [0, 100). No further messages arrive, so
+        # event time never advances past the window end. With close_on_idle the
+        # wall clock alone closes the window once it passes window_end + grace.
+        window_def = tumbling_window_definition_factory(
+            duration_ms=100, grace_ms=0, close_on_idle=True
+        )
+        window = window_def.sum()
+        window.final(closing_strategy="partition")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+
+        with store.start_partition_transaction(0) as tx:
+            updated, expired = process(
+                window, value=1, key=b"key", transaction=tx, timestamp_ms=50
+            )
+            assert len(updated) == 1
+            assert not expired  # window still open, no message advanced event time
+
+            # Wall clock has not reached window_end yet -> still open.
+            assert list(window.expire_idle(tx, now_ms=99)) == []
+
+            # Wall clock passes window_end (grace=0) -> window closes on its own.
+            idle_expired = list(window.expire_idle(tx, now_ms=100))
+            assert len(idle_expired) == 1
+            assert idle_expired[0][1]["value"] == 1
+            assert idle_expired[0][1]["start"] == 0
+            assert idle_expired[0][1]["end"] == 100
+
+    def test_expire_idle_respects_grace(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        window_def = tumbling_window_definition_factory(
+            duration_ms=100, grace_ms=10, close_on_idle=True
+        )
+        window = window_def.sum()
+        window.final(closing_strategy="partition")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+
+        with store.start_partition_transaction(0) as tx:
+            process(window, value=5, key=b"key", transaction=tx, timestamp_ms=50)
+
+            # window_end=100, grace=10 -> closes only once now_ms >= 110.
+            assert list(window.expire_idle(tx, now_ms=105)) == []
+            idle_expired = list(window.expire_idle(tx, now_ms=110))
+            assert len(idle_expired) == 1
+            assert idle_expired[0][1]["value"] == 5
+            assert idle_expired[0][1]["end"] == 100
+
+    def test_expire_idle_noop_when_disabled(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        # Default close_on_idle=False -> expire_idle never closes anything.
+        window_def = tumbling_window_definition_factory(duration_ms=100, grace_ms=0)
+        window = window_def.sum()
+        window.final(closing_strategy="partition")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+
+        with store.start_partition_transaction(0) as tx:
+            process(window, value=1, key=b"key", transaction=tx, timestamp_ms=50)
+            assert list(window.expire_idle(tx, now_ms=10_000)) == []
+
+    def test_close_on_idle_requires_partition_strategy(
+        self, tumbling_window_definition_factory
+    ):
+        window_def = tumbling_window_definition_factory(
+            duration_ms=100, close_on_idle=True
+        )
+        window = window_def.sum()
+        with pytest.raises(ValueError, match='closing_strategy="partition"'):
+            window.final(closing_strategy="key")
+
+    def test_close_on_idle_rejected_by_current(
+        self, tumbling_window_definition_factory
+    ):
+        window_def = tumbling_window_definition_factory(
+            duration_ms=100, close_on_idle=True
+        )
+        window = window_def.sum()
+        with pytest.raises(ValueError, match="only supported with final"):
+            window.current(closing_strategy="partition")
