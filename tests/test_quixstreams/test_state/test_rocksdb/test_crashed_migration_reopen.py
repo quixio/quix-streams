@@ -167,6 +167,7 @@ def _strip_ttl_evidence(partition) -> None:
         TTL_BACKFILL_STAMPED_CF_NAME,
         TTL_SYSTEM_CF_NAME,
         TTL_INDEX_CF_NAME,
+        TTL_ADOPT_BACKUP_CF_NAME,
     ):
         partition._drop_local_cf_if_exists(cf_name)
     batch = WriteBatch(raw_mode=True)
@@ -181,10 +182,13 @@ def _strip_ttl_evidence(partition) -> None:
     ):
         batch.delete(key, handle)
     partition._write(batch)
-    # Both open-time classifiers must now see nothing: no warm-preview signal
-    # (which would flip via case 2) and no migration bookkeeping (case 3).
+    # All three open-time classifiers must now see nothing: no warm-preview
+    # signal (which would flip via case 2), no migration bookkeeping (case 3),
+    # and no v3.24.0-adoption bookkeeping (which would arm the legacy-read guard
+    # even though nothing flips).
     assert partition._has_warm_ttl_artifacts() is False
     assert partition._migration_artifacts_at_open() == ""
+    assert partition._v3240_adopt_artifacts_at_open() == ""
 
 
 def _flip_flag(partition):
@@ -796,4 +800,3 @@ class TestMigrationBlocksLiveProcessing:
         ]
         assert data_resumes, events
         assert min(data_resumes) > completed_at, events
-

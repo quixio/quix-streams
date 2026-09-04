@@ -489,7 +489,9 @@ class RocksDBStorePartition(StorePartition):
 
         # Warm/cold classification + rollback resolution, evaluated at
         # open BEFORE the persisted-flip snapshot. Five outcomes:
-        #  1. rollback set on a provisionally cold-adopted store -> restore legacy;
+        #  1. rollback set on a provisionally cold-adopted store -> restore legacy
+        #     (and, since the restore keeps the adopted originals byte-identical,
+        #     arm the legacy-read guard below on the adoption artifacts);
         #  2. warm TTL artifacts present but the ``__ttl_enabled__`` flag is absent
         #     (a preview that kept ``__ttl_index__`` / a format marker without the
         #     flag) -> deterministic in-place flip (sound positive ID);
