@@ -1,0 +1,1370 @@
+diff --git a/tests/test_quixstreams/fixtures.py b/tests/test_quixstreams/fixtures.py
+index 6f42537a..91865793 100644
+--- a/tests/test_quixstreams/fixtures.py
++++ b/tests/test_quixstreams/fixtures.py
+@@ -1,7 +1,7 @@
+ import uuid
+ from concurrent.futures import ThreadPoolExecutor
+ from typing import Optional, Literal, Union
+-from unittest.mock import create_autospec
++from unittest.mock import create_autospec, patch
+ 
+ import pytest
+ from confluent_kafka.admin import (
+@@ -43,7 +43,8 @@ from quixstreams.platforms.quix.config import (
+ )
+ from quixstreams.rowconsumer import RowConsumer
+ from quixstreams.rowproducer import RowProducer
+-from quixstreams.state import StateStoreManager, ChangelogManager
++from quixstreams.state import StateStoreManager
++from quixstreams.state.changelog import ChangelogManager, RecoveryManager
+ from quixstreams.topic_manager import TopicManager
+ 
+ 
+@@ -326,17 +327,34 @@ def state_manager(state_manager_factory) -> StateStoreManager:
+ 
+ 
+ @pytest.fixture()
+-def changelog_manager_factory(topic_manager_factory, row_producer_factory):
++def changelog_manager_factory(
++    topic_manager_factory,
++    row_producer_factory,
++    row_consumer_factory,
++):
+     def factory(
+-        admin: Optional[Admin] = None, producer: RowProducer = row_producer_factory()
++        admin: Optional[Admin] = None,
++        producer: RowProducer = row_producer_factory(),
++        recovery_manager: Optional[RecoveryManager] = None,
+     ):
+-        return ChangelogManager(
+-            topic_manager=topic_manager_factory(admin=admin), producer=producer
++        changelog_manager = ChangelogManager(
++            topic_manager=topic_manager_factory(admin=admin),
++            producer=producer,
++            consumer=row_consumer_factory(),
+         )
++        if recovery_manager:
++            changelog_manager._recovery_manager = recovery_manager
++        return changelog_manager
+ 
+     return factory
+ 
+ 
++@pytest.fixture()
++def changelog_manager_mock_recovery(changelog_manager_factory):
++    with patch("quixstreams.state.changelog.RecoveryManager", spec=RecoveryManager):
++        return changelog_manager_factory()
++
++
+ @pytest.fixture()
+ def state_manager_changelogs(
+     state_manager_factory, admin, changelog_manager_factory
+@@ -350,7 +368,66 @@ def state_manager_changelogs(
+ 
+ 
+ @pytest.fixture()
+-def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
++def quix_mock_config_builder_factory(kafka_container):
++    def factory(workspace_id: Optional[str] = None):
++        if not workspace_id:
++            workspace_id = "my_ws"
++        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
++        cfg_builder._workspace_id = workspace_id
++        cfg_builder.workspace_id = workspace_id
++        cfg_builder.get_confluent_broker_config.side_effect = lambda: {
++            "bootstrap.servers": kafka_container.broker_address
++        }
++        # Slight change to ws stuff in case you pass a blank workspace (which makes
++        #  some things easier
++        cfg_builder.prepend_workspace_id.side_effect = (
++            lambda s: prepend_workspace_id(workspace_id, s) if workspace_id else s
++        )
++        cfg_builder.strip_workspace_id_prefix.side_effect = (
++            lambda s: strip_workspace_id_prefix(workspace_id, s) if workspace_id else s
++        )
++        return cfg_builder
++
++    return factory
++
++
++@pytest.fixture()
++def quix_topic_manager_factory(quix_mock_config_builder_factory, topic_manager_factory):
++    """
++    Allows for creating topics with a test cluster while keeping the workspace aspects
++    """
++
++    def factory(admin: Optional[Admin] = None, workspace_id: Optional[str] = None):
++        topic_manager = topic_manager_factory(admin)
++        quix_topic_manager = topic_manager_factory(admin).Quix(
++            quix_config_builder=quix_mock_config_builder_factory(
++                workspace_id=workspace_id
++            )
++        )
++        quix_topic_manager._create_topics = topic_manager._create_topics
++        patcher = patch.object(quix_topic_manager, "_topic_replication", 1)
++        patcher.start()
++        return quix_topic_manager
++
++    return factory
++
++
++@pytest.fixture()
++def quix_app_factory(
++    random_consumer_group,
++    kafka_container,
++    tmp_path,
++    admin,
++    quix_mock_config_builder_factory,
++    quix_topic_manager_factory,
++):
++    """
++    For doing testing with Application.Quix() against a local cluster.
++
++    Almost all behavior is standard, except the quix_config_builder is mocked out, and
++    thus topic creation is handled with the Admin client.
++    """
++
+     def factory(
+         auto_offset_reset: AutoOffsetReset = "latest",
+         consumer_extra_config: Optional[dict] = None,
+@@ -363,27 +440,15 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
+         auto_create_topics: bool = True,
+         use_changelog_topics: bool = True,
+         topic_validation: Optional[Literal["exists", "required", "all"]] = None,
+-        topic_manager: Optional[TopicManager] = None,
+         workspace_id: str = "my_ws",
+     ) -> Application:
+-        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+-        cfg_builder._workspace_id = workspace_id
+-        cfg_builder.workspace_id = workspace_id
+-        cfg_builder.get_confluent_broker_config.side_effect = lambda: {
+-            "bootstrap.servers": kafka_container.broker_address
+-        }
+-        cfg_builder.prepend_workspace_id.side_effect = lambda s: prepend_workspace_id(
+-            workspace_id, s
+-        )
+-        cfg_builder.strip_workspace_id_prefix.side_effect = (
+-            lambda s: strip_workspace_id_prefix(workspace_id, s)
+-        )
+         state_dir = state_dir or (tmp_path / "state").absolute()
+-
+         return Application.Quix(
+             consumer_group=random_consumer_group,
+             state_dir=state_dir,
+-            quix_config_builder=cfg_builder,
++            quix_config_builder=quix_mock_config_builder_factory(
++                workspace_id=workspace_id
++            ),
+             auto_offset_reset=auto_offset_reset,
+             consumer_extra_config=consumer_extra_config,
+             producer_extra_config=producer_extra_config,
+@@ -394,7 +459,9 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
+             auto_create_topics=auto_create_topics,
+             use_changelog_topics=use_changelog_topics,
+             topic_validation=topic_validation,
+-            topic_manager=topic_manager,
++            topic_manager=quix_topic_manager_factory(
++                admin=admin, workspace_id=workspace_id
++            ),
+         )
+ 
+     return factory
+@@ -454,7 +521,6 @@ def topic_manager_topic_factory(topic_manager_admin_factory):
+             "value_deserializer": value_deserializer,
+             "config": topic_manager.topic_config(num_partitions=partitions),
+         }
+-        topic_manager = topic_manager_admin_factory()
+         topic = topic_manager.topic(
+             name, **{k: v for k, v in topic_args.items() if v is not None}
+         )
+diff --git a/tests/test_quixstreams/test_app.py b/tests/test_quixstreams/test_app.py
+index a28048de..1be3fa5d 100644
+--- a/tests/test_quixstreams/test_app.py
++++ b/tests/test_quixstreams/test_app.py
+@@ -428,17 +428,22 @@ class TestQuixApplication:
+         """
+         app = quix_app_factory()
+         builder = app._quix_config_builder
++        topic_manager = app._topic_manager
+ 
+         initial_topic_name = "input_topic"
++        topic_partitions = 5
+         topic = app.topic(
+             initial_topic_name,
+-            config=app.topic_config(name="billy bob", num_partitions=5),
++            config=app.topic_config(name="billy bob", num_partitions=topic_partitions),
+         )
+         expected_name = f"{builder.workspace_id}-{initial_topic_name}"
++        expected_topic = topic_manager.topics[expected_name]
+         assert topic.name == expected_name
+-        assert expected_name in app._topic_manager.topics
+-        assert app._topic_manager.topics[expected_name].config.replication_factor == 2
+-        assert app._topic_manager.topics[expected_name].config.num_partitions == 5
++        assert expected_name in topic_manager.topics
++        assert (
++            expected_topic.config.replication_factor == topic_manager._topic_replication
++        )
++        assert expected_topic.config.num_partitions == topic_partitions
+ 
+     def test_quix_app_stateful_quix_deployment_no_state_management_warning(
+         self, quix_app_factory, monkeypatch, topic_factory, executor
+@@ -448,9 +453,8 @@ class TestQuixApplication:
+         runs on Quix (the "Quix__Deployment__Id" env var is set),
+         but the "State Management" flag is disabled for the deployment.
+         """
+-        topic_name, _ = topic_factory()
+-        app = quix_app_factory(workspace_id="")
+-        topic = app.topic(topic_name)
++        app = quix_app_factory()
++        topic = app.topic(str(uuid.uuid4()))
+         sdf = app.dataframe(topic)
+         sdf = sdf.apply(lambda x, state: x, stateful=True)
+ 
+@@ -462,8 +466,9 @@ class TestQuixApplication:
+             QuixEnvironment.STATE_MANAGEMENT_ENABLED,
+             "",
+         )
++
+         with pytest.warns(RuntimeWarning) as warned:
+-            executor.submit(_stop_app_on_timeout, app, 5.0)
++            executor.submit(_stop_app_on_timeout, app, 10.0)
+             app.run(sdf)
+ 
+         warning = str(warned.list[0].message)
+diff --git a/tests/test_quixstreams/test_models/fixtures.py b/tests/test_quixstreams/test_models/fixtures.py
+index 462b34bd..c126fc26 100644
+--- a/tests/test_quixstreams/test_models/fixtures.py
++++ b/tests/test_quixstreams/test_models/fixtures.py
+@@ -5,7 +5,7 @@ from typing import Mapping, Union, List, Any
+ 
+ import pytest
+ 
+-from .utils import ConfluentKafkaMessageStub
++from ..utils import ConfluentKafkaMessageStub
+ 
+ 
+ @pytest.fixture()
+diff --git a/tests/test_quixstreams/test_models/test_topics.py b/tests/test_quixstreams/test_models/test_topics.py
+index d93773d2..c4f9e69d 100644
+--- a/tests/test_quixstreams/test_models/test_topics.py
++++ b/tests/test_quixstreams/test_models/test_topics.py
+@@ -22,7 +22,8 @@ from quixstreams.models.serializers import (
+     SERIALIZERS,
+     DESERIALIZERS,
+ )
+-from .utils import ConfluentKafkaMessageStub, int_to_bytes, float_to_bytes
++from .utils import int_to_bytes, float_to_bytes
++from ..utils import ConfluentKafkaMessageStub
+ 
+ 
+ class JSONListDeserializer(JSONDeserializer):
+diff --git a/tests/test_quixstreams/test_models/utils.py b/tests/test_quixstreams/test_models/utils.py
+index 0422867c..f365e65f 100644
+--- a/tests/test_quixstreams/test_models/utils.py
++++ b/tests/test_quixstreams/test_models/utils.py
+@@ -1,5 +1,4 @@
+ import struct
+-from typing import Optional, List, Tuple, Union
+ 
+ 
+ def float_to_bytes(value: float) -> bytes:
+@@ -8,65 +7,3 @@ def float_to_bytes(value: float) -> bytes:
+ 
+ def int_to_bytes(value: int) -> bytes:
+     return struct.pack(">i", value)
+-
+-
+-class ConfluentKafkaMessageStub:
+-    """
+-    A stub object to mock `confluent_kafka.Message`.
+-
+-    Instances of `confluent_kafka.Message` cannot be directly created from Python,
+-    see https://github.com/confluentinc/confluent-kafka-python/issues/1535.
+-
+-    """
+-
+-    def __init__(
+-        self,
+-        topic: str = "test",
+-        partition: int = 0,
+-        offset: int = 0,
+-        timestamp: Tuple[int, int] = (1, 123),
+-        key: bytes = None,
+-        value: bytes = None,
+-        headers: Optional[List[Tuple[str, bytes]]] = None,
+-        latency: float = None,
+-        leader_epoch: int = None,
+-    ):
+-        self._topic = topic
+-        self._partition = partition
+-        self._offset = offset
+-        self._timestamp = timestamp
+-        self._key = key
+-        self._value = value
+-        self._headers = headers
+-        self._latency = latency
+-        self._leader_epoch = leader_epoch
+-
+-    def headers(self, *args, **kwargs) -> Optional[List[Tuple[str, bytes]]]:
+-        return self._headers
+-
+-    def key(self, *args, **kwargs) -> Optional[Union[str, bytes]]:
+-        return self._key
+-
+-    def offset(self, *args, **kwargs) -> int:
+-        return self._offset
+-
+-    def partition(self, *args, **kwargs) -> int:
+-        return self._partition
+-
+-    def timestamp(self, *args, **kwargs) -> (int, int):
+-        return self._timestamp
+-
+-    def topic(self, *args, **kwargs) -> str:
+-        return self._topic
+-
+-    def value(self, *args, **kwargs) -> Optional[Union[str, bytes]]:
+-        return self._value
+-
+-    def latency(self, *args, **kwargs) -> Optional[float]:
+-        return self._latency
+-
+-    def leader_epoch(self, *args, **kwargs) -> Optional[int]:
+-        return self._leader_epoch
+-
+-    def __len__(self) -> int:
+-        return len(self._value)
+diff --git a/tests/test_quixstreams/test_state/fixtures.py b/tests/test_quixstreams/test_state/fixtures.py
+index af26e0d0..e660b799 100644
+--- a/tests/test_quixstreams/test_state/fixtures.py
++++ b/tests/test_quixstreams/test_state/fixtures.py
+@@ -2,10 +2,11 @@ import pytest
+ import uuid
+ 
+ from typing import Optional
+-from unittest.mock import patch
++from unittest.mock import patch, create_autospec
+ 
+-from quixstreams.kafka.admin import Admin
+-from quixstreams.state.changelog import ChangelogWriter
++from quixstreams.kafka import Admin, Consumer
++from quixstreams.state.changelog import RecoveryPartition, RecoveryManager
++from quixstreams.state.types import StorePartition
+ 
+ 
+ @pytest.fixture()
+@@ -49,3 +50,23 @@ def changelog_writer_patched(changelog_writer_factory):
+ @pytest.fixture()
+ def changelog_writer_with_changelog(changelog_writer_factory, admin):
+     return changelog_writer_factory(admin=admin)
++
++
++@pytest.fixture()
++def recovery_partition_store_mock(rocksdb_store_factory):
++    topic = str(uuid.uuid4())
++    store = create_autospec(StorePartition)()
++    store.get_changelog_offset.return_value = 15
++    recovery_partition = RecoveryPartition(
++        topic=topic, changelog=f"changelog__{topic}", partition=0, store_partition=store
++    )
++    recovery_partition._changelog_lowwater = 10
++    recovery_partition._changelog_highwater = 20
++    return recovery_partition
++
++
++@pytest.fixture()
++def recovery_manager_mock_consumer():
++    return RecoveryManager(
++        consumer=create_autospec(Consumer)("broker", "group", "latest")
++    )
+diff --git a/tests/test_quixstreams/test_state/test_changelog.py b/tests/test_quixstreams/test_state/test_changelog.py
+index 76423983..11099636 100644
+--- a/tests/test_quixstreams/test_state/test_changelog.py
++++ b/tests/test_quixstreams/test_state/test_changelog.py
+@@ -1,11 +1,72 @@
+-from unittest.mock import patch
++from unittest.mock import patch, create_autospec, call
+ 
++import pytest
+ import uuid
++
+ from quixstreams.state.changelog import (
+-    ChangelogManager,
+     ChangelogWriter,
++    RecoveryPartition,
++    ConfluentPartition,
+ )
++from quixstreams.state.types import StorePartition
+ from quixstreams.topic_manager import BytesTopic
++from ..utils import ConfluentKafkaMessageStub
++
++
++class TestRecoveryPartition:
++    def test_set_watermarks(self, recovery_partition_store_mock):
++        recovery_partition = recovery_partition_store_mock
++        recovery_partition.set_watermarks(50, 100)
++        assert recovery_partition._changelog_lowwater == 50
++        assert recovery_partition._changelog_highwater == 100
++
++    def test_needs_recovery(self, recovery_partition_store_mock):
++        recovery_partition = recovery_partition_store_mock
++        assert recovery_partition.needs_recovery
++
++    def test_needs_recovery_caught_up(self, recovery_partition_store_mock):
++        recovery_partition = recovery_partition_store_mock
++        recovery_partition.store_partition.get_changelog_offset.return_value = 20
++        assert not recovery_partition_store_mock.needs_recovery
++
++    def test_needs_recovery_no_valid_offsets(self, recovery_partition_store_mock):
++        recovery_partition = recovery_partition_store_mock
++        recovery_partition.set_watermarks(100, 100)
++        assert not recovery_partition.needs_recovery
++        assert recovery_partition.needs_offset_update
++
++    def test_recover(self, recovery_partition_store_mock):
++        recovery_partition = recovery_partition_store_mock
++        msg = ConfluentKafkaMessageStub()
++        recovery_partition.recover(msg)
++        recovery_partition.store_partition.recover.assert_called_with(
++            changelog_message=msg
++        )
++
++    def test_update_offset(self, recovery_partition_store_mock):
++        recovery_partition = recovery_partition_store_mock
++        with patch.object(
++            recovery_partition, "OffsetUpdate", spec=recovery_partition.OffsetUpdate
++        ) as offset_update:
++            recovery_partition.update_offset()
++        offset_update.assert_called_with(recovery_partition.offset)
++        assert isinstance(
++            recovery_partition.store_partition.set_changelog_offset.call_args_list[
++                0
++            ].kwargs["changelog_message"],
++            recovery_partition.OffsetUpdate,
++        )
++
++    def test_update_offset_warn(self, recovery_partition_store_mock):
++        recovery_partition = recovery_partition_store_mock
++        recovery_partition.store_partition.get_changelog_offset.return_value = (
++            recovery_partition._changelog_highwater + 1
++        )
++        with patch.object(
++            recovery_partition, "_warn_bad_offset", spec=recovery_partition.OffsetUpdate
++        ) as warn:
++            recovery_partition.update_offset()
++        warn.assert_called()
+ 
+ 
+ class TestChangelogWriter:
+@@ -45,11 +106,9 @@ class TestChangelogWriter:
+ 
+ 
+ class TestChangelogManager:
+-    def test_add_changelog(self, topic_manager_factory, row_producer_factory):
+-        topic_manager = topic_manager_factory()
+-        changelog_manager = ChangelogManager(
+-            topic_manager=topic_manager, producer=row_producer_factory()
+-        )
++    def test_add_changelog(self, changelog_manager_factory):
++        changelog_manager = changelog_manager_factory()
++        topic_manager = changelog_manager._topic_manager
+         kwargs = dict(
+             source_topic_name="my_source_topic",
+             suffix="my_suffix",
+@@ -59,12 +118,10 @@ class TestChangelogManager:
+             changelog_manager.add_changelog(**kwargs)
+         make_changelog.assert_called_with(**kwargs)
+ 
+-    def test_get_writer(self, topic_manager_factory, row_producer_factory):
+-        topic_manager = topic_manager_factory()
++    def test_get_writer(self, row_producer_factory, changelog_manager_factory):
+         producer = row_producer_factory()
+-        changelog_manager = ChangelogManager(
+-            topic_manager=topic_manager, producer=producer
+-        )
++        changelog_manager = changelog_manager_factory(producer=producer)
++        topic_manager = changelog_manager._topic_manager
+ 
+         topic_name = "my_topic"
+         suffix = "my_suffix"
+@@ -79,3 +136,547 @@ class TestChangelogManager:
+         assert writer._topic == changelog_topic
+         assert writer._partition_num == p_num
+         assert writer._producer == producer
++
++    def test_assign_partition(self, changelog_manager_mock_recovery):
++        source_topic = "topic_a"
++        suffixes = ["default", "rolling_10s"]
++        partition = 1
++        changelog_manager = changelog_manager_mock_recovery
++        topic_manager = changelog_manager._topic_manager
++        recovery_manager = changelog_manager._recovery_manager
++
++        topic_manager.topic(source_topic)
++        calls = []
++        suffix_partitions = {}
++        changelog_partitions = {}
++        for suffix in suffixes:
++            changelog = topic_manager.changelog_topic(
++                source_topic_name=source_topic, suffix=suffix, consumer_group="group"
++            )
++            suffix_partitions[suffix] = create_autospec(StorePartition)()
++            changelog_partitions[changelog.name] = suffix_partitions[suffix]
++
++        changelog_manager.assign_partition(
++            source_topic_name=source_topic,
++            partition=partition,
++            store_partitions=suffix_partitions,
++        )
++
++        recovery_manager.assign_partitions.assert_called_with(
++            source_topic_name=source_topic,
++            partition=partition,
++            store_partitions=changelog_partitions,
++        )
++
++    def test_revoke_partition(self, changelog_manager_mock_recovery):
++        source_topic = "topic_a"
++        suffixes = ["default", "rolling-10s"]
++        partition = 1
++        changelog_manager = changelog_manager_mock_recovery
++        topic_manager = changelog_manager._topic_manager
++        recovery_manager = changelog_manager._recovery_manager
++
++        topic_manager.topic(source_topic)
++        for s in suffixes:
++            topic_manager.changelog_topic(
++                source_topic_name=source_topic, suffix=s, consumer_group="group"
++            )
++
++        changelog_manager.revoke_partition(
++            source_topic_name=source_topic,
++            partition=partition,
++        )
++        calls = [
++            call(
++                topic=source_topic,
++                partition=partition,
++            )
++        ]
++        recovery_manager.revoke_partitions.assert_has_calls(calls)
++
++    def test_do_recovery(self, changelog_manager_mock_recovery):
++        changelog_manager = changelog_manager_mock_recovery
++        recovery_manager = changelog_manager._recovery_manager
++
++        changelog_manager.do_recovery()
++        recovery_manager.do_recovery.assert_called()
++
++
++class TestRecoveryManager:
++    def test_assign_partitions(self, recovery_manager_mock_consumer):
++        """
++        Assign a topic partition and queue up its respective changelog partitions for
++        assignment.
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}"
++        partition_num = 1
++        store_partition = create_autospec(StorePartition)()
++        recovery_manager.assign_partitions(
++            source_topic_name=source_topic,
++            partition=partition_num,
++            store_partitions={changelog: store_partition},
++        )
++
++        assert recovery_manager._recovery_method == recovery_manager._rebalance
++        assert len(recovery_manager._pending_assigns) == 1
++        recovery_partition = recovery_manager._pending_assigns[0]
++        expected_confluent_partition = recovery_partition.topic_partition
++        assert isinstance(recovery_partition, RecoveryPartition)
++        assert recovery_partition.topic == source_topic
++        assert recovery_partition.changelog == changelog
++        assert recovery_partition.partition == partition_num
++        assert recovery_partition.store_partition == store_partition
++
++        assign_call = consumer.incremental_assign.call_args_list[0].args
++        assert len(assign_call) == 1
++        assert isinstance(assign_call[0], list)
++        assert len(assign_call[0]) == 1
++        assert isinstance(assign_call[0][0], ConfluentPartition)
++        assert expected_confluent_partition.topic == assign_call[0][0].topic
++        assert expected_confluent_partition.partition == assign_call[0][0].partition
++
++        pause_call = consumer.pause.call_args_list[0].args
++        assert len(pause_call) == 1
++        assert isinstance(pause_call[0], list)
++        assert len(pause_call[0]) == 1
++        assert isinstance(pause_call[0][0], ConfluentPartition)
++        assert expected_confluent_partition.topic == pause_call[0][0].topic
++        assert expected_confluent_partition.partition == pause_call[0][0].partition
++
++    def test_revoke_partitions(self, recovery_manager_mock_consumer):
++        """
++        Revoke a topic partition and queue up its respective changelog partitions (that
++        are currently recovering) for revoking.
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}"
++        partition_num = 1
++        store_partition = create_autospec(StorePartition)()
++        recovery_manager._partitions = {
++            partition_num: {
++                changelog: RecoveryPartition(
++                    topic=source_topic,
++                    changelog=changelog,
++                    partition=partition_num,
++                    store_partition=store_partition,
++                ),
++            }
++        }
++
++        recovery_manager.revoke_partitions(
++            topic=source_topic,
++            partition=partition_num,
++        )
++
++        assert partition_num not in recovery_manager._partitions
++        assert recovery_manager._recovery_method == recovery_manager._rebalance
++        assert len(recovery_manager._pending_revokes) == 1
++        recovery_partition = recovery_manager._pending_revokes[0]
++        assert isinstance(recovery_partition, RecoveryPartition)
++        assert recovery_partition.topic == source_topic
++        assert recovery_partition.changelog == changelog
++        assert recovery_partition.partition == partition_num
++        assert recovery_partition.store_partition == store_partition
++
++        unassign_call = consumer.incremental_unassign.call_args_list[0].args
++        assert len(unassign_call) == 1
++        assert isinstance(unassign_call[0], list)
++        assert len(unassign_call[0]) == 1
++        assert isinstance(unassign_call[0][0], ConfluentPartition)
++        assert source_topic == unassign_call[0][0].topic
++        assert partition_num == unassign_call[0][0].partition
++
++        pause_call = consumer.pause.call_args_list[0].args
++        assert len(pause_call) == 1
++        assert isinstance(pause_call[0], list)
++        assert len(pause_call[0]) == 1
++        assert isinstance(pause_call[0][0], ConfluentPartition)
++        assert changelog == pause_call[0][0].topic
++        assert partition_num == pause_call[0][0].partition
++
++    def test_revoke_partition_not_assigned(self, recovery_manager_mock_consumer):
++        """
++        Revoke topic partition while skipping the changelog partition revoke since
++        it was never assigned to begin with (due to not needing recovery).
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++        source_topic = "source_topic"
++        partition_num = 1
++
++        recovery_manager.revoke_partitions(
++            topic=source_topic,
++            partition=partition_num,
++        )
++
++        assert recovery_manager._recovery_method == recovery_manager._recover
++        assert len(recovery_manager._pending_revokes) == 0
++        consumer.pause.assert_not_called()
++
++        unassign_call = consumer.incremental_unassign.call_args_list[0].args
++        assert len(unassign_call) == 1
++        assert isinstance(unassign_call[0], list)
++        assert len(unassign_call[0]) == 1
++        assert isinstance(unassign_call[0][0], ConfluentPartition)
++        assert source_topic == unassign_call[0][0].topic
++        assert partition_num == unassign_call[0][0].partition
++
++    def test__handle_pending_assigns(self, recovery_manager_mock_consumer):
++        """
++        Two changelog partitions (partition numbers 3 and 7) are pending assignment; p3
++        has no offsets to recover, and p7 does, so only p7 should end up assigned.
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}__default"
++        partition_nums = [3, 7]
++        recovery_manager._pending_assigns = [
++            RecoveryPartition(
++                topic=source_topic,
++                changelog=changelog,
++                partition=partition,
++                store_partition=create_autospec(StorePartition)(),
++            )
++            for partition in partition_nums
++        ]
++        side_effects = []
++        for idx, p in enumerate(recovery_manager._pending_assigns):
++            p.store_partition.get_changelog_offset.return_value = 10 * idx
++            side_effects.append((0, 20 * idx))
++        side_effects.reverse()
++        consumer.get_watermark_offsets.side_effect = side_effects
++        not_recover = recovery_manager._pending_assigns[0]
++        should_recover = recovery_manager._pending_assigns[1]
++
++        recovery_manager._handle_pending_assigns()
++
++        pause_call = consumer.pause.call_args_list[0].args
++        assert len(pause_call) == 1
++        assert isinstance(pause_call[0], list)
++        assert len(pause_call[0]) == 2
++        for idx, call in enumerate(pause_call[0]):
++            assert isinstance(call, ConfluentPartition)
++            assert source_topic == call.topic
++            assert call.partition == partition_nums[idx]
++
++        assign_call = consumer.incremental_assign.call_args_list[0].args
++        assert len(assign_call) == 1
++        assert isinstance(assign_call[0], list)
++        assert len(assign_call[0]) == 1
++        assert isinstance(assign_call[0][0], ConfluentPartition)
++        assert should_recover.changelog == assign_call[0][0].topic
++        assert should_recover.partition == assign_call[0][0].partition
++        assert should_recover.offset == assign_call[0][0].offset
++
++        assert (
++            recovery_manager._partitions[should_recover.partition][
++                should_recover.changelog
++            ]
++            == should_recover
++        )
++        assert not_recover.partition not in recovery_manager._partitions
++        assert not recovery_manager._pending_assigns
++
++    def test__handle_pending_assigns_no_assigns(self, recovery_manager_mock_consumer):
++        """
++        Handle pending assigns of changelog partitions where none of them actually
++        needed assigning since they were up-to-date.
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}__default"
++        partition_num = 3
++        recovery_manager._pending_assigns = [
++            RecoveryPartition(
++                topic=source_topic,
++                changelog=changelog,
++                partition=partition_num,
++                store_partition=create_autospec(StorePartition)(),
++            )
++        ]
++        consumer.get_watermark_offsets.side_effect = [(0, 10)]
++        not_recover = recovery_manager._pending_assigns[0]
++        not_recover.store_partition.get_changelog_offset.return_value = 10
++
++        recovery_manager._handle_pending_assigns()
++
++        pause_call = consumer.pause.call_args_list[0].args
++        assert len(pause_call) == 1
++        assert isinstance(pause_call[0], list)
++        assert len(pause_call[0]) == 1
++        assert isinstance(pause_call[0][0], ConfluentPartition)
++        assert source_topic == pause_call[0][0].topic
++        assert pause_call[0][0].partition == partition_num
++
++        consumer.incremental_assign.assert_not_called()
++        assert not_recover.partition not in recovery_manager._partitions
++        assert not recovery_manager._pending_assigns
++
++    def test__handle_pending_assigns_update_offset(
++        self, recovery_manager_mock_consumer
++    ):
++        """
++        Handle pending assigns of changelog partitions where the partition does not
++        actually need recovery, but instead a simple offset update (due to some
++        processing error, or there being no offset to read).
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}__default"
++        partition_num = 3
++        recovery_manager._pending_assigns = [
++            RecoveryPartition(
++                topic=source_topic,
++                changelog=changelog,
++                partition=partition_num,
++                store_partition=create_autospec(StorePartition)(),
++            )
++        ]
++        consumer.get_watermark_offsets.side_effect = [(0, 10)]
++        not_recover = recovery_manager._pending_assigns[0]
++        not_recover.store_partition.get_changelog_offset.return_value = 20
++
++        with patch.object(
++            recovery_manager._pending_assigns[0], "update_offset"
++        ) as update_offset:
++            recovery_manager._handle_pending_assigns()
++
++        pause_call = consumer.pause.call_args_list[0].args
++        assert len(pause_call) == 1
++        assert isinstance(pause_call[0], list)
++        assert len(pause_call[0]) == 1
++        assert isinstance(pause_call[0][0], ConfluentPartition)
++        assert source_topic == pause_call[0][0].topic
++        assert pause_call[0][0].partition == partition_num
++
++        consumer.incremental_assign.assert_not_called()
++        update_offset.assert_called()
++        assert not_recover.partition not in recovery_manager._partitions
++        assert not recovery_manager._pending_assigns
++
++    def test__handle_pending_revokes(self, recovery_manager_mock_consumer):
++        """
++        Handle pending revokes of changelog partitions.
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}__default"
++        partition_num = 3
++        revoke = RecoveryPartition(
++            topic=source_topic,
++            changelog=changelog,
++            partition=partition_num,
++            store_partition=create_autospec(StorePartition)(),
++        )
++        recovery_manager._pending_revokes = [revoke]
++
++        recovery_manager._handle_pending_revokes()
++
++        unassign_call = consumer.incremental_unassign.call_args_list[0].args
++        assert len(unassign_call) == 1
++        assert isinstance(unassign_call[0], list)
++        assert len(unassign_call[0]) == 1
++        assert isinstance(unassign_call[0][0], ConfluentPartition)
++        assert revoke.changelog == unassign_call[0][0].topic
++        assert revoke.partition == unassign_call[0][0].partition
++
++        assert not recovery_manager._pending_revokes
++
++    def test__update_partition_offsets(self, recovery_manager_mock_consumer):
++        """
++        Partition offset updates are handled correctly.
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}__default"
++        partition_nums = [3, 7]
++        expected_pending_revokes = []
++        for partition in partition_nums:
++            rp = RecoveryPartition(
++                topic=source_topic,
++                changelog=changelog,
++                partition=partition,
++                store_partition=create_autospec(StorePartition)(),
++            )
++            rp.set_watermarks(0, 20)
++            rp.store_partition.get_changelog_offset.return_value = 18
++            recovery_manager._partitions.setdefault(partition, {})[changelog] = rp
++            expected_pending_revokes += [rp]
++
++        with patch.object(recovery_manager, "_handle_pending_revokes") as handle_revoke:
++            recovery_manager._update_partition_offsets()
++
++        for partition in expected_pending_revokes:
++            partition.store_partition.set_changelog_offset.assert_called()
++        # Confirm the revokes were added to pending successfully, though normally
++        # they'd get handled/removed right after if the method wasn't patched
++        assert recovery_manager._pending_revokes == expected_pending_revokes
++        handle_revoke.assert_called()
++
++    def test__finalize_recovery(self, recovery_manager_mock_consumer):
++        """
++        Finalize recovery, which raises an exception to break out of an Application
++        consume loop.
++
++        In this case, also tests when we have a remaining _partition with some offset
++        issues, updating it to current and revoking it before finishing recovery.
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++        assignment_result = "assignments"
++        consumer.assignment.return_value = assignment_result
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}__default"
++        partition_num = 1
++        rp = RecoveryPartition(
++            topic=source_topic,
++            changelog=changelog,
++            partition=partition_num,
++            store_partition=create_autospec(StorePartition)(),
++        )
++        rp.set_watermarks(0, 20)
++        rp.store_partition.get_changelog_offset.return_value = 18
++        recovery_manager._partitions.setdefault(partition_num, {})[changelog] = rp
++
++        with pytest.raises(recovery_manager.RecoveryComplete):
++            recovery_manager._finalize_recovery()
++
++        consumer.resume.assert_called_with(assignment_result)
++        consumer.incremental_unassign.assert_called()
++        assert recovery_manager._polls_remaining == recovery_manager._poll_attempts
++        assert not recovery_manager._partitions
++
++    def test__rebalance(self, recovery_manager_mock_consumer):
++        """
++        Handle a rebalance call (as a result of an applicable assign or revoke call).
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        recovery_manager._recovery_method = recovery_manager._rebalance
++        consumer = recovery_manager._consumer
++        consumer.get_watermark_offsets.return_value = (0, 20)
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}__default"
++        partition_num = 1
++        rp = RecoveryPartition(
++            topic=source_topic,
++            changelog=changelog,
++            partition=partition_num,
++            store_partition=create_autospec(StorePartition)(),
++        )
++        rp.store_partition.get_changelog_offset.return_value = 10
++        # just testing that pending assign or revoke is called as expected
++        recovery_manager._pending_assigns = [rp]
++        recovery_manager._pending_revokes = [rp]
++
++        recovery_manager._rebalance()
++
++        consumer.incremental_unassign.assert_called()
++        consumer.incremental_assign.assert_called()
++        assert recovery_manager._recovery_method == recovery_manager._recover
++        assert recovery_manager._polls_remaining == recovery_manager._poll_attempts
++
++    def test__recover(self, recovery_manager_mock_consumer):
++        """
++        Successfully recover from a changelog message, which is also the last one
++        for the partition, so revoke it afterward.
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}__default"
++        highwater = 20
++        partition_num = 1
++        msg = ConfluentKafkaMessageStub(
++            topic=changelog, partition=partition_num, offset=highwater - 1
++        )
++        consumer.poll.return_value = msg
++        rp = RecoveryPartition(
++            topic=source_topic,
++            changelog=changelog,
++            partition=partition_num,
++            store_partition=create_autospec(StorePartition)(),
++        )
++        rp.set_watermarks(0, highwater)
++        rp.store_partition.get_changelog_offset.return_value = highwater
++        recovery_manager._partitions.setdefault(partition_num, {})[changelog] = rp
++
++        recovery_manager._recover()
++
++        rp.store_partition.recover.assert_called_with(changelog_message=msg)
++        assert not recovery_manager._partitions
++        consumer.incremental_unassign.assert_called()
++
++    def test__recover_no_partitions(self, recovery_manager_mock_consumer):
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++
++        with patch.object(recovery_manager, "_finalize_recovery") as finalize:
++            finalize.side_effect = recovery_manager.RecoveryComplete()
++            with pytest.raises(recovery_manager.RecoveryComplete):
++                recovery_manager._recover()
++
++        finalize.assert_called()
++        consumer.poll.assert_not_called()
++
++    def test__recover_empty_poll(self, recovery_manager_mock_consumer):
++        """
++        Handle an empty poll.
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        consumer = recovery_manager._consumer
++        consumer.poll.return_value = None
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}__default"
++        partition_num = 1
++        rp = RecoveryPartition(
++            topic=source_topic,
++            changelog=changelog,
++            partition=partition_num,
++            store_partition=create_autospec(StorePartition)(),
++        )
++        recovery_manager._partitions.setdefault(partition_num, {})[changelog] = rp
++
++        with patch.object(recovery_manager, "_finalize_recovery") as finalize:
++            recovery_manager._recover()
++
++        assert recovery_manager._polls_remaining == recovery_manager._poll_attempts - 1
++        finalize.assert_not_called()
++        consumer.poll.assert_called()
++        rp.store_partition.recover.assert_not_called()
++
++    def test__recover_last_empty_poll(self, recovery_manager_mock_consumer):
++        """
++        Handle a final empty poll attempt, which ends recovery.
++        """
++        recovery_manager = recovery_manager_mock_consumer
++        recovery_manager._polls_remaining = 1
++        consumer = recovery_manager._consumer
++        consumer.poll.return_value = None
++        source_topic = "source_topic"
++        changelog = f"changelog__{source_topic}__default"
++        partition_num = 1
++        rp = RecoveryPartition(
++            topic=source_topic,
++            changelog=changelog,
++            partition=partition_num,
++            store_partition=create_autospec(StorePartition)(),
++        )
++        recovery_manager._partitions.setdefault(partition_num, {})[changelog] = rp
++
++        with patch.object(recovery_manager, "_finalize_recovery") as finalize:
++            finalize.side_effect = recovery_manager.RecoveryComplete()
++            with pytest.raises(recovery_manager.RecoveryComplete):
++                recovery_manager._recover()
++
++        assert recovery_manager._polls_remaining == 0
++        finalize.assert_called()
++        consumer.poll.assert_called()
+diff --git a/tests/test_quixstreams/test_state/test_manager.py b/tests/test_quixstreams/test_state/test_manager.py
+index 422a257c..529b5b24 100644
+--- a/tests/test_quixstreams/test_state/test_manager.py
++++ b/tests/test_quixstreams/test_state/test_manager.py
+@@ -1,12 +1,14 @@
+ import os
+ import contextlib
+ import uuid
+-from unittest.mock import patch
++from unittest.mock import patch, call, create_autospec
+ 
+ import pytest
+ import rocksdict
+ from tests.utils import TopicPartitionStub
+ 
++from quixstreams.kafka.consumer import Consumer
++from quixstreams.rowproducer import RowProducer
+ from quixstreams.state.exceptions import (
+     StoreNotRegisteredError,
+     InvalidStoreTransactionStateError,
+@@ -47,21 +49,10 @@ class TestStateStoreManager:
+         state_manager.on_partition_revoke(tp)
+         state_manager.on_partition_lost(tp)
+ 
+-    def test_register_store(self, state_manager_changelogs):
+-        manager = state_manager_changelogs
+-        topic_manager = manager._changelog_manager._topic_manager
+-        topic = topic_manager.topic(name="topic1")
+-        store_name = "default"
+-        manager.register_store(topic.name, store_name=store_name)
+-
+-        assert topic.name in manager._stores
+-        assert store_name in topic_manager.changelog_topics[topic.name]
+-
+-    def test_register_store_no_changelog_manager(self, state_manager):
++    def test_register_store(self, state_manager):
+         state_manager = state_manager
+         state_manager.register_store("my_topic", store_name="default")
+-
+-        assert state_manager._changelog_manager is None
++        assert "default" in state_manager.stores["my_topic"]
+ 
+     def test_assign_revoke_partitions_stores_registered(self, state_manager):
+         state_manager.register_store("topic1", store_name="store1")
+@@ -258,3 +249,134 @@ class TestStateStoreManager:
+                     "topic", partition=0, offset=0
+                 ):
+                     ...
++
++
++class TestStateStoreManagerChangelog:
++    def test_rebalance_partitions_stores_not_registered(self, state_manager_changelogs):
++        state_manager = state_manager_changelogs
++        tp = TopicPartitionStub("topic", 0)
++        # It's ok to rebalance partitions when there are no stores registered
++        state_manager.on_partition_assign(tp)
++        state_manager.on_partition_revoke(tp)
++        state_manager.on_partition_lost(tp)
++
++    def test_register_store(self, state_manager_changelogs):
++        state_manager = state_manager_changelogs
++        topic_manager = state_manager._changelog_manager._topic_manager
++        topic = topic_manager.topic(name="topic1")
++        store_name = "default"
++        state_manager.register_store(topic.name, store_name=store_name)
++
++        assert store_name in state_manager._stores[topic.name]
++        assert store_name in topic_manager.changelog_topics[topic.name]
++
++    def test_assign_revoke_partitions_stores_registered(self, state_manager_changelogs):
++        state_manager = state_manager_changelogs
++        changelog_manager = state_manager._changelog_manager
++        changelog_assign = patch.object(changelog_manager, "assign_partition").start()
++        changelog_revoke = patch.object(changelog_manager, "revoke_partition").start()
++        changelog_manager._topic_manager.topic(name="topic1")
++        changelog_manager._topic_manager.topic(name="topic2")
++        state_manager.register_store("topic1", store_name="store1")
++        state_manager.register_store("topic1", store_name="store2")
++        state_manager.register_store("topic2", store_name="store1")
++
++        stores_list = [s for d in state_manager.stores.values() for s in d.values()]
++        assert len(stores_list) == 3
++
++        partitions = [
++            TopicPartitionStub("topic1", 0),
++            TopicPartitionStub("topic2", 0),
++        ]
++
++        store_partitions = []
++        assign_calls = []
++        for tp in partitions:
++            store_partitions.extend(state_manager.on_partition_assign(tp))
++            assign_calls.append(
++                call(
++                    tp.topic,
++                    tp.partition,
++                    {
++                        name: store.partitions[tp.partition]
++                        for name, store in state_manager._stores[tp.topic].items()
++                    },
++                )
++            )
++        changelog_assign.assert_has_calls(assign_calls)
++        assert len(store_partitions) == 3
++
++        assert len(state_manager.get_store("topic1", "store1").partitions) == 1
++        assert len(state_manager.get_store("topic1", "store2").partitions) == 1
++        assert len(state_manager.get_store("topic2", "store1").partitions) == 1
++
++        revoke_calls = []
++        for tp in partitions:
++            state_manager.on_partition_revoke(tp)
++            revoke_calls.append(call(tp.topic, tp.partition))
++        changelog_revoke.assert_has_calls(revoke_calls)
++
++        assert not state_manager.get_store("topic1", "store1").partitions
++        assert not state_manager.get_store("topic1", "store2").partitions
++        assert not state_manager.get_store("topic2", "store1").partitions
++
++    def test_store_transaction_no_flush_on_exception(self, state_manager_changelogs):
++        state_manager = state_manager_changelogs
++        changelog_manager = state_manager._changelog_manager
++        producer = create_autospec(RowProducer)("broker")
++        consumer = create_autospec(Consumer)("broker", "group", "latest")
++        changelog_manager._producer = producer
++        changelog_manager._recovery_manager._consumer = consumer
++        changelog_manager._topic_manager.topic(name="topic")
++        state_manager.register_store("topic", store_name="store")
++        state_manager.on_partition_assign(TopicPartitionStub("topic", 0))
++
++        store = state_manager.get_store("topic", "store")
++
++        with contextlib.suppress(Exception):
++            with state_manager.start_store_transaction("topic", partition=0, offset=1):
++                tx = state_manager.get_store_transaction("store")
++                tx.set("some_key", "some_value")
++                raise ValueError()
++
++        store_partition = store.partitions[0]
++        assert store_partition.get_processed_offset() is None
++        assert store_partition.get_changelog_offset() is None
++        producer.produce.assert_not_called()
++
++    def test_store_transaction_no_flush_if_partition_transaction_failed(
++        self, state_manager_changelogs
++    ):
++        """
++        Ensure that no PartitionTransactions are flushed to the DB if
++        any of them fails
++        """
++        state_manager = state_manager_changelogs
++        changelog_manager = state_manager._changelog_manager
++        producer = create_autospec(RowProducer)("broker")
++        consumer = create_autospec(Consumer)("broker", "group", "latest")
++        changelog_manager._producer = producer
++        changelog_manager._recovery_manager._consumer = consumer
++        changelog_manager._topic_manager.topic(name="topic")
++        state_manager.register_store("topic", store_name="store1")
++        state_manager.register_store("topic", store_name="store2")
++        state_manager.on_partition_assign(TopicPartitionStub("topic", 0))
++
++        store1 = state_manager.get_store("topic", "store1")
++        store2 = state_manager.get_store("topic", "store2")
++
++        with state_manager.start_store_transaction("topic", partition=0, offset=1):
++            tx_store1 = state_manager.get_store_transaction("store1")
++            tx_store2 = state_manager.get_store_transaction("store2")
++            # Simulate exception in one of the transactions
++            with contextlib.suppress(ValueError), patch.object(
++                rocksdict.WriteBatch, "put", side_effect=ValueError("test")
++            ):
++                tx_store1.set("some_key", "some_value")
++            tx_store2.set("some_key", "some_value")
++
++        assert store1.partitions[0].get_processed_offset() is None
++        assert store1.partitions[0].get_changelog_offset() is None
++        assert store2.partitions[0].get_processed_offset() is None
++        assert store2.partitions[0].get_changelog_offset() is None
++        producer.produce.assert_not_called()
+diff --git a/tests/test_quixstreams/test_state/test_rocksdb/test_partition.py b/tests/test_quixstreams/test_state/test_rocksdb/test_partition.py
+index e921a352..996d013a 100644
+--- a/tests/test_quixstreams/test_state/test_rocksdb/test_partition.py
++++ b/tests/test_quixstreams/test_state/test_rocksdb/test_partition.py
+@@ -21,6 +21,7 @@ from quixstreams.state.rocksdb import (
+ from quixstreams.state.rocksdb.serialization import serialize
+ from quixstreams.state.rocksdb.metadata import CHANGELOG_CF_MESSAGE_HEADER
+ from quixstreams.utils.json import dumps
++from ...utils import ConfluentKafkaMessageStub
+ 
+ TEST_KEYS = [
+     "string",
+@@ -167,6 +168,26 @@ class TestRocksDBStorePartition:
+     def test_ensure_metadata_cf(self, rocksdb_partition):
+         assert rocksdb_partition.get_column_family("__metadata__")
+ 
++    def test_recover(self, rocksdb_partition):
++        """
++        Perform a recovery from a changelog message.
++        """
++        key = "my_key"
++        value = "my_value"
++        changelog_msg = ConfluentKafkaMessageStub(
++            offset=10,
++            key=dumps(key),
++            value=dumps(value),
++            headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
++        )
++
++        assert rocksdb_partition.get_changelog_offset() is None
++        rocksdb_partition.recover(changelog_message=changelog_msg)
++
++        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset() + 1
++        with rocksdb_partition.begin() as tx:
++            assert tx.get(key) == value
++
+ 
+ class TestRocksDBPartitionTransaction:
+     def test_transaction_complete(self, rocksdb_partition):
+@@ -182,7 +203,7 @@ class TestRocksDBPartitionTransaction:
+         value_out = "my_value"
+         cf = "default"
+         db_writes = 3
+-        assert rocksdb_partition.get_changelog_offset() == 0
++        assert rocksdb_partition.get_changelog_offset() is None
+ 
+         with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
+             for i in range(db_writes):
+@@ -208,7 +229,7 @@ class TestRocksDBPartitionTransaction:
+         key_out = "my_key"
+         value_out = "my_value"
+         cf = "default"
+-        assert rocksdb_partition.get_changelog_offset() == 0
++        assert rocksdb_partition.get_changelog_offset() is None
+ 
+         with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
+             tx.set(key=key_out, value=value_out, cf_name=cf)
+@@ -241,7 +262,7 @@ class TestRocksDBPartitionTransaction:
+         cf = "default"
+         db_writes = 3
+         delete_index = 2
+-        assert rocksdb_partition.get_changelog_offset() == 0
++        assert rocksdb_partition.get_changelog_offset() is None
+ 
+         with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
+             for i in range(db_writes):
+@@ -273,7 +294,7 @@ class TestRocksDBPartitionTransaction:
+     ):
+         key_out = "my_key"
+         cf = "default"
+-        assert rocksdb_partition.get_changelog_offset() == 0
++        assert rocksdb_partition.get_changelog_offset() is None
+ 
+         with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
+             tx.delete(key=key_out, cf_name=cf)
+@@ -597,3 +618,8 @@ class TestRocksDBPartitionTransaction:
+ 
+         with rocksdb_partition.begin() as tx:
+             assert tx.exists(key, cf_name="cf")
++
++
++class TestRocksDBPartitionRecoveryTransaction:
++    # TODO: finish this
++    ...
+diff --git a/tests/test_quixstreams/utils.py b/tests/test_quixstreams/utils.py
+new file mode 100644
+index 00000000..645106a5
+--- /dev/null
++++ b/tests/test_quixstreams/utils.py
+@@ -0,0 +1,63 @@
++from typing import Optional, List, Tuple, Union
++
++
++class ConfluentKafkaMessageStub:
++    """
++    A stub object to mock `confluent_kafka.Message`.
++
++    Instances of `confluent_kafka.Message` cannot be directly created from Python,
++    see https://github.com/confluentinc/confluent-kafka-python/issues/1535.
++
++    """
++
++    def __init__(
++        self,
++        topic: str = "test",
++        partition: int = 0,
++        offset: int = 0,
++        timestamp: Tuple[int, int] = (1, 123),
++        key: bytes = None,
++        value: bytes = None,
++        headers: Optional[List[Tuple[str, bytes]]] = None,
++        latency: float = None,
++        leader_epoch: int = None,
++    ):
++        self._topic = topic
++        self._partition = partition
++        self._offset = offset
++        self._timestamp = timestamp
++        self._key = key
++        self._value = value
++        self._headers = headers
++        self._latency = latency
++        self._leader_epoch = leader_epoch
++
++    def headers(self, *args, **kwargs) -> Optional[List[Tuple[str, bytes]]]:
++        return self._headers
++
++    def key(self, *args, **kwargs) -> Optional[Union[str, bytes]]:
++        return self._key
++
++    def offset(self, *args, **kwargs) -> int:
++        return self._offset
++
++    def partition(self, *args, **kwargs) -> int:
++        return self._partition
++
++    def timestamp(self, *args, **kwargs) -> (int, int):
++        return self._timestamp
++
++    def topic(self, *args, **kwargs) -> str:
++        return self._topic
++
++    def value(self, *args, **kwargs) -> Optional[Union[str, bytes]]:
++        return self._value
++
++    def latency(self, *args, **kwargs) -> Optional[float]:
++        return self._latency
++
++    def leader_epoch(self, *args, **kwargs) -> Optional[int]:
++        return self._leader_epoch
++
++    def __len__(self) -> int:
++        return len(self._value)
