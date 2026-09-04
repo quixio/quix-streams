@@ -292,11 +292,17 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # itself still succeeds and is still re-stamped if some OTHER write
             # in this batch carries a real timestamp and flips the store; only
             # the flip trigger is withheld.
+            key_serialized = self._serialize_key(key, prefix=prefix)
             if timestamp is not None and timestamp >= 0:
                 self._batch_has_ttl_writes = True
+                self._pending_stamps[(prefix, key_serialized)] = stamp
+            else:
+                logger.warning(
+                    "state.set(..., ttl=...) carried timestamp=%s, which cannot "
+                    "anchor an expiry; storing the record without one.",
+                    timestamp,
+                )
             self._track_batch_ttl_ms(ttl)
-            key_serialized = self._serialize_key(key, prefix=prefix)
-            self._pending_stamps[(prefix, key_serialized)] = stamp
             # Advance the high-water on TTL writes only — we don't want a
             # plain ``state.set(k, v)`` on an unflipped store to start
             # writing the TTL high-water marker (legacy stores must stay
@@ -374,11 +380,17 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # itself still succeeds and is still re-stamped if some OTHER write
             # in this batch carries a real timestamp and flips the store; only
             # the flip trigger is withheld.
+            key_serialized = self._serialize_key(key, prefix=prefix)
             if timestamp is not None and timestamp >= 0:
                 self._batch_has_ttl_writes = True
+                self._pending_stamps[(prefix, key_serialized)] = stamp
+            else:
+                logger.warning(
+                    "state.set(..., ttl=...) carried timestamp=%s, which cannot "
+                    "anchor an expiry; storing the record without one.",
+                    timestamp,
+                )
             self._track_batch_ttl_ms(ttl)
-            key_serialized = self._serialize_key(key, prefix=prefix)
-            self._pending_stamps[(prefix, key_serialized)] = stamp
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
         elif self._pending_stamps:
