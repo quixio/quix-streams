@@ -164,6 +164,36 @@ class RocksDBOptions(RocksDBOptionsType):
         meaningful for TTL-enabled stores; ignored for windowed / timestamped
         stores and for no-``ttl=`` workloads.
         Default - ``True``.
+    :param ttl_rollback: operational lever that reverts a store which was
+        PROVISIONALLY cold-adopted as a v3.24.0 TTL store back to legacy mode
+        (see ``RocksDBStorePartition._rollback_provisional_adopt``): on a warm
+        restart the pre-adoption originals are restored byte-identical; on a
+        fresh volume the provisional adopt is suppressed. It never touches the
+        sound warm-deterministic path nor a corroborated store.
+        This option is the IN-CODE surface of the
+        ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1`` environment variable, which keeps
+        working: the lever is ON when EITHER is set (option wins when ``True``,
+        else the env var is consulted), and the partition logs which source
+        turned it on. Prefer the option in Quix Cloud, where a deployment
+        environment variable that is not declared in the app's ``app.yaml`` is
+        silently dropped on redeploy — a lever that can vanish between runs is
+        not a lever you can reason about afterwards.
+        Mutually exclusive with ``ttl_force_flip``; both on raises.
+        Default - ``False``.
+    :param ttl_force_flip: operational REPAIR lever, the inverse of
+        ``ttl_rollback``. It forces a store whose ``__ttl_enabled__`` flag is
+        ABSENT into TTL mode and persists the flip, then lets the recovery pass
+        finish any leftover migration. Use it when a store holds TTL-stamped
+        values but has no bookkeeping left for the automatic open-time repair to
+        identify it by (a rebuilt state directory, or a previous rollback that
+        removed the flag while its untouched values stayed stamped) — the
+        symptom is a crash loop where every read of a stamped value fails in the
+        value deserializer. No-op on a store that is already flipped, so it is
+        safe to leave set for one restart and then clear.
+        Same dual surface as ``ttl_rollback``: this option, or
+        ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1``.
+        Mutually exclusive with ``ttl_rollback``; both on raises.
+        Default - ``False``.
 
     Please see `rocksdict.Options` for a complete description of other options.
     """
@@ -188,6 +218,8 @@ class RocksDBOptions(RocksDBOptionsType):
     legacy_records_ttl: Optional[timedelta] = None
     legacy_backfill_chunk_size: int = 150_000
     ttl_changelog_tombstones: bool = True
+    ttl_rollback: bool = False
+    ttl_force_flip: bool = False
 
     def __post_init__(self) -> None:
         if self.legacy_records_ttl is not None and self.legacy_records_ttl <= timedelta(
@@ -232,6 +264,17 @@ class RocksDBOptions(RocksDBOptionsType):
             raise ValueError(
                 "max_evictions_per_flush must be a strictly positive int, "
                 f"got {self.max_evictions_per_flush!r}"
+            )
+        if self.ttl_rollback and self.ttl_force_flip:
+            # Contradictory levers: one reverts a store to legacy, the other
+            # forces it into TTL mode. Rejected here so a pure-config mistake
+            # fails at construction with a stack pointing at the caller; the
+            # partition repeats the check on the RESOLVED values at open, which
+            # is where an option/env-var combination can also collide.
+            raise ValueError(
+                "ttl_rollback and ttl_force_flip are mutually exclusive "
+                "(one reverts a store to legacy mode, the other forces it into "
+                "TTL mode); set at most one of them."
             )
 
     def to_options(self) -> rocksdict.Options:

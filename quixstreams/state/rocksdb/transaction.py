@@ -1,14 +1,14 @@
 import logging
 from datetime import timedelta
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Literal, Optional, Set, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, Optional, Set, Union, cast
 
 from quixstreams.state.base.transaction import (
     PartitionTransaction,
     PartitionTransactionStatus,
     validate_transaction_status,
 )
-from quixstreams.state.exceptions import StateSerializationError
+from quixstreams.state.exceptions import StateMigrationError, StateSerializationError
 from quixstreams.state.metadata import Marker
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, append_integer
@@ -17,7 +17,10 @@ from .exceptions import IncompatibleStateStoreError
 from .metadata import (
     GLOBAL_COUNTER_CF_NAME,
     GLOBAL_COUNTER_KEY,
+    TTL_ENABLED_KEY,
+    TTL_FORCE_FLIP_ENV_VAR,
     TTL_INDEX_CF_NAME,
+    TTL_ROLLBACK_ENV_VAR,
 )
 from .ttl_codec import (
     _MAX_PLAUSIBLE_STAMP_MS,
@@ -547,9 +550,44 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         timestamp: Optional[int] = None,
     ) -> Union[bytes, Literal[Marker.UNDEFINED, Marker.DELETED]]:
         if not self._stamps_enabled(cf_name):
-            return super()._get_bytes(
+            raw_legacy = super()._get_bytes(
                 key=key, prefix=prefix, cf_name=cf_name, timestamp=timestamp
             )
+            # Legacy (un-flipped) read path. Normally byte-identical to v3.23.6:
+            # the value is returned exactly as stored. The one exception is a
+            # store the open-time resolution ARMED as unreconciled: TTL
+            # bookkeeping on disk, no ``__ttl_enabled__`` flag, and nothing that
+            # flipped it -- either the automatic repair declined (see
+            # ``RocksDBStorePartition._repair_unflagged_stamped_store``) or the
+            # rollback lever turned a provisionally-adopted store legacy again
+            # while leaving its adopted originals byte-identical (see
+            # ``RocksDBStorePartition._rollback_provisional_adopt``). On such a
+            # store a value that still decodes as a LIVE stamp is a genuine TTL
+            # value being read in legacy mode: returning it hands ``8B||payload``
+            # to the value deserializer, which is the sc-74843 crash loop
+            # (2026-09-04: ``StateSerializationError`` / orjson "surrogates not
+            # allowed" on every restart). Fail loud instead -- see
+            # :meth:`_raise_unreconciled_stamped_read` for why this does not strip.
+            #
+            # The armed flag is checked FIRST and is an open-time snapshot that is
+            # False for every store without TTL bookkeeping, so the 99% legacy read
+            # path does not gain a single byte comparison. The liveness condition
+            # (sentinel or a stamp still ahead of the wallclock) is what keeps a
+            # genuine legacy ``set_bytes()`` dedup store -- whose values are
+            # 8-byte big-endian PAST epoch-ms and therefore decode as plausible
+            # stamps -- reading back verbatim rather than raising.
+            if (
+                cf_name == "default"
+                and self._partition._ttl_stamped_reads_unflagged  # noqa: SLF001
+                and isinstance(raw_legacy, bytes)
+            ):
+                decoded_legacy = _safe_decode_stamp(raw_legacy)
+                if decoded_legacy is not None:
+                    stamp_legacy = decoded_legacy[0]
+                    now_ms = self._partition._now_ms()  # noqa: SLF001
+                    if stamp_legacy == SENTINEL_NEVER or stamp_legacy > now_ms:
+                        self._raise_unreconciled_stamped_read(raw_legacy, prefix)
+            return raw_legacy
 
         if timestamp is not None:
             self._partition.advance_high_water(timestamp)
@@ -608,6 +646,71 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             return Marker.UNDEFINED
 
         return payload
+
+    def _raise_unreconciled_stamped_read(self, raw: bytes, prefix: bytes) -> NoReturn:
+        """
+        Refuse a ``default``-CF read that returned a live TTL-stamped value on a
+        store flagged LEGACY, with an actionable :class:`StateMigrationError`.
+
+        **Why not strip the stamp here.** Stripping would mask a store-wide
+        mis-flag: the partition would keep writing UN-stamped values (it is legacy,
+        so ``_stamps_enabled`` is False) while reading stamped ones, so the store
+        would drift further apart on every flush and no operator would ever learn.
+        Worse, the strip cannot be proven safe per value: ``_safe_decode_stamp``
+        documents its residual, a genuine legacy value whose first eight bytes
+        happen to decode, and eight bytes removed from such a value are gone for
+        good. Open time is the place where a flip IS decidable (the repair samples
+        the default CF and persists the decision); by the time a single read gets
+        here that decision has already been taken -- the repair looked and
+        declined, or the rollback lever asserted legacy intent -- so a per-value
+        guess here can only contradict it.
+
+        **Why not return it raw.** That is precisely the crash being fixed: the
+        caller deserializes ``8B||json`` and dies, with a traceback pointing at
+        ``orjson`` rather than at the state store. A named error naming the lever
+        turns an undiagnosable crash loop into a one-variable fix.
+
+        The message carries the value LENGTH and the hex of the 8-byte stamp
+        prefix, never the payload: a state value can hold user data, and this
+        message goes to logs.
+
+        The WARNING is rate-limited to once per partition (the offending value is
+        persistent, so every read of it would otherwise re-log); the RAISE is not,
+        because suppressing it would return stamped bytes to the caller.
+        """
+        if not self._partition._stamped_legacy_read_warned:  # noqa: SLF001
+            self._partition._stamped_legacy_read_warned = True  # noqa: SLF001
+            logger.warning(
+                "Unreconciled TTL state at path=%s: a default-CF read returned a "
+                "TTL-stamped value while the partition is flagged LEGACY. "
+                "Refusing the read (see StateMigrationError) instead of handing "
+                "the stamp to the value deserializer. Set "
+                "RocksDBOptions(ttl_force_flip=True) (or %s=1) and restart to "
+                "flip this store into TTL mode.",
+                getattr(self._partition, "path", "<unknown>"),
+                TTL_FORCE_FLIP_ENV_VAR,
+            )
+        raise StateMigrationError(
+            f"State store at path="
+            f"{getattr(self._partition, 'path', '<unknown>')!r} is flagged LEGACY "
+            f"(no {TTL_ENABLED_KEY!r} in its metadata column family) but its "
+            f"default column family holds TTL-stamped values: a read of key "
+            f"prefix={prefix[:16]!r} returned {len(raw)} byte(s) whose 8-byte "
+            f"prefix {raw[:TTL_STAMP_BYTES].hex()} decodes as a live expiry "
+            f"stamp. Returning it would hand the stamp to the value deserializer "
+            f"(the crash this guard replaces) and stripping it could truncate a "
+            f"genuine legacy value, so neither is done. The store opened carrying "
+            f"TTL bookkeeping -- an interrupted legacy-TTL migration, or a "
+            f"v3.24.0 adoption -- and nothing flipped it: either the automatic "
+            f"open-time repair found no live stamp in its sample of the default "
+            f"CF, or the rollback lever (RocksDBOptions.ttl_rollback / "
+            f"{TTL_ROLLBACK_ENV_VAR}=1) asserted legacy intent and reverted the "
+            f"adoption. Set RocksDBOptions(ttl_force_flip=True) (or "
+            f"{TTL_FORCE_FLIP_ENV_VAR}=1) and restart to flip the store into TTL "
+            f"mode -- clearing the rollback lever first if it is set, since the "
+            f"two together refuse to open -- or clear this partition's state and "
+            f"let it rebuild from the changelog."
+        )
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def exists(

@@ -19,7 +19,11 @@ from quixstreams.state.base.transaction import (
     PartitionTransactionStatus,
     validate_transaction_status,
 )
-from quixstreams.state.exceptions import ChangelogFlushError, StateSerializationError
+from quixstreams.state.exceptions import (
+    ChangelogFlushError,
+    StateMigrationError,
+    StateSerializationError,
+)
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
@@ -39,10 +43,11 @@ from quixstreams.state.rocksdb.metadata import (
     STATE_FORMAT_VERSION_KEY,
     TTL_ADOPT_PENDING_KEY,
     TTL_ENABLED_KEY,
+    TTL_FORCE_FLIP_ENV_VAR,
     TTL_HIGH_WATER_KEY,
     TTL_ROLLBACK_ENV_VAR,
 )
-from quixstreams.state.rocksdb.partition import _PendingCensusSurvey
+from quixstreams.state.rocksdb.partition import _lever_source, _PendingCensusSurvey
 from quixstreams.state.rocksdb.transaction import _safe_decode_stamp, _ttl_to_ms
 from quixstreams.state.rocksdb.ttl_codec import (
     _MAX_PLAUSIBLE_STAMP_MS,
@@ -114,6 +119,8 @@ class MemoryStorePartition(StorePartition):
         max_evictions_per_flush: int = _DEFAULT_MAX_EVICTIONS_PER_FLUSH,
         legacy_records_ttl: Optional[timedelta] = None,
         ttl_changelog_tombstones: bool = True,
+        ttl_rollback: bool = False,
+        ttl_force_flip: bool = False,
     ) -> None:
         if max_evictions_per_flush <= 0:
             # Parity with ``RocksDBOptions.__post_init__``:
@@ -139,13 +146,59 @@ class MemoryStorePartition(StorePartition):
         # local-only (the pre-change ``_run_sweep``-in-``write()`` path). Memory
         # does not consume ``RocksDBOptions``, so it is a direct constructor arg.
         self._ttl_changelog_tombstones: bool = ttl_changelog_tombstones
-        # Operational rollback lever, read ONCE at open from the environment
-        # (mirrors ``RocksDBStorePartition._ttl_rollback``). Memory is always the
-        # COLD regime (non-persistent: every restart replays the changelog from
-        # scratch); when set it SUPPRESSES the cold provisional adopt on
-        # the next full changelog replay (a fresh replay reconstructs the un-adopted
-        # originals, so no explicit restore is needed).
-        self._ttl_rollback: bool = os.environ.get(TTL_ROLLBACK_ENV_VAR) == "1"
+        # Operational rollback lever, resolved ONCE at open with the SAME order
+        # as ``RocksDBStorePartition``: the constructor argument (the in-code
+        # surface, parity with ``RocksDBOptions.ttl_rollback`` -- memory has no
+        # options object) wins when True, else ``QUIXSTREAMS_STATE_TTL_ROLLBACK``
+        # must be exactly ``"1"``. Prefer the argument: a Quix Cloud deployment
+        # environment variable that is not declared in the app's ``app.yaml`` is
+        # silently dropped on redeploy, so an env-only lever can vanish between
+        # runs (sc-74843). Memory is always the COLD regime (non-persistent: every
+        # restart replays the changelog from scratch); when set the lever
+        # SUPPRESSES the cold provisional adopt on the next full changelog replay
+        # (a fresh replay reconstructs the un-adopted originals, so no explicit
+        # restore is needed).
+        rollback_env_on = os.environ.get(TTL_ROLLBACK_ENV_VAR) == "1"
+        self._ttl_rollback: bool = bool(ttl_rollback) or rollback_env_on
+        # Force-flip lever, accepted for surface parity with the RocksDB backend
+        # (``RocksDBOptions.ttl_force_flip`` / ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP``)
+        # so one configuration works against either backend, and so the
+        # mutual-exclusion check below is enforced identically. It has NO repair
+        # work to do here: the lever exists to re-flag a PERSISTED store whose
+        # ``__ttl_enabled__`` flag went missing, and this backend persists
+        # nothing -- every open re-derives the classification from a full
+        # changelog replay, which cannot lose a flag it never stored.
+        force_flip_env_on = os.environ.get(TTL_FORCE_FLIP_ENV_VAR) == "1"
+        self._ttl_force_flip: bool = bool(ttl_force_flip) or force_flip_env_on
+        if type(self).uses_ttl_stamps:
+            rollback_source = _lever_source(ttl_rollback, rollback_env_on)
+            force_flip_source = _lever_source(ttl_force_flip, force_flip_env_on)
+            if self._ttl_rollback and self._ttl_force_flip:
+                # Contradictory levers -- refuse to construct, mirroring the
+                # RocksDB backend, so a configuration that is nonsense there is
+                # not silently tolerated here.
+                raise StateMigrationError(
+                    f"The TTL rollback and force-flip levers are BOTH on for "
+                    f"this MemoryStorePartition (rollback "
+                    f"source={rollback_source}, force-flip "
+                    f"source={force_flip_source}), but they are mutually "
+                    f"exclusive: rollback reverts a store to legacy mode while "
+                    f"force-flip forces it into TTL mode. Unset one of them "
+                    f"(the ttl_rollback / ttl_force_flip arguments, or "
+                    f"{TTL_ROLLBACK_ENV_VAR} / {TTL_FORCE_FLIP_ENV_VAR})."
+                )
+            if self._ttl_rollback:
+                logger.info(
+                    "TTL rollback lever: ON (source=%s) for the in-memory store.",
+                    rollback_source,
+                )
+            if self._ttl_force_flip:
+                logger.info(
+                    "TTL force-flip lever: ON (source=%s) for the in-memory store; "
+                    "it has no effect on this backend, which re-derives TTL mode "
+                    "from a full changelog replay on every open.",
+                    force_flip_source,
+                )
         # Runtime mirror of the COLD-heuristic provisional-adoption state
         # (parity with ``RocksDBStorePartition._adopt_provisional``). True == this
         # partition was provisionally cold-adopted and is not yet corroborated:
