@@ -444,6 +444,32 @@ class RocksDBStorePartition(StorePartition):
         else:
             self.uses_ttl_stamps = False
 
+        # Whether ``__ttl_enabled__`` is known to be COMMITTED on disk, as
+        # opposed to merely True in memory. The two can diverge, and that
+        # divergence is the sc-74843 write/read asymmetry: the flush-time flip
+        # (``RocksDBPartitionTransaction._maybe_flip_or_reject``) sets the runtime
+        # flag at PREPARE time while the flag bytes ride the transaction cache and
+        # only land at COMMIT. Any abort between the two — a rebalance, a
+        # changelog produce/flush error, a failed checkpoint — leaves the
+        # partition object flipped in memory with NOTHING on disk, and no later
+        # transaction re-stages the flag. Every subsequent write on that object
+        # then stamps inline and commits STAMPED VALUES onto a store whose
+        # ``__ttl_enabled__`` was never written, so the next partition object for
+        # that path opens LEGACY over stamped values and dies in the value
+        # deserializer on the first read (live 2026-09-04: a header-true stamped
+        # record produced at 10:25:35.359 and a StateSerializationError at
+        # 10:25:35.384, on one partition of one container).
+        #
+        # :meth:`write` closes that hole by re-asserting the flag into any batch
+        # it commits while this is False, so a flipped partition cannot persist a
+        # stamped value without persisting the flag that makes it readable. Set
+        # True only by evidence of a COMMITTED flag: loaded from disk here, or
+        # written by :meth:`_stamp_flip_metadata` (an immediate durable write), or
+        # after :meth:`write`'s own batch commits. Never set from a staged /
+        # in-flight batch — False is the safe direction (one redundant metadata
+        # put on the next flush).
+        self._ttl_flag_persisted: bool = self.uses_ttl_stamps
+
         # Runtime mirror of the COLD-heuristic provisional-adoption marker
         # (``__ttl_adopt_pending__``). True == this store was provisionally
         # cold-adopted and is NOT yet corroborated: the pre-adoption originals live
@@ -488,14 +514,26 @@ class RocksDBStorePartition(StorePartition):
             self._finish_interrupted_corroboration()
 
         # Warm/cold classification + rollback resolution, evaluated at
-        # open BEFORE the persisted-flip snapshot. Five outcomes:
+        # open BEFORE the persisted-flip snapshot. Six outcomes:
         #  1. rollback set on a provisionally cold-adopted store -> restore legacy
         #     (and, since the restore keeps the adopted originals byte-identical,
         #     arm the legacy-read guard below on the adoption artifacts);
-        #  2. warm TTL artifacts present but the ``__ttl_enabled__`` flag is absent
+        #  2. the durable migration-DONE MARKER is on disk and the
+        #     ``__ttl_enabled__`` flag is absent -> flip + persist
+        #     UNCONDITIONALLY. The marker is produced only at the end of a
+        #     successful completion / corroboration, so it is definitive proof
+        #     that this store is TTL-enabled AND fully migrated: every
+        #     default-CF value it certifies is stamped. Owner of the shape
+        #     sc-74843 round 3 crashed on -- a COMPLETED migration reopened
+        #     unflagged (see below);
+        #  3. the operator set ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP`` (or
+        #     ``RocksDBOptions.ttl_force_flip``) -> flip UNCONDITIONALLY: no value
+        #     sample, no artifact requirement, no non-empty-CF requirement. The
+        #     manual escape hatch, and the only case an operator controls;
+        #  4. warm TTL artifacts present but the ``__ttl_enabled__`` flag is absent
         #     (a preview that kept ``__ttl_index__`` / a format marker without the
         #     flag) -> deterministic in-place flip (sound positive ID);
-        #  3. THIS-BRANCH migration bookkeeping present and the flag absent (a
+        #  5. THIS-BRANCH migration bookkeeping present and the flag absent (a
         #     migration whose process died before it could flip, or one whose flag
         #     was deleted while its values stayed stamped) -> repair the flip when
         #     the default CF still samples as stamped
@@ -505,17 +543,37 @@ class RocksDBStorePartition(StorePartition):
         #     every restart of an offset-caught-up store died on the first
         #     ``state.get()`` because the legacy read path handed a TTL-stamped
         #     value to the value deserializer. See that method for the mechanism;
-        #  4. no positive signal at all, but the operator set
-        #     ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP`` -> repair unconditionally (the
-        #     manual escape hatch for a store whose bookkeeping is gone);
-        #  5. otherwise leave the loaded flag as-is (already-flipped warm store, or
+        #  6. otherwise leave the loaded flag as-is (already-flipped warm store, or
         #     a legacy / fresh-volume store whose cold census is handled at
         #     :meth:`complete_recovery`).
         #
-        # Cases 2 and 3 are mutually exclusive BY CONSTRUCTION: the artifact set
-        # case 3 keys on is EXACTLY the set :meth:`_has_warm_ttl_artifacts` vetoes
+        # THE ORDER IS A STRENGTH-OF-EVIDENCE ORDER, and it is load-bearing:
+        # explicit operator intent (cases 1, 3) and durable PROOF (case 2) both
+        # outrank INFERENCE from on-disk bytes (cases 4, 5). Getting this backwards
+        # is what made the force-flip lever useless in production on 2026-09-04
+        # (11:55Z): as the LAST arm of the chain it was unreachable for any store
+        # carrying a migration artifact, because case 5 claimed such a store first
+        # and then declined on its all-past value sample. Four replicas ran with
+        # the lever set, logged that it was ON, and crash-looped anyway. Never
+        # place an inference-based case above a lever or a marker.
+        #
+        # Cases 4 and 5 are mutually exclusive BY CONSTRUCTION: the artifact set
+        # case 5 keys on is EXACTLY the set :meth:`_has_warm_ttl_artifacts` vetoes
         # itself on (a v3.24.0 preview predates all of it), so at most one of the
         # two conditions can hold.
+        #
+        # Case 2 steals nothing from case 4: a done-marker lives in the
+        # ``__ttl_system__`` CF, which is one of the artifacts
+        # ``_has_warm_ttl_artifacts`` vetoes itself on, so case 4 could never have
+        # claimed a marked store. It does deliberately PRE-EMPT case 5, which
+        # would otherwise decide the same store on its bounded value SAMPLE and
+        # REFUSE to flip when nothing in that sample is still live -- the
+        # realistic outcome for a completed dedup store whose 1h stamps have all
+        # gone past, which is exactly a store that must flip. The marker outranks
+        # the sample because it is durable evidence of the migration itself, not
+        # an inference from bytes; and flipping without the sample is
+        # non-destructive either way, because the read path degrades an un-stamped
+        # value RAW (``_safe_decode_stamp`` -> None) instead of truncating it.
         #
         # Both probes run for EVERY TTL-capable partition, flipped or not,
         # because the resolution below can turn a flipped store legacy (case 1)
@@ -525,8 +583,8 @@ class RocksDBStorePartition(StorePartition):
         # creates a CF).
         #
         # The two artifact sets are deliberately kept APART. Migration
-        # bookkeeping is the evidence cases 3/4 act on, and only it, so the
-        # case-2/case-3 exclusivity above survives. Adoption bookkeeping
+        # bookkeeping is the evidence cases 4/5 act on, and only it, so the
+        # case-4/case-5 exclusivity above survives. Adoption bookkeeping
         # (``__ttl_adopt_backup__`` / ``__ttl_adopt_pending__``) proves something
         # weaker -- "this build decided the values here are v3.24.0 stamps" --
         # which is no grounds to flip anything but IS grounds to arm the
@@ -536,27 +594,113 @@ class RocksDBStorePartition(StorePartition):
         if class_uses_ttl_stamps:
             migration_artifacts = self._migration_artifacts_at_open()
             adopt_artifacts = self._v3240_adopt_artifacts_at_open()
-        # Case 3 applies only to a store that is BOTH unflagged and carrying
+        # Case 4 applies only to a store that is BOTH unflagged and carrying
         # bookkeeping. Hoisted into a local so the ``elif`` below stays a single
         # readable line.
         repair_candidate = bool(migration_artifacts) and not self.uses_ttl_stamps
         force_flip_candidate = self._ttl_force_flip and not self.uses_ttl_stamps
-        # Set True by cases 3/4 below when the flip was INFERRED at open rather
+        # Case 2 candidate: a completed migration whose flip flag is missing.
+        # Keyed on ``cfs_at_open`` first so the 99% legacy path (no
+        # ``__ttl_system__`` CF) pays nothing beyond the set membership test the
+        # corroboration gate above already needed -- no third ``list_cf`` and no
+        # extra point-get.
+        done_marker_unflagged = (
+            class_uses_ttl_stamps
+            and not self.uses_ttl_stamps
+            and TTL_SYSTEM_CF_NAME in cfs_at_open
+            and self._has_local_migration_done_marker()
+        )
+        # Set True by cases 3/5 below when the flip was INFERRED at open rather
         # than loaded from disk. Consulted by the ``_persisted_flipped_at_open``
         # snapshot further down, which must not treat an inferred flip as durable
-        # this-branch evidence.
+        # this-branch evidence. Case 2 deliberately leaves it False: a done-marker
+        # IS durable this-branch evidence (stronger than the flag it replaces), so
+        # a marked store must be treated as genuinely persisted-flipped -- which
+        # routes ``complete_recovery`` to BRANCH A, where an empty census is
+        # recognised as "fully migrated" instead of being re-surveyed as an
+        # ambiguous cold census.
         self._ttl_flag_repaired_at_open: bool = False
         if class_uses_ttl_stamps and self._adopt_provisional and self._ttl_rollback:
             # Warm restart of a cold-heuristic-adopted store with the
             # rollback lever set -> restore the originals byte-identical.
             self._rollback_provisional_adopt()
         elif (
+            done_marker_unflagged
+            and not self._ttl_rollback
+            and not self._adopt_provisional
+        ):
+            # Completed-migration flip repair (case 2). The store carries the
+            # durable migration-done marker but no ``__ttl_enabled__`` flag: the
+            # completion re-stamped every leftover, produced the marker and
+            # dropped its bookkeeping, and the flip was never recorded (or was
+            # recorded and later removed). Nothing else claims this shape --
+            # ``has_incomplete_ttl_migration`` answers False on a marked store, so
+            # an offset-caught-up reopen runs NO recovery pass at all -- and its
+            # values are all stamped, so the legacy read path handed
+            # ``8B||json`` to the deserializer on the first ``state.get()``:
+            # sc-74843, "3 seconds from Assigned store partition to death, every
+            # restart" (live 2026-09-04 10:25Z).
+            #
+            # Excluded while ``ttl_rollback`` is set, for the same reason as case
+            # 4: that lever is an explicit "keep this store legacy" instruction
+            # and re-flipping here would silently undo it on the next restart.
+            # Excluded while the store is still provisionally adopted, so this
+            # can never demote/short-circuit the corroboration reconciliation
+            # above (which owns marker + provisional together and clears the
+            # provisional flag itself when it applies).
+            self.uses_ttl_stamps = True
+            self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+            self._stamp_flip_metadata()
+            logger.info(
+                "Completed legacy-TTL migration found UNFLAGGED at path=%s: the "
+                "durable migration-done marker is on disk but __ttl_enabled__ is "
+                "not. The marker is produced only at the end of a successful "
+                "completion, so every default-CF value here is TTL-stamped; "
+                "flipping into TTL mode and persisting the flip. Without this the "
+                "store opens in legacy mode and the first state.get() hands a "
+                "stamped value to the value deserializer (sc-74843).",
+                self._path,
+            )
+            # The ``__ttl_index__`` CF is LOCAL_ONLY, so a store that lost its
+            # flip flag may equally have lost (or never built) its index while the
+            # default CF stayed stamped. Rebuild it verbatim from those stamps so
+            # the completed records can still expire; a no-op once the index holds
+            # one entry, which is the common case here.
+            self._rebuild_index_from_default_cf()
+        elif class_uses_ttl_stamps and force_flip_candidate:
+            # Operator-forced repair (case 3): the lever IS the evidence, so this
+            # flips UNCONDITIONALLY -- no value sample, no artifact requirement,
+            # no non-empty-CF requirement (see
+            # :meth:`_repair_unflagged_stamped_store`, ``forced=True``).
+            #
+            # ORDERED ABOVE THE ARTIFACT-DRIVEN REPAIR ON PURPOSE, and this
+            # ordering is a fix, not a preference. As an ``elif`` chain BELOW
+            # case 5 the lever was UNREACHABLE for the very stores it exists to
+            # rescue: a store carrying any migration artifact (the replicated
+            # ``__ttl_system__`` CF alone is one) made ``repair_candidate`` True,
+            # so case 5 claimed it first and then DECLINED, because its evidence
+            # gate requires a still-live stamp in the sample and every stamp on a
+            # completed short-TTL dedup store is already past. Live 2026-09-04
+            # 11:55-11:57Z: ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1`` was confirmed
+            # on all four replicas, the lever's own INFO fired on every partition
+            # open, and every replica still died on the first ``state.get()`` --
+            # the operator's explicit instruction was overruled by a heuristic
+            # sample. An explicit lever must never be silently outvoted by an
+            # inference, so it now runs before both inference-based cases and
+            # only case 2 (the done-marker, which is durable PROOF rather than an
+            # inference) precedes it. ``ttl_rollback`` remains the only exclusion,
+            # and rollback + force-flip together already raised in ``__init__``.
+            self._ttl_flag_repaired_at_open = self._repair_unflagged_stamped_store(
+                artifacts="", forced=True
+            )
+        elif (
             class_uses_ttl_stamps
             and not self.uses_ttl_stamps
             and self._has_warm_ttl_artifacts()
         ):
-            # Sound warm signal without the enabled flag. Flip
-            # deterministically and persist the flip so the store resumes TTL mode.
+            # v3.24.0-preview warm flip (case 4). Sound warm signal without the
+            # enabled flag: flip deterministically and persist the flip so the
+            # store resumes TTL mode.
             self.uses_ttl_stamps = True
             self.get_or_create_column_family(TTL_INDEX_CF_NAME)
             self._stamp_flip_metadata()
@@ -573,10 +717,14 @@ class RocksDBStorePartition(StorePartition):
             # expire). No-op when the index is already populated.
             self._rebuild_index_from_default_cf()
         elif repair_candidate and not self._ttl_rollback:
-            # Interrupted-migration repair (case 3). The store carries this-build
+            # Interrupted-migration repair (case 5): the last resort, and the only
+            # case decided by a value SAMPLE. The store carries this-build
             # migration bookkeeping but lost its ``__ttl_enabled__`` flag, so it
             # would otherwise open in legacy mode over TTL-stamped values and die
-            # on the first read. Skipped while the rollback lever is set: that
+            # on the first read. Reached only when nothing stronger claimed it:
+            # no done-marker (case 2 -- proof), no operator lever (case 3 --
+            # instruction), no v3.24.0 warm signature (case 4). Skipped while the
+            # rollback lever is set: that
             # lever is an explicit "keep this store legacy" instruction, and
             # re-flipping here would silently undo the rollback on the very next
             # restart. (An operator who rolled back a genuine TTL store and then
@@ -584,14 +732,6 @@ class RocksDBStorePartition(StorePartition):
             # one -- the two together refuse to open.)
             self._ttl_flag_repaired_at_open = self._repair_unflagged_stamped_store(
                 artifacts=migration_artifacts, forced=False
-            )
-        elif class_uses_ttl_stamps and force_flip_candidate:
-            # Operator-forced repair (case 4): no bookkeeping left to identify the
-            # store by, so the lever IS the evidence. Reached only when case 3 did
-            # not fire (no artifacts, or the rollback lever -- and rollback +
-            # force-flip together already raised in ``__init__``).
-            self._ttl_flag_repaired_at_open = self._repair_unflagged_stamped_store(
-                artifacts="", forced=True
             )
 
         # Arm the legacy-read stamp guard. True only for a store that opened
@@ -667,7 +807,7 @@ class RocksDBStorePartition(StorePartition):
         # discarded. An un-flipped (pure-legacy) store keeps ``False`` and still
         # discards an orphan census.
         #
-        # A flip INFERRED by the open-time repair (case 3/4 above) deliberately does
+        # A flip INFERRED by the open-time repair (cases 3/5 above) deliberately does
         # NOT count. The repair proves "these bytes are stamped", never "this store
         # was mid legacy->TTL migration", and the difference decides how
         # ``complete_recovery`` treats the census: with this True it takes BRANCH A,
@@ -682,6 +822,13 @@ class RocksDBStorePartition(StorePartition):
         # un-stamped leftovers has them discarded rather than stamped, so they stay
         # readable (the fail-safe read path returns an un-stamped value raw) and
         # never-expiring instead of being corrupted. Non-destructive beats complete.
+        #
+        # The done-marker flip (case 2) is the ONE inferred-at-open flip that DOES
+        # count, and it is not an inference: the marker is durable proof that a
+        # legacy->TTL migration ran here to completion, which is strictly more
+        # than the flag it stands in for. Counting it is also what a marked store
+        # needs — BRANCH A reads an empty census as "fully migrated" and returns,
+        # whereas BRANCH B would re-survey it as an ambiguous cold census.
         self._persisted_flipped_at_open: bool = (
             self.uses_ttl_stamps and not self._ttl_flag_repaired_at_open
         )
@@ -884,6 +1031,54 @@ class RocksDBStorePartition(StorePartition):
             and key == TTL_MIGRATION_DONE_KEY
         ):
             self._recovery_saw_migration_done = True
+            # FLIP AT THE MOMENT THE MARKER IS SEEN, not at the end of recovery.
+            # The marker is a ``__ttl_system__`` record, so the header-true
+            # flip-discovery below (keyed on ``cf_name == "default"``) cannot
+            # claim it, and until this branch existed the marker was written
+            # verbatim into the local ``__ttl_system__`` CF of a store still
+            # flagged LEGACY. That leaves "done-marker on disk, no
+            # ``__ttl_enabled__``" the moment this batch commits — and everything
+            # downstream that would have fixed it can be missed: the
+            # end-of-recovery flip in :meth:`complete_recovery` never runs if the
+            # recovery loop dies or the partition is revoked first, and a
+            # reassigned/warm partition that is already caught up runs no recovery
+            # pass at all. That is how four replicas crash-looped on a PLAIN WARM
+            # RESTART (live 2026-09-04 10:41-10:43Z): the completion's marker was
+            # replicated down the changelog, every warm copy of the store replayed
+            # it while legacy, and the first ``state.get()`` handed a stamped value
+            # to the value deserializer.
+            #
+            # Flipping here makes the marker self-sufficient: the flag is
+            # persisted in its own immediate durable write BEFORE the marker
+            # record's own batch is committed below, so no crash point can leave
+            # the marker on disk without the flag. Safe for the rest of the
+            # replay: the marker is produced LAST by every path that produces it,
+            # so any record after it is a later-container LIVE record, which is
+            # header-true and belongs on the stamped path anyway (before this it
+            # landed verbatim with no index entry and could never expire).
+            #
+            # No ``__ttl_index__`` rebuild here, deliberately: this runs PER
+            # RECORD, and a full default-CF scan on the marker would be an
+            # unbounded cost inside the replay loop. Any already-on-disk stamped
+            # value that this volume never indexed therefore stays unindexed and
+            # never expires until it is overwritten — an over-KEEP, never a
+            # delete, and the residual the codebase already prefers. The
+            # index-rebuilding owners are unchanged and cover the realistic
+            # shapes: :meth:`complete_recovery`'s done-marker branch rebuilds
+            # from an all-stamped census, and the open-time cases rebuild from
+            # the default CF.
+            if not self.uses_ttl_stamps:
+                self.uses_ttl_stamps = True
+                self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+                self._stamp_flip_metadata()
+                logger.info(
+                    "Recovery: migration-done marker replayed at path=%s; the "
+                    "source store completed its legacy-TTL migration, so "
+                    "flipping this partition into TTL mode and persisting the "
+                    "flip now (the marker must never sit on disk without "
+                    "__ttl_enabled__).",
+                    self._path,
+                )
 
         # Recovery flip-discovery.
         #
@@ -1609,7 +1804,10 @@ class RocksDBStorePartition(StorePartition):
         # persist the durable done-flag marker AFTER the last stamped record. A
         # crash before this leaves the store re-completable from the (now-more-
         # stamped) changelog; a subsequent restore that sees the marker never
-        # re-enters completion.
+        # re-enters completion. The call also persists ``__ttl_enabled__``
+        # BEFORE the marker (see :meth:`_produce_migration_done_marker`), so the
+        # store this completion just re-stamped can never be reopened unflagged —
+        # the sc-74843 crash on the first live read after a COMPLETED migration.
         self._produce_migration_done_marker()
         logger.info(
             "Recovery: completed legacy-TTL migration at path=%s; stamped %d "
@@ -1620,7 +1818,28 @@ class RocksDBStorePartition(StorePartition):
 
     def _produce_migration_done_marker(self) -> None:
         """
-        Produce + persist the durable "migration done" marker.
+        Persist the flip, then produce + persist the durable "migration done"
+        marker.
+
+        **Flip BEFORE marker** — the on-disk invariant every caller depends on is
+        "done-marker present ⟹ ``__ttl_enabled__`` present". The marker means
+        "this store is TTL-enabled and fully migrated", so a store carrying the
+        marker without the flip flag opens in LEGACY mode over values that are
+        all stamped and hands ``8B||payload`` to the value deserializer on the
+        first ``state.get()`` — the sc-74843 crash loop. Persisting the flag
+        FIRST, in its own durable write, makes that shape unproducible at every
+        crash point: crash between the two and the store reopens flipped (reads
+        correct) and still UNMARKED, so recovery re-enters the completion, which
+        is idempotent (a key leaves ``__ttl_backfill_pending__`` only once it has
+        been stamped). The reverse order — marker first — is the shape that
+        crash-loops, which is why the flag is not written after the marker or in
+        the same batch as it.
+
+        Every caller (recovery completion, the empty-census marker, the
+        live-backfill resume, adoption corroboration) reaches here on an
+        already-flipped partition, so in the normal case this write is a
+        no-op-equivalent rewrite of a flag some earlier path already persisted;
+        it exists so no future caller has to remember.
 
         **Changelog-first ordering** — mirroring :meth:`_flush_backfill_changelog`
         and the invariant it enforces everywhere else: the marker is produced to
@@ -1637,9 +1856,21 @@ class RocksDBStorePartition(StorePartition):
         The metadata flip flag is local-only (lost on a fresh volume), so the
         changelog-carried marker is what a cold rebuild learns "TTL enabled +
         backfill done, never redo" from. Used by the recovery-completion path; the
-        live-enable paths instead stage the marker into the transaction cache so
-        it rides the flip flush.
+        live-enable paths instead stage the marker into the transaction cache
+        (``RocksDBPartitionTransaction._write_migration_done_marker_to_cache``)
+        so it rides the flip flush, where
+        ``_write_flip_metadata_to_cache`` stages the flag into the very same
+        batch — so the invariant holds atomically there, and :meth:`write`
+        re-asserts the flag if that batch ever aborts.
         """
+        if type(self).uses_ttl_stamps:
+            # Gated on the CLASS flag so a windowed / timestamped opt-out can
+            # never be flagged as TTL (those subclasses never call this method,
+            # but the gate keeps that a property of the code rather than of the
+            # call graph).
+            self.uses_ttl_stamps = True
+            self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+            self._stamp_flip_metadata()
         marker_value = int_to_bytes(STATE_FORMAT_VERSION)
         if self._changelog_producer is not None:
             # PER-PHASE delivery accounting: this marker phase gets its own
@@ -2433,6 +2664,10 @@ class RocksDBStorePartition(StorePartition):
         meta_batch.delete(TTL_HIGH_WATER_KEY, metadata_handle)
         meta_batch.delete(TTL_ADOPT_PENDING_KEY, metadata_handle)
         self._write(meta_batch)
+        # The flag is gone from disk. Keep the memo honest so a later re-flip of
+        # this same object re-asserts it in :meth:`write` (the store is legacy
+        # from here, so nothing re-asserts it while the rollback stands).
+        self._ttl_flag_persisted = False
 
         # Drop the TTL index + backup CFs.
         self._drop_local_cf_if_exists(TTL_INDEX_CF_NAME)
@@ -2474,8 +2709,10 @@ class RocksDBStorePartition(StorePartition):
 
         The vetoed store is NOT unowned: :meth:`_migration_artifacts_at_open` looks
         for exactly this bookkeeping and :meth:`_repair_unflagged_stamped_store`
-        (case 3 of the open-time resolution) decides it, on stamp evidence sampled
-        from the default CF. That ownership is the sc-74843 fix; before it, this
+        (case 5 of the open-time resolution) decides it, on stamp evidence sampled
+        from the default CF -- unless the migration-done marker is present, in
+        which case case 2 claims the store first and flips it without a sample.
+        That ownership is the sc-74843 fix; before it, this
         veto deferred to the changelog-replay / ``complete_recovery`` path, which
         never runs for an offset-caught-up store whose flip flag is the thing
         that is missing -- the store opened legacy over stamped values and
@@ -2488,8 +2725,9 @@ class RocksDBStorePartition(StorePartition):
         metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
         # Veto: this-branch migration bookkeeping means a current-build store
         # (possibly a crashed migration), never a v3.24.0 preview. Such a store is
-        # handled by case 3 of the open-time resolution
-        # (:meth:`_repair_unflagged_stamped_store`), not here.
+        # handled by case 5 of the open-time resolution
+        # (:meth:`_repair_unflagged_stamped_store`) — or, when its migration
+        # already completed, by the done-marker flip in case 2 — not here.
         if (
             TTL_BACKFILL_PENDING_CF_NAME in cfs
             or TTL_BACKFILL_STAMPED_CF_NAME in cfs
@@ -2560,10 +2798,10 @@ class RocksDBStorePartition(StorePartition):
 
         Sibling of :meth:`_migration_artifacts_at_open`, kept SEPARATE from it on
         purpose. That probe answers "this build ran a legacy->TTL migration here",
-        which is the evidence :meth:`_repair_unflagged_stamped_store` (case 3 of
+        which is the evidence :meth:`_repair_unflagged_stamped_store` (case 5 of
         the open-time resolution) acts on and is exactly the set
         :meth:`_has_warm_ttl_artifacts` vetoes itself on -- so keeping this
-        artifact set out of it is what preserves the case-2/case-3
+        artifact set out of it is what preserves the case-4/case-5
         mutual-exclusivity-by-construction. Adoption bookkeeping proves something
         weaker and different: "this build decided the values on this volume are
         v3.24.0 stamps". That is no grounds to flip anything, but it IS grounds to
@@ -2680,9 +2918,23 @@ class RocksDBStorePartition(StorePartition):
         strips eight bytes off every value and, on an all-past sample, lets the
         sweep delete the whole store.
 
-        ``forced=True`` is the ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP`` lever: an
-        explicit operator decision for a store whose bookkeeping is gone, so it
-        flips without evidence and only WARNs when the evidence is missing.
+        The gate is NOT the last line of defence for a COMPLETED migration. A
+        store whose migration-done marker is on disk is claimed earlier, by case
+        2 of the open-time resolution, and flipped without any sample: the marker
+        is durable proof that every value here is stamped, so an all-past sample
+        (a completed dedup store whose short stamps have expired) must not be
+        allowed to refuse the flip and leave the store unreadable.
+
+        ``forced=True`` is the ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP`` /
+        ``RocksDBOptions.ttl_force_flip`` lever: an explicit operator decision,
+        so it flips UNCONDITIONALLY -- whatever the sample says, whatever
+        bookkeeping is or is not on disk, and even on an empty default CF -- and
+        only WARNs when the live-stamp evidence is missing. It applies to ANY
+        unflagged store, not just one whose bookkeeping is gone: case 3 of the
+        open-time resolution runs it ahead of BOTH inference-based cases,
+        precisely because an operator instruction must not be outvoted by a
+        heuristic sample (see that block for the production failure that proved
+        it).
 
         :param artifacts: log-ready list of the bookkeeping found
             (:meth:`_migration_artifacts_at_open`); empty on the forced path.
@@ -3358,6 +3610,29 @@ class RocksDBStorePartition(StorePartition):
             for key in deletes:
                 batch.delete(key, cf_handle)
 
+        if self.uses_ttl_stamps and not self._ttl_flag_persisted:
+            # RE-ASSERT THE FLIP FLAG. A flipped partition must never commit a
+            # stamped value without ``__ttl_enabled__`` being committed too:
+            # every value in the default CF is stamped from here on, and a store
+            # that reopens without the flag reads them in legacy mode and dies in
+            # the value deserializer (sc-74843). The flush-time flip sets the
+            # runtime flag at PREPARE while the flag bytes ride the transaction
+            # cache, so an abort between the two (rebalance, changelog error,
+            # failed checkpoint) leaves the object flipped with nothing on disk
+            # and no later transaction re-staging the flag — this closes that
+            # window at the last possible moment, inside the same atomic batch as
+            # the values themselves. Idempotent and self-disabling: one bool test
+            # per flush once the flag is known committed, and nothing at all on
+            # the legacy path. A duplicate put of the identical bytes (the flip
+            # flush stages them too) is harmless.
+            metadata_handle = self.get_column_family_handle(METADATA_CF_NAME)
+            batch.put(TTL_ENABLED_KEY, b"\x01", metadata_handle)
+            batch.put(
+                STATE_FORMAT_VERSION_KEY,
+                int_to_bytes(STATE_FORMAT_VERSION),
+                metadata_handle,
+            )
+
         if self.uses_ttl_stamps and self._high_water_ms is not None:
             batch.put(
                 TTL_HIGH_WATER_KEY,
@@ -3393,6 +3668,12 @@ class RocksDBStorePartition(StorePartition):
             )
 
         self._write(batch)
+        if self.uses_ttl_stamps:
+            # The batch committed, so any flip flag it carried — the one staged
+            # by a flush-time flip, or the re-assert above — is now durable.
+            # Memoised AFTER the write, never before: an exception from
+            # ``_write`` must leave this False so the next flush re-asserts.
+            self._ttl_flag_persisted = True
 
     # ------------------------------------------------------------------
     # TTL flip / probe helpers (used by the transaction at flush time).
@@ -4404,6 +4685,9 @@ class RocksDBStorePartition(StorePartition):
             metadata_handle,
         )
         self._write(batch)
+        # The flag is now COMMITTED, so ``write`` no longer has to re-assert it
+        # into every batch (see ``_ttl_flag_persisted`` in ``__init__``).
+        self._ttl_flag_persisted = True
 
     def _looks_like_stamped_value(self, value: bytes) -> bool:
         """

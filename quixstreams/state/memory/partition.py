@@ -472,6 +472,18 @@ class MemoryStorePartition(StorePartition):
             and key == TTL_MIGRATION_DONE_KEY
         ):
             self._recovery_saw_migration_done = True
+            # Flip AT THE MARKER, not only at end of recovery — the same
+            # invariant the RocksDB backend enforces ("a done-marker implies
+            # flipped"), for the same reason: the read path gates on the INSTANCE
+            # flag, so a partition that saw the marker and never reached
+            # :meth:`complete_recovery` (a recovery loop that died, a revoked
+            # partition) would serve stamped values through the legacy read path.
+            # There is no ``_stamp_flip_metadata`` mirror here because the memory
+            # backend persists nothing (see the flip-discovery note below), so the
+            # in-memory flip is the whole of it.
+            if not self.uses_ttl_stamps:
+                self.uses_ttl_stamps = True
+                self._state.setdefault(TTL_INDEX_CF_NAME, {})
 
         # Recovery flip-discovery (mirrors
         # ``RocksDBStorePartition.recover_from_changelog_message``).
