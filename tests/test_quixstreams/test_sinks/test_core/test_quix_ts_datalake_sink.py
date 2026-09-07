@@ -2404,7 +2404,7 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
     def test_sidecar_upload_failure_does_not_fail_the_write(
         self, sink_factory, mock_blob_client, mock_catalog_client
     ):
-        # Submit succeeds; the future raises when awaited (_await_sidecar_uploads).
+        # Submit succeeds; the future raises when awaited (_settle_uploads).
         bad = MagicMock()
         bad.result.side_effect = RuntimeError("sidecar upload failed")
         self._split_futures(mock_blob_client, bad)
