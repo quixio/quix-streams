@@ -286,6 +286,9 @@ class TestRecoveryRebalanceMidRecovery:
             def get_watermark_offsets(self, *_args, **_kwargs):
                 return 0, 10
 
+            def seek(self, *_args, **_kwargs):
+                return None
+
         consumer = _PauseResumeTrackingConsumer(
             assignment=[stateless_tp0, stateful_tp0, changelog_tp0]
         )
