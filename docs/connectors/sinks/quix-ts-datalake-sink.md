@@ -114,7 +114,9 @@ The index is navigation-only — it is not used for query pruning, so it is a hi
 
 ### Catalog registration
 
-A physical-only table registers with an empty `partition_spec` and lets the catalog derive the spec from the first files' paths. As soon as any virtual column is configured, the spec cannot be discovered from paths, so the sink sends the full intended tree order up front and declares which entries are virtual in `properties.virtual_partitions`. On restart against an existing table, the sink validates against that same full order.
+The table's `partition_spec` is the **physical** columns only. That is the folder tree: the catalog validates every `add-files` call against it, and a file's `partition_values` can only ever carry physical values — a file holds every value of a virtual column, so it has no single value to register. The virtual levels are declared in table properties instead: `properties.expected_partitions` is the full tree order (physical + virtual) and `properties.virtual_partitions` lists the virtual entries. `properties.timestamp_column` and `properties.sort_column` are recorded alongside them.
+
+These properties are sink-owned. On every start against an existing table the sink compares them with its configuration and rewrites them if they differ, preserving the table's location, schema, and every property it does not own (`file_count`, `created_by`, …). So adding a `~virtual` level or a `sort_column` to a table that already has data takes effect on the next start, and unsetting one removes it again. The physical set is validated and cannot change: a physical ↔ virtual swap of a column is rejected because it would corrupt the folder structure.
 
 ### Caveats
 
@@ -158,7 +160,7 @@ sink = QuixTSDataLakeSink(
 |---|---|---|---|
 | `sort_column` | `Optional[str]` | `None` | Column recorded on the table as `properties.sort_column`, which compaction orders files by. When `None`, the lakehouse falls back to `timestamp_column`. |
 
-Compaction writes files ordered by this column so that `ORDER BY` and time-range queries can skip files and stream results instead of sorting the whole table. The sink records `properties.timestamp_column` on every registration and adds `properties.sort_column` only when you set it explicitly, so the fallback stays available.
+Compaction writes files ordered by this column so that `ORDER BY` and time-range queries can skip files and stream results instead of sorting the whole table. The sink records `properties.timestamp_column` on every table and adds `properties.sort_column` only when you set it explicitly, so the fallback stays available. Both are synced to an existing table on start (see [Catalog registration](#catalog-registration)), and unsetting `sort_column` removes it from the table again.
 
 This parameter is table metadata for the lakehouse to act on. The sink itself does not reorder rows within a file.
 

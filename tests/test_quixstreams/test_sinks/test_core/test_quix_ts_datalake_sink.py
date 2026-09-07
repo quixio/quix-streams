@@ -934,23 +934,23 @@ class TestPartitionValidation:
     def test_validate_catalog_partition_matches_with_virtual_on_restart(
         self, sink_factory, mock_catalog_client
     ):
-        """RESTART to an existing virtual-partitioned table must NOT raise.
-
-        The catalog stores the full spec (physical + virtual) as the sink
-        registers it; validation must compare against the full tree order, not
-        the physical-only hive_columns (which previously caused a spurious
-        'Partition strategy mismatch' on every restart of a ~-virtual sink)."""
+        """RESTART to an existing virtual-partitioned table must NOT raise, for
+        both catalog states the sink can meet: the physical-only spec this sink
+        writes, and the legacy full spec (physical + virtual) an earlier version
+        wrote alongside ``properties.virtual_partitions``."""
         sink = sink_factory(
             hive_columns=["year", "month", "~driver"],
             catalog_url="http://catalog:8080",
         )
         sink._catalog = mock_catalog_client
 
-        table_metadata = {
-            "partition_spec": ["year", "month", "driver"]
-        }  # phys + virtual
-        # Should NOT raise.
-        sink._validate_partition_strategy(table_metadata)
+        sink._validate_partition_strategy({"partition_spec": ["year", "month"]})
+        sink._validate_partition_strategy(
+            {
+                "partition_spec": ["year", "month", "driver"],
+                "properties": {"virtual_partitions": ["driver"]},
+            }
+        )
 
 
 # =============================================================================
@@ -983,14 +983,15 @@ class TestCatalogIntegration:
     def test_skip_register_if_table_exists(
         self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
     ):
-        """Test that existing table is not recreated."""
+        """An existing table is never re-created; sink-owned properties it is
+        missing are synced onto it instead."""
         sink = sink_factory(
             catalog_url="http://catalog:8080",
             auto_discover=True,
         )
         sink._catalog = mock_catalog_client
 
-        # Mock table already exists
+        # Mock table already exists, without any sink-owned properties
         existing_response = MagicMock()
         existing_response.status_code = 200
         existing_response.json.return_value = {"partition_spec": []}
@@ -1003,8 +1004,13 @@ class TestCatalogIntegration:
         batch = sample_batch()
         sink.write(batch)
 
-        # put should NOT be called since table exists
-        mock_catalog_client.put.assert_not_called()
+        # The one PUT is a metadata sync, not a create: no created_by stamp,
+        # the existing spec untouched, the sink's properties added.
+        mock_catalog_client.put.assert_called_once()
+        body = mock_catalog_client.put.call_args.kwargs["json"]
+        assert "created_by" not in body["properties"]
+        assert body["partition_spec"] == []
+        assert body["properties"]["timestamp_column"] == "ts_ms"
         assert sink.table_registered is True
 
     def test_register_with_workspace_id_location(
@@ -1153,6 +1159,230 @@ class TestCatalogIntegration:
         assert by_partition["__None__"]["partition_values"]["machine"] == "__None__"
         null_bucket_path = by_partition["__None__"]["file_path"]
         assert "machine=__None__" in null_bucket_path
+
+
+# =============================================================================
+# 6b. Catalog table metadata: physical-only spec, sink-owned properties synced
+# =============================================================================
+
+
+def _existing_table(mock_catalog_client, metadata):
+    """Make the catalog report an existing table described by ``metadata``."""
+    table = MagicMock(status_code=200)
+    table.json.return_value = metadata
+    health = MagicMock(status_code=200)
+    mock_catalog_client.get.side_effect = lambda path, **kw: (
+        health if "/health" in path else table
+    )
+
+
+class TestCatalogTableMetadata:
+    """``partition_spec`` is physical-only — it is the folder tree the catalog
+    validates every add-files call against, and a file can only carry physical
+    partition values. The virtual tree, timestamp_column and sort_column live in
+    sink-owned properties, which are synced to an existing table on start."""
+
+    # What the catalog holds for a physical-only table another sink created,
+    # including properties the sink does not own and must not disturb.
+    META = {
+        "location": "s3://bucket/ws/prefix/test_table",
+        "schema": {"type": "struct", "fields": [{"name": "speed"}]},
+        "partition_spec": ["year", "month"],
+        "properties": {
+            "created_by": "someone-else",
+            "file_count": "12",
+            "expected_partitions": ["year", "month"],
+            "timestamp_column": "ts_ms",
+        },
+    }
+
+    def _sink(self, sink_factory, mock_catalog_client, **kwargs):
+        sink = sink_factory(catalog_url="http://catalog:8080", **kwargs)
+        sink._catalog = mock_catalog_client
+        return sink
+
+    def test_create_sends_physical_spec_and_declares_virtual_levels(
+        self, sink_factory, mock_catalog_client
+    ):
+        sink = self._sink(
+            sink_factory,
+            mock_catalog_client,
+            hive_columns=["year", "month", "~driver"],
+            sort_column="seq",
+        )
+        sink._register_table()
+
+        body = mock_catalog_client.put.call_args.kwargs["json"]
+        assert body["partition_spec"] == ["year", "month"]
+        assert body["properties"] == {
+            "created_by": "quixstreams-quix-lake-sink",
+            "auto_discovered": "false",
+            "expected_partitions": ["year", "month", "driver"],
+            "virtual_partitions": ["driver"],
+            "timestamp_column": "ts_ms",
+            "sort_column": "seq",
+        }
+        assert sink.table_registered
+
+    def test_existing_table_in_sync_is_left_alone(
+        self, sink_factory, mock_catalog_client
+    ):
+        _existing_table(mock_catalog_client, self.META)
+        sink = self._sink(
+            sink_factory, mock_catalog_client, hive_columns=["year", "month"]
+        )
+
+        sink._register_table()
+
+        mock_catalog_client.put.assert_not_called()
+        assert sink.table_registered
+
+    def test_adding_virtual_level_to_existing_table_updates_properties_only(
+        self, sink_factory, mock_catalog_client
+    ):
+        # The table already has data under year=/month=. Adding ~driver (and a
+        # sort_column) is a metadata change: no crash, no spec change, and
+        # nothing the sink does not own is disturbed.
+        _existing_table(mock_catalog_client, self.META)
+        sink = self._sink(
+            sink_factory,
+            mock_catalog_client,
+            hive_columns=["year", "month", "~driver"],
+            sort_column="seq",
+        )
+
+        sink._register_table()  # must not raise
+
+        body = mock_catalog_client.put.call_args.kwargs["json"]
+        assert body["partition_spec"] == ["year", "month"]
+        assert body["properties"] == {
+            "created_by": "someone-else",
+            "file_count": "12",
+            "expected_partitions": ["year", "month", "driver"],
+            "virtual_partitions": ["driver"],
+            "timestamp_column": "ts_ms",
+            "sort_column": "seq",
+        }
+        assert body["location"] == self.META["location"]
+        assert body["schema"] == self.META["schema"]
+        assert sink.table_registered
+
+    def test_unsetting_sort_column_and_virtual_levels_removes_them(
+        self, sink_factory, mock_catalog_client
+    ):
+        meta = {
+            **self.META,
+            "properties": {
+                **self.META["properties"],
+                "expected_partitions": ["year", "month", "driver"],
+                "virtual_partitions": ["driver"],
+                "sort_column": "seq",
+            },
+        }
+        _existing_table(mock_catalog_client, meta)
+        sink = self._sink(
+            sink_factory, mock_catalog_client, hive_columns=["year", "month"]
+        )
+
+        sink._register_table()
+
+        props = mock_catalog_client.put.call_args.kwargs["json"]["properties"]
+        assert "sort_column" not in props  # falls back to timestamp_column
+        assert "virtual_partitions" not in props
+        assert props["expected_partitions"] == ["year", "month"]
+
+    def test_legacy_virtual_entries_are_stripped_from_partition_spec(
+        self, sink_factory, mock_catalog_client
+    ):
+        # An earlier sink version put the virtual level in partition_spec, which
+        # makes the catalog reject every add-files call once the table has data
+        # (no file carries a 'driver' partition value). Restart must not raise,
+        # and must repair the spec.
+        meta = {
+            **self.META,
+            "partition_spec": ["year", "month", "driver"],
+            "properties": {
+                **self.META["properties"],
+                "expected_partitions": ["year", "month", "driver"],
+                "virtual_partitions": ["driver"],
+            },
+        }
+        _existing_table(mock_catalog_client, meta)
+        sink = self._sink(
+            sink_factory, mock_catalog_client, hive_columns=["year", "month", "~driver"]
+        )
+
+        sink._register_table()
+
+        body = mock_catalog_client.put.call_args.kwargs["json"]
+        assert body["partition_spec"] == ["year", "month"]
+        assert body["properties"]["virtual_partitions"] == ["driver"]
+
+    def test_physical_to_virtual_swap_is_rejected(
+        self, sink_factory, mock_catalog_client
+    ):
+        _existing_table(mock_catalog_client, self.META)  # month is foldered on disk
+        sink = self._sink(
+            sink_factory, mock_catalog_client, hive_columns=["year", "~month"]
+        )
+
+        with pytest.raises(ValueError, match="Partition strategy mismatch"):
+            sink._register_table()
+        mock_catalog_client.put.assert_not_called()
+        assert not sink.table_registered
+
+    def test_virtual_to_physical_swap_is_rejected(
+        self, sink_factory, mock_catalog_client
+    ):
+        meta = {
+            **self.META,
+            "partition_spec": ["year"],
+            "properties": {**self.META["properties"], "virtual_partitions": ["driver"]},
+        }
+        _existing_table(mock_catalog_client, meta)
+        sink = self._sink(
+            sink_factory, mock_catalog_client, hive_columns=["year", "driver"]
+        )
+
+        with pytest.raises(ValueError, match="Partition strategy mismatch"):
+            sink._register_table()
+        mock_catalog_client.put.assert_not_called()
+
+    def test_metadata_update_failure_raises(self, sink_factory, mock_catalog_client):
+        _existing_table(mock_catalog_client, self.META)
+        mock_catalog_client.put.return_value = MagicMock(status_code=500, text="boom")
+        sink = self._sink(
+            sink_factory, mock_catalog_client, hive_columns=["year", "month", "~driver"]
+        )
+
+        with pytest.raises(RuntimeError, match="Failed to update table"):
+            sink._register_table()
+        assert not sink.table_registered
+
+    def test_manifest_partition_values_are_physical_only(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        # A file holds every driver, so it has no driver value to register; the
+        # catalog checks these keys against the physical-only spec.
+        sink = self._sink(
+            sink_factory, mock_catalog_client, hive_columns=["year", "~driver"]
+        )
+        sink.table_registered = True
+        batch = SinkBatch(topic="test", partition=0)
+        for i, d in enumerate(["HAM", "VER"]):
+            batch.append(
+                value={"driver": d, "ts_ms": 1704067200000},
+                key=f"k{i}",
+                timestamp=1704067200000,
+                headers=[],
+                offset=i,
+            )
+
+        sink.write(batch)
+
+        files = mock_catalog_client.post.call_args.kwargs["json"]["files"]
+        assert len(files) == 1
+        assert files[0]["partition_values"] == {"year": "2024"}
 
 
 # =============================================================================
@@ -2144,8 +2374,10 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         sink._register_table()
 
         body = mock_catalog_client.put.call_args.kwargs["json"]
-        # Full tree order sent up front (virtual can't be discovered from paths).
-        assert body["partition_spec"] == ["year", "month", "driver"]
+        # partition_spec is the PHYSICAL tree only; the virtual level is
+        # declared in properties (full order + which entries are virtual).
+        assert body["partition_spec"] == ["year", "month"]
+        assert body["properties"]["expected_partitions"] == ["year", "month", "driver"]
         assert body["properties"]["virtual_partitions"] == ["driver"]
 
     def test_register_table_records_sort_and_timestamp_columns(

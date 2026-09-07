@@ -831,62 +831,71 @@ class QuixTSDataLakeSink(BatchingSink):
                 # Replace empty dicts with None; keeps non-empty dicts as-is
                 df[col] = df[col].apply(lambda x: x or None)
 
-    def _register_table(self):
-        """Register the table in REST Catalog."""
-        if not self._catalog:
-            return
+    # Keys of _owned_properties that are removed from the table when the sink
+    # no longer sets them: an unset sort_column must fall back to the timestamp
+    # column, not linger; a dropped ~virtual level must leave the tree.
+    _OPTIONAL_OWNED_PROPERTIES = ("virtual_partitions", "sort_column")
 
-        # First check if table already exists
-        check_response = self._catalog.get(
-            f"/namespaces/{self.namespace}/tables/{self.table_name}",
-            timeout=5,
-        )
+    def _table_path(self) -> str:
+        return f"/namespaces/{self.namespace}/tables/{self.table_name}"
 
-        if check_response.status_code == 200:
-            logger.info("Table '%s' already exists in catalog", self.table_name)
-            self.table_registered = True
-            # Validate partition strategy matches
-            self._validate_partition_strategy(check_response.json())
-            return
-
-        # Table doesn't exist, create it
-        # Note: Location must be full S3 URI for catalog (API uses this with DuckDB)
-        # Include workspace_id in the path if set (for workspace-scoped storage)
+    def _table_location(self) -> str:
+        # Full S3 URI (the API hands it to DuckDB); workspace-scoped when set.
         if self.workspace_id:
-            location = f"s3://{self.s3_bucket}/{self.workspace_id}/{self.s3_prefix}/{self.table_name}"
-        else:
-            location = f"s3://{self.s3_bucket}/{self.s3_prefix}/{self.table_name}"
+            return f"s3://{self.s3_bucket}/{self.workspace_id}/{self.s3_prefix}/{self.table_name}"
+        return f"s3://{self.s3_bucket}/{self.s3_prefix}/{self.table_name}"
 
-        # Physical-only tables keep the historical dynamic-discovery behaviour
-        # (empty spec; the catalog derives it from the first files' paths). When
-        # any VIRTUAL column is configured it can't be discovered from paths, so
-        # we send the full intended tree order up front and declare which
-        # entries are virtual in properties.
-        properties = {
-            "created_by": "quixstreams-quix-lake-sink",
-            "auto_discovered": "false",
+    def _owned_properties(self) -> Dict[str, Any]:
+        """Table properties the sink owns and keeps in step with its config
+        (see _sync_table_metadata).
+
+        ``partition_spec`` itself is PHYSICAL-only: it is the folder tree, the
+        catalog validates every add-files call against it, and a file's
+        partition_values can only ever carry physical values (a file holds
+        every value of a virtual column). So the virtual levels are declared
+        here instead — the full tree order in ``expected_partitions`` and the
+        virtual entries in ``virtual_partitions``. The ordering columns let
+        lakehouse compaction write time-ordered, skippable files:
+        ``sort_column`` (when set) takes precedence, ``timestamp_column`` is
+        the automatic fallback, so both are recorded.
+        """
+        props: Dict[str, Any] = {
             "expected_partitions": self._partition_spec_order.copy(),
         }
         if self._virtual_columns:
-            partition_spec = self._partition_spec_order.copy()
-            properties["virtual_partitions"] = self._virtual_columns.copy()
-        else:
-            partition_spec = []  # Empty spec for dynamic discovery
-
-        # Record the ordering columns so lakehouse compaction can write
-        # time-ordered, skippable files. sort_column (when set) takes precedence;
-        # timestamp_column is the automatic fallback, so persist it too.
+            props["virtual_partitions"] = self._virtual_columns.copy()
         if self.timestamp_column:
-            properties["timestamp_column"] = self.timestamp_column
+            props["timestamp_column"] = self.timestamp_column
         if self.sort_column:
-            properties["sort_column"] = self.sort_column
+            props["sort_column"] = self.sort_column
+        return props
 
-        # Create table with minimal schema (will be inferred from data)
+    def _register_table(self):
+        """Register the table in REST Catalog, or bring an existing table's
+        sink-owned metadata in step with this configuration."""
+        if not self._catalog:
+            return
+
+        check_response = self._catalog.get(self._table_path(), timeout=5)
+        if check_response.status_code == 200:
+            logger.info("Table '%s' already exists in catalog", self.table_name)
+            metadata = check_response.json()
+            self._validate_partition_strategy(metadata)
+            self._sync_table_metadata(metadata)
+            self.table_registered = True
+            return
+
+        # Table doesn't exist, create it (schema is inferred from data later).
+        properties = {
+            "created_by": "quixstreams-quix-lake-sink",
+            "auto_discovered": "false",
+            **self._owned_properties(),
+        }
         create_response = self._catalog.put(
-            f"/namespaces/{self.namespace}/tables/{self.table_name}",
+            self._table_path(),
             json={
-                "location": location,
-                "partition_spec": partition_spec,
+                "location": self._table_location(),
+                "partition_spec": self.hive_columns.copy(),
                 "properties": properties,
             },
             timeout=30,
@@ -894,7 +903,7 @@ class QuixTSDataLakeSink(BatchingSink):
 
         if create_response.status_code in [200, 201]:
             logger.info(
-                "Successfully created table '%s' in REST Catalog. Partitions will be set dynamically to: %s",
+                "Successfully created table '%s' in REST Catalog with partitions %s",
                 self.table_name,
                 self.hive_columns,
             )
@@ -903,6 +912,59 @@ class QuixTSDataLakeSink(BatchingSink):
             raise RuntimeError(
                 f"Failed to create table '{self.table_name}' in REST Catalog: "
                 f"{create_response.status_code} {create_response.text}"
+            )
+
+    def _sync_table_metadata(self, metadata: Dict[str, Any]) -> None:
+        """Rewrite an existing table's sink-owned metadata when it differs
+        from this configuration, so a new ``~virtual`` level, a sort_column or
+        a repaired partition_spec reaches the catalog without recreating the
+        table. The catalog's PUT is a whole-row upsert, so everything else —
+        location, schema, properties owned by other components (file_count,
+        created_by, ...) — is read back and sent unchanged. No-op when nothing
+        differs, which is the common restart.
+        """
+        if self._catalog is None:
+            return
+        existing_spec: List[str] = list(metadata.get("partition_spec") or [])
+        existing_props: Dict[str, Any] = dict(metadata.get("properties") or {})
+
+        # Physical-only, keeping the catalog's order for columns it already
+        # has. This also strips virtual entries an earlier sink version put in
+        # the spec — which made the catalog reject every add-files call once
+        # the table had data, since no file can carry a virtual value.
+        desired_spec = [c for c in existing_spec if c in self.hive_columns] + [
+            c for c in self.hive_columns if c not in existing_spec
+        ]
+        owned = self._owned_properties()
+        desired_props = {**existing_props, **owned}
+        for key in self._OPTIONAL_OWNED_PROPERTIES:
+            if key not in owned:
+                desired_props.pop(key, None)
+
+        if desired_spec == existing_spec and desired_props == existing_props:
+            return
+
+        logger.info(
+            "Updating catalog metadata for table '%s': partition_spec %s -> %s, "
+            "properties %s -> %s",
+            self.table_name,
+            existing_spec,
+            desired_spec,
+            existing_props,
+            desired_props,
+        )
+        body: Dict[str, Any] = {
+            "location": metadata.get("location") or self._table_location(),
+            "partition_spec": desired_spec,
+            "properties": desired_props,
+        }
+        if metadata.get("schema") is not None:
+            body["schema"] = metadata["schema"]
+        response = self._catalog.put(self._table_path(), json=body, timeout=30)
+        if response.status_code not in [200, 201]:
+            raise RuntimeError(
+                f"Failed to update table '{self.table_name}' metadata in REST "
+                f"Catalog: {response.status_code} {response.text}"
             )
 
     def _add_timestamp_columns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -950,44 +1012,50 @@ class QuixTSDataLakeSink(BatchingSink):
         return df
 
     def _validate_partition_strategy(self, table_metadata: Dict[str, Any]):
-        """Validate that the sink's partition strategy matches the existing table."""
-        existing_partition_spec = table_metadata.get("partition_spec", [])
+        """Validate that the sink's PHYSICAL partition strategy matches the
+        existing table's.
 
-        # Build expected partition spec from sink configuration. Use the FULL tree
-        # order (physical + virtual, `~` stripped) — that's what the sink registers
-        # for a table with virtual columns (partition_spec = physical + virtual).
-        # Comparing against hive_columns (physical only) here would see the virtual
-        # columns as a spurious mismatch and wrongly reject the sink on RESTART to
-        # an existing table.
-        expected_partition_spec = self._partition_spec_order.copy()
+        Only the physical columns are load-bearing: they are the folder tree,
+        and a mismatch there would corrupt it. Virtual levels are metadata and
+        may be added or removed freely (_sync_table_metadata records the
+        change), so they are set aside here. The catalog's partition_spec is
+        physical-only as this sink writes it, but an earlier version included
+        the virtual entries, so ``properties.virtual_partitions`` tells the
+        two apart on such a table.
+        """
+        existing_spec = list(table_metadata.get("partition_spec") or [])
+        declared_virtual = set(
+            (table_metadata.get("properties") or {}).get("virtual_partitions") or []
+        )
+        existing_physical = [c for c in existing_spec if c not in declared_virtual]
+        expected_physical = self.hive_columns
 
-        # Special case: If table has no partition spec yet (empty list),
-        # it will be set when first files are added
-        if not existing_partition_spec:
+        # Special case: no spec yet (empty list) — set when first files are added
+        if not existing_physical:
             logger.info(
                 "Table '%s' has no partition spec yet. Will be set to %s on first write.",
                 self.table_name,
-                expected_partition_spec,
+                expected_physical,
             )
             return
 
-        # Check if partition strategies match
-        if set(existing_partition_spec) != set(expected_partition_spec):
+        if set(existing_physical) != set(expected_physical):
             error_msg = (
                 f"Partition strategy mismatch for table '{self.table_name}'. "
-                f"Existing table has partitions: {existing_partition_spec}, "
-                f"but sink is configured with: {expected_partition_spec}. "
-                "This would corrupt the folder structure. Please ensure the sink partition "
-                "configuration matches the existing table."
+                f"Existing table has physical partitions: {existing_physical}, "
+                f"but sink is configured with: {expected_physical}. "
+                "This would corrupt the folder structure. Please ensure the sink "
+                "partition configuration matches the existing table (a column cannot "
+                "switch between physical and ~virtual once the table has data)."
             )
             logger.error(error_msg)
             raise ValueError(error_msg)
 
         # Also check the order of partitions
-        if existing_partition_spec != expected_partition_spec:
+        if existing_physical != expected_physical:
             warning_msg = (
                 f"Partition column order differs for table '{self.table_name}'. "
-                f"Existing: {existing_partition_spec}, Configured: {expected_partition_spec}. "
+                f"Existing: {existing_physical}, Configured: {expected_physical}. "
                 "While this won't corrupt data, it may lead to suboptimal query performance."
             )
             logger.warning(warning_msg)
@@ -1074,7 +1142,10 @@ class QuixTSDataLakeSink(BatchingSink):
             else:
                 file_path = f"s3://{self.s3_bucket}/{storage_key}"
 
-            # Build partition values dict.
+            # Build partition values dict — PHYSICAL columns only. A file holds
+            # every value of a virtual column, so it has no single value to
+            # register, and the catalog validates these keys against the
+            # (physical-only) partition_spec on every add-files call.
             # _write_batch fillna()'s NaN partition values with HIVE_NULL_PARTITION
             # (the on-disk sentinel — see the constant near the top) so they
             # survive groupby and land in a single ``col=__None__`` directory on
