@@ -87,7 +87,18 @@ Use a virtual column when you want a value to be navigable and filterable but do
 
 ### The `.vidx` sidecar index
 
-Each data file gets a virtual-index sidecar Parquet written to a `.vidx/` subfolder of that file's own Hive partition folder. The sidecar holds one row per distinct tuple of the virtual columns present in the file, with the file's physical partition values added as constant columns — so a reader gets full (physical + virtual) tuples from the content alone, with no `hive_partitioning` needed:
+Each data file gets a virtual-index sidecar Parquet written to a `.vidx/` subfolder of that file's own Hive partition folder. The sidecar holds one row per distinct tuple of the virtual columns present in the file, with the file's physical partition values added as constant columns — so a reader gets full (physical + virtual) tuples from the content alone, with no `hive_partitioning` needed.
+
+The sidecar schema is fixed per table: every configured virtual column, then every physical partition column, all stored as strings (a virtual column absent from a batch is written as `NULL`). That is what makes a single glob over many files' sidecars safe — Parquet readers refuse a glob whose files disagree on a column's type or presence, so per-file inference would break the read path on the first odd batch. It also keeps an identifier stable across batches: pandas upcasts an integer column to float as soon as a null joins it, but `42` and `42.0` both land as `"42"`.
+
+```sql
+-- Navigate: which drivers appear in January 2024? Skip files that lack the column.
+SELECT DISTINCT driver
+FROM read_parquet('s3://bucket/data-lake/time-series/telemetry/*/*/.vidx/*.parquet')
+WHERE year = '2024' AND month = '01' AND driver IS NOT NULL;
+```
+
+Or, without the null filter, the equivalent tuple listing:
 
 ```sql
 SELECT DISTINCT driver
@@ -109,7 +120,8 @@ A physical-only table registers with an empty `partition_spec` and lets the cata
 
 - A virtual column must be a field your records actually carry. Unlike a physical partition, it is not derived and not reconstructible from the path: reads use `hive_partitioning=true`, which rebuilds physical columns from `key=value/` folders but has nothing to rebuild a virtual column from. The column has to be in the Parquet data for `WHERE driver = 'HAM'` to resolve, and for the lakehouse's sidecar reindex to read its values back out.
 - For that reason `year`, `month`, `day`, and `hour` are supported as **physical** partitions only — they are derived from `timestamp_column`, so a virtual `~hour` would mean the sink inventing a column your records never contained. Use `hour`, not `~hour`; time-range pruning is already provided by the per-file statistics below.
-- A virtual column missing from a given batch is not an error. Files that lack it simply contribute nothing to the tree for that column.
+- A virtual column missing from a given batch is not an error. Its sidecar rows carry `NULL` for that column (the schema stays fixed), so navigation queries should add `IS NOT NULL` when listing a level's values.
+- The `.vidx/` folders live *inside* the data partition folders, and Parquet globs do not skip dot-folders. A whole-table glob such as `.../telemetry/**/*.parquet` will pick the sidecars up as data — either a schema error or phantom rows, depending on the reader. Query through the catalog's file list (the manifest never contains sidecars), or use a glob whose depth matches the physical tree (`.../telemetry/*/*/*.parquet` for a two-level tree) so `.vidx/` is never descended into.
 
 ## File Statistics (Zone Maps)
 

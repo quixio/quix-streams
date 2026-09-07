@@ -692,10 +692,19 @@ class QuixTSDataLakeSink(BatchingSink):
         columns. Carrying the physical columns in the content means readers need no
         ``hive_partitioning`` — a single ``read_parquet('{root}/.../.vidx/*')``
         yields full (physical + virtual) tuples that navigation aggregates
-        (``SELECT DISTINCT <col> WHERE <ancestors>``) into the folder tree. The
-        index is navigation-only (no query pruning), so no per-file back-reference
-        is stored. No-op when the table has no virtual columns or none are present
-        in this file. Never raises (the index is a hint, not the data).
+        (``SELECT DISTINCT <col> WHERE <ancestors>``) into the folder tree.
+
+        The schema is FIXED per table — every configured virtual column (absent
+        ones as null) plus the physical partition columns, all utf8 — so a glob
+        over many files' sidecars always unifies. Per-batch dtype inference or an
+        only-present column set would give each file its own schema, and
+        ``read_parquet('.vidx/*.parquet')`` fails outright on the first file
+        that disagrees, with no signal at write time.
+
+        The index is navigation-only (no query pruning), so no per-file
+        back-reference is stored. No-op when the table has no virtual columns or
+        none are present in this file. Never raises (the index is a hint, not
+        the data).
         """
         present = [c for c in self._virtual_columns if c in df.columns]
         if not present or self._blob_client is None:
@@ -704,13 +713,25 @@ class QuixTSDataLakeSink(BatchingSink):
             vdf = df[present].drop_duplicates().reset_index(drop=True)
             if vdf.empty:
                 return
+            # Arrow's cast (rather than str()) keeps an id stable across
+            # batches: int64 ``42`` and the float64 ``42.0`` pandas upcasts it
+            # to once a null joins the column both become ``"42"``.
+            n = len(vdf)
+            columns: Dict[str, Any] = {
+                col: (
+                    pa.array(vdf[col]).cast(pa.string())
+                    if col in vdf.columns
+                    else pa.nulls(n, pa.string())
+                )
+                for col in self._virtual_columns
+            }
             # Physical partition values are constant for this file (one Hive
             # folder) -> add them as constant columns so the sidecar holds the
             # FULL partition tuple.
             for col, val in zip(partition_columns or [], partition_values or ()):
-                vdf[col] = str(val)
+                columns[col] = pa.array([str(val)] * n, type=pa.string())
             buf = pa.BufferOutputStream()
-            pq.write_table(pa.Table.from_pandas(vdf, preserve_index=False), buf)
+            pq.write_table(pa.table(columns), buf)
             sidecar_key = self._sidecar_key(storage_key)
             future = self._blob_client.put_object_async(
                 sidecar_key, buf.getvalue().to_pybytes()

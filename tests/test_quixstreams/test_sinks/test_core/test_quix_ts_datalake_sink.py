@@ -1985,6 +1985,81 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         assert set(vdf["driver"]) == {"HAM", "VER"}
         assert set(vdf["year"]) == {"2024"}
 
+    # -- Sidecar schema stability --------------------------------------------
+    # The documented read path is one glob over every file's sidecar
+    # (``read_parquet('.../.vidx/*.parquet')``), which fails outright if two
+    # files disagree on a column's type or presence. pa.concat_tables is the
+    # in-process proxy for that glob: it raises on any schema mismatch.
+
+    def _sidecar_tables(self, mock_blob_client):
+        _, sidecars = self._uploads(mock_blob_client)
+        return [pq.read_table(io.BytesIO(c[0][1])) for c in sidecars]
+
+    def test_sidecar_schema_is_stable_across_batches(
+        self, sink_factory, mock_blob_client
+    ):
+        sink = sink_factory(hive_columns=["year", "~driver", "~session"])
+        # Batch A: driver is an int, session present. Batch B: driver is a
+        # string, session absent. Per-batch inference would give two schemas.
+        sink.write(
+            self._batch(
+                [
+                    {
+                        "value": {
+                            "driver": 44,
+                            "session": "Q1",
+                            "ts_ms": 1704067200000,
+                        },
+                        "key": "k1",
+                        "timestamp": 1704067200000,
+                        "offset": 0,
+                    }
+                ]
+            )
+        )
+        sink.write(
+            self._batch(
+                [
+                    {
+                        "value": {"driver": "HAM", "ts_ms": 1704067200000},
+                        "key": "k2",
+                        "timestamp": 1704067200000,
+                        "offset": 1,
+                    }
+                ]
+            )
+        )
+
+        a, b = self._sidecar_tables(mock_blob_client)
+        assert a.schema.equals(b.schema)
+        # Every configured virtual column + every physical column, all utf8.
+        assert a.schema.names == ["driver", "session", "year"]
+        assert all(t == pa.string() for t in a.schema.types)
+        merged = pa.concat_tables([a, b])  # the glob; must not raise
+        assert merged.column("driver").to_pylist() == ["44", "HAM"]
+        assert merged.column("session").to_pylist() == ["Q1", None]
+        assert merged.column("year").to_pylist() == ["2024", "2024"]
+
+    def test_sidecar_ids_render_identically_with_and_without_nulls(
+        self, sink_factory, mock_blob_client
+    ):
+        # pandas upcasts an int column to float64 as soon as a null joins it;
+        # the sidecar must still say "42", not "42.0", or the same driver
+        # shows up twice in the tree.
+        sink = sink_factory(hive_columns=["year", "~driver"])
+        records = [
+            {
+                "value": {"driver": d, "ts_ms": 1704067200000},
+                "key": f"k{i}",
+                "timestamp": 1704067200000,
+                "offset": i,
+            }
+            for i, d in enumerate([42, None])
+        ]
+        sink.write(self._batch(records))
+        (t,) = self._sidecar_tables(mock_blob_client)
+        assert t.column("driver").to_pylist() == ["42", None]
+
     # -- Durability of the sidecar lane -------------------------------------
     # Both handlers below back an explicit promise in the sink: the virtual
     # index is a HINT, not the data, so a sidecar failure is logged and never
