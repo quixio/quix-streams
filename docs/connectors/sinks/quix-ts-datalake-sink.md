@@ -117,9 +117,9 @@ The sink computes per-file min/max statistics and sends them to the REST Catalog
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `stats_columns` | `Optional[List[str]]` | `None` | Columns to compute statistics for. `None` computes them for every numeric and timestamp column in each written file. Pass an explicit list to restrict the set. |
+| `stats_columns` | `Optional[List[str]]` | `None` | Columns to compute statistics for. `None` computes them for every numeric and timestamp column in each written file. Pass an explicit list to restrict the set, or an empty list to disable statistics entirely. |
 
-Statistics are computed from the in-memory Arrow batch before serialization, so they cost a vectorized min/max over data that is already in memory — the Parquet footer is never re-read from storage.
+Statistics are computed from the in-memory Arrow batch before serialization, so they cost a vectorized min/max over data that is already in memory — the Parquet footer is never re-read from storage. They are only computed when a `catalog_url` is configured; without a catalog there is nothing to consume them, so the sink skips the work.
 
 Each entry records `type` (`numeric` or `timestamp`), `min`, `max`, `null_count`, and `value_count` (non-null rows). Integer, float, and decimal columns are reported as `numeric` with float bounds; timestamp and date columns as `timestamp` with ISO-8601 bounds.
 

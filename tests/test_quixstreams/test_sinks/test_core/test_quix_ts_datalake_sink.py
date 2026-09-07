@@ -1621,6 +1621,33 @@ class TestQuixTSDataLakeSinkColumnStats:
         stats = sink._compute_column_stats(table)
         assert set(stats.keys()) == {"speed"}
 
+    def test_stats_columns_empty_list_disables_stats(self, sink_factory):
+        # ``[]`` is the only way to switch stats off; it must not collapse into
+        # None ("every column"), which is the opposite of the caller's intent.
+        sink = sink_factory(stats_columns=[])
+        table = pa.table({"speed": pa.array([1, 2], type=pa.int64())})
+        assert sink._compute_column_stats(table) == {}
+
+    def test_stats_not_computed_without_a_catalog(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        # The catalog is the only consumer of zone maps; the default
+        # (no catalog) config must not compute them just to throw them away.
+        sink = sink_factory()
+        with patch.object(sink, "_compute_column_stats") as compute:
+            sink.write(sample_batch())
+        compute.assert_not_called()
+
+    def test_stats_computed_when_a_catalog_is_configured(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        with patch.object(sink, "_compute_column_stats", return_value={}) as compute:
+            sink.write(sample_batch())
+        compute.assert_called_once()
+
     @pytest.mark.parametrize("value", [2**53 + 1, 2**53 + 3])
     def test_safe_float_bounds_widen_for_large_ints(self, sink_factory, value):
         # Neither value is exactly representable as float64, and they round in

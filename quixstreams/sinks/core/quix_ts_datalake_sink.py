@@ -129,7 +129,8 @@ class QuixTSDataLakeSink(BatchingSink):
         range cannot satisfy a WHERE/ORDER BY on the column. ``None`` (default)
         computes stats for every numeric and timestamp column in each written
         file (cheap — the batch is already in memory). Pass an explicit list to
-        restrict the set and bound catalog storage on very wide tables.
+        restrict the set and bound catalog storage on very wide tables, or an
+        empty list to disable statistics entirely.
     :param stream_timeout_ms: Optional **per-key** silence threshold in
         milliseconds. Paired with ``on_stream_timeout``; both must be
         provided to enable the feature. See
@@ -218,9 +219,11 @@ class QuixTSDataLakeSink(BatchingSink):
         # in each written file, which is nearly free here because the batch is
         # already an in-memory Arrow table. Pass an explicit list to restrict
         # the set (e.g. just the timestamp column) and bound catalog stats-row
-        # growth on very wide tables. Stats ride along with each add-files
+        # growth on very wide tables; an empty list disables stats entirely,
+        # so the None check must be explicit (``if stats_columns`` would fold
+        # ``[]`` back into "all columns"). Stats ride along with each add-files
         # entry as ``column_stats`` and are consumed by the catalog's pruning.
-        self._stats_columns = set(stats_columns) if stats_columns else None
+        self._stats_columns = set(stats_columns) if stats_columns is not None else None
 
         # Blob storage client and bucket name will be initialized in setup()
         self._blob_client: Optional[BlobStorageClient] = None
@@ -589,8 +592,10 @@ class QuixTSDataLakeSink(BatchingSink):
         # Compute per-column min/max zone maps from the in-memory table BEFORE
         # serialising — nearly free, and avoids re-reading the parquet footer
         # from storage later. Carried through _pending_futures into the catalog
-        # add-files call (see _register_files_in_manifest).
-        column_stats = self._compute_column_stats(table)
+        # add-files call (see _register_files_in_manifest). The catalog is the
+        # only consumer, so with none configured skip the work instead of
+        # computing and discarding.
+        column_stats = self._compute_column_stats(table) if self._catalog else {}
 
         buf = pa.BufferOutputStream()
         pq.write_table(table, buf)
