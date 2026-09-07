@@ -887,23 +887,34 @@ class TestRollbackEnvVar:
 
 
 # ===========================================================================
-# Scenario 5: Cold rebuild, all-past stamped census → quarantined
-# Spec §5.2: KEEP the all-past REFUSE guard as QUARANTINE.
+# Scenario 5: Cold rebuild, all-past stamped census.
+# Spec §5.2, REWRITTEN 2026-09-07 (sc-74843 round 5): an all-past census with
+# real payloads is ADOPTED with a WARN; the all-past REFUSE guard is retired.
+# The legacy dedup shape it protected is refused by the non-empty-payload rule
+# (bare 8-byte values) instead.
 # ===========================================================================
 
 
-class TestAllPastQuarantined:
-    """Validates spec §5.2: an all-past stamped census is quarantined — never
-    adopted, store stays legacy, values byte-identical.
+class TestAllPastAdoptsAndBareValuesRefused:
+    """Validates the REWRITTEN spec §5.2 (Ludvik, 2026-09-07: "we always want
+    to migrate to latest TTL mode").
 
-    GREEN on HEAD: HEAD already quarantines all-past (with ``adopt_v3240_stamps=True``
-    it refuses, and without it stays legacy). The spec KEEPS this guard, so
-    the behavior must persist after the flag is removed. RED because the
-    construction path changes (no flag to set).
+    The old rule — "an all-past stamped census is quarantined, never adopted" —
+    is retired. Liveness is not evidence about what the bytes ARE: a store fully
+    migrated by v3.24.0 with a 120 s TTL and cold-restored minutes later has
+    EVERY stamp in the past, and refusing it stranded 2.35M expired, unindexed
+    keys per replica in production (live 2026-09-07 09:20Z) and then let the
+    live backfill double-stamp them (09:37Z).
+
+    The new rule is unanimity plus a NON-EMPTY payload
+    (``transaction._stamp_evidence_for``): all-past with payloads ADOPTS (WARN,
+    never a refusal), while a census of bare 8-byte epoch-ms values — the legacy
+    ``set_bytes()`` dedup shape the all-past guard was really detecting — is
+    still refused and quarantined.
     """
 
-    def test_all_past_stays_legacy_quarantined(self, tmp_path, caplog):
-        """Spec §5.2: all-past → quarantined, not adopted."""
+    def test_all_past_with_payloads_is_adopted_with_a_warn(self, tmp_path, caplog):
+        """Rewritten spec §5.2: all-past + non-empty payloads → ADOPT, WARN."""
         producer = _make_producer()
         expiry_past = NOW_MS - 7 * DAY_MS  # all in the past
         msgs = [_v3240_msg(f"k{i}", f"v{i}", expiry_past) for i in range(4)]
@@ -916,38 +927,85 @@ class TestAllPastQuarantined:
             partition.complete_recovery()
 
         assert (
-            partition.uses_ttl_stamps is False
-        ), "All-past census must stay legacy (quarantined)"
+            partition.uses_ttl_stamps is True
+        ), "an all-past census of real stamped values must adopt, not quarantine"
 
-        # Values byte-identical.
+        # Values byte-identical (adoption never re-wraps).
         for i in range(4):
             raw_key = b"pfx|" + json_dumps(f"k{i}")
             expected = encode_ttl_value(expiry_past, json_dumps(f"v{i}"))
             assert _raw_default_get(partition, raw_key) == expected
 
-        # Census preserved (quarantined).
-        assert _pending_keys(partition) == {
-            b"pfx|" + json_dumps(f"k{i}") for i in range(4)
-        }
+        # Census drained, index rebuilt from the records' own stamps, backup made.
+        assert _pending_keys(partition) == set()
+        assert _index_count(partition) == 4
+        assert TTL_ADOPT_BACKUP_CF_NAME in partition.list_column_families()
 
-        # No index or backup created.
-        assert _index_count(partition) == 0
-        cfs = partition.list_column_families()
-        assert TTL_ADOPT_BACKUP_CF_NAME not in cfs
-
-        # WARN (downgraded from CRITICAL per spec §5.8).
+        # The all-past fact is still reported — as a WARN, never as a refusal.
+        messages = [r.getMessage() for r in caplog.records]
         assert any(
-            r.levelno == logging.WARNING and "quarantin" in r.getMessage().lower()
-            for r in caplog.records
-        ) or any(
-            r.levelno == logging.WARNING and "refused" in r.getMessage().lower()
-            for r in caplog.records
-        ), "All-past quarantine must log WARN"
+            "already in the past" in m for m in messages
+        ), f"the all-past WARN must survive as a non-refusing signal: {messages}"
+        assert not any(
+            "Refused auto-adopt" in m for m in messages
+        ), f"all-past must no longer refuse: {messages}"
 
         partition.close()
 
-    def test_all_past_memory_twin(self, caplog):
-        """Spec §5.7: memory twin — all-past quarantined, not adopted."""
+    def test_bare_8_byte_values_stay_legacy_quarantined(self, tmp_path, caplog):
+        """The refusal the all-past guard really existed for, now keyed on
+        evidence instead of liveness: every value is EXACTLY 8 bytes (a legacy
+        ``set_bytes()`` dedup "last seen" epoch-ms, no payload), so the census
+        is not uniformly TTL-stamped. Stay legacy, byte-identical, census
+        preserved as the repair vector.
+        """
+        producer = _make_producer()
+        expiry_past = NOW_MS - 7 * DAY_MS
+        msgs = [
+            (b"pfx|" + json_dumps(f"k{i}"), struct.pack(">Q", expiry_past + i), False)
+            for i in range(4)
+        ]
+
+        partition = _rocksdb_partition(
+            tmp_path, name="bare8", changelog_producer=producer
+        )
+        with caplog.at_level(logging.WARNING):
+            _replay_default(partition, msgs, now_ms=NOW_MS)
+            partition.complete_recovery()
+
+        assert (
+            partition.uses_ttl_stamps is False
+        ), "bare 8-byte dedup values are not stamp evidence and must not adopt"
+
+        for i in range(4):
+            raw_key = b"pfx|" + json_dumps(f"k{i}")
+            assert _raw_default_get(partition, raw_key) == struct.pack(
+                ">Q", expiry_past + i
+            )
+
+        # Census preserved (quarantined); no index, no backup.
+        assert _pending_keys(partition) == {
+            b"pfx|" + json_dumps(f"k{i}") for i in range(4)
+        }
+        assert _index_count(partition) == 0
+        assert TTL_ADOPT_BACKUP_CF_NAME not in partition.list_column_families()
+
+        assert any(
+            r.levelno == logging.WARNING and "refused" in r.getMessage().lower()
+            for r in caplog.records
+        ), "the bare-value quarantine must log WARN"
+
+        partition.close()
+
+    def test_all_past_memory_twin_still_quarantines(self, caplog):
+        """KNOWN DIVERGENCE, pinned deliberately: the round-5 evidence rule was
+        applied to the RocksDB backend only (the fix's authorized file scope),
+        so the in-memory backend still quarantines an all-past census. Tracked
+        in ``dev-planning/quix-streams-main/open-points.md`` (2026-09-07,
+        "memory backend parity for the round-5 stamp-evidence rule"); this
+        assertion must be inverted in the same change that ports the rule to
+        ``quixstreams/state/memory/partition.py``.
+        """
         producer = _make_producer()
         expiry_past = NOW_MS - 7 * DAY_MS
         msgs = [_v3240_msg(f"k{i}", f"v{i}", expiry_past) for i in range(4)]
@@ -959,7 +1017,7 @@ class TestAllPastQuarantined:
 
         assert (
             partition.uses_ttl_stamps is False
-        ), "Memory: all-past census must stay legacy (quarantined)"
+        ), "memory backend still on the pre-round-5 all-past rule (see open-points)"
         partition.close()
 
 
