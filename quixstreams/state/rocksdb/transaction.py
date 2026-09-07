@@ -84,6 +84,68 @@ def _safe_decode_stamp(value: bytes) -> Optional[tuple[int, bytes]]:
     return None
 
 
+# Inclusive FLOOR of the "these bytes really ARE a TTL stamp" plausibility
+# window: 2000-01-01T00:00:00Z. Every stamp this library writes is
+# ``event_time + ttl`` of a live Kafka record (or the sentinel), so none can sit
+# below it, while a legacy value whose first eight bytes are a small counter, a
+# struct field or a short ASCII run lands far outside it.
+_STAMP_EVIDENCE_FLOOR_MS = 946_684_800_000
+
+# Inclusive LOOKAHEAD of the same window, measured from the decision clock:
+# ~100 years. Wider than any real ``ttl=``, and much narrower than the raw codec
+# bound ``_MAX_PLAUSIBLE_STAMP_MS`` (year 33658) that ``_safe_decode_stamp``
+# uses — a legacy binary prefix can slip under year 33658, not under year 2126.
+_STAMP_EVIDENCE_LOOKAHEAD_MS = 100 * 365 * 86_400_000
+
+
+def _stamp_evidence_for(
+    value: bytes, now_ms: int
+) -> Literal["stamped", "bare", "unstamped"]:
+    """
+    Classify ONE ``default``-CF value as legacy->TTL migration EVIDENCE. This is
+    the single shared rule behind every store-level migration decision: the
+    open-time repair's value sample
+    (``RocksDBStorePartition._sample_default_cf_stamp_evidence``), the
+    cold-restore census survey (``_survey_backfill_pending``), the
+    already-flipped-store census gate, the live backfill's don't-double-wrap
+    skip, and the legacy-read guard in :meth:`_get_bytes` below.
+
+    Three outcomes:
+
+    - ``"stamped"`` — the value IS a TTL stamp: it passes the strict validator
+      :func:`_safe_decode_stamp`, its expiry is the never-expires sentinel or
+      lies inside ``[2000-01-01T00:00Z, now + 100 years]``, and the payload
+      after the 8-byte prefix is NON-EMPTY;
+    - ``"bare"`` — the value is exactly an 8-byte plausible epoch-ms integer and
+      nothing else: the documented legacy ``set_bytes()`` dedup shape ("last
+      seen" timestamps). Positive counter-evidence, never stamp evidence;
+    - ``"unstamped"`` — undecodable or out-of-window: a genuine legacy payload.
+
+    **Liveness is deliberately NOT part of this.** Whether a stamp has already
+    expired says nothing about whether the bytes ARE a stamp, and a store whose
+    short-TTL records all expired during a restart is exactly the store that must
+    still be recognised as TTL-migrated (sc-74843 round 5, live 2026-09-07;
+    product decision: "we always want to migrate to latest TTL mode"). The
+    non-empty-payload requirement is what now excludes the legacy dedup shape
+    that the retired all-past/liveness heuristic used to protect.
+
+    :param value: raw ``default``-CF value bytes.
+    :param now_ms: the decision clock (recovery clock, or the open-time
+        wallclock); only the window's upper bound depends on it.
+    """
+    decoded = _safe_decode_stamp(value)
+    if decoded is None:
+        return "unstamped"
+    stamp, payload = decoded
+    if stamp != SENTINEL_NEVER and not (
+        _STAMP_EVIDENCE_FLOOR_MS <= stamp <= now_ms + _STAMP_EVIDENCE_LOOKAHEAD_MS
+    ):
+        return "unstamped"
+    if not payload:
+        return "bare"
+    return "stamped"
+
+
 def _ttl_to_ms(ttl: timedelta) -> int:
     """Convert a strictly positive ``timedelta`` to integer milliseconds.
 
@@ -571,11 +633,26 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             #
             # The armed flag is checked FIRST and is an open-time snapshot that is
             # False for every store without TTL bookkeeping, so the 99% legacy read
-            # path does not gain a single byte comparison. The liveness condition
-            # (sentinel or a stamp still ahead of the wallclock) is what keeps a
-            # genuine legacy ``set_bytes()`` dedup store -- whose values are
-            # 8-byte big-endian PAST epoch-ms and therefore decode as plausible
-            # stamps -- reading back verbatim rather than raising.
+            # path does not gain a single byte comparison.
+            #
+            # TWO conditions keep a genuine legacy value reading back verbatim
+            # instead of raising:
+            #  - :func:`_stamp_evidence_for` must classify it ``"stamped"``, which
+            #    requires a NON-EMPTY payload after the 8-byte prefix. That is what
+            #    exempts the legacy ``set_bytes()`` dedup shape (bare 8-byte
+            #    big-endian epoch-ms "last seen" values) whatever its numeric value
+            #    happens to be -- past OR future (sc-74843 round 5, bug 5.4: a
+            #    future-looking bare value used to raise here and, worse, flipped
+            #    the store at open);
+            #  - the stamp must still be LIVE (sentinel, or ahead of the
+            #    wallclock). Liveness is no longer evidence about what the bytes
+            #    ARE -- the open-time repair ignores it entirely now -- but it is
+            #    still the right trigger HERE: the stores that legitimately stay
+            #    legacy while holding stamp-shaped values are the rolled-back ones
+            #    (``QUIXSTREAMS_STATE_TTL_ROLLBACK``), whose contract is that their
+            #    adopted originals read back byte-identical. A store that is
+            #    unanimously stamped and NOT rolled back is flipped at open now, so
+            #    it never reaches this guard at all.
             if (
                 cf_name == "default"
                 and self._partition._ttl_stamped_reads_unflagged  # noqa: SLF001
@@ -585,7 +662,9 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 if decoded_legacy is not None:
                     stamp_legacy = decoded_legacy[0]
                     now_ms = self._partition._now_ms()  # noqa: SLF001
-                    if stamp_legacy == SENTINEL_NEVER or stamp_legacy > now_ms:
+                    live = stamp_legacy == SENTINEL_NEVER or stamp_legacy > now_ms
+                    evidence = _stamp_evidence_for(raw_legacy, now_ms)
+                    if live and evidence == "stamped":
                         self._raise_unreconciled_stamped_read(raw_legacy, prefix)
             return raw_legacy
 
@@ -637,6 +716,32 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
         stamp, payload = decoded
 
+        # DOUBLE-WRAP repair. A value whose payload is ITSELF a TTL stamp
+        # (:func:`_stamp_evidence_for` == ``"stamped"``) is
+        # ``outer_stamp||inner_stamp||user_payload``: the signature of a live
+        # wrapping backfill that re-stamped already-stamped v3.24.0 values (round
+        # 5, bug 5.6, live 2026-09-07 09:37Z). Stripping only the outer stamp
+        # would hand ``inner_stamp||json`` to the value deserializer -- the
+        # sc-74843 StateSerializationError, observed again at 09:43Z on a rebuild
+        # from the poisoned changelog. Unwrap ONCE and judge expiry on the INNER
+        # (original) stamp, which is the record's real TTL; the outer one was
+        # never anything but damage. Cannot recurse: the inner value is a valid
+        # stamp by the classification, and its own payload is checked once here.
+        #
+        # This is a HOT path (every TTL-mode read), so the two integer tests in
+        # front of the classifier are load-bearing, not an optimization detail:
+        # they exclude every realistic payload without a wallclock read or a byte
+        # copy. A plausible stamp is either the sentinel (first byte ``0xFF``) or
+        # an in-window epoch-ms below ``2**56`` (first byte ``0x00``), while a
+        # serialized payload starts with a JSON/msgpack/ASCII byte; and a
+        # double-wrapped value is necessarily LONGER than its own 8-byte prefix.
+        # If the plausibility window is ever widened past ``2**56`` ms, this
+        # pre-filter must be widened with it.
+        if len(payload) > TTL_STAMP_BYTES and payload[0] in (0x00, 0xFF):
+            inner = self._decode_double_wrap(payload, prefix)
+            if inner is not None:
+                stamp, payload = inner
+
         # Sentinel-stamped entries always pass; "no TTL" is the common case.
         if stamp == SENTINEL_NEVER:
             return payload
@@ -646,6 +751,39 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             return Marker.UNDEFINED
 
         return payload
+
+    def _decode_double_wrap(
+        self, payload: bytes, prefix: bytes
+    ) -> Optional[tuple[int, bytes]]:
+        """
+        Return the inner ``(stamp, value)`` when ``payload`` — the bytes under a
+        value's own 8-byte stamp — is ITSELF a TTL stamp, i.e. the stored value
+        is double-stamped; ``None`` otherwise. WARNs once per partition.
+
+        Split out of :meth:`_get_bytes` so the hot read path keeps a single
+        cheap pre-filter and none of this machinery inline. See the call site for
+        why this shape exists (sc-74843 round 5, bugs 5.6/5.7).
+        """
+        now_ms = self._partition._now_ms()  # noqa: SLF001
+        if _stamp_evidence_for(payload, now_ms) != "stamped":
+            return None
+        inner = _safe_decode_stamp(payload)
+        if inner is not None:
+            if not self._partition._double_wrap_read_warned:  # noqa: SLF001
+                self._partition._double_wrap_read_warned = True  # noqa: SLF001
+                logger.warning(
+                    "Double-stamped TTL value at path=%s (key prefix=%r): the "
+                    "payload under the 8-byte stamp is itself a TTL stamp, the "
+                    "signature of a legacy backfill that re-wrapped an "
+                    "already-stamped v3.24.0 value. Unwrapping the extra stamp "
+                    "on read and honouring the ORIGINAL expiry instead of "
+                    "handing the inner stamp to the value deserializer. Warned "
+                    "once per partition; every such value is repaired the same "
+                    "way, and a changelog rebuild repairs them on ingest.",
+                    getattr(self._partition, "path", "<memory>"),
+                    prefix[:16],
+                )
+        return inner
 
     def _raise_unreconciled_stamped_read(self, raw: bytes, prefix: bytes) -> NoReturn:
         """
@@ -660,10 +798,14 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         documents its residual, a genuine legacy value whose first eight bytes
         happen to decode, and eight bytes removed from such a value are gone for
         good. Open time is the place where a flip IS decidable (the repair samples
-        the default CF and persists the decision); by the time a single read gets
-        here that decision has already been taken -- the repair looked and
-        declined, or the rollback lever asserted legacy intent -- so a per-value
-        guess here can only contradict it.
+        the default CF for UNANIMOUS stamp evidence and persists the decision); by
+        the time a single read gets here that decision has already been taken --
+        the sample was not unanimous, or the rollback lever asserted legacy intent
+        -- so a per-value guess here can only contradict it.
+
+        Only a value that :func:`_stamp_evidence_for` calls ``"stamped"`` AND that
+        is still live reaches this method; a bare 8-byte legacy dedup value never
+        does, whatever its numeric value.
 
         **Why not return it raw.** That is precisely the crash being fixed: the
         caller deserializes ``8B||json`` and dies, with a traceback pointing at
@@ -702,8 +844,8 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             f"genuine legacy value, so neither is done. The store opened carrying "
             f"TTL bookkeeping -- an interrupted legacy-TTL migration, or a "
             f"v3.24.0 adoption -- and nothing flipped it: either the automatic "
-            f"open-time repair found no live stamp in its sample of the default "
-            f"CF, or the rollback lever (RocksDBOptions.ttl_rollback / "
+            f"open-time repair found the default CF was NOT uniformly stamped in "
+            f"its sample, or the rollback lever (RocksDBOptions.ttl_rollback / "
             f"{TTL_ROLLBACK_ENV_VAR}=1) asserted legacy intent -- suppressing "
             f"that repair, or reverting an adoption while keeping its originals "
             f"byte-identical. Set RocksDBOptions(ttl_force_flip=True) (or "
