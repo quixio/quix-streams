@@ -270,8 +270,13 @@ For deeper coverage of the tracker itself (concurrency, TTL sweep, composing it 
 
 ## Retrying Failures
 
-`QuixTSDataLakeSink` will surface write failures to the application's checkpoint machinery, which retries according to the configured processing guarantee.
+A write has two phases, each retried up to three times on its own:
+
+1. **Upload.** Every file of the batch (and every `.vidx` sidecar) is queued and then awaited. If any data upload fails, the attempt deletes whatever it *did* land before retrying — nothing has been registered yet, so the files are safe to remove — and the retry re-uploads the whole batch under fresh names. Retries therefore never accumulate orphan files or duplicate rows from half-written attempts. If the clean-up itself fails, the orphan keys are logged at `WARNING`.
+2. **Manifest registration** (catalog configured). Only the `add-files` call is retried; the data is never re-uploaded because of a catalog error. If registration still fails, the files stay in storage — the catalog may already have recorded them before the error reached the sink — and the error is raised.
+
+Errors that survive both retry loops are surfaced to the application's checkpoint machinery, which retries according to the configured processing guarantee.
 
 ## Delivery Guarantees
 
-`QuixTSDataLakeSink` provides at-least-once guarantees. On retry after a partial failure, the output may contain duplicate rows.
+`QuixTSDataLakeSink` provides at-least-once guarantees. When the checkpoint replays a batch whose files landed but whose registration failed, the output may contain duplicate rows.

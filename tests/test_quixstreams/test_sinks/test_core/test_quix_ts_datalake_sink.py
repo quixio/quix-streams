@@ -37,6 +37,14 @@ from quixstreams.sinks.core.quix_ts_datalake_sink import (
 # =============================================================================
 
 
+@pytest.fixture(autouse=True)
+def no_retry_sleep():
+    """The sink sleeps 3s between retry attempts; the tests exercising those
+    paths only care about the attempt count."""
+    with patch("quixstreams.sinks.core.quix_ts_datalake_sink.time.sleep"):
+        yield
+
+
 @pytest.fixture
 def mock_blob_client():
     """Mock BlobStorageClient for unit tests."""
@@ -577,17 +585,19 @@ class TestWriteOperations:
         assert "__key" in df.columns
         assert list(df["__key"]) == ["key1", "key2"]
 
-    def test_write_empty_batch_handled(self, sink_factory, mock_blob_client):
-        """Test that empty batch is handled gracefully (writes empty parquet)."""
-        sink = sink_factory()
-        batch = SinkBatch(topic="test", partition=0)
+    def test_write_empty_batch_writes_and_registers_nothing(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        """An empty batch must not produce a 0-row parquet file, let alone
+        register one in the manifest."""
+        sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
 
-        # Should not raise
-        sink.write(batch)
+        sink.write(SinkBatch(topic="test", partition=0))  # must not raise
 
-        # Note: The sink writes an empty parquet file for empty batches.
-        # This is the current behavior - verify it completes without error.
-        mock_blob_client.put_object_async.assert_called_once()
+        mock_blob_client.put_object_async.assert_not_called()
+        mock_catalog_client.post.assert_not_called()
 
     def test_write_with_partitions(self, sink_factory, sample_batch, mock_blob_client):
         """Test writing with partition columns."""
@@ -1245,7 +1255,7 @@ class TestErrorHandling:
         with pytest.raises(RuntimeError, match="Failed to create table"):
             sink.write(batch)
 
-    def test_finalize_writes_clears_futures_on_failure(
+    def test_pending_uploads_cleared_on_failure(
         self, sink_factory, sample_batch, mock_blob_client
     ):
         """Test that _pending_futures is cleared even when uploads fail."""
@@ -1263,6 +1273,8 @@ class TestErrorHandling:
 
         # Futures should be cleared even after failure
         assert len(sink._pending_futures) == 0
+        # Nothing landed, so there was nothing to discard.
+        mock_blob_client.delete_objects.assert_not_called()
 
     def test_validate_structure_error_propagates(self, sink_factory, mock_blob_client):
         """Test that storage errors during structure validation propagate."""
@@ -1273,6 +1285,191 @@ class TestErrorHandling:
 
         with pytest.raises(OSError, match="Storage unavailable"):
             sink._validate_existing_table_structure()
+
+
+# =============================================================================
+# 7b. Write attempt hygiene: retries must not leave orphans or duplicates
+# =============================================================================
+
+
+def _machines_batch():
+    """Two partition groups (M1, M2) so one can succeed while the other fails."""
+    batch = SinkBatch(topic="test", partition=0)
+    for i, m in enumerate(["M1", "M2"]):
+        batch.append(
+            value={"machine": m, "v": i, "ts_ms": 1704067200000 + i},
+            key=f"k{i}",
+            timestamp=1704067200000 + i,
+            headers=[],
+            offset=i,
+        )
+    return batch
+
+
+def _future(error: Exception = None) -> MagicMock:
+    f = MagicMock()
+    if error is not None:
+        f.result.side_effect = error
+    else:
+        f.result.return_value = None
+    return f
+
+
+def _manifest_bodies(mock_catalog_client):
+    return [
+        c.kwargs["json"]
+        for c in mock_catalog_client.post.call_args_list
+        if "manifest" in str(c)
+    ]
+
+
+class TestWriteAttemptHygiene:
+    """write() retries in two phases. A failed upload attempt must discard what
+    it landed and forget what it queued; a failed manifest call must be retried
+    on its own, never by re-uploading the data."""
+
+    def test_manifest_failure_does_not_reupload_data(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        mock_catalog_client.post.side_effect = Exception("Manifest error")
+
+        with pytest.raises(Exception, match="Manifest error"):
+            sink.write(sample_batch())
+
+        # The data landed exactly once; only the manifest call was retried.
+        assert mock_blob_client.put_object_async.call_count == 1
+        assert mock_catalog_client.post.call_count == 3
+        # The catalog may have recorded the files before the error reached us,
+        # so they are NOT deleted: the checkpoint replays the batch instead.
+        mock_blob_client.delete_objects.assert_not_called()
+
+    def test_transient_manifest_failure_retries_registration_only(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        ok = MagicMock(status_code=200)
+        mock_catalog_client.post.side_effect = [Exception("blip"), ok]
+
+        sink.write(sample_batch())  # must not raise
+
+        assert mock_blob_client.put_object_async.call_count == 1
+        bodies = _manifest_bodies(mock_catalog_client)
+        assert len(bodies) == 2
+        # Same file registered on both tries -> no fresh uuid was minted.
+        assert bodies[0]["files"][0]["file_path"] == bodies[1]["files"][0]["file_path"]
+
+    def test_failed_attempt_discards_the_files_it_landed(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(
+            hive_columns=["machine"],
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        # M1 always lands, M2 always fails -> every attempt fails.
+        mock_blob_client.put_object_async.side_effect = lambda key, _b: (
+            _future(Exception("Upload failed")) if "machine=M2" in key else _future()
+        )
+
+        with pytest.raises(Exception, match="Upload failed"):
+            sink.write(_machines_batch())
+
+        uploads = mock_blob_client.put_object_async.call_args_list
+        assert len(uploads) == 6  # 2 files x 3 attempts
+        # Each attempt discarded exactly the M1 file IT uploaded.
+        landed_m1 = [c[0][0] for c in uploads if "machine=M1" in c[0][0]]
+        discarded = [c[0][0] for c in mock_blob_client.delete_objects.call_args_list]
+        assert discarded == [[k] for k in landed_m1]
+        mock_catalog_client.post.assert_not_called()
+
+    def test_failed_attempt_discards_its_sidecars_and_forgets_them(
+        self, sink_factory, mock_blob_client
+    ):
+        # Data upload fails, sidecar upload succeeds: the sidecar indexes a file
+        # that never landed, so it must be deleted, and its future must not be
+        # carried into the next attempt.
+        sink = sink_factory(hive_columns=["year", "~driver"])
+        mock_blob_client.put_object_async.side_effect = lambda key, _b: (
+            _future() if "/.vidx/" in key else _future(Exception("Upload failed"))
+        )
+        batch = SinkBatch(topic="test", partition=0)
+        batch.append(
+            value={"driver": "HAM", "ts_ms": 1704067200000},
+            key="k",
+            timestamp=1704067200000,
+            headers=[],
+            offset=0,
+        )
+
+        with pytest.raises(Exception, match="Upload failed"):
+            sink.write(batch)
+
+        sidecar_keys = [
+            c[0][0]
+            for c in mock_blob_client.put_object_async.call_args_list
+            if "/.vidx/" in c[0][0]
+        ]
+        assert len(sidecar_keys) == 3  # one per attempt, none carried over
+        discarded = [c[0][0] for c in mock_blob_client.delete_objects.call_args_list]
+        assert discarded == [[k] for k in sidecar_keys]
+        assert sink._pending_sidecar_futures == []
+        assert sink._pending_futures == []
+
+    def test_submission_failure_midway_does_not_double_register_survivors(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        # Attempt 1 queues M1, then fails to even queue M2 (the executor call
+        # itself raises). M1's future would otherwise still be pending when
+        # attempt 2 runs and get registered alongside attempt 2's files.
+        sink = sink_factory(
+            hive_columns=["machine"],
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        calls = {"n": 0}
+
+        def route(key, _b):
+            calls["n"] += 1
+            if calls["n"] == 2:  # 2nd submission of attempt 1 = M2
+                raise RuntimeError("executor rejected the upload")
+            return _future()
+
+        mock_blob_client.put_object_async.side_effect = route
+
+        sink.write(_machines_batch())  # attempt 2 succeeds
+
+        uploads = [c[0][0] for c in mock_blob_client.put_object_async.call_args_list]
+        assert len(uploads) == 4  # attempt 1: M1 + (M2 raised); attempt 2: M1, M2
+        # Attempt 1's M1 was discarded...
+        mock_blob_client.delete_objects.assert_called_once_with([uploads[0]])
+        # ...and only attempt 2's two files reached the manifest.
+        bodies = _manifest_bodies(mock_catalog_client)
+        assert len(bodies) == 1
+        registered = {f["file_path"].rsplit("/", 1)[1] for f in bodies[0]["files"]}
+        assert registered == {u.rsplit("/", 1)[1] for u in uploads[2:]}
+
+    def test_discard_failure_is_logged_not_raised(
+        self, sink_factory, mock_blob_client, caplog
+    ):
+        sink = sink_factory(hive_columns=["machine"])
+        mock_blob_client.put_object_async.side_effect = lambda key, _b: (
+            _future(Exception("Upload failed")) if "machine=M2" in key else _future()
+        )
+        mock_blob_client.delete_objects.side_effect = OSError("storage down")
+
+        # The ORIGINAL upload error surfaces, not the delete error.
+        with pytest.raises(Exception, match="Upload failed"):
+            sink.write(_machines_batch())
+        assert "left as orphans" in caplog.text
 
 
 # =============================================================================

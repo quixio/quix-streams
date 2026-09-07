@@ -12,7 +12,7 @@ import math
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 try:
     import pandas as pd
@@ -38,6 +38,8 @@ from ._quix_ts_datalake_catalog_client import QuixTSDataLakeCatalogClient
 from .stream_timeout_tracker import StreamTimeoutTracker
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 # Timestamp column mappers for Hive partitioning
@@ -235,11 +237,12 @@ class QuixTSDataLakeSink(BatchingSink):
         self._max_workers = max_workers
         self._silence_azure_http_logs = silence_azure_http_logs
 
-        # Batch upload tracking
+        # Uploads submitted by the in-progress write attempt; _settle_uploads
+        # drains and empties both lists at the end of every attempt.
         self._pending_futures: List[Dict[str, Any]] = []
         # Virtual-index SIDECAR uploads (one per data file, written to .vidx/).
-        # Tracked separately from data files so _finalize_writes waits on them but
-        # does NOT register them in the manifest (they are metadata, not data).
+        # Tracked separately from data files so they are awaited but NOT
+        # registered in the manifest (they are metadata, not data).
         self._pending_sidecar_futures: List[Dict[str, Any]] = []
 
         # Stream-timeout tracking (opt-in, per-key silence detector).
@@ -378,39 +381,78 @@ class QuixTSDataLakeSink(BatchingSink):
         if self.auto_discover and not self.table_registered and self._catalog:
             self._register_table()
 
+        # Two phases, each with its own retry. An upload attempt that fails
+        # discards whatever it did land (see _settle_uploads), so retrying it
+        # never piles orphans or duplicates onto a half-written batch. The
+        # manifest call is retried on its own: a catalog hiccup — or a body
+        # the catalog rejects — must never re-upload parquet that already
+        # landed under fresh uuids. If registration still fails, the files
+        # stay in storage (the catalog may have recorded them before the
+        # error reached us) and the exception surfaces to the checkpoint,
+        # which replays the batch: this is the at-least-once path.
+        start = time.perf_counter()
+        rows_written, uploaded = self._retry("Write", lambda: self._write_batch(batch))
+        # Log the actually-written count, not batch.size. They are equal in
+        # normal operation, but reporting the real number makes any future
+        # silent-drop regression visible in the log.
+        logger.info(
+            "Wrote %d rows to blob storage in %.1f ms",
+            rows_written,
+            (time.perf_counter() - start) * 1000,
+        )
+
+        if uploaded and self._catalog and self.table_registered:
+            self._retry(
+                "Manifest registration",
+                lambda: self._register_files_in_manifest(uploaded),
+            )
+
+    @staticmethod
+    def _retry(what: str, fn: Callable[[], T]) -> T:
+        """Run ``fn`` up to three times, sleeping between attempts; re-raises
+        the last error."""
         attempts = 3
-        while attempts:
-            start = time.perf_counter()
+        while True:
             try:
-                rows_written = self._write_batch(batch)
-                elapsed_ms = (time.perf_counter() - start) * 1000
-                # Log the actually-written count, not batch.size. They are
-                # equal in normal operation, but reporting the real number
-                # makes any future silent-drop regression visible in the log.
-                logger.info(
-                    "Wrote %d rows to blob storage in %.1f ms",
-                    rows_written,
-                    elapsed_ms,
-                )
-                return
+                return fn()
             except Exception as exc:
                 attempts -= 1
                 if attempts == 0:
                     raise
-                logger.warning("Write failed (%s) - retrying...", exc)
+                logger.warning("%s failed (%s) - retrying...", what, exc)
                 time.sleep(3)
 
-    def _write_batch(self, batch: SinkBatch) -> int:
+    def _write_batch(self, batch: SinkBatch) -> Tuple[int, List[Dict[str, Any]]]:
         """Convert batch to Parquet and write to blob storage with Hive partitioning.
 
-        Returns the number of rows actually grouped and written to storage.
-        Equals batch.size in normal operation; reported by write() so any
-        future silent-drop regression is visible in the log instead of
-        being papered over with the input count.
-        """
-        if not batch:
-            return 0
+        Returns ``(rows_written, uploaded)``: the number of rows actually
+        grouped and written (equals batch.size in normal operation; reported
+        by write() so any future silent-drop regression is visible in the log
+        instead of being papered over with the input count), and the
+        data-file entries that landed, for manifest registration.
 
+        Every upload this attempt submits is settled before returning — on
+        success as ``uploaded``, on failure by best-effort deletion — so a
+        retry always starts from an empty slate.
+        """
+        # (SinkBatch is always truthy; ``not batch`` would never fire.)
+        if batch.empty():
+            return 0, []
+
+        try:
+            rows_written = self._submit_batch_uploads(batch)
+        except Exception:
+            # Submission failed part-way (a later partition group could not
+            # be converted or queued). Whatever is already in flight belongs
+            # to this failed attempt: settle and discard it, or the retry
+            # would register the survivors a second time.
+            self._settle_uploads(discard=True)
+            raise
+        return rows_written, self._settle_uploads()
+
+    def _submit_batch_uploads(self, batch: SinkBatch) -> int:
+        """Convert the batch and queue one upload per Hive partition group.
+        Returns the number of rows queued."""
         # Convert batch to list of dictionaries
         rows = []
         for item in batch:
@@ -476,8 +518,6 @@ class QuixTSDataLakeSink(BatchingSink):
             self._write_parquet_to_storage(df, storage_key, [], ())
             rows_written = len(df)
 
-        # Wait for all uploads to complete and register files in catalog
-        self._finalize_writes()
         return rows_written
 
     @staticmethod
@@ -681,69 +721,78 @@ class QuixTSDataLakeSink(BatchingSink):
         except Exception as e:
             logger.warning("Failed to write virtual sidecar for %s: %s", storage_key, e)
 
-    def _finalize_writes(self):
-        """Wait for all pending uploads to complete and register files in catalog."""
-        if not self._pending_futures:
-            # Still drain any sidecars (defensive; normally paired with data).
-            self._await_sidecar_uploads()
-            return
+    def _settle_uploads(self, discard: bool = False) -> List[Dict[str, Any]]:
+        """Wait for every upload this attempt submitted; both pending lists are
+        always emptied.
 
-        count = len(self._pending_futures)
-        logger.debug(f"Waiting for {count} upload(s) to complete...")
+        Returns the data-file items once all data uploads succeeded. If any
+        data upload failed — or ``discard`` is set because the attempt already
+        failed upstream — whatever did land is deleted (best-effort) and the
+        first upload error re-raised: a never-registered data file, or the
+        sidecar of a data file that never landed, is an orphan, and the retry
+        re-uploads everything under fresh uuids anyway. Virtual-index sidecars
+        are awaited alongside the data so the tree is queryable the moment the
+        batch is acknowledged, but a sidecar failure only degrades the index,
+        so it is logged and never raised.
+        """
+        data_items, self._pending_futures = self._pending_futures, []
+        sidecar_items, self._pending_sidecar_futures = (
+            self._pending_sidecar_futures,
+            [],
+        )
 
-        try:
-            # Wait for all uploads to complete, collecting the first error
-            first_error = None
-            for item in self._pending_futures:
-                try:
-                    item["future"].result()
-                    logger.debug(
-                        "Uploaded %d rows to %s", item["row_count"], item["key"]
-                    )
-                except Exception as e:
-                    logger.error("Failed to upload %s: %s", item["key"], e)
-                    if first_error is None:
-                        first_error = e
+        landed: List[str] = []
+        first_error: Optional[Exception] = None
+        for item in data_items:
+            try:
+                item["future"].result()
+                landed.append(item["key"])
+                logger.debug("Uploaded %d rows to %s", item["row_count"], item["key"])
+            except Exception as e:
+                logger.error("Failed to upload %s: %s", item["key"], e)
+                if first_error is None:
+                    first_error = e
 
+        sidecars_ok = 0
+        for item in sidecar_items:
+            try:
+                item["future"].result()
+                landed.append(item["key"])
+                sidecars_ok += 1
+            except Exception as e:
+                logger.warning("Virtual sidecar upload failed (%s): %s", item["key"], e)
+
+        if discard or first_error is not None:
+            self._discard_uploads(landed)
             if first_error is not None:
                 raise first_error
+            return []
 
-            logger.info(f"Successfully uploaded {count} file(s)")
+        if data_items:
+            logger.info("Successfully uploaded %d file(s)", len(data_items))
+        if sidecar_items:
+            logger.debug(
+                "Uploaded %d/%d virtual sidecar(s)", sidecars_ok, len(sidecar_items)
+            )
+        return data_items
 
-            # Virtual-index sidecars ride alongside the data files. Wait for them
-            # too so the tree is queryable the moment the batch is acknowledged
-            # (a sidecar failure only degrades the index, never blocks the data).
-            self._await_sidecar_uploads()
-
-            # Register all files in catalog manifest if configured
-            if self._catalog and self.table_registered:
-                self._register_files_in_manifest()
-        finally:
-            self._pending_futures.clear()
-
-    def _await_sidecar_uploads(self):
-        """Block on the virtual-index sidecar uploads. Best-effort: a failed
-        sidecar is logged but never raised — the data is already safe and the
-        index self-heals on the next write/reindex."""
-        if not self._pending_sidecar_futures:
+    def _discard_uploads(self, keys: List[str]) -> None:
+        """Best-effort delete of the blobs a failed attempt landed. Nothing has
+        been registered yet, so removing them is safe; if the delete itself
+        fails the keys are logged so the orphans can be cleaned up by hand."""
+        if not keys or self._blob_client is None:
             return
         try:
-            ok = 0
-            for item in self._pending_sidecar_futures:
-                try:
-                    item["future"].result()
-                    ok += 1
-                except Exception as e:
-                    logger.warning(
-                        "Virtual sidecar upload failed (%s): %s", item["key"], e
-                    )
-            logger.debug(
-                "Uploaded %d/%d virtual sidecar(s)",
-                ok,
-                len(self._pending_sidecar_futures),
+            self._blob_client.delete_objects(keys)
+            logger.info("Discarded %d file(s) from the failed write attempt", len(keys))
+        except Exception as e:
+            logger.warning(
+                "Could not discard %d file(s) from the failed write attempt (%s); "
+                "left as orphans: %s",
+                len(keys),
+                e,
+                keys,
             )
-        finally:
-            self._pending_sidecar_futures.clear()
 
     def _null_empty_dicts(self, df: pd.DataFrame):
         """
@@ -982,9 +1031,9 @@ class QuixTSDataLakeSink(BatchingSink):
                 detected_partition_columns,
             )
 
-    def _register_files_in_manifest(self):
-        """Register multiple newly written files in the catalog manifest."""
-        if not (file_items := self._pending_futures):
+    def _register_files_in_manifest(self, file_items: List[Dict[str, Any]]):
+        """Register newly written data files in the catalog manifest."""
+        if not file_items or self._catalog is None:
             return
 
         # Build file entries for all files
