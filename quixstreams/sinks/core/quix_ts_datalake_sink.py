@@ -709,10 +709,9 @@ class QuixTSDataLakeSink(BatchingSink):
             }
         )
 
-        # The VIRTUAL index for this file goes to a blob ``.vidx/`` sidecar
-        # (navigation reads it via DuckDB) — the SOLE virtual index; nothing
-        # virtual is sent to Postgres anymore. column_stats (zone maps) still go
-        # to the catalog above.
+        # The VIRTUAL index for this file is a blob ``.vidx/`` sidecar that
+        # navigation reads directly (via DuckDB); the catalog receives only the
+        # column_stats (zone maps) attached above.
         self._write_virtual_sidecar(
             df, storage_key, partition_columns, partition_values
         )
@@ -883,7 +882,7 @@ class QuixTSDataLakeSink(BatchingSink):
                 df[col] = df[col].apply(lambda x: x or None)
 
     # Keys of _owned_properties that are removed from the table when the sink
-    # no longer sets them: an unset sort_column must fall back to the timestamp
+    # does not set them: an unset sort_column must fall back to the timestamp
     # column, not linger; a dropped ~virtual level must leave the tree.
     _OPTIONAL_OWNED_PROPERTIES = ("virtual_partitions", "sort_column")
 
@@ -1224,14 +1223,12 @@ class QuixTSDataLakeSink(BatchingSink):
             # when empty so older catalogs simply ignore the absent field.
             if column_stats:
                 entry["column_stats"] = column_stats
-            # NOTE: the VIRTUAL index (per-file virtual values + co-occurrence
-            # tuples) is no longer sent to the catalog/Postgres — it lives entirely
-            # in the blob ``.vidx/`` sidecars written by _write_virtual_sidecar.
-            # Only column_stats (zone maps) still ride along in the manifest.
+            # The VIRTUAL index (per-file virtual values) is not part of the
+            # manifest: it lives in the blob ``.vidx/`` sidecars written by
+            # _write_virtual_sidecar. Only column_stats ride along here.
             file_entries.append(entry)
 
-        # Send all files to catalog in a single request (files + column_stats
-        # only; the virtual index is in blob sidecars now, not Postgres).
+        # Send all files to catalog in a single request.
         body: Dict[str, Any] = {"files": file_entries}
         response = self._catalog.post(
             f"/namespaces/{self.namespace}/tables/{self.table_name}/manifest/add-files",
