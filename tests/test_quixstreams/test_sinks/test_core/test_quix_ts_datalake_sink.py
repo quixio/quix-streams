@@ -362,6 +362,66 @@ class TestSilenceChattyLoggers:
             assert _logging.getLogger(name).level == _logging.INFO
 
 
+class TestPartitionConfigValidation:
+    """Configs that used to be accepted silently and then stick (the restart
+    validators compare the sink against the table it created) are rejected at
+    construction instead."""
+
+    @pytest.mark.parametrize("col", ["~year", "~month", "~day", "~hour"])
+    def test_virtual_time_column_is_rejected(self, col):
+        # year/month/day/hour are derived from timestamp_column; a virtual one
+        # would be a permanently empty partition level.
+        with pytest.raises(ValueError, match="physical partitions"):
+            QuixTSDataLakeSink(
+                s3_prefix="p", table_name="t", hive_columns=["year", col]
+            )
+
+    def test_bare_tilde_is_rejected(self):
+        with pytest.raises(ValueError, match="must be column names"):
+            QuixTSDataLakeSink(s3_prefix="p", table_name="t", hive_columns=["~"])
+
+    @pytest.mark.parametrize(
+        "cols", [["year", "year"], ["driver", "~driver"], ["~driver", "~driver"]]
+    )
+    def test_duplicate_column_is_rejected(self, cols):
+        with pytest.raises(ValueError, match="more than once"):
+            QuixTSDataLakeSink(s3_prefix="p", table_name="t", hive_columns=cols)
+
+    def test_sort_column_cannot_be_a_physical_partition(self):
+        # A physical column is stripped from every file, so no file can be
+        # sorted by it; recording it blind would promise pruning that never comes.
+        with pytest.raises(ValueError, match="physical partition column"):
+            QuixTSDataLakeSink(
+                s3_prefix="p", table_name="t", hive_columns=["year"], sort_column="year"
+            )
+
+    def test_sort_column_may_be_virtual_or_plain(self):
+        QuixTSDataLakeSink(
+            s3_prefix="p",
+            table_name="t",
+            hive_columns=["year", "~driver"],
+            sort_column="driver",
+        )
+        QuixTSDataLakeSink(
+            s3_prefix="p", table_name="t", hive_columns=["year"], sort_column="seq"
+        )
+
+    def test_stats_columns_excluding_ordering_columns_warns(self, caplog):
+        QuixTSDataLakeSink(
+            s3_prefix="p", table_name="t", sort_column="seq", stats_columns=["speed"]
+        )
+        assert "excludes the ordering column(s) ['seq', 'ts_ms']" in caplog.text
+
+    def test_stats_columns_covering_ordering_columns_is_quiet(self, caplog):
+        QuixTSDataLakeSink(
+            s3_prefix="p",
+            table_name="t",
+            sort_column="seq",
+            stats_columns=["seq", "ts_ms"],
+        )
+        assert "excludes the ordering column" not in caplog.text
+
+
 # =============================================================================
 # 2. Timestamp Column Mapping Tests
 # =============================================================================
@@ -1321,9 +1381,11 @@ class TestCatalogTableMetadata:
     def test_physical_to_virtual_swap_is_rejected(
         self, sink_factory, mock_catalog_client
     ):
-        _existing_table(mock_catalog_client, self.META)  # month is foldered on disk
+        # machine is foldered on disk; making it virtual would stop foldering it.
+        meta = {**self.META, "partition_spec": ["year", "machine"]}
+        _existing_table(mock_catalog_client, meta)
         sink = self._sink(
-            sink_factory, mock_catalog_client, hive_columns=["year", "~month"]
+            sink_factory, mock_catalog_client, hive_columns=["year", "~machine"]
         )
 
         with pytest.raises(ValueError, match="Partition strategy mismatch"):

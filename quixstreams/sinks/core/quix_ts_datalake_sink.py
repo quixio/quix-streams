@@ -207,6 +207,7 @@ class QuixTSDataLakeSink(BatchingSink):
         # skip files and stream. When None, the lakehouse falls back to the
         # timestamp column automatically.
         self.sort_column = sort_column or None
+        self._validate_partition_config(_raw_hive, stats_columns)
         self._catalog = (
             QuixTSDataLakeCatalogClient(catalog_url, catalog_auth_token)
             if catalog_url
@@ -260,6 +261,56 @@ class QuixTSDataLakeSink(BatchingSink):
             thread_name="QuixTSDataLakeSink-timeout-check",
             logger=logger,
         )
+
+    def _validate_partition_config(
+        self, raw_hive: List[str], stats_columns: Optional[List[str]]
+    ) -> None:
+        """Reject partition configs that would otherwise be accepted silently
+        and then stick: the restart validators compare a running sink against
+        the table it created, so a broken first config becomes the only one
+        they accept."""
+        for entry in raw_hive:
+            if entry.lstrip("~") == "":
+                raise ValueError(
+                    f"hive_columns entries must be column names, got {entry!r}"
+                )
+        virtual_time = sorted(set(self._virtual_columns) & set(TIMESTAMP_COL_MAPPER))
+        if virtual_time:
+            raise ValueError(
+                f"hive_columns: {', '.join('~' + c for c in virtual_time)}: year, "
+                "month, day and hour are derived from timestamp_column and exist "
+                "only as physical partitions; a virtual time level would be "
+                "permanently empty. Drop the '~'."
+            )
+        names = self._partition_spec_order
+        duplicates = sorted({c for c in names if names.count(c) > 1})
+        if duplicates:
+            raise ValueError(
+                f"hive_columns lists {duplicates} more than once; a column is "
+                "either physical or ~virtual, and appears once."
+            )
+        if self.sort_column and self.sort_column in self.hive_columns:
+            raise ValueError(
+                f"sort_column {self.sort_column!r} is a physical partition column: "
+                "its value lives in the folder path and is stripped from every "
+                "file, so files cannot be sorted by it. Use a ~virtual partition "
+                "or a plain data column."
+            )
+        if stats_columns is not None:
+            wanted = set(stats_columns)
+            missing = [
+                c
+                for c in (self.sort_column, self.timestamp_column)
+                if c and c not in wanted
+            ]
+            if missing:
+                logger.warning(
+                    "stats_columns=%s excludes the ordering column(s) %s: without "
+                    "per-file min/max on them the lakehouse cannot skip files by "
+                    "sort_column / timestamp_column.",
+                    stats_columns,
+                    missing,
+                )
 
     @property
     def s3_bucket(self) -> str:

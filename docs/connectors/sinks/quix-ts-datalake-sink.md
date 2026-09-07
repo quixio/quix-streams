@@ -121,7 +121,7 @@ These properties are sink-owned. On every start against an existing table the si
 ### Caveats
 
 - A virtual column must be a field your records actually carry. Unlike a physical partition, it is not derived and not reconstructible from the path: reads use `hive_partitioning=true`, which rebuilds physical columns from `key=value/` folders but has nothing to rebuild a virtual column from. The column has to be in the Parquet data for `WHERE driver = 'HAM'` to resolve, and for the lakehouse's sidecar reindex to read its values back out.
-- For that reason `year`, `month`, `day`, and `hour` are supported as **physical** partitions only — they are derived from `timestamp_column`, so a virtual `~hour` would mean the sink inventing a column your records never contained. Use `hour`, not `~hour`; time-range pruning is already provided by the per-file statistics below.
+- For that reason `year`, `month`, `day`, and `hour` are supported as **physical** partitions only — they are derived from `timestamp_column`, so a virtual `~hour` would be a permanently empty level. The constructor rejects `~year`/`~month`/`~day`/`~hour` with a `ValueError`, as it does a bare `~` and a column listed twice (including once physical and once virtual). Use `hour`, not `~hour`; time-range pruning is already provided by the per-file statistics below.
 - A virtual column missing from a given batch is not an error. Its sidecar rows carry `NULL` for that column (the schema stays fixed), so navigation queries should add `IS NOT NULL` when listing a level's values.
 - The `.vidx/` folders live *inside* the data partition folders, and Parquet globs do not skip dot-folders. A whole-table glob such as `.../telemetry/**/*.parquet` will pick the sidecars up as data — either a schema error or phantom rows, depending on the reader. Query through the catalog's file list (the manifest never contains sidecars), or use a glob whose depth matches the physical tree (`.../telemetry/*/*/*.parquet` for a two-level tree) so `.vidx/` is never descended into.
 
@@ -163,6 +163,8 @@ sink = QuixTSDataLakeSink(
 Compaction writes files ordered by this column so that `ORDER BY` and time-range queries can skip files and stream results instead of sorting the whole table. The sink records `properties.timestamp_column` on every table and adds `properties.sort_column` only when you set it explicitly, so the fallback stays available. Both are synced to an existing table on start (see [Catalog registration](#catalog-registration)), and unsetting `sort_column` removes it from the table again.
 
 This parameter is table metadata for the lakehouse to act on. The sink itself does not reorder rows within a file.
+
+`sort_column` cannot be a physical partition column — its value lives in the folder path and is stripped from every file, so no file could be sorted by it — and the constructor rejects that with a `ValueError`. A `~virtual` partition or any plain data column is fine. File skipping on the sort column also needs its per-file statistics: if you restrict `stats_columns`, keep `sort_column` and `timestamp_column` in the list, or the sink logs a warning at construction.
 
 ```python
 sink = QuixTSDataLakeSink(
