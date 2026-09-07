@@ -578,9 +578,13 @@ class QuixTSDataLakeSink(BatchingSink):
         partition_values: tuple,
     ):
         """Write a DataFrame to blob storage as Parquet."""
-        # Convert to Arrow table and prepare buffer
+        # Convert to Arrow table and prepare buffer. The frame is a groupby
+        # slice on the partitioned path, so its index is a non-contiguous
+        # subset of the batch's RangeIndex; without preserve_index=False Arrow
+        # materialises it as an ``__index_level_0__`` int64 column that would
+        # land in every file and, being numeric, in its column_stats too.
         self._null_empty_dicts(df)
-        table = pa.Table.from_pandas(df)
+        table = pa.Table.from_pandas(df, preserve_index=False)
 
         # Compute per-column min/max zone maps from the in-memory table BEFORE
         # serialising — nearly free, and avoids re-reading the parquet footer

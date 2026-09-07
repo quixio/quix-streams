@@ -642,6 +642,41 @@ class TestWriteOperations:
         assert "year" not in df.columns
         assert "month" not in df.columns
 
+    def test_write_does_not_leak_pandas_index_into_files_or_stats(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        """A groupby slice keeps the batch's row positions as its index; that
+        index must not be materialised as an ``__index_level_0__`` column in
+        the parquet file, nor show up as a numeric zone map in the manifest."""
+        sink = sink_factory(
+            hive_columns=["machine"],
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        # Interleave the partition values so the M1 group has index [0, 2]
+        # (non-contiguous -> not a RangeIndex -> Arrow would store it).
+        records = [
+            {
+                "value": {"machine": m, "v": i, "ts_ms": 1704067200000 + i},
+                "key": f"k{i}",
+                "timestamp": 1704067200000 + i,
+                "offset": i,
+            }
+            for i, m in enumerate(["M1", "M2", "M1"])
+        ]
+
+        sink.write(sample_batch(records=records))
+
+        for call in mock_blob_client.put_object_async.call_args_list:
+            schema = pq.read_schema(io.BytesIO(call[0][1]))
+            assert "__index_level_0__" not in schema.names
+        body = mock_catalog_client.post.call_args.kwargs["json"]
+        for f in body["files"]:
+            assert "__index_level_0__" not in f["column_stats"]
+
     def test_write_creates_multiple_files_for_different_partitions(
         self, sink_factory, mock_blob_client
     ):
