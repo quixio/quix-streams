@@ -1197,6 +1197,13 @@ class Application:
             tp for tp in topic_partitions if tp.topic not in non_changelog_topics
         ]
         self._consumer.pause(changelog_tps)
+        # The `assign()` above also resets the paused state of the data partitions.
+        # When this callback fires from the `poll()` inside a running recovery loop,
+        # those partitions must go back to paused before anything else runs, or the
+        # recovery loop starts fetching source messages it cannot process. Covers
+        # partitions that never reach `RecoveryManager.assign_partition` because
+        # they have no stateful store. No-op outside an active recovery.
+        self._state_manager.pause_assigned_data_partitions(topic_partitions)
 
         if self._state_manager.stores:
             non_changelog_tps = [

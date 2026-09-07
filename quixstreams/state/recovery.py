@@ -486,6 +486,9 @@ class RecoveryManager:
         # Cache position results to avoid double calls in same iteration
         self._position_cache: Dict[str, Tuple[float, ConfluentPartition]] = {}
         self._recovery_paused_data_tps: set[tuple[str, int]] = set()
+        # Data topic-partitions the recovery loop had to rewind because they were
+        # fetching while recovery was running. Reset by every `do_recovery` call.
+        self._recovery_rewound_data_tps: set[tuple[str, int]] = set()
 
     @property
     def partitions(self) -> Dict[int, Dict[str, RecoveryPartition]]:
@@ -540,6 +543,7 @@ class RecoveryManager:
         """
         logger.info("Beginning recovery check...")
         self._running = True
+        self._recovery_rewound_data_tps.clear()
 
         # Seek the changelog partitions to the previously saved position and resume
         # them. Partitions added later by a rebalance are primed the same way by
@@ -647,12 +651,47 @@ class RecoveryManager:
         in which case `assign_partition` never runs and the partition would stay
         paused indefinitely. Application calls this on every assignment to cover it.
 
-        Skipped while a recovery is pending/active (`has_assignments`): those pauses
-        are intentional and get resumed by `do_recovery`/`assign_partition`.
+        Skipped while a recovery is pending (`has_assignments`) or running
+        (`self._running`): those pauses are intentional and get resumed by
+        `do_recovery`/`assign_partition`. The `self._running` half matters when a
+        rebalance revokes the last recovering partition, which empties
+        `_recovery_partitions` while the loop is still on its way out.
         """
-        if not self._recovery_paused_data_tps or self.has_assignments:
+        if not self._recovery_paused_data_tps or self.has_assignments or self._running:
             return
         self._resume_recovery_paused_data_partitions(partitions)
+
+    def pause_assigned_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        """
+        Pause the data partitions of a fresh assignment while recovery is running.
+
+        `Consumer.assign()` resets the paused state of every partition in the new
+        assignment, so a rebalance landing mid-recovery (this runs from the
+        assignment callback fired inside `_recovery_loop`'s `poll`) un-pauses the
+        data partitions recovery paused. Any of them would then feed source-topic
+        messages into the recovery loop. Partitions with no stateful store never
+        reach `assign_partition`, so that is not enough to re-pause them.
+
+        No-op unless a recovery loop is running; `do_recovery` resumes every
+        non-changelog partition of the assignment when the loop finishes.
+
+        :param partitions: the topic partitions just assigned to the consumer
+        """
+        if not self._running:
+            return
+
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+        to_pause = [tp for tp in partitions if tp.topic in non_changelog_topics]
+        if not to_pause:
+            return
+
+        logger.debug(
+            f"Pausing data partitions assigned during recovery: "
+            f"{[(tp.topic, tp.partition) for tp in to_pause]}"
+        )
+        self._pause_for_recovery(to_pause)
 
     def _generate_recovery_partitions(
         self,
@@ -701,8 +740,10 @@ class RecoveryManager:
 
         When a rebalance calls this while a recovery is already running, the newly
         added changelog partitions are also seeked+resumed so the running recovery
-        loop can consume them, and data partitions paused for recovery stay paused
-        (`do_recovery` resumes them once the loop finishes).
+        loop can consume them, every assigned data partition is (re-)paused
+        regardless of whether this call produced a `RecoveryPartition`, and data
+        partitions paused for recovery stay paused (`do_recovery` resumes them
+        once the loop finishes).
         """
         recovery_partitions = self._generate_recovery_partitions(
             topic_name=topic,
@@ -755,29 +796,34 @@ class RecoveryManager:
                 added_partitions.append(rp)
 
         # Figure out if we need to pause any topic partitions
-        if self._recovery_partitions:
-            if self._running:
-                # Some partitions are already recovering,
-                # pausing only the source topic partition
-                self._pause_for_recovery(
-                    [ConfluentPartition(topic=topic, partition=partition)]
-                )
-                # The running loop is already past `do_recovery`'s seek+resume
-                # block, so prime the changelog partitions added just now here.
-                for rp in added_partitions:
-                    self._prime_changelog_partition(rp)
-            else:
-                # Recovery hasn't started yet, so pause ALL partitions
-                # and wait for Application to start recovery
-                self._pause_for_recovery(self._consumer.assignment())
-        elif not self._running:
+        if self._running:
+            # Some partitions are already recovering: pause the source topic
+            # partition being assigned, and then every other assigned data
+            # partition, because the `Consumer.assign()` that preceded this
+            # callback reset the paused state of the whole new assignment. This
+            # runs whether or not this call produced a `RecoveryPartition`: a
+            # stateless partition assigned mid-recovery must wait for recovery
+            # like every other data partition.
+            self._pause_for_recovery(
+                [ConfluentPartition(topic=topic, partition=partition)]
+            )
+            self.pause_assigned_data_partitions(current_assignment)
+            # The running loop is already past `do_recovery`'s seek+resume
+            # block, so prime the changelog partitions added just now here.
+            for rp in added_partitions:
+                self._prime_changelog_partition(rp)
+        elif self._recovery_partitions:
+            # Recovery hasn't started yet, so pause ALL partitions
+            # and wait for Application to start recovery
+            self._pause_for_recovery(self._consumer.assignment())
+        else:
             # Nothing to recover here and no recovery in progress: release data
-            # partitions still paused by an earlier recovery generation.
-            # While `self._running` is True those pauses must stay: during an eager
-            # rebalance `_recovery_partitions` is momentarily empty between the
-            # revoke and the reassign of the same stateful partition, and resuming
-            # a data partition then would feed the still-running recovery loop
-            # source-topic messages. `do_recovery` resumes them when it finishes.
+            # partitions still paused by an earlier recovery generation. Reached
+            # only when `self._running` is False, so a recovery-paused partition
+            # can never be resumed under a running loop — during an eager rebalance
+            # `_recovery_partitions` is momentarily empty between the revoke and the
+            # reassign of the same stateful partition, and resuming a data partition
+            # then would feed the loop source-topic messages.
             self._resume_recovery_paused_data_partitions(current_assignment)
 
     def _revoke_recovery_partitions(self, recovery_partitions: List[RecoveryPartition]):
@@ -852,10 +898,12 @@ class RecoveryManager:
 
         A RecoveryPartition is unassigned immediately once fully updated.
 
-        A polled message may not belong to any tracked `RecoveryPartition`: after a
-        rebalance the consumer can still deliver the tail of a revoked changelog
-        partition, or a message from a data partition the `Application` resumed.
-        Such messages are dropped instead of raising.
+        A polled message may not belong to any tracked `RecoveryPartition`. A
+        message from a changelog partition no longer under recovery (the tail of a
+        partition revoked by a rebalance) is dropped: its state is gone. A message
+        from a data topic means a pause gap, and is rewound rather than dropped
+        (see `_rewind_data_partition`), because dropping it would lose it for the
+        whole session.
         """
         while self.recovering:
             self._log_recovery_progress()
@@ -864,18 +912,61 @@ class RecoveryManager:
             else:
                 msg = raise_for_msg_error(msg)
                 changelogs = self._recovery_partitions.get(msg.partition(), {})
-                if (rp := changelogs.get(msg.topic())) is None:
+                if (rp := changelogs.get(msg.topic())) is not None:
+                    rp.recover_from_changelog_message(changelog_message=msg)
+                elif msg.topic() in self._topic_manager.non_changelog_topics:
+                    self._rewind_data_partition(msg)
+                else:
                     logger.debug(
                         f'Skipping a message for "{msg.topic()}[{msg.partition()}]" '
                         f"at offset {msg.offset()}: not under recovery"
                     )
-                else:
-                    rp.recover_from_changelog_message(changelog_message=msg)
                 self._consumer._broker_available()  # noqa: SLF001
             if self._broker_availability_timeout:
                 self._consumer.raise_if_broker_unavailable(
                     self._broker_availability_timeout
                 )
+
+    def _rewind_data_partition(self, msg: SuccessfulConfluentKafkaMessageProto) -> None:
+        """
+        Pause a data partition the recovery loop should never have polled and rewind
+        it so the delivered message is read again after recovery.
+
+        The recovery loop only ever consumes changelog partitions, so a data-topic
+        message proves the partition escaped its recovery pause: the consumer-side
+        `assign()` of a rebalance resets the paused state of the whole new
+        assignment. Dropping the message loses it for the rest of the session: it is
+        never processed, yet the consumer position has moved past it and only the
+        pre-rebalance committed offset would bring it back. Pausing and seeking back
+        to `msg.offset()` makes it the next message read once `do_recovery` resumes
+        the partition.
+
+        Only the first message per topic-partition is acted on. Messages are
+        delivered in offset order per partition, so the first one seen is the
+        earliest; seeking again for a later message would skip the earlier rewind
+        target. Later messages are dropped, and re-read after the rewind.
+
+        :param msg: a message polled by the recovery loop from a data topic
+        """
+        topic, partition = msg.topic(), msg.partition()
+        if (topic, partition) in self._recovery_rewound_data_tps:
+            logger.debug(
+                f'Dropping a message for "{topic}[{partition}]" at offset '
+                f"{msg.offset()}: partition already rewound for recovery"
+            )
+            return
+
+        self._recovery_rewound_data_tps.add((topic, partition))
+        self._pause_for_recovery([ConfluentPartition(topic=topic, partition=partition)])
+        self._consumer.seek(
+            ConfluentPartition(topic=topic, partition=partition, offset=msg.offset())
+        )
+        logger.warning(
+            f'Data partition "{topic}[{partition}]" was consumed by the recovery '
+            f"loop; it is now paused and rewound to offset {msg.offset()} so no "
+            f"message is lost. This means the partition escaped its recovery pause, "
+            f"most likely a rebalance re-assigning it while recovery was running."
+        )
 
     def _get_position_with_cache(self, rp: RecoveryPartition) -> ConfluentPartition:
         """
