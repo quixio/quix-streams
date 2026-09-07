@@ -540,21 +540,12 @@ class RecoveryManager:
         """
         logger.info("Beginning recovery check...")
         self._running = True
-        # note: technically it should be rp.offset + 1, but to remain backwards
-        # compatible with <v2.7 +1 ALOS offsetting, it remains rp.offset.
-        # This means we will always re-write the "first" recovery message.
-        # More specifically, this is only covering for a very edge case:
-        # when first upgrading from <v2.7 AND a recovery was actually needed.
-        # Once on >=v2.7, this is no longer an issue...so we could eventually
-        # remove this, potentially.
 
-        # Seek the changelog partitions to the previously saved position and resume them
+        # Seek the changelog partitions to the previously saved position and resume
+        # them. Partitions added later by a rebalance are primed the same way by
+        # `assign_partition` while the loop below is running.
         for rp in dict_values(self._recovery_partitions):
-            tp = ConfluentPartition(
-                topic=rp.changelog_name, partition=rp.partition_num, offset=rp.offset
-            )
-            self._consumer.seek(tp)
-            self._consumer.resume([tp])
+            self._prime_changelog_partition(rp)
 
         self._recovery_loop()
         if self._running:
@@ -571,6 +562,34 @@ class RecoveryManager:
             self._forget_recovery_paused_data_partitions(non_changelog_tps)
         else:
             logger.debug("Recovery process interrupted; stopping.")
+
+    def _prime_changelog_partition(self, rp: RecoveryPartition) -> None:
+        """
+        Seek a `RecoveryPartition`'s changelog partition to its saved position and
+        resume consuming it, making it readable by the recovery loop.
+
+        Called by `do_recovery` for the partitions known when recovery starts, and
+        by `assign_partition` for partitions a rebalance adds while the loop is
+        already running. A changelog partition that is never seeked keeps an
+        OFFSET_INVALID (-1001) consumer position, which `_get_changelog_offset`
+        eventually turns into a "Recovery stuck" RuntimeError once
+        MAX_INVALID_OFFSET_ATTEMPTS is exceeded.
+
+        Note: technically it should be rp.offset + 1, but to remain backwards
+        compatible with <v2.7 +1 ALOS offsetting, it remains rp.offset.
+        This means we will always re-write the "first" recovery message.
+        More specifically, this is only covering for a very edge case:
+        when first upgrading from <v2.7 AND a recovery was actually needed.
+        Once on >=v2.7, this is no longer an issue...so we could eventually
+        remove this, potentially.
+
+        :param rp: the `RecoveryPartition` whose changelog partition to prime
+        """
+        tp = ConfluentPartition(
+            topic=rp.changelog_name, partition=rp.partition_num, offset=rp.offset
+        )
+        self._consumer.seek(tp)
+        self._consumer.resume([tp])
 
     def _pause_for_recovery(self, partitions: List[ConfluentPartition]) -> None:
         self._track_recovery_paused_data_partitions(partitions)
@@ -679,6 +698,11 @@ class RecoveryManager:
         Assigns `StorePartition`s (as `RecoveryPartition`s) ONLY IF recovery required.
 
         Pauses active consumer partitions as needed.
+
+        When a rebalance calls this while a recovery is already running, the newly
+        added changelog partitions are also seeked+resumed so the running recovery
+        loop can consume them, and data partitions paused for recovery stay paused
+        (`do_recovery` resumes them once the loop finishes).
         """
         recovery_partitions = self._generate_recovery_partitions(
             topic_name=topic,
@@ -690,6 +714,7 @@ class RecoveryManager:
         current_assignment = self._consumer.assignment()
         assigned_tps = set((tp.topic, tp.partition) for tp in current_assignment)
 
+        added_partitions: List[RecoveryPartition] = []
         for rp in recovery_partitions:
             changelog_name, partition = rp.changelog_name, rp.partition_num
             # Validate that the changelog topic-partition is assigned to consumer before
@@ -727,6 +752,7 @@ class RecoveryManager:
             elif rp.needs_recovery_check:
                 logger.debug(f"Adding a recovery check for {rp}")
                 self._recovery_partitions.setdefault(partition, {})[changelog_name] = rp
+                added_partitions.append(rp)
 
         # Figure out if we need to pause any topic partitions
         if self._recovery_partitions:
@@ -736,11 +762,22 @@ class RecoveryManager:
                 self._pause_for_recovery(
                     [ConfluentPartition(topic=topic, partition=partition)]
                 )
+                # The running loop is already past `do_recovery`'s seek+resume
+                # block, so prime the changelog partitions added just now here.
+                for rp in added_partitions:
+                    self._prime_changelog_partition(rp)
             else:
                 # Recovery hasn't started yet, so pause ALL partitions
                 # and wait for Application to start recovery
                 self._pause_for_recovery(self._consumer.assignment())
-        else:
+        elif not self._running:
+            # Nothing to recover here and no recovery in progress: release data
+            # partitions still paused by an earlier recovery generation.
+            # While `self._running` is True those pauses must stay: during an eager
+            # rebalance `_recovery_partitions` is momentarily empty between the
+            # revoke and the reassign of the same stateful partition, and resuming
+            # a data partition then would feed the still-running recovery loop
+            # source-topic messages. `do_recovery` resumes them when it finishes.
             self._resume_recovery_paused_data_partitions(current_assignment)
 
     def _revoke_recovery_partitions(self, recovery_partitions: List[RecoveryPartition]):
@@ -814,6 +851,11 @@ class RecoveryManager:
         messages until recovery is "complete" (i.e. no assigned `RecoveryPartition`s).
 
         A RecoveryPartition is unassigned immediately once fully updated.
+
+        A polled message may not belong to any tracked `RecoveryPartition`: after a
+        rebalance the consumer can still deliver the tail of a revoked changelog
+        partition, or a message from a data partition the `Application` resumed.
+        Such messages are dropped instead of raising.
         """
         while self.recovering:
             self._log_recovery_progress()
@@ -821,8 +863,14 @@ class RecoveryManager:
                 self._update_recovery_status()
             else:
                 msg = raise_for_msg_error(msg)
-                rp = self._recovery_partitions[msg.partition()][msg.topic()]
-                rp.recover_from_changelog_message(changelog_message=msg)
+                changelogs = self._recovery_partitions.get(msg.partition(), {})
+                if (rp := changelogs.get(msg.topic())) is None:
+                    logger.debug(
+                        f'Skipping a message for "{msg.topic()}[{msg.partition()}]" '
+                        f"at offset {msg.offset()}: not under recovery"
+                    )
+                else:
+                    rp.recover_from_changelog_message(changelog_message=msg)
                 self._consumer._broker_available()  # noqa: SLF001
             if self._broker_availability_timeout:
                 self._consumer.raise_if_broker_unavailable(
