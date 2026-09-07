@@ -123,7 +123,7 @@ Statistics are computed from the in-memory Arrow batch before serialization, so 
 
 Each entry records `type` (`numeric` or `timestamp`), `min`, `max`, `null_count`, and `value_count` (non-null rows). Integer, float, and decimal columns are reported as `numeric` with float bounds; timestamp and date columns as `timestamp` with ISO-8601 bounds.
 
-Skipped automatically: the internal `__key` column, anything that is neither numeric nor temporal (strings, structs), and all-null columns — an all-null column has no usable bound, so omitting it leaves the file unpruned rather than wrongly pruned. When no column qualifies, the `column_stats` key is omitted from the manifest entry entirely, so older catalogs simply ignore the absent field.
+Skipped automatically: the internal `__key` column, anything that is neither numeric nor temporal (strings, structs), all-null columns, and numeric columns whose minimum or maximum is `±inf` or `NaN` — neither gives a usable bound (and neither can be JSON-encoded), so omitting the column leaves the file unpruned rather than wrongly pruned. When no column qualifies, the `column_stats` key is omitted from the manifest entry entirely, so older catalogs simply ignore the absent field.
 
 Numeric bounds are widened outward to the nearest representable float (`min` rounds down, `max` rounds up). This guarantees the stored range is a superset of the real one, so float rounding of large integers — nanosecond epochs beyond 2^53, for example — can only cost some pruning and can never wrongly skip a file that holds matching rows.
 

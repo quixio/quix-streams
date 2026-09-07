@@ -502,7 +502,9 @@ class QuixTSDataLakeSink(BatchingSink):
         Numeric columns (int/float/decimal) are reported as ``type="numeric"``
         with float bounds (floored min / ceiled max for safety); timestamp and
         date columns as ``type="timestamp"`` with ISO-8601 bounds. Everything
-        else (strings, structs, the ``__key`` column) is skipped. Respects
+        else (strings, structs, the ``__key`` column) is skipped, as are
+        all-null columns and numeric columns whose bounds are +/-inf or NaN
+        (no usable bound, and not JSON-encodable). Respects
         ``self._stats_columns`` when set. Runs on the in-memory batch, so it is
         just vectorised min/max — no re-read of the parquet footer.
         """
@@ -545,6 +547,16 @@ class QuixTSDataLakeSink(BatchingSink):
             if vtype == "numeric":
                 vmin = self._safe_float_min(vmin)
                 vmax = self._safe_float_max(vmax)
+                # +/-inf and NaN survive min_max but are not usable bounds and
+                # cannot be JSON-encoded: ``requests`` serialises with
+                # allow_nan=False, so one such value would make the manifest
+                # call raise before any HTTP happens. Skip the column and leave
+                # the file unpruned — the same policy as an all-null column.
+                if not (math.isfinite(vmin) and math.isfinite(vmax)):
+                    logger.debug(
+                        "Skipping stats for column %s: non-finite bounds", name
+                    )
+                    continue
             else:  # timestamp / date
                 vmin = vmin.isoformat()
                 vmax = vmax.isoformat()

@@ -7,6 +7,7 @@ catalog integration, and error handling.
 """
 
 import io
+import json
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -1505,6 +1506,74 @@ class TestQuixTSDataLakeSinkColumnStats:
         sink = sink_factory()
         table = pa.table({"x": pa.array([None, None], type=pa.float64())})
         assert sink._compute_column_stats(table) == {}
+
+    @pytest.mark.parametrize(
+        "values",
+        [
+            [1.0, float("inf")],
+            [float("-inf"), 2.0],
+            [float("nan"), float("nan")],
+        ],
+        ids=["pos-inf", "neg-inf", "all-nan"],
+    )
+    def test_non_finite_bounds_skip_the_column(self, sink_factory, values):
+        # +/-inf and NaN survive pc.min_max (NaN is not an Arrow null) and cannot
+        # be JSON-encoded: ``requests`` serialises with allow_nan=False, so one
+        # such value would make the manifest call raise before any HTTP
+        # happens. The column is left unpruned; its neighbours are unaffected.
+        sink = sink_factory()
+        table = pa.table(
+            {
+                "x": pa.array(values, type=pa.float64()),
+                "ok": pa.array([1, 2], type=pa.int64()),
+            }
+        )
+        stats = sink._compute_column_stats(table)
+        assert "x" not in stats
+        assert stats["ok"] == {
+            "type": "numeric",
+            "min": 1.0,
+            "max": 2.0,
+            "null_count": 0,
+            "value_count": 2,
+        }
+
+    def test_nan_alongside_finite_values_is_ignored(self, sink_factory):
+        # Arrow's min_max skips NaN when finite values are present, so the
+        # column keeps its (finite) zone map.
+        sink = sink_factory()
+        table = pa.table({"x": pa.array([1.0, float("nan"), 3.0], type=pa.float64())})
+        stats = sink._compute_column_stats(table)
+        assert stats["x"]["min"] == 1.0
+        assert stats["x"]["max"] == 3.0
+
+    def test_write_with_inf_value_produces_json_safe_manifest(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        # End-to-end: a poison value in the batch must not make the manifest
+        # body unserialisable (which would fail before any HTTP call and drag
+        # the whole write into the retry loop, re-uploading the parquet).
+        sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        records = [
+            {
+                "value": {"speed": float("inf"), "rpm": 7, "ts_ms": 1704067200000},
+                "key": "k1",
+                "timestamp": 1704067200000,
+                "offset": 0,
+            }
+        ]
+
+        sink.write(sample_batch(records=records))
+
+        # Exactly one upload -> the write did not retry.
+        assert mock_blob_client.put_object_async.call_count == 1
+        body = mock_catalog_client.post.call_args.kwargs["json"]
+        json.dumps(body, allow_nan=False)  # what requests does; must not raise
+        cs = body["files"][0]["column_stats"]
+        assert "speed" not in cs
+        assert cs["rpm"]["min"] == 7.0
 
     def test_stats_columns_restricts_the_tracked_set(self, sink_factory):
         sink = sink_factory(stats_columns=["speed"])
