@@ -187,8 +187,7 @@ def _unwrap_double_stamp(value: bytes, now_ms: int) -> Optional[tuple[int, bytes
     :func:`_stamp_evidence_for` (in-window expiry, non-empty payload). No
     legitimate serializer emits eight bytes that decode to an epoch-ms inside
     ``[2000-01-01, now + 100 y]`` followed by more bytes; a live wrapping
-    backfill re-stamping already-stamped v3.24.0 values does exactly that
-    (sc-74843 round 5, bug 5.6/5.7).
+    backfill re-stamping already-stamped v3.24.0 values does exactly that.
 
     The returned stamp is the INNER one: the record's original expiry. The outer
     stamp was never anything but damage, so nothing about it is preserved.
@@ -224,30 +223,26 @@ class _PendingCensusSurvey(NamedTuple):
 
     ``bare_payloads`` counts censused values that decode inside the window but
     carry an EMPTY payload — the legacy ``set_bytes()`` dedup shape ("last
-    seen" epoch-ms integers). It is the store-level counter-evidence that
-    replaced the retired ``all_past`` refusal: a census with any bare value is
-    quarantined, never adopted. Only meaningful when the survey did not
-    short-circuit on an undecodable value (that exit reports 0).
+    seen" epoch-ms integers). It is the store-level counter-evidence a census
+    is quarantined on: a census with any bare value is never adopted. Only
+    meaningful when the survey did not short-circuit on an undecodable value
+    (that exit reports 0).
 
-    ``bare_payloads`` DEFAULTS to 0 because this type is shared with
-    ``MemoryStorePartition._survey_backfill_pending``, which still implements
-    the pre-round-5 rule and constructs the survey without it (see
-    ``dev-planning/quix-streams-main/open-points.md``, 2026-09-07, memory
-    parity). Every RocksDB construction passes it explicitly; the default must
-    be dropped when the memory backend adopts the rule.
-
-    ``all_past`` (max censused stamp <= the recovery clock) is retained for
-    LOGGING only. It no longer refuses adoption: liveness says nothing about
+    ``all_past`` (max censused stamp <= the recovery clock) is carried for
+    LOGGING only and never refuses adoption: liveness says nothing about
     whether the bytes are stamps, and a fully-migrated store whose short-TTL
-    records expired during the restart is exactly the store that must adopt
-    (sc-74843 round 5, live 2026-09-07).
+    records expired during the restart is exactly the store that must adopt.
+
+    Shared verbatim with ``MemoryStorePartition._survey_backfill_pending``, the
+    in-memory mirror of the same decision — every field is required at both
+    construction sites so neither backend can silently omit one.
     """
 
     pending_count: int
     all_stamped: bool
     all_past: bool
     covers_default_cf: bool
-    bare_payloads: int = 0
+    bare_payloads: int
 
 
 class _StampEvidence(NamedTuple):
@@ -264,20 +259,18 @@ class _StampEvidence(NamedTuple):
       sentinel, non-empty payload). UNANIMITY over these is what the repair
       gates on, via :attr:`unanimously_stamped` — or, for a PARTIAL count with
       no ``bare`` value, :attr:`mixed_stamped`, which the repair accepts only
-      alongside on-disk proof that a migration stamped values on this volume
-      (spec §5.2.1, bug 5.8);
+      alongside on-disk proof that a migration stamped values on this volume;
     - ``bare`` — values that decode in-window but carry an EMPTY payload: the
       legacy ``set_bytes()`` dedup shape. Counter-evidence, reported in the
       refusal so an operator can see WHY the store stayed legacy;
     - ``decoded`` — values the raw validator ``_safe_decode_stamp`` accepts
       (``stamped`` + ``bare`` + out-of-window). Logging only;
     - ``future_or_sentinel`` — the subset of ``decoded`` still live at open.
-      LOGGING ONLY. It used to BE the gate, and that was the sc-74843 round-5
-      defect: a store fully migrated by v3.24.0 with a 120 s TTL and restarted
-      after two minutes samples 256/256 stamps, none of them live, and was
-      refused ("NOT flipping it", live 2026-09-07 09:08Z) — leaving a
-      TTL-stamped store in legacy mode, which is the crash the repair exists to
-      prevent. The legacy dedup shape that liveness was protecting is excluded
+      LOGGING ONLY, and it must stay that way: a store fully migrated by
+      v3.24.0 with a 120 s TTL and restarted two minutes later samples 256/256
+      stamps with none of them live, so gating on liveness would leave a
+      TTL-stamped store in legacy mode — the crash the repair exists to
+      prevent. The legacy dedup shape liveness used to stand in for is excluded
       by the non-empty-payload requirement instead.
     """
 
@@ -298,13 +291,13 @@ class _StampEvidence(NamedTuple):
     def mixed_stamped(self) -> bool:
         """True iff the sample holds BOTH real TTL stamps and genuinely
         un-stamped values, and NO ``bare`` counter-evidence — the byte shape of a
-        migration caught HALF-DONE (spec §5.2.1).
+        migration caught HALF-DONE.
 
         On its own this is NOT grounds to flip: it is equally the shape of a
         legacy store whose values coincidentally decode in-window. The open-time
         repair pairs it with on-disk PROOF that a TTL migration stamped values on
         THIS volume (:meth:`RocksDBStorePartition._interrupted_migration_signals`);
-        with no such proof a mixed sample stays refused (round 5, bug 5.4).
+        with no such proof a mixed sample stays refused.
 
         A single ``bare`` value vetoes: the legacy ``set_bytes()`` dedup shape
         must never be read as a half-done migration, however many of its
@@ -365,10 +358,12 @@ class RocksDBStorePartition(StorePartition):
         self._open_max_retries = self._options.open_max_retries
         self._open_retry_backoff = self._options.open_retry_backoff
         self._max_evictions_per_flush = self._options.max_evictions_per_flush
-        # Opt-in for backfilling a populated legacy store on TTL enable.
-        # ``None`` preserves the current reject-on-populated-store behavior;
-        # a strictly positive ``timedelta`` enables the in-place backfill
-        # (see :meth:`backfill_legacy_records`). Read by the transaction layer
+        # Uniform expiry for the pre-existing records of a POPULATED legacy
+        # store when TTL is enabled on it. ``None`` lets the triggering
+        # ``state.set(..., ttl=...)`` write derive an implicit window from its
+        # own ``ttl=`` (with a WARN); a strictly positive ``timedelta`` sets
+        # that window explicitly. Either way the in-place backfill runs (see
+        # :meth:`backfill_legacy_records`). Read by the transaction layer
         # through this partition in ``_maybe_flip_or_reject``.
         self._legacy_records_ttl: Optional[timedelta] = self._options.legacy_records_ttl
         # Number of pre-existing records re-stamped per write-batch during the
@@ -406,7 +401,7 @@ class RocksDBStorePartition(StorePartition):
         # Quix Cloud: a deployment environment variable that is not declared in
         # the app's ``app.yaml`` is silently DROPPED on redeploy, so an env-only
         # lever can vanish between runs and leave a run's behaviour
-        # unexplainable afterwards (this happened while diagnosing sc-74843).
+        # unexplainable afterwards.
         # Whichever source wins is logged below, once per partition, so the
         # evidence lives in the run's own log.
         rollback_env_on = os.environ.get(TTL_ROLLBACK_ENV_VAR) == "1"
@@ -490,9 +485,9 @@ class RocksDBStorePartition(StorePartition):
         # (:meth:`_normalize_replay_value`). Such records exist because a
         # quarantined v3.24.0 census could be handed to the live wrapping backfill,
         # which stamped already-stamped values a second time and PRODUCED them to
-        # the changelog (round 5, bug 5.6, live 2026-09-07 09:37Z) -- so the
-        # poisoned records are permanent on that topic and every future rebuild of
-        # that consumer group replays them. Surfaced as one aggregate WARNING at
+        # the changelog -- so those records are permanent on that topic and every
+        # future rebuild of that consumer group replays them. Surfaced as one
+        # aggregate WARNING at
         # :meth:`complete_recovery`.
         self._recovery_double_wrap_unwrapped: int = 0
         # Incomplete-migration detection. Set True on the first
@@ -547,8 +542,8 @@ class RocksDBStorePartition(StorePartition):
 
         # Warn-once guard for the DOUBLE-WRAP read repair: a flipped partition
         # holding ``outer_stamp||inner_stamp||payload`` on disk, written by the
-        # live wrapping backfill over already-stamped v3.24.0 values (round 5,
-        # bug 5.6/5.7). The read path unwraps the extra stamp instead of handing
+        # live wrapping backfill over already-stamped v3.24.0 values. The read
+        # path unwraps the extra stamp instead of handing
         # ``inner_stamp||payload`` to the value deserializer; partition-scoped so
         # a whole store of such values logs once.
         self._double_wrap_read_warned: bool = False
@@ -573,7 +568,7 @@ class RocksDBStorePartition(StorePartition):
 
         # Whether ``__ttl_enabled__`` is known to be COMMITTED on disk, as
         # opposed to merely True in memory. The two can diverge, and that
-        # divergence is the sc-74843 write/read asymmetry: the flush-time flip
+        # divergence is a write/read asymmetry: the flush-time flip
         # (``RocksDBPartitionTransaction._maybe_flip_or_reject``) sets the runtime
         # flag at PREPARE time while the flag bytes ride the transaction cache and
         # only land at COMMIT. Any abort between the two — a rebalance, a
@@ -583,9 +578,8 @@ class RocksDBStorePartition(StorePartition):
         # then stamps inline and commits STAMPED VALUES onto a store whose
         # ``__ttl_enabled__`` was never written, so the next partition object for
         # that path opens LEGACY over stamped values and dies in the value
-        # deserializer on the first read (live 2026-09-04: a header-true stamped
-        # record produced at 10:25:35.359 and a StateSerializationError at
-        # 10:25:35.384, on one partition of one container).
+        # deserializer on the first read -- milliseconds after the stamped
+        # record it just produced.
         #
         # :meth:`write` closes that hole by re-asserting the flag into any batch
         # it commits while this is False, so a flipped partition cannot persist a
@@ -650,8 +644,8 @@ class RocksDBStorePartition(StorePartition):
         #     UNCONDITIONALLY. The marker is produced only at the end of a
         #     successful completion / corroboration, so it is definitive proof
         #     that this store is TTL-enabled AND fully migrated: every
-        #     default-CF value it certifies is stamped. Owner of the shape
-        #     sc-74843 round 3 crashed on -- a COMPLETED migration reopened
+        #     default-CF value it certifies is stamped. Owner of the shape that
+        #     otherwise crash-loops -- a COMPLETED migration reopened
         #     unflagged (see below);
         #  3. the operator set ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP`` (or
         #     ``RocksDBOptions.ttl_force_flip``) -> flip UNCONDITIONALLY: no value
@@ -664,13 +658,13 @@ class RocksDBStorePartition(StorePartition):
         #     migration whose process died before it could flip, or one whose flag
         #     was deleted while its values stayed stamped) -> repair the flip when
         #     the default CF samples as UNIFORMLY stamped, or as a MIXED half-done
-        #     migration backed by an interrupted-migration signal (spec §5.2.1)
+        #     migration backed by an interrupted-migration signal
         #     (:meth:`_repair_unflagged_stamped_store`). This case is the owner of
-        #     the "migration bookkeeping + caught-up warm reopen" state that used
-        #     to belong to nobody: sc-74843 / live crash loop 2026-09-04, where
-        #     every restart of an offset-caught-up store died on the first
-        #     ``state.get()`` because the legacy read path handed a TTL-stamped
-        #     value to the value deserializer. See that method for the mechanism;
+        #     the "migration bookkeeping + caught-up warm reopen" state, which
+        #     otherwise belongs to nobody: every restart of an offset-caught-up
+        #     store dies on the first ``state.get()`` because the legacy read
+        #     path hands a TTL-stamped value to the value deserializer. See that
+        #     method for the mechanism;
         #  6. otherwise leave the loaded flag as-is (already-flipped warm store, or
         #     a legacy / fresh-volume store whose cold census is handled at
         #     :meth:`complete_recovery`).
@@ -678,12 +672,12 @@ class RocksDBStorePartition(StorePartition):
         # THE ORDER IS A STRENGTH-OF-EVIDENCE ORDER, and it is load-bearing:
         # explicit operator intent (cases 1, 3) and durable PROOF (case 2) both
         # outrank INFERENCE from on-disk bytes (cases 4, 5). Getting this backwards
-        # is what made the force-flip lever useless in production on 2026-09-04
-        # (11:55Z): as the LAST arm of the chain it was unreachable for any store
-        # carrying a migration artifact, because case 5 claimed such a store first
-        # and then declined on its all-past value sample. Four replicas ran with
-        # the lever set, logged that it was ON, and crash-looped anyway. Never
-        # place an inference-based case above a lever or a marker.
+        # makes the force-flip lever useless: as the LAST arm of the chain it is
+        # unreachable for any store carrying a migration artifact, because case 5
+        # claims such a store first and can then decline on its own value sample.
+        # The lever is set, its INFO fires on every open, and the store
+        # crash-loops anyway. Never place an inference-based case above a lever
+        # or a marker.
         #
         # Cases 4 and 5 are mutually exclusive BY CONSTRUCTION: the artifact set
         # case 5 keys on is EXACTLY the set :meth:`_has_warm_ttl_artifacts` vetoes
@@ -694,14 +688,16 @@ class RocksDBStorePartition(StorePartition):
         # ``__ttl_system__`` CF, which is one of the artifacts
         # ``_has_warm_ttl_artifacts`` vetoes itself on, so case 4 could never have
         # claimed a marked store. It does deliberately PRE-EMPT case 5, which
-        # would otherwise decide the same store on its bounded value SAMPLE and
-        # REFUSE to flip when nothing in that sample is still live -- the
-        # realistic outcome for a completed dedup store whose 1h stamps have all
-        # gone past, which is exactly a store that must flip. The marker outranks
-        # the sample because it is durable evidence of the migration itself, not
-        # an inference from bytes; and flipping without the sample is
-        # non-destructive either way, because the read path degrades an un-stamped
-        # value RAW (``_safe_decode_stamp`` -> None) instead of truncating it.
+        # would otherwise decide the same store on its bounded value SAMPLE. The
+        # marker outranks that sample because it is durable evidence of the
+        # migration itself rather than an inference from bytes: it needs no
+        # sample at all, and it still flips the store in the corner where a
+        # sample proves nothing -- a TTL store whose values are all legitimately
+        # EMPTY (``set_bytes(key, b"")`` under a ``ttl=``) samples as ``bare``,
+        # indistinguishable from the legacy dedup shape, so case 5 refuses it.
+        # Flipping without the sample is non-destructive either way, because the
+        # read path degrades an un-stamped value RAW (``_safe_decode_stamp`` ->
+        # None) instead of truncating it.
         #
         # Both probes run for EVERY TTL-capable partition, flipped or not,
         # because the resolution below can turn a flipped store legacy (case 1)
@@ -750,10 +746,10 @@ class RocksDBStorePartition(StorePartition):
         # ``__ttl_enabled__`` synchronously via ``_stamp_flip_metadata()`` before
         # ``__init__`` returns, so by the time ``complete_recovery`` runs the flag
         # genuinely IS on disk. Treating it as an unpersisted inference is what
-        # sent a force-flipped store's own leftover census into BRANCH B, where
-        # the (then still refusing) all-past survey quarantined it: 2.4M expired,
-        # UNINDEXED keys stranded in RocksDB with the lever set and honoured
-        # (round 5, bug 5.3, live 2026-09-07 09:20Z). Both cases therefore route
+        # sent a force-flipped store's own leftover census into BRANCH B, to be
+        # re-judged as an ambiguous cold census instead of adopted -- expired,
+        # UNINDEXED keys stranded on disk with the lever set and honoured. Both
+        # cases therefore route
         # ``complete_recovery`` to BRANCH A, which completes/adopts the census
         # instead of re-judging it as an ambiguous cold census.
         self._ttl_flag_repaired_at_open: bool = False
@@ -774,9 +770,8 @@ class RocksDBStorePartition(StorePartition):
             # ``has_incomplete_ttl_migration`` answers False on a marked store, so
             # an offset-caught-up reopen runs NO recovery pass at all -- and its
             # values are all stamped, so the legacy read path handed
-            # ``8B||json`` to the deserializer on the first ``state.get()``:
-            # sc-74843, "3 seconds from Assigned store partition to death, every
-            # restart" (live 2026-09-04 10:25Z).
+            # ``8B||json`` to the deserializer on the first ``state.get()`` --
+            # seconds from partition assignment to death, on every restart.
             #
             # Excluded while ``ttl_rollback`` is set, for the same reason as case
             # 4: that lever is an explicit "keep this store legacy" instruction
@@ -795,7 +790,7 @@ class RocksDBStorePartition(StorePartition):
                 "completion, so every default-CF value here is TTL-stamped; "
                 "flipping into TTL mode and persisting the flip. Without this the "
                 "store opens in legacy mode and the first state.get() hands a "
-                "stamped value to the value deserializer (sc-74843).",
+                "stamped value to the value deserializer.",
                 self._path,
             )
             # The ``__ttl_index__`` CF is LOCAL_ONLY, so a store that lost its
@@ -815,14 +810,12 @@ class RocksDBStorePartition(StorePartition):
             # case 5 the lever was UNREACHABLE for the very stores it exists to
             # rescue: a store carrying any migration artifact (the replicated
             # ``__ttl_system__`` CF alone is one) made ``repair_candidate`` True,
-            # so case 5 claimed it first and then DECLINED, because its evidence
-            # gate then required a still-live stamp in the sample and every stamp
-            # on a completed short-TTL store is already past. Live 2026-09-04
-            # 11:55-11:57Z: ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1`` was confirmed
-            # on all four replicas, the lever's own INFO fired on every partition
-            # open, and every replica still died on the first ``state.get()`` --
-            # the operator's explicit instruction was overruled by a heuristic
-            # sample. An explicit lever must never be silently outvoted by an
+            # so case 5 claimed it first and could then DECLINE on its own value
+            # sample: ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1`` set and honoured,
+            # the lever's own INFO fired on every partition open, and every
+            # replica still died on the first ``state.get()`` -- the operator's
+            # explicit instruction overruled by a heuristic sample. An explicit
+            # lever must never be silently outvoted by an
             # inference, so it now runs before both inference-based cases and
             # only case 2 (the done-marker, which is durable PROOF rather than an
             # inference) precedes it. ``ttl_rollback`` remains the only exclusion,
@@ -831,7 +824,7 @@ class RocksDBStorePartition(StorePartition):
             # ``_ttl_flag_repaired_at_open`` is deliberately NOT set here: the
             # forced flip is an instruction plus a synchronously-persisted flag,
             # not a sampled inference, so ``complete_recovery`` must see it as a
-            # genuinely persisted flip (see that snapshot below and bug 5.3).
+            # genuinely persisted flip (see that snapshot below).
             self._repair_unflagged_stamped_store(artifacts="", forced=True)
         elif (
             class_uses_ttl_stamps
@@ -897,9 +890,8 @@ class RocksDBStorePartition(StorePartition):
         # provisionally-adopted store carries adoption bookkeeping and, on the
         # cold-heuristic path, no migration bookkeeping at all (the census CF is
         # drained and dropped by the adoption). Keying only on the migration set
-        # left the rolled-back store unguarded and reproduced the sc-74843
-        # deserializer crash on the very lever meant to be the way out
-        # (Tester round 1, bug 1.1, 2026-09-04).
+        # left the rolled-back store unguarded and reproduced the deserializer
+        # crash on the very lever meant to be the way out.
         #
         # Recomputed HERE, after the resolution, not reused from
         # ``repair_candidate``, because ``uses_ttl_stamps`` is what case 1 changes.
@@ -957,7 +949,7 @@ class RocksDBStorePartition(StorePartition):
         # does NOT count, and that holds for BOTH of its sub-cases:
         #  - a UNANIMOUS sample proves "these bytes are stamped", never "this
         #    store was mid legacy->TTL migration";
-        #  - a MIXED sample plus an interrupted-migration signal (spec §5.2.1)
+        #  - a MIXED sample plus an interrupted-migration signal
         #    does prove the store is mid-migration, but its census is HALF-
         #    STAMPED by construction — and BRANCH A's wrap-once completion would
         #    double-stamp the already-stamped half. Where the ledger survives,
@@ -983,9 +975,9 @@ class RocksDBStorePartition(StorePartition):
         #    and its flip is PERSISTED synchronously inside ``__init__``, so the
         #    flag is durably on disk before any replay begins. Excluding it sent
         #    a force-flipped store's own leftover census into BRANCH B, where it
-        #    was quarantined as an ambiguous cold census — 2.4M expired,
-        #    unindexed, never-swept keys with the lever set and honoured (round
-        #    5, bug 5.3, live 2026-09-07). BRANCH A instead adopts that census
+        #    was quarantined as an ambiguous cold census — expired, unindexed,
+        #    never-swept keys with the lever set and honoured. BRANCH A instead
+        #    adopts that census
         #    verbatim and rebuilds its index, which is what the lever asked for.
         #    The double-wrap hazard that used to argue against counting a forced
         #    flip is closed at the BRANCH A gate itself: with no header-true
@@ -1204,11 +1196,10 @@ class RocksDBStorePartition(StorePartition):
             # end-of-recovery flip in :meth:`complete_recovery` never runs if the
             # recovery loop dies or the partition is revoked first, and a
             # reassigned/warm partition that is already caught up runs no recovery
-            # pass at all. That is how four replicas crash-looped on a PLAIN WARM
-            # RESTART (live 2026-09-04 10:41-10:43Z): the completion's marker was
-            # replicated down the changelog, every warm copy of the store replayed
-            # it while legacy, and the first ``state.get()`` handed a stamped value
-            # to the value deserializer.
+            # pass at all. That is how a store crash-loops on a PLAIN WARM
+            # RESTART: the completion's marker is replicated down the changelog,
+            # every warm copy of the store replays it while legacy, and the first
+            # ``state.get()`` hands a stamped value to the value deserializer.
             #
             # Flipping here makes the marker self-sufficient: the flag is
             # persisted in its own immediate durable write BEFORE the marker
@@ -1490,7 +1481,7 @@ class RocksDBStorePartition(StorePartition):
           100% stamped is genuine legacy and its orphan census is discarded, so
           the live first-``ttl=``-write backfill owns that store. Adoption must
           NOT be left to that backfill: it wraps whole values, and wrapping an
-          already-stamped one double-stamps it (bug 5.6).
+          already-stamped one double-stamps it.
         - if the pending CF is empty AND no live backfill is durably marked in
           flight (``__ttl_backfill_in_progress__`` absent) → all-stamped /
           fully-migrated; nothing to complete beyond recording the done-marker.
@@ -1674,24 +1665,21 @@ class RocksDBStorePartition(StorePartition):
                     )
                     return
                 if survey.all_past:
-                    # WARN AND CONTINUE. This used to REFUSE (quarantine): every
-                    # censused stamp being in the past was read as the "legacy
-                    # dedup shape" (bare past epoch-ms values), and adopting one
-                    # would hand the sweep a store where every record is already
-                    # expired. Two things changed:
-                    #  - the dedup shape is now excluded by evidence, not by
-                    #    liveness: a bare 8-byte value fails the quorum above
-                    #    (``survey.bare_payloads``), so an all-past census that
-                    #    reaches here carries real payloads under its stamps;
-                    #  - refusing was actively destructive in production. A store
-                    #    filled by v3.24.0 with a 120 s TTL and cold-restored
-                    #    minutes later has EVERY stamp in the past by the time
-                    #    recovery completes. Live 2026-09-07 09:20Z: 588 325
-                    #    censused stamps refused per partition, ~2.35M expired
-                    #    keys left unindexed with the census quarantined, and the
-                    #    first live ttl= write then handed the same values to the
-                    #    wrapping backfill and DOUBLE-STAMPED them (round 5, bug
-                    #    5.6) -- the sc-74843 deserializer crash, again.
+                    # WARN AND CONTINUE -- never a refusal. Every censused stamp
+                    # being in the past is not counter-evidence:
+                    #  - the "legacy dedup shape" it used to stand in for is
+                    #    excluded by EVIDENCE instead: a bare 8-byte value fails
+                    #    the quorum above (``survey.bare_payloads``), so an
+                    #    all-past census that reaches here carries real payloads
+                    #    under its stamps;
+                    #  - refusing is actively destructive. A store filled by
+                    #    v3.24.0 with a 120 s TTL and cold-restored minutes later
+                    #    has EVERY stamp in the past by the time recovery
+                    #    completes: refusing leaves its expired keys unindexed
+                    #    behind a quarantined census, and the first live ttl=
+                    #    write then hands the same values to the wrapping
+                    #    backfill, which DOUBLE-STAMPS them into the very
+                    #    deserializer crash this path exists to prevent.
                     # Adopting is the correct outcome: values stay byte-identical,
                     # the index is rebuilt from their own stamps, and the bounded
                     # sweep reclaims them once event-time passes those stamps.
@@ -1857,13 +1845,11 @@ class RocksDBStorePartition(StorePartition):
             # All-stamped census on an ALREADY-FLIPPED store: the header-absent
             # leftovers are either genuine legacy that completion should wrap
             # once OR already-stamped v3.24.0 that completion would DOUBLE-WRAP.
-            # The liveness term this gate used to carry
-            # (``not _pending_all_stamps_in_past()``) is GONE: an all-past census
-            # of stamp-shaped values with real payloads is the ordinary shape of
-            # a short-TTL store restarted late, and routing it into the wrap-once
-            # completion is precisely how 68k already-stamped values per
-            # partition became ``8B||8B||json`` in production (round 5, bug 5.6,
-            # live 2026-09-07 09:37Z). The legacy dedup shape it was protecting
+            # Liveness is NOT part of this gate: an all-past census of
+            # stamp-shaped values with real payloads is the ordinary shape of a
+            # short-TTL store restarted late, and routing it into the wrap-once
+            # completion is precisely how an already-stamped value becomes
+            # ``8B||8B||json``. The legacy dedup shape liveness stood in for
             # (bare 8-byte values) fails this gate on the payload rule instead
             # and still completes as a legacy wrap-once below.
             if self._legacy_records_ttl is None or not self._recovery_saw_stamped:
@@ -2063,7 +2049,7 @@ class RocksDBStorePartition(StorePartition):
         # re-enters completion. The call also persists ``__ttl_enabled__``
         # BEFORE the marker (see :meth:`_produce_migration_done_marker`), so the
         # store this completion just re-stamped can never be reopened unflagged —
-        # the sc-74843 crash on the first live read after a COMPLETED migration.
+        # the crash loop on the first live read after a COMPLETED migration.
         self._produce_migration_done_marker()
         logger.info(
             "Recovery: completed legacy-TTL migration at path=%s; stamped %d "
@@ -2082,7 +2068,7 @@ class RocksDBStorePartition(StorePartition):
         "this store is TTL-enabled and fully migrated", so a store carrying the
         marker without the flip flag opens in LEGACY mode over values that are
         all stamped and hands ``8B||payload`` to the value deserializer on the
-        first ``state.get()`` — the sc-74843 crash loop. Persisting the flag
+        first ``state.get()`` — a crash loop on every restart. Persisting the flag
         FIRST, in its own durable write, makes that shape unproducible at every
         crash point: crash between the two and the store reopens flipped (reads
         correct) and still UNMARKED, so recovery re-enters the completion, which
@@ -2397,14 +2383,12 @@ class RocksDBStorePartition(StorePartition):
         **Short-circuits on the first failure**, so a genuine legacy census
         (population 1) typically pays a single point-get.
 
-        Replaces the pair ``_all_pending_values_are_stamped() and not
-        _pending_all_stamps_in_past()`` this gate used to be. The liveness half
-        is gone (see the call site): every stamp being expired is the ordinary
-        shape of a short-TTL store restarted late, and wrapping such a census
-        once more is the double-stamp corruption of round 5. The dedup shape the
-        liveness test was really detecting — bare 8-byte epoch-ms values — fails
-        this gate on the payload requirement and is completed as a legacy
-        wrap-once, exactly as before.
+        Liveness is deliberately NOT part of it (see the call site): every stamp
+        being expired is the ordinary shape of a short-TTL store restarted late,
+        and wrapping such a census once more double-stamps it. The dedup shape a
+        liveness test would catch — bare 8-byte epoch-ms values — fails this
+        gate on the payload requirement instead and is completed as a legacy
+        wrap-once.
 
         Deliberately stricter than :meth:`_all_pending_values_are_stamped`,
         which stays on the RAW validator because its caller (the done-marker
@@ -2461,12 +2445,11 @@ class RocksDBStorePartition(StorePartition):
 
         All-past (``all_past``): True iff the MAX censused stamp is ``<= the
         recovery clock`` (a ``SENTINEL_NEVER`` stamp counts as future).
-        **LOGGING ONLY** since sc-74843 round 5 — it no longer refuses
-        adoption. Every stamp being expired is the ordinary shape of a
-        short-TTL store restarted after more than one TTL window, and refusing
-        it stranded 2.35M expired-but-unindexed keys with a quarantined census
-        in production (live 2026-09-07 09:20Z). The dedup shape that refusal
-        was really protecting is caught by ``bare_payloads``.
+        **LOGGING ONLY** — it does not refuse adoption. Every stamp being
+        expired is the ordinary shape of a short-TTL store restarted after
+        more than one TTL window, and refusing such a census strands every
+        expired key unindexed behind a quarantine. The dedup shape that
+        refusal would protect against is caught by ``bare_payloads``.
 
         Coverage (``covers_default_cf``): True iff the census covers EVERY
         default-CF key. Invariant: adoption flips read semantics store-wide,
@@ -2769,8 +2752,8 @@ class RocksDBStorePartition(StorePartition):
         preview maintained it). Chunked over the default CF, ``LOCAL_ONLY``.
 
         DOUBLE-STAMPED values (``outer||inner_stamp||payload``, left by an
-        earlier build's live backfill re-wrapping already-stamped v3.24.0 values
-        — round 5, bug 5.6/5.7) are REPAIRED here rather than indexed as-is: the
+        earlier build's live backfill re-wrapping already-stamped v3.24.0
+        values) are REPAIRED here rather than indexed as-is: the
         outer stamp is stripped in the same batch as the index put and the entry
         is written for the record's own INNER expiry. Indexing the outer stamp
         while the read path unwraps to the inner one would make the two disagree,
@@ -2832,7 +2815,7 @@ class RocksDBStorePartition(StorePartition):
                 "itself a TTL stamp (an earlier build's legacy backfill re-wrapped "
                 "already-stamped v3.24.0 values). The extra stamp was stripped and "
                 "each record is now indexed at its ORIGINAL expiry, so reads no "
-                "longer hand a stamp to the value deserializer (sc-74843).",
+                "longer hand a stamp to the value deserializer.",
                 self._path,
                 unwrapped_count,
             )
@@ -3071,11 +3054,11 @@ class RocksDBStorePartition(StorePartition):
         (case 5 of the open-time resolution) decides it, on stamp evidence sampled
         from the default CF -- unless the migration-done marker is present, in
         which case case 2 claims the store first and flips it without a sample.
-        That ownership is the sc-74843 fix; before it, this
-        veto deferred to the changelog-replay / ``complete_recovery`` path, which
-        never runs for an offset-caught-up store whose flip flag is the thing
-        that is missing -- the store opened legacy over stamped values and
-        crash-looped on the first read.
+        That ownership is load-bearing: without it this veto defers to the
+        changelog-replay / ``complete_recovery`` path, which never runs for an
+        offset-caught-up store whose flip flag is the thing that is missing --
+        the store then opens legacy over stamped values and crash-loops on the
+        first read.
 
         Cheap: one ``list_cf`` (already done at open by the ledger/marker snapshots)
         plus a few metadata point-gets. Only consulted on the legacy-at-open path.
@@ -3250,7 +3233,7 @@ class RocksDBStorePartition(StorePartition):
         :attr:`_StampEvidence.mixed_stamped` by
         :meth:`_repair_unflagged_stamped_store` to tell a HALF-DONE migration
         apart from a genuinely legacy store whose values coincidentally decode as
-        stamps (spec §5.2.1):
+        stamps:
 
         - a non-empty ``__ttl_backfill_stamped__`` ledger — chunks of a live
           :meth:`backfill_legacy_records` that committed locally, or crash-window
@@ -3272,8 +3255,8 @@ class RocksDBStorePartition(StorePartition):
         restore carries neither and the cold classification path
         (``complete_recovery`` BRANCH B) is untouched by this rule.
 
-        **The ``__ttl_backfill_in_progress__`` marker VETOES the whole set**
-        (round 5c). It is armed by EVERY chunked ``legacy_records_ttl`` backfill
+        **The ``__ttl_backfill_in_progress__`` marker VETOES the whole set.**
+        It is armed by EVERY chunked ``legacy_records_ttl`` backfill
         in its own commit before the first chunk is produced, and cleared only
         once the last chunk has committed, so while it is on disk this store is
         not an ORPHANED half-done migration: its owner is the ordinary lazy path,
@@ -3283,7 +3266,7 @@ class RocksDBStorePartition(StorePartition):
         (no-``ttl=``) write landing before it would be stamped with the
         never-expire sentinel instead of the backfill's expiry, and the
         completing backfill never triggers because the store no longer opens
-        legacy (bug 5b.1, 6 pinned tests). The marker also adds no discriminating
+        legacy. The marker also adds no discriminating
         power here: a MIXED sample means stamped values are already on disk on
         this volume, which for a live backfill means at least one chunk
         COMMITTED, and every committed chunk writes BOTH the ledger and the
@@ -3359,7 +3342,7 @@ class RocksDBStorePartition(StorePartition):
         ``RocksDBPartitionTransaction._get_bytes``) whereas a wrong flip strips
         eight bytes off every value.
 
-        **The one exception: a HALF-DONE migration (spec §5.2.1).** A MIXED
+        **The one exception: a HALF-DONE migration.** A MIXED
         sample — some values ARE stamps, some are genuine legacy, none is
         ``bare`` (:attr:`_StampEvidence.mixed_stamped`) — is exactly what a
         migration interrupted PART-WAY through its own store looks like, and
@@ -3371,10 +3354,10 @@ class RocksDBStorePartition(StorePartition):
         ``__ttl_index__``, with the ``__ttl_backfill_in_progress__`` marker
         ABSENT (:meth:`_interrupted_migration_signals`). With neither signal, a
         mixed sample is read as a legacy store whose values coincidentally decode
-        in-window and stays REFUSED (bug 5.4). With the marker still armed the
+        in-window and stays REFUSED. With the marker still armed the
         store is not orphaned at all: an in-flight chunked ``legacy_records_ttl``
         backfill owns it and flips it at its own completing write, so flipping at
-        open would pre-empt and corrupt that resume (bug 5b.1). Bookkeeping alone
+        open would pre-empt and corrupt that resume. Bookkeeping alone
         still never suffices: the signals are about VALUES this volume stamped,
         not about a migration having been attempted.
 
@@ -3389,16 +3372,15 @@ class RocksDBStorePartition(StorePartition):
         Non-destructive beats complete.
 
         Whether any sampled stamp is still LIVE is irrelevant to this gate and
-        used only in the log line. It used to be the gate, and that cost a
-        production outage: a store fully migrated by v3.24.0 with a 120 s TTL,
-        cold-started two minutes later, sampled 256/256 valid stamps with none of
-        them live and was refused ("NOT flipping it", live 2026-09-07 09:08Z) --
-        so a genuinely TTL-stamped store opened in legacy mode and every replica
-        needed the force-flip lever to start. The legacy ``set_bytes()`` dedup
-        shape that liveness was protecting (bare 8-byte epoch-ms values, all
-        past) is excluded by the non-empty-payload requirement instead, which
-        also closes the mirror-image false POSITIVE liveness allowed: a bare
-        8-byte value whose integer happens to be future-dated used to count as
+        used only in the log line. Gating on liveness refuses exactly the stores
+        that must flip: a store fully migrated by v3.24.0 with a 120 s TTL and
+        cold-started two minutes later samples 256/256 valid stamps with none of
+        them live, so it would open in legacy mode over stamped values and need
+        the force-flip lever to start at all. The legacy ``set_bytes()`` dedup
+        shape liveness would screen out (bare 8-byte epoch-ms values, all past)
+        is excluded by the non-empty-payload requirement instead, which also
+        closes the mirror-image FALSE POSITIVE liveness allows: a bare 8-byte
+        value whose integer happens to be future-dated would otherwise count as
         live stamp evidence and flip a genuinely legacy store.
 
         The gate is NOT the last line of defence for a COMPLETED migration. A
@@ -3726,7 +3708,7 @@ class RocksDBStorePartition(StorePartition):
           the cheap gate that no-ops the 99% legacy path). The repair path matters:
           flipping an unflagged store at open is what makes this probe answer True
           and so forces the recovery pass that completes its migration with the
-          data partitions paused (sc-74843);
+          data partitions paused;
         - no durable "migration done" marker exists (else the migration is done);
         - AND any completion track still has work:
           - the ``__ttl_backfill_in_progress__`` metadata marker is set: a live
@@ -4217,7 +4199,7 @@ class RocksDBStorePartition(StorePartition):
             # stamped value without ``__ttl_enabled__`` being committed too:
             # every value in the default CF is stamped from here on, and a store
             # that reopens without the flag reads them in legacy mode and dies in
-            # the value deserializer (sc-74843). The flush-time flip sets the
+            # the value deserializer. The flush-time flip sets the
             # runtime flag at PREPARE while the flag bytes ride the transaction
             # cache, so an abort between the two (rebalance, changelog error,
             # failed checkpoint) leaves the object flipped with nothing on disk
@@ -4408,13 +4390,13 @@ class RocksDBStorePartition(StorePartition):
 
         **Don't-double-stamp guard (``skip_already_stamped``, default True).**
         The census is *supposed* to hold only not-yet-stamped values, and on the
-        happy path it does. It did not in production: a v3.24.0 census that the
-        cold-adopt path had quarantined left a LEGACY store full of
-        already-stamped values, and the first live ``ttl=`` write handed all of
-        them to this loop — 68 079 records per partition wrapped a second time
-        into ``8B||8B||json`` AND produced to the changelog, so the first read
-        after the next restart died in the value deserializer (round 5, bug 5.6,
-        live 2026-09-07 09:36-09:39Z). Defense in depth: any value that
+        happy path it does. It does not when an earlier decision left stamped
+        values behind: a v3.24.0 census the cold-adopt path quarantined leaves a
+        LEGACY store full of already-stamped values, and the first live ``ttl=``
+        write hands all of them to this loop — wrapped a second time into
+        ``8B||8B||json`` AND produced to the changelog, so the first read after
+        the next restart dies in the value deserializer. Defense in depth: any
+        value that
         :func:`_stamp_evidence_for` classifies ``"stamped"`` is NOT re-wrapped.
         It is left byte-identical, indexed at its OWN stamp so the sweep can
         still reclaim it, ledgered (it needs no stamping, now or on a resume) and
@@ -4722,7 +4704,7 @@ class RocksDBStorePartition(StorePartition):
             # LOUD: a legacy store should not be holding stamped values at all.
             # It means an earlier decision (a quarantined v3.24.0 census, a
             # rollback, a partial census) left them there, and re-wrapping them is
-            # the double-stamp corruption of round 5 -- so an operator must see
+            # the double-stamp corruption -- so an operator must see
             # that this store was NOT the clean legacy store the backfill assumed.
             logger.warning(
                 "TTL legacy backfill at path=%s left %d of %d censused record(s) "
@@ -4730,7 +4712,7 @@ class RocksDBStorePartition(StorePartition):
                 "or a store whose cold adoption was refused/rolled back). They "
                 "were indexed at their own expiry instead of being wrapped a "
                 "second time, which would have produced 8B||8B||payload and "
-                "broken every read of them (sc-74843 round 5). Their changelog "
+                "broken every read of them. Their changelog "
                 "records are already correct and were not re-produced.",
                 self._path,
                 preserved,
@@ -5106,7 +5088,7 @@ class RocksDBStorePartition(StorePartition):
                 delete_index_if_not_staged(index_key)
                 continue
             main_expires_at, _ = decoded_main
-            # DOUBLE-STAMPED values (round 5, bugs 5.6/5.7) are judged on their
+            # DOUBLE-STAMPED values are judged on their
             # ON-DISK outer stamp here, deliberately, even though the read path
             # unwraps them and honours the inner one. The index entry an earlier
             # build wrote for such a record carries that same outer stamp, so the
@@ -5480,15 +5462,14 @@ class RocksDBStorePartition(StorePartition):
           expiry.
 
         **Why the double-wrap repair belongs here.** A quarantined v3.24.0
-        census used to be handed to the live wrapping backfill, which re-stamped
-        already-stamped values AND PRODUCED them to the changelog with the
-        ``__ttl_stamped__`` header (round 5, bug 5.6, live 2026-09-07 09:37Z:
-        68 079 records per partition). Those records are permanent on that
-        topic, so every future cold rebuild of that consumer group replays them
-        — and a fresh store has no event-time frontier, so the "already expired"
-        replay filter cannot drop them either. Landing them verbatim leaves the
-        first read handing ``inner_stamp||json`` to the value deserializer, which
-        is the sc-74843 crash (live 09:43Z). Unwrapping at ingest makes a
+        census handed to the live wrapping backfill leaves it re-stamping
+        already-stamped values AND PRODUCING them to the changelog with the
+        ``__ttl_stamped__`` header. Such records are permanent on that topic, so
+        every future cold rebuild of that consumer group replays them — and a
+        fresh store has no event-time frontier, so the "already expired" replay
+        filter cannot drop them either. Landing them verbatim leaves the first
+        read handing ``inner_stamp||json`` to the value deserializer: the crash
+        loop again. Unwrapping at ingest makes a
         poisoned changelog self-healing and re-usable without re-seeding the
         state, and it is the SAME evidence rule the adoption decision already
         trusts: a payload that is itself an in-window 8-byte stamp followed by

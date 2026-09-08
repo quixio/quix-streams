@@ -124,10 +124,10 @@ def _stamp_evidence_for(
     **Liveness is deliberately NOT part of this.** Whether a stamp has already
     expired says nothing about whether the bytes ARE a stamp, and a store whose
     short-TTL records all expired during a restart is exactly the store that must
-    still be recognised as TTL-migrated (sc-74843 round 5, live 2026-09-07;
-    product decision: "we always want to migrate to latest TTL mode"). The
-    non-empty-payload requirement is what now excludes the legacy dedup shape
-    that the retired all-past/liveness heuristic used to protect.
+    still be recognised as TTL-migrated. The non-empty-payload requirement is
+    what excludes the legacy dedup shape instead: bare 8-byte values are ruled
+    out by what they contain, not by where their numbers sit relative to the
+    clock.
 
     :param value: raw ``default``-CF value bytes.
     :param now_ms: the decision clock (recovery clock, or the open-time
@@ -626,9 +626,9 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # ``RocksDBStorePartition._rollback_provisional_adopt``). On such a
             # store a value that still decodes as a LIVE stamp is a genuine TTL
             # value being read in legacy mode: returning it hands ``8B||payload``
-            # to the value deserializer, which is the sc-74843 crash loop
-            # (2026-09-04: ``StateSerializationError`` / orjson "surrogates not
-            # allowed" on every restart). Fail loud instead -- see
+            # to the value deserializer, which crash-loops the application
+            # (``StateSerializationError`` out of the JSON decoder, on every
+            # restart). Fail loud instead -- see
             # :meth:`_raise_unreconciled_stamped_read` for why this does not strip.
             #
             # The armed flag is checked FIRST and is an open-time snapshot that is
@@ -641,18 +641,16 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             #    requires a NON-EMPTY payload after the 8-byte prefix. That is what
             #    exempts the legacy ``set_bytes()`` dedup shape (bare 8-byte
             #    big-endian epoch-ms "last seen" values) whatever its numeric value
-            #    happens to be -- past OR future (sc-74843 round 5, bug 5.4: a
-            #    future-looking bare value used to raise here and, worse, flipped
-            #    the store at open);
+            #    happens to be -- past OR future;
             #  - the stamp must still be LIVE (sentinel, or ahead of the
-            #    wallclock). Liveness is no longer evidence about what the bytes
-            #    ARE -- the open-time repair ignores it entirely now -- but it is
-            #    still the right trigger HERE: the stores that legitimately stay
-            #    legacy while holding stamp-shaped values are the rolled-back ones
+            #    wallclock). Liveness is NOT evidence about what the bytes ARE --
+            #    the open-time repair ignores it entirely -- but it is the right
+            #    trigger HERE: the stores that legitimately stay legacy while
+            #    holding stamp-shaped values are the rolled-back ones
             #    (``QUIXSTREAMS_STATE_TTL_ROLLBACK``), whose contract is that their
             #    adopted originals read back byte-identical. A store that is
-            #    unanimously stamped and NOT rolled back is flipped at open now, so
-            #    it never reaches this guard at all.
+            #    unanimously stamped and NOT rolled back is flipped at open, so it
+            #    never reaches this guard at all.
             if (
                 cf_name == "default"
                 and self._partition._ttl_stamped_reads_unflagged  # noqa: SLF001
@@ -690,10 +688,10 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # cannot be a stamp, so it is necessarily an un-stamped legacy payload —
         # precisely the class this fail-safe protects. ``_safe_decode_stamp``
         # already returns None for ``len < TTL_STAMP_BYTES``, so short values
-        # degrade raw alongside long ones. An earlier length check used to return
-        # ``Marker.UNDEFINED`` here, silently reading every sub-8-byte legacy
-        # survivor (``1``, ``true``, ``null``, ``"ab"``) back as MISSING while its
-        # long counterpart survived.
+        # degrade raw alongside long ones. Rejecting them with
+        # ``Marker.UNDEFINED`` instead would silently read every sub-8-byte
+        # legacy survivor (``1``, ``true``, ``null``, ``"ab"``) back as MISSING
+        # while its long counterpart survived.
         decoded = _safe_decode_stamp(raw_bytes)
         if decoded is None:
             # Warn once PER PARTITION: the guard lives on the
@@ -719,11 +717,12 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # DOUBLE-WRAP repair. A value whose payload is ITSELF a TTL stamp
         # (:func:`_stamp_evidence_for` == ``"stamped"``) is
         # ``outer_stamp||inner_stamp||user_payload``: the signature of a live
-        # wrapping backfill that re-stamped already-stamped v3.24.0 values (round
-        # 5, bug 5.6, live 2026-09-07 09:37Z). Stripping only the outer stamp
-        # would hand ``inner_stamp||json`` to the value deserializer -- the
-        # sc-74843 StateSerializationError, observed again at 09:43Z on a rebuild
-        # from the poisoned changelog. Unwrap ONCE and judge expiry on the INNER
+        # wrapping backfill that re-stamped already-stamped v3.24.0 values.
+        # Stripping only the outer stamp would hand ``inner_stamp||json`` to the
+        # value deserializer -- the same ``StateSerializationError`` crash the
+        # guard above exists to prevent, reachable here as well through a rebuild
+        # from a changelog that carries such values.
+        # Unwrap ONCE and judge expiry on the INNER
         # (original) stamp, which is the record's real TTL; the outer one was
         # never anything but damage. Cannot recurse: the inner value is a valid
         # stamp by the classification, and its own payload is checked once here.
@@ -762,7 +761,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
         Split out of :meth:`_get_bytes` so the hot read path keeps a single
         cheap pre-filter and none of this machinery inline. See the call site for
-        why this shape exists (sc-74843 round 5, bugs 5.6/5.7).
+        why this shape exists.
         """
         now_ms = self._partition._now_ms()  # noqa: SLF001
         if _stamp_evidence_for(payload, now_ms) != "stamped":
@@ -1066,11 +1065,10 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
              batch (the *implicit* legacy ttl). A WARN precedes the flip to
              flag that the window was implicit and how to override it.
 
-           The populated-no-config path no longer rejects: a later revision
-           replaced the ``reject_ttl_on_populated_store`` hard-error with this
-           auto-backfill (finish the migration rather than error).
-           The one surviving hard-error is the ``high_water is None`` framework
-           guard in :meth:`_legacy_expiry_from_ttl_ms`.
+           The populated-no-config path does NOT reject: enabling TTL on a
+           populated legacy store finishes the migration instead of erroring.
+           The one hard-error left on this path is the ``high_water is None``
+           framework guard in :meth:`_legacy_expiry_from_ttl_ms`.
 
         :param processed_offsets: ``<topic: offset>`` of the latest processed
             message, forwarded to the chunked backfill for changelog headers.

@@ -1,19 +1,23 @@
 """
-Red-first tests for the AUTOMATIC regime-split v3.24.0-stamp adoption feature.
+The AUTOMATIC regime-split v3.24.0-stamp adoption feature.
 
-Replaces the opt-in ``adopt_v3240_stamps`` flag with two regimes:
+A store written by v3.24.0 carries TTL-stamped values without ever recording
+that it had TTL enabled. There is no opt-in flag for adopting it: the library
+recognises the stamps and adopts the store itself, in one of two regimes.
 
-- **Warm restart** (local store intact with v3.24.0 TTL artifacts):
-  Deterministic adopt in place — no heuristic, no backup, no CRITICAL dead-end.
-  Requires ``_enforce_format_version`` to accept v2 (or upgrade from v1/absent).
+- **Warm restart** (local store intact, v3.24.0 TTL artifacts present):
+  deterministic adopt in place -- no heuristic, no backup, no dead-end. Requires
+  ``_enforce_format_version`` to accept format v2 and to upgrade v1/absent.
 
-- **Cold rebuild / fresh volume / memory** (only raw stamped bytes):
-  Provisional auto-adopt with backup CF, sweep suppression, and corroboration.
-  Rollback via ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1`` env var.
+- **Cold rebuild / fresh volume / memory backend** (only the raw stamped bytes
+  survive): PROVISIONAL auto-adopt with a backup CF, sweep suppression and
+  corroboration by the first live ``ttl=`` write. Reversible until corroborated,
+  via ``RocksDBOptions.ttl_rollback`` / ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1``.
 
-Every test is expected RED on HEAD (``323d391a``); the feature is unbuilt.
-
-Spec: ``dev-planning/state-ttl-v3240-auto-adopt/spec.md``
+Adoption is decided on the shared stamp-evidence rule (unanimous stamps,
+non-empty payloads, liveness irrelevant, bare 8-byte dedup values refused). The
+in-memory backend applies the same rule, so the "memory twin" tests here assert
+PARITY with RocksDB, not divergence.
 """
 
 import logging
@@ -896,25 +900,22 @@ class TestRollbackEnvVar:
 
 
 class TestAllPastAdoptsAndBareValuesRefused:
-    """Validates the REWRITTEN spec §5.2 (Ludvik, 2026-09-07: "we always want
-    to migrate to latest TTL mode").
+    """The adoption rule is UNANIMITY plus a NON-EMPTY payload
+    (``transaction._stamp_evidence_for``), never liveness.
 
-    The old rule — "an all-past stamped census is quarantined, never adopted" —
-    is retired. Liveness is not evidence about what the bytes ARE: a store fully
-    migrated by v3.24.0 with a 120 s TTL and cold-restored minutes later has
-    EVERY stamp in the past, and refusing it stranded 2.35M expired, unindexed
-    keys per replica in production (live 2026-09-07 09:20Z) and then let the
-    live backfill double-stamp them (09:37Z).
+    Liveness is not evidence about what the bytes ARE: a store fully migrated by
+    v3.24.0 with a 120 s TTL and cold-restored minutes later has EVERY stamp in
+    the past, and refusing such a census strands every expired key unindexed
+    behind a quarantine and then lets the live backfill double-stamp them. So an
+    all-past census WITH payloads adopts (WARN, never a refusal), while a census
+    of bare 8-byte epoch-ms values — the legacy ``set_bytes()`` dedup shape a
+    liveness guard was really detecting — is refused and quarantined.
 
-    The new rule is unanimity plus a NON-EMPTY payload
-    (``transaction._stamp_evidence_for``): all-past with payloads ADOPTS (WARN,
-    never a refusal), while a census of bare 8-byte epoch-ms values — the legacy
-    ``set_bytes()`` dedup shape the all-past guard was really detecting — is
-    still refused and quarantined.
+    Both backends apply the rule, so the memory twin below asserts parity.
     """
 
     def test_all_past_with_payloads_is_adopted_with_a_warn(self, tmp_path, caplog):
-        """Rewritten spec §5.2: all-past + non-empty payloads → ADOPT, WARN."""
+        """All-past census + non-empty payloads -> ADOPT, with a WARN."""
         producer = _make_producer()
         expiry_past = NOW_MS - 7 * DAY_MS  # all in the past
         msgs = [_v3240_msg(f"k{i}", f"v{i}", expiry_past) for i in range(4)]
@@ -997,14 +998,11 @@ class TestAllPastAdoptsAndBareValuesRefused:
 
         partition.close()
 
-    def test_all_past_memory_twin_still_quarantines(self, caplog):
-        """KNOWN DIVERGENCE, pinned deliberately: the round-5 evidence rule was
-        applied to the RocksDB backend only (the fix's authorized file scope),
-        so the in-memory backend still quarantines an all-past census. Tracked
-        in ``dev-planning/quix-streams-main/open-points.md`` (2026-09-07,
-        "memory backend parity for the round-5 stamp-evidence rule"); this
-        assertion must be inverted in the same change that ports the rule to
-        ``quixstreams/state/memory/partition.py``.
+    def test_all_past_memory_twin_adopts_too(self, caplog):
+        """BACKEND PARITY: the in-memory backend applies the same evidence rule,
+        so an all-past census of real stamped values ADOPTS there as well — the
+        values are kept verbatim, the census is drained and the all-past fact is
+        reported as a WARN, never as a refusal.
         """
         producer = _make_producer()
         expiry_past = NOW_MS - 7 * DAY_MS
@@ -1012,12 +1010,28 @@ class TestAllPastAdoptsAndBareValuesRefused:
         full = [(k, v, "default", s) for k, v, s in msgs]
 
         partition = MemoryStorePartition(changelog_producer=producer)
-        _replay_memory(partition, full, now_ms=NOW_MS)
-        partition.complete_recovery()
+        with caplog.at_level(logging.WARNING):
+            _replay_memory(partition, full, now_ms=NOW_MS)
+            partition.complete_recovery()
 
         assert (
-            partition.uses_ttl_stamps is False
-        ), "memory backend still on the pre-round-5 all-past rule (see open-points)"
+            partition.uses_ttl_stamps is True
+        ), "memory must adopt an all-past census of real stamps, like RocksDB"
+        assert partition._adopt_provisional is True
+
+        # Census drained; values kept byte-identical (adoption never re-wraps).
+        assert not partition._state.get(TTL_BACKFILL_PENDING_CF_NAME)
+        for raw_key, value, _ in msgs:
+            assert partition._state["default"][raw_key] == value
+
+        # The all-past fact survives as a WARN, not as a refusal.
+        messages = [r.getMessage() for r in caplog.records]
+        assert any(
+            "already in the past" in m for m in messages
+        ), f"the memory all-past WARN must be emitted: {messages}"
+        assert not any(
+            "Refused" in m and "auto-adopt" in m for m in messages
+        ), f"memory all-past must no longer refuse: {messages}"
         partition.close()
 
 

@@ -74,9 +74,9 @@ class StateMigrationError(StateError):
        deliberately leaves the adopted originals byte-identical and therefore
        still stamped. A ``default``-CF read then returned a value whose 8-byte
        prefix decodes as a plausible, still-live expiry stamp. Returning it raw
-       hands the stamp to the value deserializer -- the live crash loop this
-       guard replaces, where every restart died with a
-       ``StateSerializationError`` from ``orjson`` on ``8B||json``. Silently
+       hands the stamp to the value deserializer -- the crash loop this guard
+       replaces, in which every restart dies with a
+       ``StateSerializationError`` from the JSON decoder on ``8B||json``. Silently
        stripping eight bytes is worse: a genuine legacy value whose first eight
        bytes happen to decode would be corrupted with no way back. Operator
        action: set ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1`` and restart to flip

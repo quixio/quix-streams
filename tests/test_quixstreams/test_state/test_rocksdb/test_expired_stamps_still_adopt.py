@@ -1,70 +1,36 @@
 """
-Red-first tests for sc-74843 round 5: a store whose default-CF values are
-ALL v3.24.0 TTL stamps must flip into TTL mode automatically even when every
-stamp has already EXPIRED, while a genuine legacy store must still never be
-flipped.
+A store whose default-CF values are ALL v3.24.0 TTL stamps must flip into TTL
+mode automatically even when every stamp has already EXPIRED, while a genuine
+legacy store must still never be flipped.
 
-LIVE EVIDENCE (Quix Cloud, 2026-09-07 09:08-09:11Z, fix build 6d0eabef, cold
-start of a store filled by v3.24.0 with a 120s TTL). Every replica logged:
+The defect these tests were written against: both migration decisions gated on
+LIVENESS instead of on what the bytes ARE. The open-time repair
+(:meth:`RocksDBStorePartition._repair_unflagged_stamped_store`) required at
+least one still-live stamp in its bounded sample, and the cold-restore adoption
+(``complete_recovery`` BRANCH B,
+:meth:`RocksDBStorePartition._survey_backfill_pending`) refused an ``all_past``
+census outright. A store that IS fully TTL-migrated but whose short-TTL records
+have all expired by the time of a cold restart (a short TTL plus a restart
+longer than one TTL window) is indistinguishable under that gate from a store
+that never carried TTL bookkeeping -- so it stayed legacy, every read of a
+stamped value crashed in the value deserializer, and the force-flip lever
+became load-bearing for an entirely ordinary shape.
 
-    State store at path=... carries interrupted legacy-TTL migration
-    bookkeeping (__ttl_backfill_pending__) but no __ttl_enabled__ flag, and
-    none of the 256 sampled default-CF value(s) carries a live TTL stamp
-    (256 decoded as a stamp, none of them still live). NOT flipping it: on a
-    genuinely legacy store that would strip 8 bytes off every read and let
-    the sweep delete every record. ... If this store really is TTL-migrated,
-    set QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1 and restart to force the flip.
+The evidence rule under test: flip when the sample is UNANIMOUS -- every sampled
+value decodes as a stamp whose expiry is the sentinel or lies inside
+``[946684800000 (2000-01-01T00:00Z), now + 100 years]`` AND carries a NON-EMPTY
+payload after the 8-byte prefix. An empty CF makes no decision. Liveness is
+IRRELEVANT. Refuse (stay legacy, guard armed, WARN) when any sampled value
+fails: undecodable, out-of-window, or an EMPTY payload -- the last being a
+legacy store holding bare 8-byte epoch-ms values (a ``set_bytes()`` dedup
+store's "last seen" timestamps). That bare shape is what the retired liveness
+gate was really protecting, and it must never flip.
 
-256/256 sampled values decoded as valid stamps and the open-time repair
-(case 5 of ``RocksDBStorePartition.__init__``,
-:meth:`RocksDBStorePartition._repair_unflagged_stamped_store`) refused
-anyway, because its gate is LIVENESS (``evidence.future_or_sentinel == 0``),
-not UNANIMITY. A store that is genuinely fully TTL-migrated but whose
-short-TTL records have all expired by the time of a cold restart (short TTL
-+ restart longer than one TTL) looks identical, by that gate, to a store
-that never carried TTL bookkeeping. Product decision (Ludvik, 2026-09-07):
-"we always want to migrate to latest TTL mode" -- the force-flip lever is
-for emergencies, not the load-bearing mechanism for this ordinary shape.
-
-TARGET EVIDENCE RULE (what ArchDev's fix must encode, unless these tests
-prove it unsound): flip automatically when the sample is UNANIMOUS -- every
-sampled value (>= min(64, all keys) samples; an empty CF makes no decision)
-decodes as a stamp whose expiry lies in the plausibility window
-``[946684800000 (2000-01-01T00:00Z), now + 100 years]`` or is the sentinel,
-AND has a NON-EMPTY payload after the 8-byte prefix. Liveness (expiry in the
-future) is IRRELEVANT to the decision. Refuse (stay legacy, guard armed,
-WARN) when any sampled value fails: undecodable, out-of-window, or an empty
-payload (a legacy store holding bare 8-byte epoch-ms values, e.g. a
-``set_bytes()`` dedup store's "last seen" timestamps).
-
-The cold-restore adoption path (``complete_recovery`` BRANCH B,
-:meth:`RocksDBStorePartition._survey_backfill_pending`) carries the exact
-same defect via its ``all_past`` refusal -- see
-``test_cold_restore_adopts_header_absent_changelog_when_all_stamps_expired``
-and the live addendum reproduced in
-``test_forced_flip_at_open_is_honoured_by_cold_census_completion`` below,
-where the refusal strands an ALREADY-flipped (force-flip lever) store's
-leftover census as permanently unindexed, un-swept records.
-
-RED/GREEN on ``6d0eabef`` (the unfixed baseline for this defect):
-
-* ``test_open_time_repair_flips_when_all_sampled_stamps_are_expired`` -- RED,
-  the live shape verbatim;
-* ``test_cold_restore_adopts_header_absent_changelog_when_all_stamps_expired``
-  -- RED, the ``all_past`` sibling defect in the cold-restore path;
-* ``test_forced_flip_at_open_is_honoured_by_cold_census_completion`` -- RED,
-  live addendum: a forced flip's own leftover census is quarantined by
-  BRANCH B because ``_persisted_flipped_at_open`` is False for an inferred
-  (case 3) flip, even though the flag was synchronously persisted at open;
-* ``test_legacy_json_values_with_bookkeeping_are_never_flipped`` -- GREEN
-  control, must stay green after the fix;
-* ``test_mixed_sample_is_refused`` -- GREEN control;
-* ``test_bare_8_byte_values_are_not_stamps`` -- RED. Confirmed latent defect:
-  the current sampler never checks for a non-empty payload, so a bare 8-byte
-  legacy value whose bytes happen to decode as a FUTURE-looking timestamp is
-  already wrongly treated as live stamp evidence and flipped today (log:
-  "Repaired an interrupted legacy-TTL migration ... 40 of 40 sampled
-  default-CF value(s) carrying a live TTL stamp").
+Coverage: the open-time repair; the cold-restore census; a force-flipped store,
+whose own leftover census must be adopted by BRANCH A rather than re-judged as
+an ambiguous cold census; and the negative controls -- legacy JSON values with
+bookkeeping present, a MIXED sample with no interrupted-migration signal, and
+bare 8-byte values whose integers happen to look future-dated.
 """
 
 import dataclasses

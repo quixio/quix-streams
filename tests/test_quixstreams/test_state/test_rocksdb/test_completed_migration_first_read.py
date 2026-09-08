@@ -1,56 +1,35 @@
 """
-Unit tests for the FIRST READ AFTER A COMPLETED legacy-TTL migration:
-sc-74843 round 3, reproduced live in Quix Cloud on 2026-09-04.
+First read after a COMPLETED legacy-TTL migration.
 
-MECHANISM (two sentences). ``complete_recovery`` re-stamped every leftover
-legacy record, produced the durable migration-done marker and dropped its
-bookkeeping, but never persisted ``__ttl_enabled__`` -- it relied on whichever
-earlier path had flipped the partition in memory to have written the flag -- so a
-store whose flip flag was never recorded (or was recorded and later lost) could
-finish its migration and be reopened in LEGACY mode over values that are now all
-TTL-stamped. Nothing at open claimed that shape: the migration bookkeeping was
-gone, ``has_incomplete_ttl_migration`` answers False on a marked store so an
+``complete_recovery`` re-stamps every leftover legacy record, produces the
+durable migration-done marker and drops its bookkeeping. If it does not also
+persist ``__ttl_enabled__``, a store can finish its migration and then be
+reopened in LEGACY mode over values that are now all TTL-stamped -- and nothing
+claims that shape: the migration bookkeeping is gone,
+``has_incomplete_ttl_migration`` answers False on a marked store, so an
 offset-caught-up reopen runs NO recovery pass at all, and the first
-``state.get()`` handed ``8B||json`` to the value deserializer --
-``StateSerializationError`` (orjson "str is not valid UTF-8: surrogates not
-allowed") three seconds after "Assigned store partition", on every restart.
+``state.get()`` hands ``8B||json`` to the value deserializer
+(``StateSerializationError``).
 
-The live sequence, verbatim (replica 1, 10:21Z then 10:25Z):
+The done-marker is REPLICATED through the changelog, so this is not a
+cold-start-only shape: every warm copy of the store replays the completion tail
+and lands in the same state. Three seams can each leave "stamped values on disk,
+no ``__ttl_enabled__``", and the tests cover all three:
 
-    Recovery: legacy-TTL migration completion progress: 538029 / 538029 ...
-    Recovery: completed legacy-TTL migration at path=...
-    Recovery process complete! Resuming normal processing...
-    StateSerializationError: Failed to deserialize value:
-        "b'\\x00\\x00\\x01\\xa0l\\x1d\\xa0@{"status":"ON",...}'"
+1. the RECOVERY-COMPLETION seam -- the completion re-stamps every leftover and
+   produces the marker;
+2. the MARKER-REPLAY seam -- the marker is a ``__ttl_system__`` record, so the
+   header-true flip-discovery branch (keyed on the default CF) cannot claim it,
+   and it lands in the local system CF of a store still flagged LEGACY.
+   Everything that would flip that store afterwards is skippable: a recovery
+   loop that dies, a revoked partition, or a warm store that is caught up and
+   runs no recovery pass;
+3. the LIVE-FLIP seam -- ``_maybe_flip_or_reject`` sets the runtime flag at
+   PREPARE while the flag bytes ride the transaction cache and land at COMMIT,
+   so an abort between the two leaves the object flipped with nothing on disk
+   and no later transaction re-staging the flag.
 
-The stamp ``0x000001a06c1da040`` is a FRESHLY re-stamped value -- written by the
-completion that had just been watched succeed -- read back through the legacy
-deserializer.
-
-SCOPE. This is not a cold-start defect. The done-marker is REPLICATED through
-the changelog, so the run4 completion appended ~1.07M header-true records plus
-the marker to the changelog, and every WARM copy of that store replayed the tail
--- which is how all four replicas crash-looped on a plain warm restart at the
-platform state path (live 10:41-10:43Z). Three entry points can each leave
-"stamped values on disk, no ``__ttl_enabled__``", and the tests below cover all
-three:
-
-1. the RECOVERY-COMPLETION seam: the completion re-stamped every leftover and
-   produced the marker without persisting the flip;
-2. the MARKER-REPLAY seam: the marker is a ``__ttl_system__`` record, so the
-   header-true flip-discovery branch (keyed on the default CF) cannot claim it
-   and it was written into the local system CF of a store still flagged LEGACY.
-   Everything that would have flipped that store afterwards is skippable -- a
-   recovery loop that dies, a revoked partition, or a warm store that is caught
-   up and runs no recovery pass at all;
-3. the LIVE-FLIP seam: ``_maybe_flip_or_reject`` sets the runtime flag at PREPARE
-   while the flag bytes ride the transaction cache and land at COMMIT, so an
-   abort between the two leaves the object flipped with nothing on disk and no
-   later transaction re-stages the flag. Live 10:25:35Z: a correctly stamped,
-   header-true changelog record produced at .359 and a
-   ``StateSerializationError`` at .384, in one container on one partition.
-
-The fix under test, four parts:
+What the tests pin:
 
 * ``_produce_migration_done_marker`` persists the flip (``__ttl_enabled__`` +
   ``__ttl_format_version__``) BEFORE it produces or writes the marker, so the
@@ -58,73 +37,21 @@ The fix under test, four parts:
   crash point;
 * ``recover_from_changelog_message`` flips + persists the moment the marker is
   APPLIED, not at end of recovery, so no skipped finalize step can lose it;
-* case 2 of the open-time resolution claims the residual window (marker on disk,
-  flag absent): done-marker present + flag absent + no rollback lever + not
-  provisionally adopted -> flip and persist, WITHOUT the bounded value sample
-  that case 4's repair gates on. The sample is the wrong gate for a completed
-  store: a finished dedup store whose short stamps have all gone past has no live
-  stamp to show, and refusing to flip it leaves every value unreadable;
+* case 2 of the open-time resolution claims the residual window (done-marker
+  present, flag absent, no rollback lever, not provisionally adopted) and flips
+  WITHOUT the bounded value sample that case 5's repair gates on -- the sample
+  is the wrong gate for a completed store, whose values can legitimately be
+  bare 8-byte dedup integers that are not stamp evidence;
 * ``RocksDBStorePartition.write`` re-asserts the flag into any batch it commits
   while the flag is not known to be committed, so a flipped partition can never
   persist a stamped value without the flag that makes it readable;
-* the open-time resolution is re-ORDERED into a strength-of-evidence order --
-  explicit operator intent (rollback, force-flip) and durable proof (the
-  done-marker) now outrank inference from on-disk bytes. The ``ttl_force_flip``
-  lever used to be the LAST arm of the ``elif`` chain, which made it unreachable
-  for any store carrying a migration artifact, because the sample-gated repair
-  claimed such a store first and declined on an all-past sample. That is why the
-  lever demonstrably did not rescue the live warm stores at 11:55Z.
-
-RED/GREEN on ``9a26227f`` (the unfixed baseline for this defect):
-
-* ``test_first_read_after_completed_migration_returns_the_payload`` -- GREEN
-  pre-fix. The in-session read uses the partition object the completion flipped
-  in memory, so it never went through the legacy path. Kept as the regression
-  guard for the seam the live log pointed at first;
-* ``test_completion_persists_the_flip_flag_and_format_marker`` -- RED pre-fix
-  (the completion writes neither key);
-* ``test_flip_is_persisted_before_the_done_marker`` -- RED pre-fix (same);
-* ``test_reopen_after_completed_migration_needs_no_repair`` -- RED pre-fix: the
-  reopen survives only because case 4's repair rescues it off the leftover
-  bookkeeping, which is luck, not ownership -- strip the bookkeeping (as the
-  completion's own cleanup does) and the rescue is gone;
-* ``test_done_marker_without_flag_is_flipped_on_open`` -- RED pre-fix with the
-  LIVE exception: ``StateSerializationError`` out of ``state.get()``;
-* ``test_done_marker_flip_respects_the_rollback_lever`` -- GREEN pre-fix, pins
-  that the new case does not undo an explicit rollback;
-* ``test_rolled_back_live_stamp_still_raises_the_actionable_error`` -- GREEN
-  pre-fix (round 2 added the arming); pins that the new case is not "fixed" by
-  weakening the guard instead of flipping;
-* ``test_force_flip_still_wins_when_the_marker_is_gone`` -- GREEN pre-fix; case 2
-  must not shadow the operator lever when there is no marker;
-* ``test_force_flip_lever_is_not_outvoted_by_the_stamp_sample`` -- RED pre-fix.
-  The live lever failure: ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1`` was set on all
-  four replicas at 11:55Z, its INFO fired on every open, and every replica still
-  crashed -- because the lever was the LAST arm of the ``elif`` chain and the
-  artifact-driven repair claimed the store first (the replicated
-  ``__ttl_system__`` CF is an artifact) and then declined on the all-past sample;
-* ``test_live_lever_shape_is_claimed_by_the_marker_without_the_lever`` -- RED
-  pre-fix; the same shape must recover with NO operator action at all;
-* ``test_force_flip_lever_flips_an_empty_store`` -- pins "unconditional" against
-  a future re-tightening of the evidence gate;
-* ``test_two_partitions_each_flip_independently`` -- RED pre-fix. One replica
-  held ``default[0]`` and ``default[1]`` during the live rollout churn, so the
-  fix must be per-partition state, not a process-wide latch;
-* ``test_flip_survives_repeated_reopens`` -- RED pre-fix at the first reopen; the
-  live store reported ``reopens=19``, so the repair must be idempotent;
-* ``test_replayed_done_marker_persists_the_flip_immediately`` -- RED pre-fix;
-* ``test_marker_replay_interrupted_before_complete_recovery`` -- RED pre-fix
-  with the live exception;
-* ``test_full_real_changelog_tail_survives_reopen`` -- GREEN pre-fix, and
-  deliberately so: the real tail contains header-true completion records, and
-  the pre-existing flip-discovery branch flips on the first of them, so the full
-  sequence never needed the marker to own anything. The live warm replicas were
-  the variant where those records had already been applied in an earlier cycle,
-  leaving the marker as the only new record -- the two tests above;
-* ``test_a_committed_stamped_write_persists_the_flip_flag`` -- RED pre-fix twice
-  (flag absent after the flush; ``StateSerializationError`` after the reopen);
-* ``test_legacy_partition_writes_no_ttl_metadata`` -- GREEN pre-fix; the guard
-  that the ``write()`` re-assert leaves the 99% legacy workload untouched.
+* the open-time resolution runs in STRENGTH-OF-EVIDENCE order: explicit
+  operator intent (rollback, force-flip) and durable proof (the done-marker)
+  outrank inference from on-disk bytes. As the LAST arm of the ``elif`` chain
+  the ``ttl_force_flip`` lever is unreachable for any store carrying a migration
+  artifact, because the sample-gated repair claims such a store first;
+* the repair is per-partition (not a process-wide latch) and idempotent across
+  repeated reopens, and a legacy partition still writes no TTL metadata at all.
 """
 
 import dataclasses

@@ -1,30 +1,32 @@
 """
-Unit tests for reopening a store whose legacy-TTL migration never finished
-recording itself: sc-74843, live crash loop in Quix Cloud on 2026-09-04.
+Reopening a store whose legacy-TTL migration never finished recording itself.
 
-MECHANISM (two sentences). A store that carries this-branch migration
-bookkeeping (``__ttl_backfill_pending__`` / ``__ttl_backfill_stamped__`` /
-``__ttl_system__`` / the progress markers) but NOT the ``__ttl_enabled__`` flip
-flag was owned by no code path: ``_has_warm_ttl_artifacts`` deliberately vetoes
-itself on exactly that bookkeeping and deferred to ``complete_recovery``, while
+A store that carries migration bookkeeping (``__ttl_backfill_pending__`` /
+``__ttl_backfill_stamped__`` / ``__ttl_system__`` / the progress markers) but
+NOT the ``__ttl_enabled__`` flip flag is owned by no code path without the
+open-time repair: ``_has_warm_ttl_artifacts`` deliberately vetoes itself on
+exactly that bookkeeping and defers to ``complete_recovery``, while
 ``complete_recovery`` only runs for a partition the ``RecoveryManager`` flags,
 and the incomplete-migration term of that check
 (``has_incomplete_ttl_migration``) short-circuits on ``uses_ttl_stamps`` -- the
-very flag that is missing. So an offset-caught-up store opened in LEGACY mode
-over TTL-stamped values, no recovery pass ever ran ("Beginning recovery check"
-was absent from the logs), and the first ``state.get()`` handed ``8B||json`` to
-the value deserializer: ``StateSerializationError`` (orjson "surrogates not
-allowed") one second after "Assigned store partition", on every restart.
+very flag that is missing. So an offset-caught-up store opens in LEGACY mode
+over TTL-stamped values, no recovery pass ever runs, and the first
+``state.get()`` hands ``8B||json`` to the value deserializer
+(``StateSerializationError``).
 
-The fix under test:
+What the tests pin:
 
-* open-time repair (``_repair_unflagged_stamped_store``) flips + persists such a
-  store when a bounded sample of its default CF still carries a LIVE stamp,
-  which also makes ``has_incomplete_ttl_migration`` True and therefore forces
-  the recovery pass that finishes the migration with the data partitions paused;
+* the open-time repair (``_repair_unflagged_stamped_store``) flips + persists
+  such a store when a bounded sample of its default CF is UNANIMOUSLY stamped
+  (in-window expiry or the sentinel, plus a non-empty payload; liveness is NOT
+  consulted), or when a MIXED sample is backed by an interrupted-migration
+  signal proving a migration stamped values on THIS volume and is no longer in
+  flight. The flip also makes ``has_incomplete_ttl_migration`` True and so
+  forces the recovery pass that finishes the migration with the data partitions
+  paused;
 * the ``ttl_force_flip`` lever (``RocksDBOptions`` field or
   ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1``) as the operator escape hatch for a
-  store whose bookkeeping is gone, so there is no evidence left to repair on;
+  store whose bookkeeping is gone, leaving no evidence to repair on;
 * a legacy-read guard that raises the actionable ``StateMigrationError`` instead
   of letting a stamped value reach the deserializer.
 

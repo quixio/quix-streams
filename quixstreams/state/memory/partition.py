@@ -48,7 +48,11 @@ from quixstreams.state.rocksdb.metadata import (
     TTL_ROLLBACK_ENV_VAR,
 )
 from quixstreams.state.rocksdb.partition import _lever_source, _PendingCensusSurvey
-from quixstreams.state.rocksdb.transaction import _safe_decode_stamp, _ttl_to_ms
+from quixstreams.state.rocksdb.transaction import (
+    _safe_decode_stamp,
+    _stamp_evidence_for,
+    _ttl_to_ms,
+)
 from quixstreams.state.rocksdb.ttl_codec import (
     _MAX_PLAUSIBLE_STAMP_MS,
     SENTINEL_NEVER,
@@ -143,7 +147,7 @@ class MemoryStorePartition(StorePartition):
         # when True, TTL evictions are staged into the transaction cache at
         # prepare-time so they are produced to the changelog as tombstones and the
         # changelog shrinks under compaction; when False, the eviction stays
-        # local-only (the pre-change ``_run_sweep``-in-``write()`` path). Memory
+        # local-only (evicted by ``_run_sweep`` inside ``write()``). Memory
         # does not consume ``RocksDBOptions``, so it is a direct constructor arg.
         self._ttl_changelog_tombstones: bool = ttl_changelog_tombstones
         # Operational rollback lever, resolved ONCE at open with the SAME order
@@ -153,7 +157,7 @@ class MemoryStorePartition(StorePartition):
         # must be exactly ``"1"``. Prefer the argument: a Quix Cloud deployment
         # environment variable that is not declared in the app's ``app.yaml`` is
         # silently dropped on redeploy, so an env-only lever can vanish between
-        # runs (sc-74843). Memory is always the COLD regime (non-persistent: every
+        # runs. Memory is always the COLD regime (non-persistent: every
         # restart replays the changelog from scratch); when set the lever
         # SUPPRESSES the cold provisional adopt on the next full changelog replay
         # (a fresh replay reconstructs the un-adopted originals, so no explicit
@@ -492,9 +496,10 @@ class MemoryStorePartition(StorePartition):
         # was in TTL mode carries the out-of-band ``__ttl_stamped__`` changelog
         # header (set in the base ``_prepare``), surfaced here as ``ttl_stamped``.
         # On the first header-true default-CF record we flip this recovery
-        # partition into TTL mode and latch for the rest of the session. This
-        # REPLACES the old value-content heuristic (``_looks_like_stamped_value``),
-        # which false-positived on legacy 8-byte epoch-ms values and dropped them.
+        # partition into TTL mode and latch for the rest of the session. The
+        # header -- never value content -- is the routing signal: the
+        # value-content heuristic (``_looks_like_stamped_value``, kept only for
+        # backend symmetry) false-positives on legacy 8-byte epoch-ms values.
         # Header absent → the record is legacy / un-stamped and
         # replays verbatim below, so a purely legacy changelog never latches. The
         # flip is session-local: memory
@@ -584,9 +589,9 @@ class MemoryStorePartition(StorePartition):
             # ``RocksDBStorePartition``): the high-water snapshotted ONCE before
             # replay, using the exact clock and condition the live read filter
             # uses (drop iff ``high_water_ms is not None and stamp <=
-            # high_water_ms``). Judging by event-time matters: the old wallclock
-            # drop mass-deleted an event-time-lagging store's records that the
-            # live filter would keep. Memory has no persisted high-water, so the
+            # high_water_ms``). Judging by event-time matters: a wallclock-based
+            # drop would mass-delete an event-time-lagging store's records that
+            # the live filter keeps. Memory has no persisted high-water, so the
             # frontier is ``None`` on a real restore -> nothing drops (a
             # permanent cold restore, keeping everything until live events
             # advance high-water and the sweep reclaims genuinely-expired
@@ -594,7 +599,7 @@ class MemoryStorePartition(StorePartition):
             # and captured via a distinct latch (``None`` is a valid frontier),
             # so it can never ratchet up from the replayed stamps.
             # ``_recovery_now_ms`` is still captured here, UNCHANGED, for the
-            # migration-completion / adoption consumers; it no longer drives the
+            # migration-completion / adoption consumers; it does NOT drive the
             # replay drop. Sentinel-stamped entries are never compared and always
             # survive.
             expired = False
@@ -612,7 +617,7 @@ class MemoryStorePartition(StorePartition):
                 # OLDER copy of
                 # ``key`` replayed earlier this session (verbatim legacy, or an
                 # older unexpired stamped copy) may already sit in the main dict;
-                # skipping (the old bare ``pass``) let it survive as a
+                # merely skipping this record would leave that copy behind as a
                 # never-expiring leftover the completion pass can no longer repair
                 # (its pending census entry was just popped above). Explicitly
                 # DELETE so this newest (expired) copy supersedes any older
@@ -701,17 +706,20 @@ class MemoryStorePartition(StorePartition):
                 self._rebuild_index_from_stamped_census()
             self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
             return
-        # Parity with RocksDB: discriminate an
-        # interrupted THIS-BRANCH completion from opt-in v3.24.0 adoption. Memory is
-        # always fresh (no persisted flip flag, no ledger), so
-        # ``_recovery_saw_stamped`` alone is the this-branch discriminator.
+        # Parity with RocksDB: discriminate an interrupted THIS-BRANCH
+        # completion from a cold v3.24.0 adoption. Memory is always fresh (no
+        # persisted flip flag, no ledger), so ``_recovery_saw_stamped`` alone is
+        # the this-branch discriminator.
         if not self._recovery_saw_stamped:
-            # BRANCH B — no this-branch evidence: unflipped, pure-legacy OR a stock
-            # v3.24.0 cold restore. Auto-adoption is now AUTOMATIC + REVERSIBLE,
-            # so a 100%-stamped not-all-past census is
-            # provisionally adopted instead of logging a CRITICAL and staying legacy.
-            # Every decision input (census size, stamp quorum, all-past, coverage)
-            # comes from ONE census pass so the inputs are mutually consistent.
+            # BRANCH B — no this-branch evidence: unflipped, pure-legacy OR a
+            # stock v3.24.0 cold restore. Adoption is AUTOMATIC and REVERSIBLE:
+            # a 100%-stamped census (unanimity under
+            # :func:`_stamp_evidence_for` — an in-window stamp or the sentinel
+            # plus a NON-EMPTY payload, LIVENESS IRRELEVANT) with full default
+            # coverage is provisionally adopted. Every decision input (census
+            # size, stamp quorum, bare-payload counter-evidence, all-past,
+            # coverage) comes from ONE census pass so the inputs are mutually
+            # consistent.
             survey = self._survey_backfill_pending()
             if survey.all_stamped:
                 if self._ttl_rollback:
@@ -727,19 +735,34 @@ class MemoryStorePartition(StorePartition):
                     )
                     return
                 if survey.all_past:
-                    # QUARANTINE (downgraded from CRITICAL to WARN): every censused
-                    # stamp is already in the past — the legacy set_bytes() dedup
-                    # shape. Adopting would rebuild the index with past stamps and
-                    # the next sweep would DELETE everything, so refuse; stay legacy,
-                    # preserve the census, read back byte-identical.
+                    # WARN AND CONTINUE. Every censused stamp being in the past
+                    # is not counter-evidence: the legacy ``set_bytes()`` dedup
+                    # shape it used to stand in for is excluded by the
+                    # NON-EMPTY-payload requirement instead (a bare 8-byte value
+                    # fails the quorum above and is quarantined below), so an
+                    # all-past census that reaches here carries real payloads
+                    # under in-window stamps — the ordinary shape of a
+                    # short-TTL store restored after more than one TTL window.
+                    # Adopting keeps every value byte-identical, rebuilds the
+                    # index from the records' own stamps and lets the bounded
+                    # sweep reclaim them; refusing would leave a TTL-stamped
+                    # store in legacy mode and hand the same values to the
+                    # wrapping backfill on the first live ``ttl=`` write.
                     logger.warning(
-                        "Refused auto-adopt: all %d censused in-memory stamp(s) are "
-                        "already in the past (legacy dedup shape); the store stays "
-                        "legacy, byte-identical, and the census is preserved "
-                        "(quarantined).",
+                        "Auto-adopt: all %d censused in-memory stamp(s) are "
+                        "already in the past — historically the 'legacy dedup "
+                        "shape' signal, which no longer refuses adoption because "
+                        "every censused value carries a non-empty payload under "
+                        "an in-window stamp (a bare 8-byte dedup value would have "
+                        "failed the quorum). This is the ordinary shape of a "
+                        "short-TTL store restored after more than one TTL window: "
+                        "adopting keeps every value byte-identical, rebuilds the "
+                        "expiry index from the records' OWN stamps, and lets the "
+                        "bounded sweep reclaim them. Set "
+                        "QUIXSTREAMS_STATE_TTL_ROLLBACK=1 and restart to keep the "
+                        "store legacy instead.",
                         survey.pending_count,
                     )
-                    return
                 if not survey.covers_default_cf:
                     # Completeness invariant (parity with RocksDB): adoption
                     # flips read semantics STORE-WIDE (every default read strips
@@ -762,9 +785,31 @@ class MemoryStorePartition(StorePartition):
                         len(self._state.get("default", {})),
                     )
                     return
-                # Not-all-past, 100%-stamped, full-coverage census: provisional
-                # (reversible) auto-adopt.
+                # 100%-stamped, full-coverage census: provisional (reversible)
+                # auto-adopt, whether or not its stamps are still live.
                 self._adopt_v3240_stamps()
+                return
+            if survey.bare_payloads:
+                # QUARANTINE — the legacy ``set_bytes()`` dedup shape, and the
+                # only refusal keyed on the VALUES rather than on coverage:
+                # every censused value decodes as an in-window stamp but at
+                # least one holds NOTHING after the 8-byte prefix, which is what
+                # a dedup store's "last seen" epoch-ms values look like.
+                # Adopting would strip 8 bytes off every read (leaving an empty
+                # value) and index records whose "stamps" are really data, so the
+                # next sweep would delete the whole store. Stay legacy,
+                # byte-identical, and PRESERVE the census (parity with the
+                # coverage refusal above) rather than discarding it as an orphan.
+                logger.warning(
+                    "Refused cold v3.24.0 auto-adopt: %d of the %d censused "
+                    "in-memory value(s) are bare 8-byte values with no payload "
+                    "after the prefix (legacy dedup shape / set_bytes 'last "
+                    "seen' epoch-ms), so the store is NOT uniformly TTL-stamped. "
+                    "It stays legacy, every value reads back byte-identical, and "
+                    "the census is preserved (quarantined).",
+                    survey.bare_payloads,
+                    survey.pending_count,
+                )
                 return
             # Sub-100% "looks-like": genuine legacy — discard the orphan census so a
             # pure-legacy store carries no lasting overhead.
@@ -799,16 +844,27 @@ class MemoryStorePartition(StorePartition):
                 )
             return
 
-        if (
-            self._all_pending_values_are_stamped()
-            and not self._pending_all_stamps_in_past()
-        ):
-            # Future-stamped ambiguous census on a flipped store: genuine legacy to
-            # wrap once OR already-stamped v3.24.0 that wrapping would DOUBLE-WRAP.
+        if self._pending_census_unanimously_stamped():
+            # All-stamped census on an ALREADY-FLIPPED store: the header-absent
+            # leftovers are either genuine legacy that completion should wrap
+            # once OR already-stamped v3.24.0 that completion would DOUBLE-WRAP.
+            # Liveness is NOT part of the gate: an all-expired census of real
+            # stamped values is the ordinary shape of a short-TTL store restored
+            # late, and routing it into the wrap-once completion is what turns
+            # ``8B||json`` into ``8B||8B||json``. The legacy dedup shape the
+            # liveness term was really detecting (bare 8-byte values) fails this
+            # gate on the payload rule instead and still completes as a legacy
+            # wrap-once below.
             if self._legacy_records_ttl is None:
                 # Branch-A reconciliation: keep the values VERBATIM via the
-                # reversible provisional adopt instead of HALTing. ``legacy_records_ttl``
-                # remains the explicit wrap-once override (fall-through below).
+                # reversible provisional adopt instead of HALTing.
+                # ``legacy_records_ttl`` remains the explicit wrap-once override
+                # (fall-through below). RocksDB additionally requires a
+                # header-true cohort to have replayed this session before it
+                # honours that override, because it can reach Branch A on a
+                # persisted flip flag alone; memory persists nothing, so
+                # ``_recovery_saw_stamped`` is the only way in here and the
+                # cohort is always present.
                 if self._ttl_rollback:
                     logger.warning(
                         "Recovery: ambiguous flipped all-stamped in-memory census "
@@ -1216,13 +1272,31 @@ class MemoryStorePartition(StorePartition):
                 return False
         return saw_any
 
-    def _pending_all_stamps_in_past(self) -> bool:
+    def _pending_census_unanimously_stamped(self) -> bool:
         """
-        Precondition: :meth:`_all_pending_values_are_stamped` is True. Return True
-        iff the MAX plausible stamp across the in-RAM census is ``<= the recovery
-        clock`` (every censused stamp is in the past). A ``SENTINEL_NEVER`` stamp
-        counts as future. Memory mirror of
-        ``RocksDBStorePartition._pending_all_stamps_in_past``.
+        The BRANCH-A (already-flipped store) census gate, memory mirror of
+        ``RocksDBStorePartition._pending_census_unanimously_stamped``: True iff
+        the in-RAM census is non-empty and EVERY censused key's default value is
+        a TTL stamp under the shared evidence rule :func:`_stamp_evidence_for` —
+        an in-window expiry or the sentinel, plus a NON-EMPTY payload.
+        **Short-circuits on the first failure**, so a genuine legacy census
+        typically pays a single lookup.
+
+        Liveness is not consulted: an all-expired census of real stamped values
+        is the ordinary shape of a short-TTL store restored late, and wrapping
+        it once more would double-stamp it. The legacy ``set_bytes()`` dedup
+        shape (bare 8-byte epoch-ms values) fails this gate on the payload
+        requirement and is completed as a legacy wrap-once instead.
+
+        Deliberately stricter than :meth:`_all_pending_values_are_stamped`,
+        which stays on the RAW validator because its caller (the done-marker
+        branch) already holds durable proof that the census is stamped and must
+        also accept a legitimately EMPTY user value (``set_bytes(key, b"")``
+        under a ttl).
+
+        The reference clock is the recovery clock (``_recovery_now_ms`` when a
+        stamped record replayed this session, else the wallclock) and bounds
+        only the plausibility window.
         """
         now = (
             self._recovery_now_ms
@@ -1231,51 +1305,71 @@ class MemoryStorePartition(StorePartition):
         )
         pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
         default = self._state.get("default", {})
-        max_stamp: Optional[int] = None
+        saw_any = False
         for key in pending:
+            saw_any = True
             value = default.get(key)
             if value is None:
-                continue
-            decoded = _safe_decode_stamp(cast(bytes, value))
-            if decoded is None:
-                continue
-            stamp, _ = decoded
-            if stamp == SENTINEL_NEVER:
                 return False
-            if max_stamp is None or stamp > max_stamp:
-                max_stamp = stamp
-        if max_stamp is None:
-            return False
-        return max_stamp <= now
+            if _stamp_evidence_for(cast(bytes, value), now) != "stamped":
+                return False
+        return saw_any
 
     def _survey_backfill_pending(self) -> _PendingCensusSurvey:
         """
         ONE-pass survey of the in-RAM pending census for the cold auto-adopt
         decision (Branch B of :meth:`complete_recovery`), the memory parity of
         ``RocksDBStorePartition._survey_backfill_pending``: a single census
-        walk computes the census size, the total stamp quorum
-        (short-circuiting on the first failure, so a pure-legacy store pays a
-        single lookup) and the all-past heuristic together, then proves census
+        walk computes the census size, the stamp quorum, the bare-payload
+        counter-evidence and the all-past log fact together, then proves census
         completeness against the default dict.
+
+        Quorum (``all_stamped``): EVERY censused key must have a live default
+        value that :func:`_stamp_evidence_for` classifies ``"stamped"`` — an
+        in-window expiry (or the sentinel) AND a non-empty payload. The walk
+        **short-circuits on the first UNDECODABLE value**, so a pure-legacy
+        store pays a single lookup. An empty census fails the quorum (no
+        adoption without positive evidence).
+
+        Counter-evidence (``bare_payloads``): censused values that decode
+        in-window but hold NOTHING after the 8-byte prefix — the legacy
+        ``set_bytes()`` dedup shape. The walk does NOT short-circuit on these:
+        the count is what the caller quarantines on. Reported as 0 on the
+        undecodable short-circuit exit, where it is not fully computed.
+
+        All-past (``all_past``): True iff the MAX censused stamp is ``<= the
+        recovery clock`` (a ``SENTINEL_NEVER`` stamp counts as future).
+        **LOGGING ONLY** — it does not refuse adoption. Every stamp being
+        expired is the ordinary shape of a short-TTL store restored after more
+        than one TTL window; the dedup shape that refusal was really protecting
+        is caught by ``bare_payloads``.
 
         Coverage invariant: adoption flips read semantics store-wide, so the
         census it is decided on must cover exactly the keys the flip will
         affect. The proof REQUIRES census ⊆ default keys (else count equality
         is not set equality) — established by the quorum loop of THIS SAME
         pass (each censused key verified to have a live default value), so the
-        precondition cannot be reordered away at a call site. An empty census
-        fails the quorum (no adoption without positive evidence); a
-        ``SENTINEL_NEVER`` stamp counts as future (never all-past).
+        precondition cannot be reordered away at a call site.
         """
         pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
         default = self._state.get("default", {})
+        now = (
+            self._recovery_now_ms
+            if self._recovery_now_ms is not None
+            else self._now_ms()
+        )
         count = 0
+        bare = 0
         max_stamp: Optional[int] = None
         saw_never = False
         for key in pending:
             value = default.get(key)
-            decoded = None if value is None else _safe_decode_stamp(cast(bytes, value))
-            if decoded is None:
+            evidence = (
+                "unstamped"
+                if value is None
+                else _stamp_evidence_for(cast(bytes, value), now)
+            )
+            if evidence == "unstamped":
                 # Quorum failure (or a censused key with no live default
                 # value): short-circuit — the remaining fields are unused.
                 return _PendingCensusSurvey(
@@ -1283,9 +1377,12 @@ class MemoryStorePartition(StorePartition):
                     all_stamped=False,
                     all_past=False,
                     covers_default_cf=False,
+                    bare_payloads=0,
                 )
             count += 1
-            stamp, _ = decoded
+            if evidence == "bare":
+                bare += 1
+            stamp = cast(tuple[int, bytes], _safe_decode_stamp(cast(bytes, value)))[0]
             if stamp == SENTINEL_NEVER:
                 saw_never = True
             elif max_stamp is None or stamp > max_stamp:
@@ -1297,13 +1394,19 @@ class MemoryStorePartition(StorePartition):
                 all_stamped=False,
                 all_past=False,
                 covers_default_cf=False,
+                bare_payloads=0,
             )
-        now = (
-            self._recovery_now_ms
-            if self._recovery_now_ms is not None
-            else self._now_ms()
-        )
         all_past = not saw_never and max_stamp is not None and max_stamp <= now
+        if bare:
+            # Bare 8-byte values present: the quorum fails, and the coverage
+            # proof below is pointless for a census that cannot be adopted.
+            return _PendingCensusSurvey(
+                pending_count=count,
+                all_stamped=False,
+                all_past=all_past,
+                covers_default_cf=False,
+                bare_payloads=bare,
+            )
         # Coverage proof — valid only under the quorum proven above (census ⊆
         # default keys), turning count equality into set equality.
         covers = count == len(default)
@@ -1312,6 +1415,7 @@ class MemoryStorePartition(StorePartition):
             all_stamped=True,
             all_past=all_past,
             covers_default_cf=covers,
+            bare_payloads=0,
         )
 
     def _rebuild_index_from_stamped_census(self) -> None:
@@ -1486,8 +1590,8 @@ class MemoryStorePartition(StorePartition):
     def _looks_like_stamped_value(self, value: bytes) -> bool:
         """See ``RocksDBStorePartition._looks_like_stamped_value``.
 
-        NOTE: as of the header-routing change this is **no longer on the
-        recovery path** — ``recover_from_changelog_message`` routes purely on the
+        NOTE: this is **not on the recovery path** —
+        ``recover_from_changelog_message`` routes purely on the
         ``__ttl_stamped__`` header. Retained (not deleted) to stay symmetric with
         the RocksDB backend, which keeps its copy because a test patches it; this
         method has no live caller in the memory backend and must not be
@@ -2171,9 +2275,8 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         # confirmed first (below) so the local store never gets ahead of it.
         pending_restamps: list[tuple[bytes, bytes]] = []
         # ONE delivery-accounting phase for this backfill, owned by THIS method
-        # as a local — the partition holds no migration counters, so nothing is
-        # reached into (and the two ``SLF001`` waivers that used to sit on the
-        # produce/increment pair below are gone with them).
+        # as a local — the partition holds no migration counters, so the
+        # produce/increment pair below reaches into nothing private.
         phase = MigrationDeliveryPhase()
         produced = False
         for key in list(default.keys()):
@@ -2226,9 +2329,9 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             # Live in-RAM migration of a POPULATED
             # legacy memory store on the first ttl= write — mirrors the RocksDB
             # populated path but on the in-RAM dict (data already in RAM → no
-            # chunking / OOM concern). This REPLACES the old warn-and-defer no-op,
-            # which deadlocked: the deferred changelog rebuild classified the store
-            # as pure-legacy and no-op'd forever, so TTL never engaged.
+            # chunking / OOM concern). Deferring instead (warn now, migrate on the
+            # next changelog rebuild) would deadlock: the rebuild classifies the
+            # store as pure-legacy and no-ops, so TTL would never engage.
             expires_at_ms = self._resolve_legacy_expiry()
             restamped = self._backfill_populated_legacy_in_ram(expires_at_ms)
 

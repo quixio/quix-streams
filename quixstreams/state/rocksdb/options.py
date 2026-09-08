@@ -164,36 +164,51 @@ class RocksDBOptions(RocksDBOptionsType):
         meaningful for TTL-enabled stores; ignored for windowed / timestamped
         stores and for no-``ttl=`` workloads.
         Default - ``True``.
-    :param ttl_rollback: operational lever that reverts a store which was
-        PROVISIONALLY cold-adopted as a v3.24.0 TTL store back to legacy mode
-        (see ``RocksDBStorePartition._rollback_provisional_adopt``): on a warm
-        restart the pre-adoption originals are restored byte-identical; on a
-        fresh volume the provisional adopt is suppressed. It never touches the
-        sound warm-deterministic path nor a corroborated store.
-        This option is the IN-CODE surface of the
-        ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1`` environment variable, which keeps
-        working: the lever is ON when EITHER is set (option wins when ``True``,
-        else the env var is consulted), and the partition logs which source
-        turned it on. Prefer the option in Quix Cloud, where a deployment
-        environment variable that is not declared in the app's ``app.yaml`` is
-        silently dropped on redeploy — a lever that can vanish between runs is
-        not a lever you can reason about afterwards.
-        Mutually exclusive with ``ttl_force_flip``; both on raises.
-        Default - ``False``.
+    :param ttl_rollback: operational lever that UNDOES an automatic adoption of
+        a v3.24.0-stamped store, putting it back in legacy mode.
+
+        When a store opened by an older release wrote TTL-stamped values without
+        recording that it had TTL enabled, this release recognises the stamps
+        and adopts the store into TTL mode automatically. The adoption is
+        reversible until a live ``state.set(..., ttl=...)`` write confirms it.
+        Turn this lever on and restart if that adoption was wrong for your
+        store: values that were already adopted on this volume are restored
+        byte-identical from their backup, and a store rebuilt from its changelog
+        is left in legacy mode instead of being adopted. A store whose TTL mode
+        was established by this release's own migration, or one whose adoption
+        has already been confirmed, is unaffected.
+
+        Set it either here or as the environment variable
+        ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1``; the lever is on when either is
+        set, and the partition logs at open which of the two turned it on.
+        Prefer this option in Quix Cloud, where a deployment environment
+        variable that is not declared in the app's ``app.yaml`` is silently
+        dropped on redeploy — a lever that can vanish between runs is not a
+        lever you can reason about afterwards. Intended as a temporary measure:
+        clear it once the store is in the mode you want.
+        Mutually exclusive with ``ttl_force_flip`` (setting both raises).
+        Default - ``False`` (off).
     :param ttl_force_flip: operational REPAIR lever, the inverse of
-        ``ttl_rollback``. It forces a store whose ``__ttl_enabled__`` flag is
-        ABSENT into TTL mode and persists the flip, then lets the recovery pass
-        finish any leftover migration. Use it when a store holds TTL-stamped
-        values but has no bookkeeping left for the automatic open-time repair to
-        identify it by (a rebuilt state directory, or a previous rollback that
-        removed the flag while its untouched values stayed stamped) — the
-        symptom is a crash loop where every read of a stamped value fails in the
-        value deserializer. No-op on a store that is already flipped, so it is
-        safe to leave set for one restart and then clear.
-        Same dual surface as ``ttl_rollback``: this option, or
-        ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1``.
-        Mutually exclusive with ``ttl_rollback``; both on raises.
-        Default - ``False``.
+        ``ttl_rollback``: it forces a store into TTL mode and records the flip,
+        then lets recovery finish any leftover migration.
+
+        Use it when a store holds TTL-stamped values but has lost the on-disk
+        evidence the automatic open-time repair needs to recognise them — for
+        example after the state directory was rebuilt, or after a rollback that
+        removed the TTL flag while leaving the values themselves stamped. The
+        symptom is a crash loop in which every read of a stamped value fails in
+        the value deserializer, and the raised ``StateMigrationError`` names
+        this lever. Read the error before setting it: it is a manual assertion
+        that the values in the store REALLY are TTL stamps, and on a genuinely
+        legacy store it would make every read strip eight bytes of real data.
+
+        Set it either here or as the environment variable
+        ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1``, with the same precedence and
+        open-time logging as ``ttl_rollback``. It is a no-op on a store that is
+        already in TTL mode, so it is safe to leave set for one restart and then
+        clear — which is how it is meant to be used.
+        Mutually exclusive with ``ttl_rollback`` (setting both raises).
+        Default - ``False`` (off).
 
     Please see `rocksdict.Options` for a complete description of other options.
     """

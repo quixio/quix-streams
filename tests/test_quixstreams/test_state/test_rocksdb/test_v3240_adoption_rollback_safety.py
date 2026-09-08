@@ -1,10 +1,15 @@
 """
-Red-first tests for three CONFIRMED bugs in the v3.24.0-stamp adoption state
-machine.  Each test MUST fail (RED) on the current HEAD (``95a62399``); a fix
-by ArchDev will turn them green.
+Safety properties of the v3.24.0-stamp adoption state machine, at the seams
+where corroboration and rollback interleave with the changelog-commit barrier:
 
-Finding references match the review-round-4 numbering from
-``dev-planning/state-ttl-v3240-auto-adopt/``.
+* an ABORTED corroboration must leave the backup CF intact, because
+  ``corroborate_adoption()`` runs inside the transaction's ``prepare()`` hooks,
+  BEFORE the changelog-commit barrier that can still fail the transaction;
+* a rollback must not clobber post-adoption durable writes with the stale
+  pre-adoption values it restores;
+* a crash mid-corroboration (done-marker persisted, pending marker not yet
+  deleted) must not pin the TTL sweep off forever, which would leave expired
+  adopted records alive indefinitely.
 """
 
 from datetime import timedelta
