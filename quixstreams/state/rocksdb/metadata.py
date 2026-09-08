@@ -38,12 +38,15 @@ STATE_FORMAT_VERSION = 2
 # raises ``IncompatibleStateStoreError`` rather than being silently rewritten.
 MIN_UPGRADEABLE_STATE_FORMAT_VERSION = 1
 
-# Per-partition opt-in flag for the TTL machinery. Absent (or empty) means the
+# Per-partition flag for the TTL machinery. Absent (or empty) means the
 # partition is in legacy mode: writes are not stamped, ``__ttl_index__`` does
 # not exist, the sweep is a no-op, and recovery replays values verbatim.
-# Present-and-truthy means the partition has been flipped into TTL mode by the
-# framework on the first ``state.set(..., ttl=...)`` write that landed on a
-# fresh (empty) default CF; once flipped, it stays flipped.
+# Present-and-truthy means the partition has been flipped into TTL mode; once
+# flipped, it stays flipped. The framework flips it on the first
+# ``state.set(..., ttl=...)`` write (directly on an empty default CF, or after
+# backfilling a populated legacy one), on adopting a v3.24.0-stamped store
+# during recovery, and on the open-time repair of a store whose bookkeeping
+# proves it is already stamped (see ``TTL_FORCE_FLIP_ENV_VAR``).
 TTL_ENABLED_KEY = b"__ttl_enabled__"
 
 # Local-only marker recording that a COLD-heuristic v3.24.0-stamp adoption is
@@ -67,6 +70,33 @@ TTL_ADOPT_PENDING_KEY = b"__ttl_adopt_pending__"
 # warm-deterministic path (that has no backup / no pending marker) nor a
 # corroborated store (done-marker present).
 TTL_ROLLBACK_ENV_VAR = "QUIXSTREAMS_STATE_TTL_ROLLBACK"
+
+# Operational REPAIR lever -- the sibling of ``TTL_ROLLBACK_ENV_VAR``, read the
+# same way (``os.environ.get`` at partition open; transient, Portal-settable, NOT
+# a ``RocksDBOptions`` field). When set to ``"1"`` it forces a store whose
+# ``TTL_ENABLED_KEY`` is ABSENT into TTL mode and persists the flip, then lets the
+# existing recovery-completion path finish any leftover migration.
+#
+# It exists because the automatic open-time repair
+# (``RocksDBStorePartition._repair_unflagged_stamped_store``) can only fire on
+# POSITIVE evidence: migration bookkeeping on disk, plus a bounded sample of the
+# default CF in which every value really is a TTL stamp (whether or not those
+# stamps have already expired). A store whose local
+# bookkeeping is gone -- a rebuilt state directory, or an earlier
+# ``QUIXSTREAMS_STATE_TTL_ROLLBACK`` that deleted the flip flag and the format /
+# high-water markers while leaving the untouched values stamped -- has no
+# evidence left to identify, so it opens in legacy mode over stamped values and
+# every read crashes in the value deserializer. This lever is the operator's
+# override for exactly that state; the read-path guard's
+# ``StateMigrationError`` names it.
+#
+# Mutually exclusive with ``TTL_ROLLBACK_ENV_VAR``: setting both raises at open
+# (see ``RocksDBStorePartition.__init__``), since one reverts a store to legacy
+# and the other forces it into TTL mode. Only presence of the exact value ``"1"``
+# counts, matching the rollback lever. No-op on an already-flipped store
+# (the persisted flag short-circuits the repair), so it is safe to leave set for
+# one restart and then unset.
+TTL_FORCE_FLIP_ENV_VAR = "QUIXSTREAMS_STATE_TTL_FORCE_FLIP"
 
 # Persisted backfill cursor for the legacy-records backfill.
 # Holds the integer count ``N`` of keys

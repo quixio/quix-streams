@@ -248,10 +248,80 @@ app = Application(
 
 With `ttl_changelog_tombstones=False`, the changelog retains the last record of each expired key until compaction reclaims it. This is identical to the behavior before sweep tombstones were introduced, and may be useful if you manage changelog retention manually or want to defer to a `cleanup.policy=compact,delete` retention window. This flag has no effect on windowed or timestamped stores.
 
+### Changelog topic sizing for short TTLs
+
+Every expiry produces a tombstone. A 2-minute TTL replaces the entire live keyspace roughly every 2 minutes, so tombstone ingest roughly doubles the normal write rate. Two Kafka defaults work against you here:
+
+- **`segment.bytes` (default 1 GiB).** The log cleaner only compacts closed segments. On a low-throughput partition a 1 GiB segment may never close, which freezes compaction regardless of policy. Setting `segment.bytes` to `67108864` (64 MiB) or `134217728` (128 MiB) closes segments quickly and lets compaction keep pace with expiry.
+- **`delete.retention.ms` (default 24 hours).** Kafka retains tombstones for this long. For a 2-minute TTL, 24 hours is 720 TTL windows of tombstones. Setting it to a few TTL windows — for example `600000` ms (10 minutes) for a 2-minute TTL — reclaims topic space far sooner while still giving rebuilding consumers enough time to complete a cold restore.
+
+Apply these settings to the changelog topic. The application prints the topic name at startup; it follows the pattern `changelog__v4--<source-topic>--<store-name>`.
+
+If you apply a `retention.bytes` cap to the changelog, keep in mind that a cold restore can only rebuild as much state as the changelog currently retains. A cap tight enough to evict live records limits how complete a cold restore can be.
+
 
 ## Upgrading an existing store
 
-If your pipeline was already running before TTL was introduced, see
-[Upgrading an existing (legacy) store](stateful-processing.md#upgrading-an-existing-legacy-store-legacy_records_ttl)
-for the full guide, including the before/after worked example,
-`legacy_records_ttl` configuration, and what happens during a cold restore.
+If your pipeline ran before TTL existed (no `state.set(..., ttl=...)` calls anywhere in your code), see [Upgrading an existing (legacy) store](stateful-processing.md#upgrading-an-existing-legacy-store-legacy_records_ttl) for the full guide, including `legacy_records_ttl` configuration and the before/after worked example.
+
+If your pipeline ran on v3.24.0 (the TTL preview), read on.
+
+### Upgrading from v3.24.0
+
+The scenarios below cover what happens to each store shape when you deploy the current version over a v3.24.0 deployment. No manual steps are required; all migration paths are automatic.
+
+#### Warm upgrade — state volume intact
+
+On a normal upgrade that preserves the state directory (Quix Cloud rolling update, Kubernetes PVC, Docker named volume), the store already carries the TTL flag that v3.24.0 wrote. The new build opens it, resumes TTL mode from the first second, and the sweep starts reclaiming expired keys. No migration log lines appear.
+
+#### Cold restore — state volume absent or empty
+
+When the state volume is gone and the store rebuilds from its changelog, the v3.24.0 records arrive without the `__ttl_stamped__` Kafka header used by the current release. Recovery identifies the stamp pattern embedded in the value bytes, adopts the store provisionally, and logs a single `[WARNING]`:
+
+```
+[WARNING] Auto-adopted <N> v3.24.0-shaped record(s) from the changelog at path=<...> (REVERSIBLE): values kept verbatim, __ttl_index__ rebuilt, originals backed up to __ttl_adopt_backup__, sweep-deletion suppressed until corroborated by a live ttl= write. If this is actually a pre-TTL legacy store, set QUIXSTREAMS_STATE_TTL_ROLLBACK=1 and restart to roll back (originals restored byte-identical).
+```
+
+This `[WARNING]` is expected and does not indicate a problem. Sweep-deletion stays suppressed until the adoption is confirmed. On the first live `state.set(..., ttl=...)` write that reaches a flush, corroboration fires and the adoption becomes permanent:
+
+```
+[INFO] Corroborated v3.24.0 adoption at path=<...> on a live ttl= write; produced the durable migration-done marker, cleared the pending marker, lifted sweep suppression (backup dropped after the commit barrier).
+```
+
+Subsequent cold restores find the durable marker and skip the provisional path entirely.
+
+#### Interrupted migration — process crashed mid-backfill
+
+If the application crashed while a `legacy_records_ttl` backfill was in progress, the store holds a mix of stamped and un-stamped records with no `__ttl_enabled__` flag. The new build detects the migration bookkeeping and resumes automatically:
+
+```
+[INFO] Repaired an interrupted legacy-TTL migration at path=<...>: found migration bookkeeping (<artifacts>), no __ttl_enabled__ flag, a default CF that samples as uniformly TTL-stamped (<M> of <N> sampled value(s), <K> of them still live), and no __ttl_backfill_in_progress__ marker. Resuming TTL mode and persisting the flip; the leftover census is completed by the recovery pass before live processing resumes.
+```
+
+Already-stamped records keep their original expiry. The remaining un-stamped records are completed before live processing starts. The `legacy_records_ttl` backfill also now skips any value that already carries a stamp, so a partial migration can never produce double-wrapped records.
+
+An INFO line logged at startup is normal. If the sample contains stamps that are all already in the past (a store whose keys have fully drained), recovery still adopts it and logs an additional note — the presence of valid stamp bytes, not their liveness, is the evidence used.
+
+#### Self-heal for double-stamped records
+
+An earlier build contained a bug that could re-wrap already-stamped v3.24.0 records during a `legacy_records_ttl` backfill, producing `outer_stamp||inner_stamp||payload`. The current build repairs these automatically during changelog replay and at index rebuild:
+
+```
+[WARNING] Recovery at path=<...> repaired <N> DOUBLE-STAMPED record(s) during changelog replay: their payload was itself a TTL stamp (outer_stamp||inner_stamp||payload), the signature of an earlier build's live backfill re-stamping already-stamped v3.24.0 values and producing them to the changelog. The outer stamp was stripped once and the record landed with its ORIGINAL expiry, so reads return the real payload instead of raising a serialization error. The changelog records themselves are unchanged (nothing is produced back); every rebuild of this consumer group repairs them ...
+```
+
+Each record is unwrapped to its original expiry. Because the changelog itself still carries the double-stamped bytes, each cold restore repairs them on ingest — this is expected and not a sign of data loss.
+
+### What if something looks wrong — operator levers
+
+Two operational levers cover rare misidentification cases. Both default to off and are mutually exclusive; setting both raises a `ValueError` at startup.
+
+**Roll back a wrong cold adoption**
+
+If the cold adoption fired on a store that actually holds pre-TTL application data (the 8-byte values look like stamps but are real payload), set `QUIXSTREAMS_STATE_TTL_ROLLBACK=1` in the deployment environment or `RocksDBOptions(ttl_rollback=True)` in code, then restart. On a warm restart the pre-adoption originals are restored byte-identical and the store reverts to legacy mode. On a fresh volume the provisional adoption is suppressed entirely. This lever only touches provisional (uncorroborated) adoptions — a corroborated store is immune. Unset it and restart once the rollback has taken effect.
+
+**Force-flip a store whose TTL flag went missing**
+
+If the log shows a line containing `NOT flipping it` and recommends setting `QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1`, set that environment variable or `RocksDBOptions(ttl_force_flip=True)` in code, then restart. The lever persists the `__ttl_enabled__` flag and lets the recovery pass finish the migration. It is a no-op on a store already in TTL mode, so it is safe to leave set for one restart and then clear.
+
+Prefer the `RocksDBOptions` form in Quix Cloud. A deployment environment variable not declared in `app.yaml` is silently dropped on redeploy, which can make a lever disappear between runs.

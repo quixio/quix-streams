@@ -1,19 +1,23 @@
 """
-Red-first tests for the AUTOMATIC regime-split v3.24.0-stamp adoption feature.
+The AUTOMATIC regime-split v3.24.0-stamp adoption feature.
 
-Replaces the opt-in ``adopt_v3240_stamps`` flag with two regimes:
+A store written by v3.24.0 carries TTL-stamped values without ever recording
+that it had TTL enabled. There is no opt-in flag for adopting it: the library
+recognises the stamps and adopts the store itself, in one of two regimes.
 
-- **Warm restart** (local store intact with v3.24.0 TTL artifacts):
-  Deterministic adopt in place — no heuristic, no backup, no CRITICAL dead-end.
-  Requires ``_enforce_format_version`` to accept v2 (or upgrade from v1/absent).
+- **Warm restart** (local store intact, v3.24.0 TTL artifacts present):
+  deterministic adopt in place -- no heuristic, no backup, no dead-end. Requires
+  ``_enforce_format_version`` to accept format v2 and to upgrade v1/absent.
 
-- **Cold rebuild / fresh volume / memory** (only raw stamped bytes):
-  Provisional auto-adopt with backup CF, sweep suppression, and corroboration.
-  Rollback via ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1`` env var.
+- **Cold rebuild / fresh volume / memory backend** (only the raw stamped bytes
+  survive): PROVISIONAL auto-adopt with a backup CF, sweep suppression and
+  corroboration by the first live ``ttl=`` write. Reversible until corroborated,
+  via ``RocksDBOptions.ttl_rollback`` / ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1``.
 
-Every test is expected RED on HEAD (``323d391a``); the feature is unbuilt.
-
-Spec: ``dev-planning/state-ttl-v3240-auto-adopt/spec.md``
+Adoption is decided on the shared stamp-evidence rule (unanimous stamps,
+non-empty payloads, liveness irrelevant, bare 8-byte dedup values refused). The
+in-memory backend applies the same rule, so the "memory twin" tests here assert
+PARITY with RocksDB, not divergence.
 """
 
 import logging
@@ -887,23 +891,31 @@ class TestRollbackEnvVar:
 
 
 # ===========================================================================
-# Scenario 5: Cold rebuild, all-past stamped census → quarantined
-# Spec §5.2: KEEP the all-past REFUSE guard as QUARANTINE.
+# Scenario 5: Cold rebuild, all-past stamped census.
+# Spec §5.2, REWRITTEN 2026-09-07 (sc-74843 round 5): an all-past census with
+# real payloads is ADOPTED with a WARN; the all-past REFUSE guard is retired.
+# The legacy dedup shape it protected is refused by the non-empty-payload rule
+# (bare 8-byte values) instead.
 # ===========================================================================
 
 
-class TestAllPastQuarantined:
-    """Validates spec §5.2: an all-past stamped census is quarantined — never
-    adopted, store stays legacy, values byte-identical.
+class TestAllPastAdoptsAndBareValuesRefused:
+    """The adoption rule is UNANIMITY plus a NON-EMPTY payload
+    (``transaction._stamp_evidence_for``), never liveness.
 
-    GREEN on HEAD: HEAD already quarantines all-past (with ``adopt_v3240_stamps=True``
-    it refuses, and without it stays legacy). The spec KEEPS this guard, so
-    the behavior must persist after the flag is removed. RED because the
-    construction path changes (no flag to set).
+    Liveness is not evidence about what the bytes ARE: a store fully migrated by
+    v3.24.0 with a 120 s TTL and cold-restored minutes later has EVERY stamp in
+    the past, and refusing such a census strands every expired key unindexed
+    behind a quarantine and then lets the live backfill double-stamp them. So an
+    all-past census WITH payloads adopts (WARN, never a refusal), while a census
+    of bare 8-byte epoch-ms values — the legacy ``set_bytes()`` dedup shape a
+    liveness guard was really detecting — is refused and quarantined.
+
+    Both backends apply the rule, so the memory twin below asserts parity.
     """
 
-    def test_all_past_stays_legacy_quarantined(self, tmp_path, caplog):
-        """Spec §5.2: all-past → quarantined, not adopted."""
+    def test_all_past_with_payloads_is_adopted_with_a_warn(self, tmp_path, caplog):
+        """All-past census + non-empty payloads -> ADOPT, with a WARN."""
         producer = _make_producer()
         expiry_past = NOW_MS - 7 * DAY_MS  # all in the past
         msgs = [_v3240_msg(f"k{i}", f"v{i}", expiry_past) for i in range(4)]
@@ -916,50 +928,110 @@ class TestAllPastQuarantined:
             partition.complete_recovery()
 
         assert (
-            partition.uses_ttl_stamps is False
-        ), "All-past census must stay legacy (quarantined)"
+            partition.uses_ttl_stamps is True
+        ), "an all-past census of real stamped values must adopt, not quarantine"
 
-        # Values byte-identical.
+        # Values byte-identical (adoption never re-wraps).
         for i in range(4):
             raw_key = b"pfx|" + json_dumps(f"k{i}")
             expected = encode_ttl_value(expiry_past, json_dumps(f"v{i}"))
             assert _raw_default_get(partition, raw_key) == expected
 
-        # Census preserved (quarantined).
-        assert _pending_keys(partition) == {
-            b"pfx|" + json_dumps(f"k{i}") for i in range(4)
-        }
+        # Census drained, index rebuilt from the records' own stamps, backup made.
+        assert _pending_keys(partition) == set()
+        assert _index_count(partition) == 4
+        assert TTL_ADOPT_BACKUP_CF_NAME in partition.list_column_families()
 
-        # No index or backup created.
-        assert _index_count(partition) == 0
-        cfs = partition.list_column_families()
-        assert TTL_ADOPT_BACKUP_CF_NAME not in cfs
-
-        # WARN (downgraded from CRITICAL per spec §5.8).
+        # The all-past fact is still reported — as a WARN, never as a refusal.
+        messages = [r.getMessage() for r in caplog.records]
         assert any(
-            r.levelno == logging.WARNING and "quarantin" in r.getMessage().lower()
-            for r in caplog.records
-        ) or any(
-            r.levelno == logging.WARNING and "refused" in r.getMessage().lower()
-            for r in caplog.records
-        ), "All-past quarantine must log WARN"
+            "already in the past" in m for m in messages
+        ), f"the all-past WARN must survive as a non-refusing signal: {messages}"
+        assert not any(
+            "Refused auto-adopt" in m for m in messages
+        ), f"all-past must no longer refuse: {messages}"
 
         partition.close()
 
-    def test_all_past_memory_twin(self, caplog):
-        """Spec §5.7: memory twin — all-past quarantined, not adopted."""
+    def test_bare_8_byte_values_stay_legacy_quarantined(self, tmp_path, caplog):
+        """The refusal the all-past guard really existed for, now keyed on
+        evidence instead of liveness: every value is EXACTLY 8 bytes (a legacy
+        ``set_bytes()`` dedup "last seen" epoch-ms, no payload), so the census
+        is not uniformly TTL-stamped. Stay legacy, byte-identical, census
+        preserved as the repair vector.
+        """
+        producer = _make_producer()
+        expiry_past = NOW_MS - 7 * DAY_MS
+        msgs = [
+            (b"pfx|" + json_dumps(f"k{i}"), struct.pack(">Q", expiry_past + i), False)
+            for i in range(4)
+        ]
+
+        partition = _rocksdb_partition(
+            tmp_path, name="bare8", changelog_producer=producer
+        )
+        with caplog.at_level(logging.WARNING):
+            _replay_default(partition, msgs, now_ms=NOW_MS)
+            partition.complete_recovery()
+
+        assert (
+            partition.uses_ttl_stamps is False
+        ), "bare 8-byte dedup values are not stamp evidence and must not adopt"
+
+        for i in range(4):
+            raw_key = b"pfx|" + json_dumps(f"k{i}")
+            assert _raw_default_get(partition, raw_key) == struct.pack(
+                ">Q", expiry_past + i
+            )
+
+        # Census preserved (quarantined); no index, no backup.
+        assert _pending_keys(partition) == {
+            b"pfx|" + json_dumps(f"k{i}") for i in range(4)
+        }
+        assert _index_count(partition) == 0
+        assert TTL_ADOPT_BACKUP_CF_NAME not in partition.list_column_families()
+
+        assert any(
+            r.levelno == logging.WARNING and "refused" in r.getMessage().lower()
+            for r in caplog.records
+        ), "the bare-value quarantine must log WARN"
+
+        partition.close()
+
+    def test_all_past_memory_twin_adopts_too(self, caplog):
+        """BACKEND PARITY: the in-memory backend applies the same evidence rule,
+        so an all-past census of real stamped values ADOPTS there as well — the
+        values are kept verbatim, the census is drained and the all-past fact is
+        reported as a WARN, never as a refusal.
+        """
         producer = _make_producer()
         expiry_past = NOW_MS - 7 * DAY_MS
         msgs = [_v3240_msg(f"k{i}", f"v{i}", expiry_past) for i in range(4)]
         full = [(k, v, "default", s) for k, v, s in msgs]
 
         partition = MemoryStorePartition(changelog_producer=producer)
-        _replay_memory(partition, full, now_ms=NOW_MS)
-        partition.complete_recovery()
+        with caplog.at_level(logging.WARNING):
+            _replay_memory(partition, full, now_ms=NOW_MS)
+            partition.complete_recovery()
 
         assert (
-            partition.uses_ttl_stamps is False
-        ), "Memory: all-past census must stay legacy (quarantined)"
+            partition.uses_ttl_stamps is True
+        ), "memory must adopt an all-past census of real stamps, like RocksDB"
+        assert partition._adopt_provisional is True
+
+        # Census drained; values kept byte-identical (adoption never re-wraps).
+        assert not partition._state.get(TTL_BACKFILL_PENDING_CF_NAME)
+        for raw_key, value, _ in msgs:
+            assert partition._state["default"][raw_key] == value
+
+        # The all-past fact survives as a WARN, not as a refusal.
+        messages = [r.getMessage() for r in caplog.records]
+        assert any(
+            "already in the past" in m for m in messages
+        ), f"the memory all-past WARN must be emitted: {messages}"
+        assert not any(
+            "Refused" in m and "auto-adopt" in m for m in messages
+        ), f"memory all-past must no longer refuse: {messages}"
         partition.close()
 
 

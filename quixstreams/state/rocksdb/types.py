@@ -29,5 +29,7 @@ class RocksDBOptionsType(Protocol):
     legacy_records_ttl: Optional[timedelta]
     legacy_backfill_chunk_size: int
     ttl_changelog_tombstones: bool
+    ttl_rollback: bool
+    ttl_force_flip: bool
 
     def to_options(self) -> rocksdict.Options: ...

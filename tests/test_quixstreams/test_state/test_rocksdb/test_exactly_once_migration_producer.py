@@ -135,15 +135,24 @@ class TestCompletionUsesMigrationProducer:
             )
             offset += 1
 
-        # Track local-write ordering only for the completion phase.
+        # Track local-write ordering only for the completion phase. The flip-flag
+        # persist is traced SEPARATELY so the local write it contributes is
+        # ATTRIBUTED in the sequence below instead of appearing as an anonymous
+        # extra "write" the next reader has to guess at.
         original_write = part._write
+        original_stamp_flip = part._stamp_flip_metadata
         order.clear()
 
         def _tracked_write(batch):
             order.append("write")
             return original_write(batch)
 
+        def _tracked_stamp_flip():
+            order.append("flip")
+            return original_stamp_flip()
+
         part._write = _tracked_write
+        part._stamp_flip_metadata = _tracked_stamp_flip
         part.complete_recovery()
 
         # All migration records (n_legacy leftover stamps + 1 done-marker) went to
@@ -153,8 +162,32 @@ class TestCompletionUsesMigrationProducer:
         assert main.produce.call_count == 0
 
         # Per-chunk flush precedes the local write (changelog-first): the leftover
-        # chunk (flush, write) then the done-marker (flush, write).
-        assert order == ["flush", "write", "flush", "write"]
+        # chunk (flush, write), then the flip flag (flip + the one local write it
+        # makes), then the done-marker (flush, write).
+        #
+        # The flip pair is sc-74843 round 3, and flag-before-marker is the
+        # REQUIRED order, not a preference: ``_produce_migration_done_marker``
+        # persists ``__ttl_enabled__`` / ``__ttl_format_version__`` in its own
+        # durable write BEFORE producing or writing the marker, so the on-disk
+        # invariant "done-marker present => flip flag present" holds at every
+        # crash point. A marker without the flag reopens the store in legacy mode
+        # over values that are now all stamped and dies in the value deserializer
+        # on the first ``state.get()``. Writing the flag after the marker, or in
+        # the same batch, is precisely the shape that crash-looped in production.
+        assert order == ["flush", "write", "flip", "write", "flush", "write"]
+
+        # The changelog-first invariant this test exists for is UNCHANGED by that
+        # extra write, and this is the assertion that says so rather than
+        # quietly relaxing the one above. The flip flag is local-only metadata --
+        # neither key is ever produced to the changelog (the marker is what a
+        # cold rebuild learns "TTL enabled" from) -- so there is no changelog
+        # record it could run ahead of. Drop the flip and its own write from the
+        # trace and the original alternation must remain exactly as it was.
+        flip = order.index("flip")
+        changelogged = [
+            entry for i, entry in enumerate(order) if i not in (flip, flip + 1)
+        ]
+        assert changelogged == ["flush", "write", "flush", "write"]
         part.close()
 
 

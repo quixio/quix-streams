@@ -1,10 +1,15 @@
 """
-Red-first tests for three CONFIRMED bugs in the v3.24.0-stamp adoption state
-machine.  Each test MUST fail (RED) on the current HEAD (``95a62399``); a fix
-by ArchDev will turn them green.
+Safety properties of the v3.24.0-stamp adoption state machine, at the seams
+where corroboration and rollback interleave with the changelog-commit barrier:
 
-Finding references match the review-round-4 numbering from
-``dev-planning/state-ttl-v3240-auto-adopt/``.
+* an ABORTED corroboration must leave the backup CF intact, because
+  ``corroborate_adoption()`` runs inside the transaction's ``prepare()`` hooks,
+  BEFORE the changelog-commit barrier that can still fail the transaction;
+* a rollback must not clobber post-adoption durable writes with the stale
+  pre-adoption values it restores;
+* a crash mid-corroboration (done-marker persisted, pending marker not yet
+  deleted) must not pin the TTL sweep off forever, which would leave expired
+  adopted records alive indefinitely.
 """
 
 from datetime import timedelta
@@ -372,21 +377,36 @@ class TestCrashMidCorroborationDoesNotPinSweepOff:
 
         # Simulate a crash during corroborate_adoption():
         # corroborate_adoption() sequence:
-        #   1. self._produce_migration_done_marker()  # produces + local _write
+        #   1. self._produce_migration_done_marker()
+        #        1a. self._stamp_flip_metadata()       # local _write: flip flag
+        #        1b. produce + flush the marker        # changelog-first
+        #        1c. self._write(batch)                # local _write: done-marker
         #   2. batch.delete(TTL_ADOPT_PENDING_KEY, ...)
-        #      self._write(batch)                      # deletes pending marker
-        #   3. self._drop_local_cf_if_exists(...)      # drops backup CF
-        #   4. self._adopt_provisional = False
+        #      self._write(batch)                      # local _write: pending del
+        #   3. self._adopt_provisional = False
+        # (the irreversible __ttl_adopt_backup__ drop is DEFERRED to
+        #  finalize_corroboration_teardown, which the transaction calls only past
+        #  the commit barrier, so it is not part of this sequence.)
         #
         # Crash between step 1 and step 2: the done-marker is on disk but the
-        # pending marker is NOT deleted. Monkeypatch _write to crash on the
-        # SECOND call (first = done-marker local persist, second = pending delete).
+        # pending marker is NOT deleted.
         real_write = partition._write
-        write_call_count = {"n": 0}
 
         def crash_on_pending_delete(batch):
-            write_call_count["n"] += 1
-            if write_call_count["n"] == 2:
+            # Target the write by CONTENT, not by call index. Step 2 is the first
+            # _write that runs once the done-marker is already durable, so this
+            # condition selects it however many writes step 1 makes.
+            #
+            # A hard-coded index does not survive: sc-74843 round 3 made step 1
+            # persist the flip flag in its OWN durable write (1a) before
+            # producing or writing the marker -- the invariant "done-marker
+            # present => __ttl_enabled__ present", without which the store
+            # reopens in legacy mode over stamped values and crash-loops. That
+            # turned step 1 into TWO writes, so the previous "crash on call #2"
+            # hook landed on the done-marker's own write (1c) and left no marker
+            # on disk, failing the precondition below instead of exercising the
+            # crash this test is about.
+            if partition._has_local_migration_done_marker():
                 raise RuntimeError("simulated crash mid-corroboration")
             return real_write(batch)
 
