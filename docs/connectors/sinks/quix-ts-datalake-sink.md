@@ -59,6 +59,23 @@ Records must be dictionaries. If your values are not dicts, convert them before 
 
 Blob credentials are read automatically from the `Quix__BlobStorage__Connection__Json` environment variable when running on Quix Cloud; for local runs, the filesystem is inferred from the `quixportal` configuration.
 
+### Parquet row groups
+
+Each file is written with row groups of about `row_group_mb` (default 32 MB) — the same
+target the lakehouse compaction uses. A reader needs roughly four storage range requests
+per row group, so many small groups make every query pay a round-trip storm on a
+high-latency storage path, while one enormous group forfeits intra-file skipping and
+inflates reader memory. Parquet sizes groups in rows, so the sink converts the target using
+the table's density: it tracks the rows and compressed bytes of the files it has already
+written and uses `rows_per_MB × row_group_mb` rows per group for the next file (clamped to
+122,880–50,000,000 rows; 1,000,000 rows before the first file, which is also pyarrow's
+default). Files smaller than one group are, as always, a single group — splitting only
+matters for large flushes.
+
+```python
+sink = QuixTSDataLakeSink(..., row_group_mb=32)
+```
+
 ## Per-Key Silence Detection
 
 The sink can detect when individual Kafka message keys go quiet and fire a callback for each one. The canonical use case is sensor drop-out detection: if `sensor-a` stops publishing while `sensor-b` continues, the callback fires only for `sensor-a`.
