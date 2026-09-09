@@ -16,7 +16,7 @@ def configure_logging(loglevel: Optional[Union[int, LogLevel]],
                       pid: bool = False) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/logging.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/logging.py#L99)
 
 Configure "quixstreams" logger.
 
@@ -5334,7 +5334,7 @@ Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
 def purge()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L232)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L246)
 
 Purge all messages currently queued or in-flight in the producer.
 
@@ -5351,6 +5351,21 @@ committed offset (at-least-once). The ``_PURGE`` reports are filtered by
 ``_on_delivery``, so a genuine delivery error recorded before the purge
 still surfaces on the next checkpoint.
 
+<a id="quixstreams.internal_producer.InternalProducer.instantiated"></a>
+
+#### InternalProducer.instantiated
+
+```python
+@property
+def instantiated() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L273)
+
+Whether the underlying librdkafka producer has been created (it is
+created lazily on first use). ``False`` means nothing was ever
+produced, so teardown flushes can be skipped entirely.
+
 <a id="quixstreams.internal_producer.InternalProducer.abort_transaction"></a>
 
 #### InternalProducer.abort\_transaction
@@ -5359,7 +5374,7 @@ still surfaces on the next checkpoint.
 def abort_transaction(timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L346)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L369)
 
 Attempt an abort if an active transaction.
 
@@ -5400,7 +5415,7 @@ def commit_transaction(positions: List[TopicPartition],
                        timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L403)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L426)
 
 Send the consumer offsets into the open transaction and commit it.
 
@@ -6835,7 +6850,7 @@ Uses quixportal for unified blob storage access (Azure, AWS S3, GCP, MinIO, loca
 def silence_chatty_loggers() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L77)
 
 Mute per-request HTTP logging from the cloud-storage SDKs used by
 this sink (Azure SDK + adlfs, botocore/boto3 + s3transfer).
@@ -6854,7 +6869,7 @@ so the framework's logging setup does not reset these levels.
 class QuixTSDataLakeSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L89)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L91)
 
 Writes Kafka batches directly to blob storage as Hive-partitioned Parquet files,
 
@@ -6875,14 +6890,30 @@ blob storage at the checkpoint.
 - `workspace_id`: Workspace ID for workspace-scoped storage paths
 (auto-injected by platform)
 - `hive_columns`: List of columns to use for Hive partitioning. Include
-'year', 'month', 'day', 'hour' to extract these from timestamp_column
+'year', 'month', 'day', 'hour' to extract these from timestamp_column.
+Prefix an entry with ``~`` to make it a VIRTUAL partition: it appears in
+the partition tree and is filterable, but is NOT written as a physical
+``key=value/`` folder and does not split files (a file keeps every value
+of it). E.g. ``["year", "month", "~driver"]`` folders by year/month and
+exposes ``driver`` as a virtual level. Virtual columns stay in the
+parquet data so queries can still filter rows by them.
 - `timestamp_column`: Column containing timestamp to extract time partitions from
+- `sort_column`: Optional column recorded on the table (properties.sort_column)
+that compaction orders files by, so ORDER BY / time-range queries can skip
+files and stream. When None, the lakehouse falls back to timestamp_column.
 - `catalog_url`: Optional REST Catalog URL for table registration
 - `catalog_auth_token`: If using REST Catalog, the respective auth token for it
 - `auto_discover`: Whether to auto-register table on first write
 - `namespace`: Catalog namespace (default: "default")
 - `auto_create_bucket`: If True, attempt to create bucket/path in storage if missing
 - `max_workers`: Maximum number of parallel upload threads (default: 10)
+- `stats_columns`: Optional list of column names to compute per-file
+min/max statistics ("zone maps") for. These are sent to the REST
+Catalog with each file and let the query layer skip files whose value
+range cannot satisfy a WHERE/ORDER BY on the column. ``None`` (default)
+computes stats for every numeric and timestamp column in each written
+file (cheap — the batch is already in memory). Pass an explicit list to
+restrict the set and bound catalog storage on very wide tables.
 - `stream_timeout_ms`: Optional **per-key** silence threshold in
 milliseconds. Paired with ``on_stream_timeout``; both must be
 provided to enable the feature. See
@@ -6916,7 +6947,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 def s3_bucket() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L209)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L259)
 
 Get the S3 bucket name (extracted from quixportal config).
 
@@ -6929,7 +6960,7 @@ def add(value: Any, key: Any, timestamp: int, headers: Any, topic: str,
         partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L229)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L279)
 
 Accumulate the record, then refresh the per-key last-seen
 stamp via the tracker.
@@ -6942,7 +6973,7 @@ stamp via the tracker.
 def flush()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L245)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L295)
 
 Flush the parent batch, then run a timeout check.
 
@@ -6954,7 +6985,7 @@ Flush the parent batch, then run a timeout check.
 def on_paused()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L250)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L300)
 
 Inherit parent ``on_paused()`` — do **not** touch tracker state.
 
@@ -6966,7 +6997,7 @@ Inherit parent ``on_paused()`` — do **not** touch tracker state.
 def setup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L255)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L305)
 
 Initialize blob storage client and test connection.
 
@@ -6978,7 +7009,7 @@ Initialize blob storage client and test connection.
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L322)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L372)
 
 Write batch directly to blob storage.
 
@@ -6990,7 +7021,7 @@ Write batch directly to blob storage.
 def cleanup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L774)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L1037)
 
 Cleanup resources when sink is stopped.
 
@@ -11647,7 +11678,7 @@ will be deleted, as they can no longer belong to any active window.
 class RocksDBOptions(RocksDBOptionsType)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/options.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/options.py#L60)
 
 RocksDB database options.
 
@@ -11664,12 +11695,143 @@ If this option is True, but `use_changelog_topics=False`,
 the DB won't be destroyed.
 Note: risk of data loss! Make sure that the changelog topics are up-to-date before disabling it in production.
 Default - `True`.
+- `block_cache_size`: size of the RocksDB block cache, in bytes.
+This is an **aggregate ceiling for the whole process**: one cache of this
+size is shared by every store partition, following RocksDB's own guidance
+that a single block cache be shared across databases. It is not a
+per-partition budget, so a 32-partition application does not reserve 32
+times this value.
+A cache is filled lazily, so a small deployment never realizes the full
+capacity; size it against total available memory rather than per store.
+Note that index and bloom-filter blocks are held outside this budget
+(``cache_index_and_filter_blocks`` is not enabled), so real usage is this
+value plus roughly ``bloom_filter_bits_per_key / 8`` bytes per key.
+Default - ``1 GiB``.
 - `max_evictions_per_flush`: cap on TTL-driven evictions performed
 during a single ``flush()`` for stores with TTL enabled. Larger values
-    increase per-flush latency but let the sweep keep up with higher
-    steady-state expiration rates. Only meaningful for TTL-enabled
-    stores; ignored otherwise.
-    Default - ``10_000``.
+increase per-flush latency but let the sweep keep up with higher
+steady-state expiration rates. Only meaningful for TTL-enabled
+stores; ignored otherwise.
+
+This is the sweep's throughput dial, and it is the one to reach for:
+the drain rate is ``max_evictions_per_flush / commit_interval``, but a
+checkpoint's cost is mostly *fixed* (a producer flush barrier plus an
+offset commit, milliseconds against a remote broker), so shrinking
+``commit_interval`` buys no drain speed and starves message processing.
+Raise this instead.
+
+**Interaction with the producer queue.** Each eviction produces one
+changelog tombstone (see ``ttl_changelog_tombstones``), so a sweep can
+enqueue far more records than librdkafka's
+``queue.buffering.max.messages`` (default ``100_000``) would appear to
+allow. In practice it does not, because ``Producer.produce()`` polls
+after every produce, so against a live broker the queue is a rolling
+window rather than an accumulator: enqueueing ``150_000`` tombstones was
+measured to peak at a queue depth of **~6,800 (6.8% of the default)**,
+with the checkpoint's producer flush completing in ~4ms. The drain rate
+governs, not the queue depth.
+
+Two situations still bound it: the peak depth scales with
+partitions-per-process (roughly ~15 partitions sweeping concurrently at
+that depth would approach the default cap, so raise
+``queue.buffering.max.messages`` for high partition counts), and a broker
+that is not draining at all will raise ``BufferError`` once the queue
+genuinely fills — though by then the application has larger problems.
+``queue.buffering.max.kbytes`` (~1 GB default) is a second cap that binds
+first for multi-KB records.
+Default - ``150_000``. Measured on one partition against a live broker: a
+full ``150_000``-eviction sweep completed in **1.12s** (index scan 0.31s,
+produces 0.53s, flush 0.004s, commit 0.27s) — a ~268x margin under a 300s
+``max.poll.interval.ms``. The original ``10_000`` sustained only ~300
+evictions/s once checkpoints grew, which loses the race against expiry
+and lets the store grow without bound.
+- `legacy_records_ttl`: expiry for pre-existing records when enabling
+TTL on a **populated** legacy store that already holds un-stamped
+records. When ``None`` (the default), the migration still completes:
+the pre-existing records are backfilled using the ttl the service
+itself uses (the max ``ttl=`` in the triggering flush) and a WARNING
+names the implicit value. When set to a strictly positive
+``timedelta``, that value is used instead: the partition **backfills**
+its pre-existing un-stamped records with a uniform expiry of
+``high_water + legacy_records_ttl`` (event-time high-water at the
+enable moment) and flips into TTL mode in place — no state deletion.
+New records keep getting their true event-time expiry. The backfill
+runs exactly once; a redeploy / restart never re-runs it. Ignored for
+windowed / timestamped stores (they opt out of the TTL stamp
+machinery at the class level). Must be strictly positive if set;
+``<= 0`` raises ``ValueError`` at construction.
+Default - ``None``.
+- `legacy_backfill_chunk_size`: number of pre-existing records re-stamped
+per write-batch during the one-time legacy backfill (see
+``legacy_records_ttl``). The backfill iterates the populated default CF
+in chunks of this size; each chunk is re-stamped, produced to the
+changelog, flushed, and committed before the next chunk is read, so peak
+transient memory is bounded to one chunk regardless of total store size.
+Lower it on memory-constrained deployments. Only meaningful on the single
+backfilling flush; ignored otherwise and on windowed / timestamped
+stores. Must be strictly positive; ``<= 0`` raises ``ValueError`` at
+construction.
+Default - ``150_000``. Raising it mainly reduces the number of confirming
+flushes (one broker round-trip each), whose fixed cost otherwise dominates
+a large backfill; the producer-queue note under
+``max_evictions_per_flush`` applies here too.
+- `ttl_changelog_tombstones`: when ``True`` (the default), TTL-driven
+evictions are also produced to the changelog as tombstones
+(``value=None``) so log compaction physically reclaims expired keys in
+step with the local store — ``cleanup.policy=compact`` alone then shrinks
+the changelog as keys expire (no ``delete`` policy / retention tuning
+needed to reclaim). When ``False``, evictions are local-only (the
+pre-change behavior): the changelog keeps each expired key's last record
+until compacted by other means, and rebuilds rely on the read-time
+expiry filter. Read-time consistency is identical either way. Only
+meaningful for TTL-enabled stores; ignored for windowed / timestamped
+stores and for no-``ttl=`` workloads.
+Default - ``True``.
+- `ttl_rollback`: operational lever that UNDOES an automatic adoption of
+a v3.24.0-stamped store, putting it back in legacy mode.
+
+When a store opened by an older release wrote TTL-stamped values without
+recording that it had TTL enabled, this release recognises the stamps
+and adopts the store into TTL mode automatically. The adoption is
+reversible until a live ``state.set(..., ttl=...)`` write confirms it.
+Turn this lever on and restart if that adoption was wrong for your
+store: values that were already adopted on this volume are restored
+byte-identical from their backup, and a store rebuilt from its changelog
+is left in legacy mode instead of being adopted. A store whose TTL mode
+was established by this release's own migration, or one whose adoption
+has already been confirmed, is unaffected.
+
+Set it either here or as the environment variable
+``QUIXSTREAMS_STATE_TTL_ROLLBACK=1``; the lever is on when either is
+set, and the partition logs at open which of the two turned it on.
+Prefer this option in Quix Cloud, where a deployment environment
+variable that is not declared in the app's ``app.yaml`` is silently
+dropped on redeploy — a lever that can vanish between runs is not a
+lever you can reason about afterwards. Intended as a temporary measure:
+clear it once the store is in the mode you want.
+Mutually exclusive with ``ttl_force_flip`` (setting both raises).
+Default - ``False`` (off).
+- `ttl_force_flip`: operational REPAIR lever, the inverse of
+``ttl_rollback``: it forces a store into TTL mode and records the flip,
+    then lets recovery finish any leftover migration.
+
+    Use it when a store holds TTL-stamped values but has lost the on-disk
+    evidence the automatic open-time repair needs to recognise them — for
+    example after the state directory was rebuilt, or after a rollback that
+    removed the TTL flag while leaving the values themselves stamped. The
+    symptom is a crash loop in which every read of a stamped value fails in
+    the value deserializer, and the raised ``StateMigrationError`` names
+    this lever. Read the error before setting it: it is a manual assertion
+    that the values in the store REALLY are TTL stamps, and on a genuinely
+    legacy store it would make every read strip eight bytes of real data.
+
+    Set it either here or as the environment variable
+    ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1``, with the same precedence and
+    open-time logging as ``ttl_rollback``. It is a no-op on a store that is
+    already in TTL mode, so it is safe to leave set for one restart and then
+    clear — which is how it is meant to be used.
+    Mutually exclusive with ``ttl_rollback`` (setting both raises).
+    Default - ``False`` (off).
 
 Please see `rocksdict.Options` for a complete description of other options.
 
@@ -11681,7 +11843,7 @@ Please see `rocksdict.Options` for a complete description of other options.
 def to_options() -> rocksdict.Options
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/options.py#L69)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/options.py#L295)
 
 Convert parameters to `rocksdict.Options`
 
@@ -11770,9 +11932,34 @@ See ``dev-planning/state-ttl/architecture.md`` for the design.
 def is_sentinel(stamp: int) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L67)
 
 Return ``True`` if ``stamp`` is the never-expires sentinel.
+
+<a id="quixstreams.state.rocksdb.ttl_codec.clamp_additive_expiry"></a>
+
+#### clamp\_additive\_expiry
+
+```python
+def clamp_additive_expiry(expiry_ms: int) -> int
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L72)
+
+Clamp an *additive* legacy-backfill / recovery-completion expiry
+(``enable_time + ttl``) to :data:`SENTINEL_NEVER` when it would land
+``>= _MAX_PLAUSIBLE_STAMP_MS`` and therefore be refused by the read-side
+strict validator (``_safe_decode_stamp``) on every subsequent read.
+
+The per-write ``_compute_stamp`` path *rejects* an implausible stamp — there
+it is a caller error. The backfill / completion paths instead derive the
+expiry additively from an operator-supplied ``legacy_records_ttl`` (or the
+batch-implicit ttl) plus the enable-time high-water, so an individually
+plausible ttl can still sum past the readable bound. Rejecting there would
+strand the entire migration (and every legacy record with it); instead the
+record is kept never-expiring — still readable, and never mass-deleted,
+honoring the no-state-reset guarantee. Callers emit a WARN when the clamp
+fires. Returns ``expiry_ms`` unchanged when it is already below the bound.
 
 <a id="quixstreams.state.rocksdb.ttl_codec.encode_ttl_value"></a>
 
@@ -11782,7 +11969,7 @@ Return ``True`` if ``stamp`` is the never-expires sentinel.
 def encode_ttl_value(expires_at_ms: int, value: bytes) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L114)
 
 Prefix a serialized main-CF value with its 8-byte big-endian expiry stamp.
 
@@ -11791,6 +11978,10 @@ Prefix a serialized main-CF value with its 8-byte big-endian expiry stamp.
 - `expires_at_ms`: absolute event-time expiry in milliseconds, or
 :data:`SENTINEL_NEVER` for entries that should never expire.
 - `value`: already-serialized value bytes.
+
+**Raises**:
+
+- `ValueError`: if ``expires_at_ms`` is outside ``[0, 2**64-1]``.
 
 **Returns**:
 
@@ -11804,7 +11995,7 @@ stamped blob suitable for writing to the main CF.
 def decode_ttl_value(blob: bytes) -> tuple[int, bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L128)
 
 Strip the 8-byte big-endian expiry stamp from a TTL main-CF blob.
 
@@ -11829,7 +12020,7 @@ Strip the 8-byte big-endian expiry stamp from a TTL main-CF blob.
 def encode_index_key(expires_at_ms: int, user_key: bytes) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L86)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L147)
 
 Build a sortable index-CF key: ``expires_at_be || user_key``.
 
@@ -11845,6 +12036,10 @@ index entirely.
 - `user_key`: serialized user key (already prefix-encoded by the
 transaction layer).
 
+**Raises**:
+
+- `ValueError`: if ``expires_at_ms`` is outside ``[0, 2**64-1]``.
+
 **Returns**:
 
 index-CF key bytes.
@@ -11857,7 +12052,7 @@ index-CF key bytes.
 def decode_index_key(blob: bytes) -> tuple[int, bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L104)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/ttl_codec.py#L167)
 
 Inverse of :func:`encode_index_key`.
 
@@ -11885,7 +12080,7 @@ Inverse of :func:`encode_index_key`.
 class RocksDBStorePartition(StorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L309)
 
 A base class to access state in RocksDB.
 
@@ -11917,7 +12112,7 @@ it will retry according to `open_max_retries` and `open_retry_backoff` options.
 def high_water_ms() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L136)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L1074)
 
 Highest record event-time observed by any transaction on this
 partition since the process started, or ``None`` for cold start.
@@ -11931,9 +12126,53 @@ partition since the process started, or ``None`` for cold start.
 def max_evictions_per_flush() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L144)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L1082)
 
 Cap on per-flush sweep evictions.
+
+<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.legacy_records_ttl"></a>
+
+#### RocksDBStorePartition.legacy\_records\_ttl
+
+```python
+@property
+def legacy_records_ttl() -> Optional[timedelta]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L1087)
+
+Opt-in TTL applied to pre-existing un-stamped records when TTL is
+enabled on a populated legacy store. ``None`` = reject on populated
+store (default); a positive ``timedelta`` = backfill in place.
+
+<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.legacy_backfill_chunk_size"></a>
+
+#### RocksDBStorePartition.legacy\_backfill\_chunk\_size
+
+```python
+@property
+def legacy_backfill_chunk_size() -> int
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L1096)
+
+Number of records re-stamped per write-batch during the backfill.
+
+<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.ttl_changelog_tombstones"></a>
+
+#### RocksDBStorePartition.ttl\_changelog\_tombstones
+
+```python
+@property
+def ttl_changelog_tombstones() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L1101)
+
+Whether TTL evictions are produced to the changelog as tombstones
+(default ``True``) or kept local-only (``False`` — the pre-change sweep).
+Consulted by the transaction layer at prepare-time to decide the sweep
+path (see :meth:`sweep_expired_into_cache`).
 
 <a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.advance_high_water"></a>
 
@@ -11943,11 +12182,194 @@ Cap on per-flush sweep evictions.
 def advance_high_water(timestamp: Optional[int]) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L148)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L1110)
 
 Advance the partition's high-water mark monotonically. Called by the
 transaction layer on every TTL-aware ``set`` / ``get`` that carries a
 timestamp. Late-arriving timestamps never roll the high-water back.
+
+<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.complete_recovery"></a>
+
+#### RocksDBStorePartition.complete\_recovery
+
+```python
+def complete_recovery() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L1456)
+
+Recovery-finalize hook. Called once by the recovery manager
+after this partition has replayed its changelog up to the high-watermark
+and before it is handed to live processing.
+
+Completes an **interrupted legacy-TTL migration**. During replay a MIXED
+changelog (some ``__ttl_stamped__``-header records + some header-absent
+legacy records) flips the partition into TTL mode on the first stamped
+record (so ``_recovery_saw_stamped`` is True) and lands the leftover
+legacy records verbatim while censusing their keys into
+``__ttl_backfill_pending__``. Those leftovers are otherwise stranded as
+never-expiring forever (the live ``ttl=`` write sees an already-flipped
+partition and the backfill gate short-circuits).
+
+Trigger:
+
+- if there is no this-branch evidence at all (no header-true record
+  replayed AND the store was not already flipped on disk at open) →
+  BRANCH B, the cold classification. A census that is 100% TTL stamps
+  under :func:`_stamp_evidence_for` and covers the whole default CF is
+  provisionally ADOPTED (values verbatim, index rebuilt from their own
+  stamps, backup + sweep guard) — including a census whose every stamp
+  has already expired. A census holding bare 8-byte values, or one that
+  covers only part of the default CF, is quarantined; anything less than
+  100% stamped is genuine legacy and its orphan census is discarded, so
+  the live first-``ttl=``-write backfill owns that store. Adoption must
+  NOT be left to that backfill: it wraps whole values, and wrapping an
+  already-stamped one double-stamps it.
+- if the pending CF is empty AND no live backfill is durably marked in
+  flight (``__ttl_backfill_in_progress__`` absent) → all-stamped /
+  fully-migrated; nothing to complete beyond recording the done-marker.
+  With that marker still armed the empty census proves nothing (a crash in
+  the first backfill chunk's produce→commit window censuses nothing at
+  all), so the done-marker is NOT latched — see the guard on that branch.
+- else (stamped seen AND pending non-empty) → incomplete migration;
+  **auto-finish** (revised from the removed reject):
+  chunk-backfill exactly the pending keys, stamping each with a uniform
+  ``expires_at_ms``, writing the ``__ttl_index__`` entry, producing a
+  header-bearing stamped record to the changelog, and deleting the key
+  from the pending CF as the chunk commits (the delete IS the durable
+  progress cursor). The uniform expiry is:
+    - ``legacy_records_ttl`` set → ``max(self._recovery_now_ms +
+      _ttl_to_ms(legacy_records_ttl), survivor_evidence)``: the LATER of
+      the two fully-formed EXPIRIES — the configured
+      wallclock-at-rebuild window, and the surviving cohort's own latest
+      expiry (``_recovery_max_survivor_expiry_ms``, else
+      ``_max_index_stamp_ms()``). The cohort term is already an expiry,
+      so it is compared, never used as a base to add the ttl to. This
+      enforces cohort uniformity: the sweep and the read filter judge the
+      leftovers on ``_high_water_ms`` — event time, which replay never
+      advances — so a wallclock-only expiry lets an event-ahead store
+      sweep them while their stamped cohort-mates live on;
+    - ``legacy_records_ttl`` absent → the survivor-derived expiry
+      ``self._recovery_max_survivor_expiry_ms`` (a future stamp shared
+      with the leftovers' backfill cohort), or ``SENTINEL_NEVER`` +
+      a WARN in the degenerate all-expired case (no surviving future
+      stamp). This replaces the removed config-absent reject — a rebuilt
+      node cannot know the original flip ttl (it lived in a LOCAL_ONLY_CF
+      never on the changelog), so it derives a safe finite value from the
+      replayed cohort instead of erroring.
+
+Un-gated by the live flip flag (the partition is already flipped). Idempotent
+and convergent across interrupts: an interrupted run leaves the still-pending
+keys in the CF; the next cold restore rebuilds pending from the (now-more-
+stamped) changelog and resumes over exactly the remainder.
+
+<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.corroborate_adoption"></a>
+
+#### RocksDBStorePartition.corroborate\_adoption
+
+```python
+def corroborate_adoption() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L2823)
+
+Adoption corroboration: a live ``state.set(..., ttl=...)`` write (non-sentinel)
+confirms a PROVISIONAL cold-heuristic adoption is genuine. Called from the
+transaction's :meth:`prepare` after :meth:`_maybe_flip_or_reject` and BEFORE
+``super().prepare()`` (the changelog-commit barrier). One-time per partition:
+
+1. produce the durable migration-done marker (changelog-first,
+   confirm-or-raise) so any FUTURE cold rebuild is deterministic via the
+   done-marker index-rebuild path;
+2. clear ``__ttl_adopt_pending__`` and set ``_adopt_provisional = False`` —
+   the sweep re-enables and reclaims now-past adopted records (the
+   corroborating flush's own sweep runs right after this hook).
+
+**The backup drop is DEFERRED.** The irreversible
+``__ttl_adopt_backup__`` drop is NOT done here; it runs from
+:meth:`finalize_corroboration_teardown`, which the transaction calls ONLY
+after ``super().prepare()`` succeeds. If ``super().prepare()`` fails (e.g. a
+changelog producer error) the transaction is FAILED and the backup CF is
+left intact, so a subsequent rollback is still possible. A crash that
+interrupts the teardown is reconciled at the next open by
+:meth:`_finish_interrupted_corroboration` (the durable done-marker proves
+corroboration succeeded).
+
+<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.finalize_corroboration_teardown"></a>
+
+#### RocksDBStorePartition.finalize\_corroboration\_teardown
+
+```python
+def finalize_corroboration_teardown() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L2862)
+
+Deferred, post-commit-barrier teardown of a corroboration.
+
+Drops the reversible ``__ttl_adopt_backup__`` CF. The transaction invokes
+this ONLY after ``super().prepare()`` has succeeded, so an aborted prepare
+never destroys the backup and rollback stays possible until corroboration
+actually reaches the commit barrier. Idempotent: the open-time reconciliation
+(:meth:`_finish_interrupted_corroboration`) repeats the drop if a crash
+interrupts this step.
+
+<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.has_incomplete_ttl_migration"></a>
+
+#### RocksDBStorePartition.has\_incomplete\_ttl\_migration
+
+```python
+def has_incomplete_ttl_migration() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L3696)
+
+Whether a durably-recorded legacy-TTL migration is flipped-but-unfinished
+and must be completed by :meth:`complete_recovery`. Consulted by
+``RecoveryPartition.needs_recovery_check`` so an
+offset-caught-up restart (``highwater-1 == offset``) still runs the
+completion pass instead of stranding the leftover legacy records.
+
+True iff ALL of:
+
+- the partition is flipped into TTL mode (``uses_ttl_stamps`` loaded True
+  at open, or set True there by :meth:`_repair_unflagged_stamped_store` --
+  the cheap gate that no-ops the 99% legacy path). The repair path matters:
+  flipping an unflagged store at open is what makes this probe answer True
+  and so forces the recovery pass that completes its migration with the
+  data partitions paused;
+- no durable "migration done" marker exists (else the migration is done);
+- AND any completion track still has work:
+  - the ``__ttl_backfill_in_progress__`` metadata marker is set: a live
+    :meth:`backfill_legacy_records` armed it BEFORE its first chunk's
+    produce and never cleared it. A crash inside that FIRST chunk's
+    produce→commit window leaves BOTH CF-based tracks empty — the ledger
+    only becomes non-empty once a chunk commits locally, and the
+    never-produced leftovers never replay and so never enter the census —
+    while the replayed chunk still flips the store store-wide. Without
+    this marker that strand is invisible to every completion track; OR
+  - the ``__ttl_backfill_pending__`` census holds ≥1 leftover key (the
+    recovery-completion / MIXED-changelog track); OR
+  - the ``__ttl_backfill_stamped__`` ledger holds ≥1 key: an
+    interrupted *live* backfill that flipped via changelog replay but
+    never wrote its done-marker. Its leftovers live below the replayed
+    offset range (never censused), so the pending census can be empty
+    while the migration is genuinely unfinished — the ledger's presence
+    is what forces the offset-caught-up second restart to run the resume
+    (:meth:`_resume_interrupted_live_backfill`).
+
+Ordered cheapest-first with short-circuits: a legacy store returns on the
+first check with no CF scans; the in-progress marker (a single metadata
+point-get) is probed before either CF scan, then pending, then the ledger
+(any one satisfies the OR).
+
+Read-only end to end: every sub-probe treats an absent bookkeeping CF
+(``__ttl_system__`` / ``__ttl_backfill_pending__`` /
+``__ttl_backfill_stamped__``) as its empty/False answer without creating
+it, so probing a store with no migration activity leaves it
+byte-identical (CF existence is a classification signal elsewhere). The
+marker probe reads ``__metadata__``, which every opened store already has
+and whose existence is not a classification signal.
 
 <a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.write"></a>
 
@@ -11959,7 +12381,7 @@ def write(cache: PartitionTransactionCache,
           batch: Optional[WriteBatch] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L252)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4138)
 
 Write data to RocksDB.
 
@@ -11986,35 +12408,14 @@ attribute check.
 def main_cf_has_user_data() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L342)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4266)
 
 Return True if the default column family already contains at least one
 entry. Used by the transaction layer at flush time to decide between
-the empty-store flip path and the populated-store rejection path.
+the empty-store flip path and the populated-store auto-backfill path.
 
 ``seek_to_first`` on the default CF runs once per partition lifetime
 (only on the flush that flips), so its cost is irrelevant.
-
-<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.estimated_main_cf_key_count"></a>
-
-#### RocksDBStorePartition.estimated\_main\_cf\_key\_count
-
-```python
-def estimated_main_cf_key_count(cap: int = 10_000) -> int
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L353)
-
-Best-effort count of the keys in the default CF, used in the
-rejection error message to give the operator a rough scale of the
-state they are about to wipe.
-
-rocksdict does not expose RocksDB's ``GetEstimatedNumKeys``, so we
-iterate up to ``cap`` keys; "saturated" means ">= cap". This runs
-once per partition lifetime (only on the rejection path), so the
-cost is irrelevant. Returns 0 only if the iteration fails for a
-reason other than emptiness — the operator-visible contract
-documents 0 as "unknown but non-zero".
 
 <a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.flip_into_ttl_mode"></a>
 
@@ -12024,7 +12425,7 @@ documents 0 as "unknown but non-zero".
 def flip_into_ttl_mode(batch: WriteBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L377)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4277)
 
 Atomically flip this partition into TTL mode.
 
@@ -12044,23 +12445,107 @@ After this call:
 - The ``__ttl_format_version__`` marker is on disk; future opens
   take the TTL-aware branch in ``__init__``.
 
-<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.reject_ttl_on_populated_store"></a>
+<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.backfill_legacy_records"></a>
 
-#### RocksDBStorePartition.reject\_ttl\_on\_populated\_store
+#### RocksDBStorePartition.backfill\_legacy\_records
 
 ```python
-def reject_ttl_on_populated_store() -> "IncompatibleStateStoreError"
+def backfill_legacy_records(expires_at_ms: int,
+                            changelog_producer: Optional[ChangelogProducer],
+                            processed_offsets: Optional[dict[str, int]],
+                            staged_default_keys: set[bytes],
+                            chunk_size: int,
+                            skip_already_stamped: bool = True) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L408)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4308)
 
-Build (and log) the structured ERROR raised when a TTL write lands on
-a partition that has existing un-stamped data. The caller is expected
-to ``raise`` the returned exception; emitting the log line here keeps
-the message format in one place.
+Provably-complete backfill: census the full default-CF key list FIRST,
 
-Spec §6.4.1 — silent TTL drop is the worst possible failure mode for
-the dedup workload this feature exists for, so we halt loudly.
+then chunk over that
+frozen list, point-getting each value fresh and re-stamping it with a
+uniform ``expires_at_ms`` expiry.
+
+**Peak memory.** Peak transient memory is
+**O(census key count)** — the full sorted ``key_list`` is materialized up
+front (~80 B/key), which is exactly what ``_CENSUS_SPILL_WARN_THRESHOLD``
+guards. Only the *values* are chunk-bounded: each chunk point-gets and
+holds one ``chunk_size`` batch of values at a time, persisting and
+producing it before reading the next. (An earlier docstring incorrectly
+claimed peak memory ≈ one chunk; the key list dominates.)
+
+Called by the transaction layer from ``prepare()`` when a TTL write is
+detected on a partition whose default CF is **populated** *and*
+``legacy_records_ttl`` is set (the backfill branch of
+``_maybe_flip_or_reject``). The companion empty-store flip path
+(:meth:`flip_into_ttl_mode`) handles the empty-CF case.
+
+**Why census-then-chunk (no iterate-while-write).** The earlier design
+held a single live forward iterator over the default CF *while* writing
+re-stamped values back into that same CF. At real scale (200k+ keys,
+SST flushes/compactions triggered mid-iteration) that read-while-write
+pattern can skip or duplicate keys — and a single skipped key flips a
+populated store into TTL mode with an un-stamped value, which the read
+path then mis-strips → corruption (the live incident). Instead we freeze
+the set of keys to stamp up front via a single ``keys()`` scan and drive
+the write loop from that frozen Python list, point-getting each value
+with ``default_cf.get(key)``. The read driver is independent of the CF's
+live structure, so every census key is visited **exactly once**.
+
+**Stamped-key ledger resume (crash-safe against interleaved writes).**
+This **supersedes** the original integer-cursor-over-a-re-sorted-list
+resume, which double-wrapped/skipped keys when a legacy
+write landed between a crash and the resume (the sorted census shifted
+under a stale integer index). Instead, each chunk records the
+keys it stamped in the local-only ``__ttl_backfill_stamped__`` ledger CF,
+PUT in the **same WriteBatch** as the stamped values so ledger and data
+commit atomically. The census then excludes both ``staged_default_keys``
+and every ledger member. **Invariant:** on any (re-)run the census is
+exactly ``{keys on disk} − {staged} − {already stamped}``, which is
+insensitive to population changes across the crash gap — a fresh legacy
+key written during the gap is simply a not-yet-stamped census key and
+gets stamped; an already-stamped key is a ledger member and is excluded,
+so it is never re-read and never re-wrapped (no double-wrap). No integer
+index into a re-sorted list is ever consulted for resume.
+
+**In-progress marker (first-chunk crash window).** The ledger above only
+becomes non-empty once a chunk COMMITS LOCALLY, but this method is
+changelog-first (produce + flush-confirm, THEN commit). A crash inside the
+FIRST chunk's produce→commit window therefore leaves that chunk durable on
+the changelog with an empty ledger, an empty pending census (the leftovers
+were never produced, so they never replay and never get censused) and a
+still-legacy store — and the next warm restart replays the chunk, flips
+the store STORE-WIDE, and finds nothing to complete. To keep that window
+detectable, the durable local-only ``__ttl_backfill_in_progress__`` marker
+is armed in its OWN commit BEFORE the chunk loop and cleared after the
+last chunk commits. While it is set,
+
+**Arguments**:
+
+- `expires_at_ms`: uniform absolute event-time expiry to stamp on
+every pre-existing record (``high_water + legacy_records_ttl``).
+- `changelog_producer`: the partition's changelog producer, or
+``None`` when changelog topics are disabled (chunks still persist
+locally; production is skipped).
+- `processed_offsets`: accepted for call-signature compatibility but
+deliberately NOT encoded into the changelog headers — migration
+re-stamps are always-apply records (see the header build below), so
+they carry no processed offsets, unlike the base ``_prepare`` path.
+Retained because callers still pass their triggering offset.
+- `staged_default_keys`: serialized default-CF keys present in the
+current transaction's update cache (genuine in-batch user writes).
+They are skipped here and re-stamped with their own true pending
+stamp by ``_restamp_default_cf_cache_for_flip``.
+- `skip_already_stamped`: leave values that are ALREADY TTL stamps
+byte-identical (index + ledger only, no re-wrap, no produce) instead
+of stamping them a second time. Default True; only the ledger-driven
+resume passes False (see above).
+
+**Returns**:
+
+count of pre-existing records re-stamped on this run (already-
+stamped values, ledger members, staged, and deleted-since-census keys
+are not counted).
 
 <a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.get"></a>
 
@@ -12071,7 +12556,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[bytes, Literal[Marker.UNDEFINED]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L443)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4759)
 
 Get a key from RocksDB.
 
@@ -12095,7 +12580,7 @@ def iter_items(lower_bound: bytes,
                cf_name: str = "default") -> Iterator[tuple[bytes, bytes]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L460)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4776)
 
 Iterate over key-value pairs within a specified range in a column family.
 
@@ -12120,7 +12605,7 @@ An iterator yielding (key, value) tuples.
 def exists(key: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L517)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4833)
 
 Check if a key is present in the DB.
 
@@ -12141,7 +12626,7 @@ Check if a key is present in the DB.
 def get_changelog_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L528)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4844)
 
 Get offset that the changelog is up-to-date with.
 
@@ -12157,7 +12642,7 @@ offset or `None` if there's no processed offset yet
 def write_changelog_offset(offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L540)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4856)
 
 Write a new changelog offset to the db.
 
@@ -12176,7 +12661,7 @@ the actual data.
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L553)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4869)
 
 Close the underlying RocksDB
 
@@ -12189,7 +12674,7 @@ Close the underlying RocksDB
 def path() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L607)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4923)
 
 Absolute path to RocksDB database folder
 
@@ -12206,7 +12691,7 @@ file path
 def destroy(cls, path: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L615)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4931)
 
 Delete underlying RocksDB database
 
@@ -12224,7 +12709,7 @@ The database must be closed first.
 def get_column_family_handle(cf_name: str) -> ColumnFamily
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L625)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4941)
 
 Get a column family handle to pass to it WriteBatch.
 
@@ -12247,7 +12732,7 @@ instance of `rocksdict.ColumnFamily`
 def get_or_create_column_family(cf_name: str) -> Rdict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L640)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L4956)
 
 Get a column family instance.
 
@@ -12260,6 +12745,46 @@ This method will cache the CF instance to avoid creating them repeatedly.
 **Returns**:
 
 instance of `rocksdict.Rdict` for the given column family
+
+<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.sweep_expired_into_cache"></a>
+
+#### RocksDBStorePartition.sweep\_expired\_into\_cache
+
+```python
+def sweep_expired_into_cache(cache: PartitionTransactionCache,
+                             staged_default_keys: set[bytes],
+                             staged_ttl_index_keys: set[bytes]) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L5130)
+
+Prepare-time sweep (the changelog-tombstone ON path).
+
+Identical eviction logic to :meth:`_run_sweep`, but stages its deletes
+into the transaction ``cache`` instead of a ``WriteBatch``, and takes the
+``staged_*`` guard sets from the caller (derived from the same cache) so
+the `1129` same-flush protections are preserved byte-for-byte:
+
+- a main-CF eviction → ``cache.delete(user_key, cf_name="default")``,
+  which the base ``_prepare`` turns into a changelog tombstone
+  (``value=None`` + ``__ttl_stamped__`` header) AND ``write()`` applies as
+  a local delete — the exact route a user ``state.delete()`` takes, so the
+  changelog physically shrinks under compaction in step with the store;
+- index-CF GC → ``cache.delete(index_key, cf_name=TTL_INDEX_CF_NAME)``,
+  which is LOCAL-ONLY (``__ttl_index__`` ∈ ``LOCAL_ONLY_CFS``, so
+  ``_prepare`` skips it) and applied only by ``write()``.
+
+Runs in ``prepare()`` AFTER ``_maybe_flip_or_reject`` (so the runtime flip
++ freshly-stamped cache writes are visible) and BEFORE ``super().prepare()``
+(so tombstones ride the same changelog batch as the user writes). It reads
+committed disk state (``main_cf.get`` / disk index iterator) exactly as the
+write-time sweep did — this tx has committed nothing yet — so the eviction
+decisions are byte-identical; only the delete sink changes.
+
+``prefix=b""`` is passed for every ``cache.delete``: the cache stores
+deletes in a flat, prefix-independent set and only uses ``prefix`` to pop a
+pending update — but the guards below guarantee a staged key is never
+evicted, so that pop is always a no-op.
 
 <a id="quixstreams.state.rocksdb.metadata"></a>
 
@@ -12283,7 +12808,7 @@ instance of `rocksdict.Rdict` for the given column family
 class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L159)
 
 Default RocksDB transaction.
 
@@ -12310,7 +12835,7 @@ stamp / index machinery — those stores have their own retention model.
 def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L405)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L935)
 
 Persist the counter, run the flush-time TTL detection / flip-or-reject
 
@@ -12599,7 +13124,7 @@ decide whether the next retry backoff would cross the deadline.
 class MemoryStore(Store)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/store.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/store.py#L15)
 
 In-memory state store.
 
@@ -12614,13 +13139,17 @@ Requires a full state recovery for each partition on assignment.
 
 ```python
 def __init__(
-    name: str,
-    stream_id: Optional[str],
-    changelog_producer_factory: Optional[ChangelogProducerFactory] = None
-) -> None
+        name: str,
+        stream_id: Optional[str],
+        changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
+        legacy_records_ttl: Optional[timedelta] = None,
+        ttl_changelog_tombstones: bool = True,
+        max_evictions_per_flush: int = _DEFAULT_MAX_EVICTIONS_PER_FLUSH,
+        ttl_rollback: bool = False,
+        ttl_force_flip: bool = False) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/store.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/store.py#L25)
 
 **Arguments**:
 
@@ -12628,6 +13157,25 @@ def __init__(
 - `stream_id`: a topic name for this store
 - `changelog_producer_factory`: a ChangelogProducerFactory instance
 if using changelogs topics.
+- `legacy_records_ttl`: uniform expiry for leftover legacy records
+completed during a MIXED-changelog recovery (parity with
+``RocksDBOptions.legacy_records_ttl``). Forwarded to each
+``MemoryStorePartition``.
+- `ttl_changelog_tombstones`: whether TTL evictions are produced to the
+changelog as tombstones (parity with
+``RocksDBOptions.ttl_changelog_tombstones``).
+- `max_evictions_per_flush`: cap on TTL-driven evictions per flush
+(parity with ``RocksDBOptions.max_evictions_per_flush``).
+- `ttl_rollback`: operational rollback lever, the in-code surface of
+``QUIXSTREAMS_STATE_TTL_ROLLBACK=1`` (parity with
+``RocksDBOptions.ttl_rollback``). Forwarded to each
+``MemoryStorePartition``, where it suppresses the cold provisional
+v3.24.0 adopt on replay.
+- `ttl_force_flip`: operational force-flip lever, the in-code surface
+of ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1`` (parity with
+``RocksDBOptions.ttl_force_flip``). Accepted for configuration
+parity only -- it has no effect on this backend, which persists no
+flip flag to repair. Mutually exclusive with ``ttl_rollback``.
 
 <a id="quixstreams.state.memory.partition"></a>
 
@@ -12641,7 +13189,7 @@ if using changelogs topics.
 class MemoryStorePartition(StorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L100)
 
 Class to access in-memory state.
 
@@ -12654,6 +13202,37 @@ Responsibilities:
     workflows that switch between MemoryStore and RocksDBStore see
     identical semantics.
 
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.legacy_records_ttl"></a>
+
+#### MemoryStorePartition.legacy\_records\_ttl
+
+```python
+@property
+def legacy_records_ttl() -> Optional[timedelta]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L318)
+
+Optional uniform expiry for leftover legacy records completed during a
+MIXED-changelog recovery. Mirrors
+``RocksDBStorePartition.legacy_records_ttl``. ``None`` = auto-finish at
+the survivor-derived default.
+
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.ttl_changelog_tombstones"></a>
+
+#### MemoryStorePartition.ttl\_changelog\_tombstones
+
+```python
+@property
+def ttl_changelog_tombstones() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L328)
+
+Whether TTL evictions are produced to the changelog as tombstones
+(default ``True``) or kept local-only (``False``). Parity with
+``RocksDBStorePartition.ttl_changelog_tombstones``.
+
 <a id="quixstreams.state.memory.partition.MemoryStorePartition.write"></a>
 
 #### MemoryStorePartition.write
@@ -12664,7 +13243,7 @@ def write(cache: PartitionTransactionCache,
           changelog_offset: Optional[int]) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L143)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L389)
 
 Write data to the state
 
@@ -12672,6 +13251,76 @@ Write data to the state
 
 - `cache`: The partition update cache
 - `changelog_offset`: The changelog message offset of the data.
+
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.has_incomplete_ttl_migration"></a>
+
+#### MemoryStorePartition.has\_incomplete\_ttl\_migration
+
+```python
+def has_incomplete_ttl_migration() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L447)
+
+Memory mirror of ``RocksDBStorePartition.has_incomplete_ttl_migration``.
+Always ``False``: the memory backend has no persistent on-disk
+flip flag or durable pending census — every open re-recovers from the
+changelog via a FULL replay (its stored offset is always ``None`` →
+``OFFSET_BEGINNING``), so the offset-caught-up crash window that this
+detects on RocksDB cannot arise. A MIXED changelog is therefore always
+completed by the normal replay-driven :meth:`complete_recovery` path.
+
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.complete_recovery"></a>
+
+#### MemoryStorePartition.complete\_recovery
+
+```python
+def complete_recovery() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L647)
+
+Recovery-finalize hook, mirroring
+:meth:`RocksDBStorePartition.complete_recovery` at the semantics level
+(in-RAM dicts instead of CFs). There is **no reject branch** — the memory
+backend never had one, and the migration is auto-finished.
+
+Completes an interrupted legacy-TTL migration replayed from a MIXED
+changelog: leftover legacy records landed VERBATIM during replay and were
+censused into ``__ttl_backfill_pending__``; here they are stamped with a
+uniform expiry, indexed, produced as header-true stamped records (so a
+subsequent restore sees an all-stamped changelog and never re-enters
+completion), and drained from the census.
+
+- NOT ``_recovery_saw_stamped`` → all-legacy replay: discard the orphan
+  pending census and no-op (hygiene parity).
+- pending empty → all-stamped / fully migrated: no-op.
+- else (MIXED) → stamp exactly the pending leftovers with:
+    - ``legacy_records_ttl`` set → ``max(wallclock_now +
+      legacy_records_ttl, survivor_evidence)`` (parity): the LATER of the
+      two fully-formed EXPIRIES, so the leftovers expire WITH their
+      stamped cohort rather than before it. The cohort term is already an
+      expiry and is compared, never used as a base for another ttl;
+    - absent → the survivor-derived expiry, or ``SENTINEL_NEVER``
+      (never-expire) + a WARN in the all-expired fallback.
+
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.corroborate_adoption"></a>
+
+#### MemoryStorePartition.corroborate\_adoption
+
+```python
+def corroborate_adoption() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L1514)
+
+Adoption corroboration (memory parity of
+``RocksDBStorePartition.corroborate_adoption``): a live ``ttl=`` write
+confirms a provisional cold-adoption. Produce the durable migration-done
+marker (changelog-first, confirm-or-raise), drop the provisional marker,
+and lift the sweep guard. One-time per partition. Unlike the RocksDB
+backend there is no value backup to discard — the memory backend never
+keeps one (rollback is replay-suppression, not an in-lifetime restore).
 
 <a id="quixstreams.state.memory.partition.MemoryStorePartition.get_changelog_offset"></a>
 
@@ -12681,7 +13330,7 @@ Write data to the state
 def get_changelog_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L255)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L1532)
 
 Get offset that the changelog is up-to-date with.
 
@@ -12697,7 +13346,7 @@ offset or `None` if there's no processed offset yet
 def write_changelog_offset(offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L262)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L1539)
 
 Write a new changelog offset to the db.
 
@@ -12718,7 +13367,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[bytes, Literal[Marker.UNDEFINED]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L274)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L1551)
 
 Get a key from the store
 
@@ -12740,7 +13389,7 @@ a value if the key is present in the store. Otherwise, `default`
 def exists(key: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L287)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L1564)
 
 Check if a key is present in the store.
 
@@ -12753,6 +13402,35 @@ Check if a key is present in the store.
 
 `True` if the key is present, `False` otherwise.
 
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.sweep_expired_into_cache"></a>
+
+#### MemoryStorePartition.sweep\_expired\_into\_cache
+
+```python
+def sweep_expired_into_cache(cache: PartitionTransactionCache,
+                             staged_default_keys: set[bytes],
+                             staged_ttl_index_keys: set[bytes]) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L1708)
+
+Prepare-time sweep on the ON path (parity with
+``RocksDBStorePartition.sweep_expired_into_cache``).
+
+Reads committed in-RAM state (``self._state``) and stages its deletes into
+the transaction ``cache``: a main-CF eviction →
+``cache.delete(user_key, cf_name="default")`` (base ``_prepare`` produces a
+changelog tombstone AND ``write()`` applies the local delete); index-CF GC
+→ ``cache.delete(index_key, cf_name=TTL_INDEX_CF_NAME)`` (local-only).
+
+Unlike the OFF-path :meth:`_run_sweep` — which runs in ``write()`` AFTER the
+cache is applied to ``self._state`` and so sees fresh writes — this scan
+runs at prepare-time against COMMITTED state, so it takes the ``staged_*``
+guard sets from the caller to preserve the `1129` same-flush protections
+(never evict / GC a key this transaction just wrote). ``prefix=b""`` is
+safe for every delete because staged keys are never handed to
+``cache.delete``.
+
 <a id="quixstreams.state.memory.partition.MemoryPartitionTransaction"></a>
 
 ### MemoryPartitionTransaction
@@ -12761,7 +13439,7 @@ Check if a key is present in the store.
 class MemoryPartitionTransaction(PartitionTransaction[bytes, Any])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L382)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L1811)
 
 TTL-aware transaction for the in-memory store.
 
@@ -12778,7 +13456,7 @@ straight to the parent's transaction cache.
 def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L547)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L2126)
 
 Run flush-time TTL detection / flip-or-reject before delegating to
 the parent's changelog production. See
@@ -12800,7 +13478,7 @@ the parent's changelog production. See
 class RecoveryPartition()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L40)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L64)
 
 A changelog topic partition mapped to a respective `StorePartition` with helper
 methods to determine its current recovery status.
@@ -12816,7 +13494,7 @@ Since `StorePartition`s do recovery directly, it also handles recovery transacti
 def offset() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L86)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L116)
 
 Get the changelog offset from the underlying `StorePartition`.
 
@@ -12833,7 +13511,7 @@ changelog offset (int)
 def needs_recovery_check() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L105)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L135)
 
 Determine whether to attempt recovery for underlying `StorePartition`.
 
@@ -12848,7 +13526,7 @@ This does NOT mean that anything actually requires recovering.
 def has_invalid_offset() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L116)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L158)
 
 Determine if the current changelog offset stored in state is invalid.
 
@@ -12860,7 +13538,7 @@ Determine if the current changelog offset stored in state is invalid.
 def increment_invalid_offset_count() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L133)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L175)
 
 Increment the counter for consecutive invalid offset attempts.
 Returns the new count.
@@ -12873,7 +13551,7 @@ Returns the new count.
 def reset_invalid_offset_count()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L141)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L183)
 
 Reset the invalid offset counter when a valid position is obtained.
 
@@ -12886,7 +13564,7 @@ Reset the invalid offset counter when a valid position is obtained.
 def invalid_offset_count() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L149)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L191)
 
 Get the number of consecutive invalid offset attempts.
 
@@ -12899,7 +13577,7 @@ Get the number of consecutive invalid offset attempts.
 def last_valid_position_time() -> Optional[float]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L156)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L198)
 
 Get the time when a valid position was last obtained.
 
@@ -12912,7 +13590,7 @@ def recover_from_changelog_message(
         changelog_message: SuccessfulConfluentKafkaMessageProto)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L162)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L204)
 
 Recover the StorePartition using a message read from its respective changelog.
 
@@ -12929,6 +13607,24 @@ messages and improves the state consistency guarantees.
 
 - `changelog_message`: An instance of `confluent_kafka.Message`
 
+<a id="quixstreams.state.recovery.RecoveryPartition.complete_recovery"></a>
+
+#### RecoveryPartition.complete\_recovery
+
+```python
+def complete_recovery()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L283)
+
+Finalize recovery for the underlying `StorePartition`.
+
+Called once by the recovery manager after this partition has reached its
+changelog high-watermark and before it is unassigned / handed to live
+processing. Delegates to ``StorePartition.complete_recovery`` (a no-op on
+the base class; both the RocksDB and memory backends override it to
+complete an interrupted legacy-TTL migration).
+
 <a id="quixstreams.state.recovery.RecoveryPartition.set_recovery_consume_position"></a>
 
 #### RecoveryPartition.set\_recovery\_consume\_position
@@ -12937,7 +13633,7 @@ messages and improves the state consistency guarantees.
 def set_recovery_consume_position(offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L222)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L295)
 
 Update the recovery partition with the consumer's position (whenever
 
@@ -12957,7 +13653,7 @@ It is possible that it may be set more than once.
 class ChangelogProducerFactory()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L254)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L327)
 
 Generates ChangelogProducers, which produce changelog messages to a StorePartition.
 
@@ -12966,15 +13662,21 @@ Generates ChangelogProducers, which produce changelog messages to a StorePartiti
 #### ChangelogProducerFactory.\_\_init\_\_
 
 ```python
-def __init__(changelog_name: str, producer: InternalProducer)
+def __init__(changelog_name: str,
+             producer: InternalProducer,
+             migration_producer: Optional[InternalProducer] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L259)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L332)
 
 **Arguments**:
 
 - `changelog_name`: changelog topic name
 - `producer`: a InternalProducer (not shared with `Application` instance)
+- `migration_producer`: an optional dedicated NON-transactional
+InternalProducer for legacy-TTL migration / backfill records only.
+Supplied only when the app runs
+exactly-once — see :class:`ChangelogProducer`. ``None`` otherwise.
 
 **Returns**:
 
@@ -12988,7 +13690,7 @@ a ChangelogWriter instance
 def get_partition_producer(partition_num) -> "ChangelogProducer"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L269)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L352)
 
 Generate a ChangelogProducer for producing to a specific partition number
 
@@ -13006,7 +13708,7 @@ Generate a ChangelogProducer for producing to a specific partition number
 class ChangelogProducer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L283)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L367)
 
 Generated for a `StorePartition` to produce state changes to its respective
 kafka changelog partition.
@@ -13016,16 +13718,34 @@ kafka changelog partition.
 #### ChangelogProducer.\_\_init\_\_
 
 ```python
-def __init__(changelog_name: str, partition: int, producer: InternalProducer)
+def __init__(changelog_name: str,
+             partition: int,
+             producer: InternalProducer,
+             migration_producer: Optional[InternalProducer] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L289)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L373)
 
 **Arguments**:
 
 - `changelog_name`: A changelog topic name
 - `partition`: source topic partition number
 - `producer`: an InternalProducer (not shared with `Application` instance)
+- `migration_producer`: an optional dedicated NON-transactional
+InternalProducer used ONLY for legacy-TTL migration / backfill records.
+It is set only when the app runs
+exactly-once: the main ``producer`` is then transactional, so a
+``flush()`` does NOT make records durable until the checkpoint
+transaction commits — but the migration paths write local RocksDB
+state immediately after producing each chunk and rely on the
+changelog-first invariant (produced+flushed == durable BEFORE the
+local write). Routing migration records through a non-transactional
+producer restores ``flush()==durable`` so a crash before the
+transaction commits cannot leave local stamps + resume ledger ahead of
+an aborted (never-republished) changelog record. When ``None``
+(non-exactly-once) migration records fall back to the main producer,
+which is already non-transactional. NORMAL changelog production is
+never routed here.
 
 <a id="quixstreams.state.recovery.ChangelogProducer.produce"></a>
 
@@ -13034,10 +13754,12 @@ def __init__(changelog_name: str, partition: int, producer: InternalProducer)
 ```python
 def produce(key: bytes,
             value: Optional[bytes] = None,
-            headers: Optional[Headers] = None)
+            headers: Optional[Headers] = None,
+            migration: bool = False,
+            on_delivery: Optional[Callable] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L312)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L421)
 
 Produce a message to a changelog topic partition.
 
@@ -13046,6 +13768,15 @@ Produce a message to a changelog topic partition.
 - `key`: message key (same as state key, including prefixes)
 - `value`: message value (same as state value)
 - `headers`: message headers (includes column family info)
+- `migration`: route through the dedicated non-transactional migration
+producer when configured. Set only by the legacy-TTL
+backfill / recovery-completion / done-marker sites; normal changelog
+production leaves it ``False``.
+- `on_delivery`: optional per-record delivery callback, chained with the
+producer's internal callback (never replacing it). The legacy-TTL
+migration sites pass a per-partition ack counter so the backfill flush
+stall detector measures THIS partition's outstanding records rather
+than the shared producer's global queue depth.
 
 <a id="quixstreams.state.recovery.RecoveryManager"></a>
 
@@ -13055,7 +13786,7 @@ Produce a message to a changelog topic partition.
 class RecoveryManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L337)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L458)
 
 Manages all consumer-related aspects of recovery, including:
     - assigning/revoking, pausing/resuming topic partitions (especially changelogs)
@@ -13075,7 +13806,7 @@ Recovery is attempted from the `Application` after any new partition assignment.
 def partitions() -> Dict[int, Dict[str, RecoveryPartition]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L370)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L494)
 
 Returns a mapping of assigned RecoveryPartitions in the following format:
 {<partition>: {<store_name>: <RecoveryPartition>}}
@@ -13089,7 +13820,7 @@ Returns a mapping of assigned RecoveryPartitions in the following format:
 def has_assignments() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L378)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L502)
 
 Whether the Application has assigned RecoveryPartitions
 
@@ -13106,7 +13837,7 @@ has assignments, as bool
 def recovering() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L387)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L511)
 
 Whether the Application is currently recovering
 
@@ -13123,7 +13854,7 @@ def register_changelog(stream_id: Optional[str], store_name: str,
                        topic_config: TopicConfig) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L395)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L519)
 
 Register a changelog Topic with the TopicManager.
 
@@ -13141,7 +13872,7 @@ Register a changelog Topic with the TopicManager.
 def do_recovery()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L414)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L538)
 
 If there are any active RecoveryPartitions, do a recovery procedure.
 
@@ -13156,7 +13887,7 @@ def resume_reassigned_data_partitions(
         partitions: List[ConfluentPartition]) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L497)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L641)
 
 Resume data partitions still paused from a previous recovery generation.
 
@@ -13167,8 +13898,38 @@ brings no stateful partition to this consumer (e.g. only stateless topics),
 in which case `assign_partition` never runs and the partition would stay
 paused indefinitely. Application calls this on every assignment to cover it.
 
-Skipped while a recovery is pending/active (`has_assignments`): those pauses
-are intentional and get resumed by `do_recovery`/`assign_partition`.
+Skipped while a recovery is pending (`has_assignments`) or running
+(`self._running`): those pauses are intentional and get resumed by
+`do_recovery`/`assign_partition`. The `self._running` half matters when a
+rebalance revokes the last recovering partition, which empties
+`_recovery_partitions` while the loop is still on its way out.
+
+<a id="quixstreams.state.recovery.RecoveryManager.pause_assigned_data_partitions"></a>
+
+#### RecoveryManager.pause\_assigned\_data\_partitions
+
+```python
+def pause_assigned_data_partitions(
+        partitions: List[ConfluentPartition]) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L664)
+
+Pause the data partitions of a fresh assignment while recovery is running.
+
+`Consumer.assign()` resets the paused state of every partition in the new
+assignment, so a rebalance landing mid-recovery (this runs from the
+assignment callback fired inside `_recovery_loop`'s `poll`) un-pauses the
+data partitions recovery paused. Any of them would then feed source-topic
+messages into the recovery loop. Partitions with no stateful store never
+reach `assign_partition`, so that is not enough to re-pause them.
+
+No-op unless a recovery loop is running; `do_recovery` resumes every
+non-changelog partition of the assignment when the loop finishes.
+
+**Arguments**:
+
+- `partitions`: the topic partitions just assigned to the consumer
 
 <a id="quixstreams.state.recovery.RecoveryManager.assign_partition"></a>
 
@@ -13180,11 +13941,18 @@ def assign_partition(topic: Optional[str], partition: int,
                      store_partitions: Dict[str, StorePartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L550)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L729)
 
 Assigns `StorePartition`s (as `RecoveryPartition`s) ONLY IF recovery required.
 
 Pauses active consumer partitions as needed.
+
+When a rebalance calls this while a recovery is already running, the newly
+added changelog partitions are also seeked+resumed so the running recovery
+loop can consume them, every assigned data partition is (re-)paused
+regardless of whether this call produced a `RecoveryPartition`, and data
+partitions paused for recovery stay paused (`do_recovery` resumes them
+once the loop finishes).
 
 <a id="quixstreams.state.recovery.RecoveryManager.revoke_partition"></a>
 
@@ -13194,7 +13962,7 @@ Pauses active consumer partitions as needed.
 def revoke_partition(partition_num: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L636)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L856)
 
 revoke ALL StorePartitions (across all Stores) for a given partition number
 
@@ -13995,13 +14763,87 @@ class IncompatibleStateStoreError(StateError)
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/exceptions.py#L31)
 
-Raised when an existing populated state store cannot be transitioned into
-TTL mode (i.e. the user's pipeline started writing ``state.set(..., ttl=...)``
-on a partition that already contains un-stamped legacy entries).
+Raised when a TTL-aware state store cannot be opened or advanced safely.
 
-Operator action: stop the application, delete the affected state directory,
-restart — recovery will rebuild the partition from the changelog topic
-with TTL enabled from the first replayed record.
+(The original "reject a populated legacy store on the first ``ttl=`` write"
+use was removed when it was replaced with an automatic legacy
+backfill; two distinct situations remain.)
+
+1. **Format-version incompatibility** (``_enforce_format_version``). A store
+   already flipped into TTL mode must carry a format-version marker at least
+   as new as the running version. If the marker is missing, or was written
+   by an older on-disk layout, the store cannot be read safely. Operator
+   action: stop the application, delete the affected state directory, and
+   restart — recovery rebuilds the partition from the changelog topic.
+
+2. **Framework-invariant guard** (``_legacy_expiry_from_ttl_ms``). A
+   should-be-unreachable condition at flip time — no event-time high-water,
+   or no recorded ``ttl=`` duration for the triggering batch — that the
+   ``state.set(..., ttl=...)`` validation should already have prevented. It
+   signals a framework bug (not operator misconfiguration) and is raised
+   rather than inventing a wall-clock expiry.
+
+<a id="quixstreams.state.exceptions.StateMigrationError"></a>
+
+### StateMigrationError
+
+```python
+class StateMigrationError(StateError)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/exceptions.py#L60)
+
+Raised when a store's legacy-vs-TTL mode cannot be reconciled with what its
+``default`` column family actually holds, or when the two TTL operational
+levers contradict each other. Both situations need an operator decision --
+the framework refuses to guess, because either guess can destroy data.
+
+1. **TTL-stamped values on a legacy-flagged store** (the read path,
+   ``RocksDBPartitionTransaction._get_bytes``). The partition opened with TTL
+   bookkeeping on disk but WITHOUT the ``__ttl_enabled__`` flag and nothing
+   flipped it -- either the open-time repair
+   (``RocksDBStorePartition._repair_unflagged_stamped_store``) declined on an
+   interrupted legacy-TTL migration, or the rollback lever reverted a v3.24.0
+   adoption (``RocksDBStorePartition._rollback_provisional_adopt``), which
+   deliberately leaves the adopted originals byte-identical and therefore
+   still stamped. A ``default``-CF read then returned a value whose 8-byte
+   prefix decodes as a plausible, still-live expiry stamp. Returning it raw
+   hands the stamp to the value deserializer -- the crash loop this guard
+   replaces, in which every restart dies with a
+   ``StateSerializationError`` from the JSON decoder on ``8B||json``. Silently
+   stripping eight bytes is worse: a genuine legacy value whose first eight
+   bytes happen to decode would be corrupted with no way back. Operator
+   action: set ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1`` and restart to flip
+   the store into TTL mode (or, if ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1`` is
+   what suppressed the automatic repair, unset it), or rebuild the
+   partition's state from its changelog.
+
+2. **Contradictory operational levers**
+   (``RocksDBStorePartition.__init__``).
+   ``QUIXSTREAMS_STATE_TTL_ROLLBACK=1`` ("revert this store to legacy") and
+   ``QUIXSTREAMS_STATE_TTL_FORCE_FLIP=1`` ("force this store into TTL
+   mode") are mutually exclusive; set together they would fight each other
+   on every open, so the partition refuses to open at all.
+
+<a id="quixstreams.state.exceptions.ChangelogFlushError"></a>
+
+### ChangelogFlushError
+
+```python
+class ChangelogFlushError(StateError)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/exceptions.py#L113)
+
+Raised by the legacy-TTL backfill / recovery-completion paths when a chunk's
+stamped changelog records could not be confirmed delivered within the bounded
+flush timeout.
+
+These paths MUST get each chunk durably onto the changelog before committing
+the matching stamps to the local store; proceeding with undelivered records
+would leave the local DB ahead of the changelog, so a peer rebuilding from the
+changelog would diverge. Failing loudly here (rather than writing the local
+batch) preserves that ordering invariant.
 
 <a id="quixstreams.state.manager"></a>
 
@@ -14033,7 +14875,7 @@ StateStoreManager is responsible for:
 def stores() -> Dict[Optional[str], Dict[str, Store]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L88)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L93)
 
 Map of registered state stores
 
@@ -14050,7 +14892,7 @@ dict in format {stream_id: {store_name: store}}
 def recovery_required() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L96)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L101)
 
 Whether recovery needs to be done.
 
@@ -14063,7 +14905,7 @@ Whether recovery needs to be done.
 def using_changelogs() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L105)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L110)
 
 Whether the StateStoreManager is using changelog topics
 
@@ -14079,7 +14921,7 @@ using changelogs, as bool
 def do_recovery() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L122)
 
 Perform a state recovery, if necessary.
 
@@ -14091,7 +14933,7 @@ Perform a state recovery, if necessary.
 def stop_recovery() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L126)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L131)
 
 Stop recovery (called during app shutdown).
 
@@ -14104,7 +14946,7 @@ def get_store(stream_id: str,
               store_name: str = DEFAULT_STATE_STORE_NAME) -> Store
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L140)
 
 Get a store for given name and stream id
 
@@ -14128,7 +14970,7 @@ def register_store(stream_id: Optional[str],
                    changelog_config: Optional[TopicConfig] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L173)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L179)
 
 Register a state store to be managed by StateStoreManager.
 
@@ -14155,7 +14997,7 @@ def register_windowed_store(
         changelog_config: Optional[TopicConfig] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L252)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L269)
 
 Register a windowed state store to be managed by StateStoreManager.
 
@@ -14178,7 +15020,7 @@ Each window store can be registered only once for each stream_id.
 def clear_stores() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L292)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L309)
 
 Delete all state stores managed by StateStoreManager.
 
@@ -14192,7 +15034,7 @@ def on_partition_assign(
         committed_offsets: dict[str, int]) -> Dict[str, StorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L309)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L326)
 
 Assign store partitions for each registered store for the given stream_id
 
@@ -14218,12 +15060,29 @@ def resume_reassigned_data_partitions(
         partitions: List[ConfluentPartition]) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L338)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L355)
 
 Resume data partitions still paused from a previous recovery generation.
 
 Delegates to the RecoveryManager; no-op when state recovery is not enabled.
 See `RecoveryManager.resume_reassigned_data_partitions`.
+
+<a id="quixstreams.state.manager.StateStoreManager.pause_assigned_data_partitions"></a>
+
+#### StateStoreManager.pause\_assigned\_data\_partitions
+
+```python
+def pause_assigned_data_partitions(
+        partitions: List[ConfluentPartition]) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L367)
+
+Pause the data partitions of a fresh assignment while recovery is running.
+
+Delegates to the RecoveryManager; no-op when state recovery is not enabled
+or no recovery loop is running.
+See `RecoveryManager.pause_assigned_data_partitions`.
 
 <a id="quixstreams.state.manager.StateStoreManager.on_partition_revoke"></a>
 
@@ -14233,7 +15092,7 @@ See `RecoveryManager.resume_reassigned_data_partitions`.
 def on_partition_revoke(stream_id: str, partition: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L350)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L380)
 
 Revoke store partitions for each registered store
 
@@ -14252,7 +15111,7 @@ for the given stream_id and partition number.
 def destroy_partition_state(stream_id: str, partition: int) -> list[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L368)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L398)
 
 Destroy persisted state for all stores of a stream partition.
 
@@ -14273,7 +15132,7 @@ names of stores whose persisted state was destroyed.
 def init() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L383)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L413)
 
 Initialize `StateStoreManager` and create a store directory
 
@@ -14286,9 +15145,10 @@ Initialize `StateStoreManager` and create a store directory
 def close() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L390)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L420)
 
-Close all registered stores
+Close all registered stores and flush the dedicated migration
+producer, if one was ever used.
 
 <a id="quixstreams.state.serialization"></a>
 
@@ -14641,8 +15501,11 @@ Check if a key is present in the store.
 
 ```python
 @abstractmethod
-def recover_from_changelog_message(key: bytes, value: Optional[bytes],
-                                   cf_name: str, offset: int)
+def recover_from_changelog_message(key: bytes,
+                                   value: Optional[bytes],
+                                   cf_name: str,
+                                   offset: int,
+                                   ttl_stamped: bool = False)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/partition.py#L97)
@@ -14655,6 +15518,55 @@ Updates state from a given changelog message.
 - `value`: changelog message value
 - `cf_name`: column family name
 - `offset`: changelog message offset
+- `ttl_stamped`: True when the changelog record carries the
+``__ttl_stamped__`` header — i.e. the value is a stamped
+default-CF record. Absent/False = legacy / un-stamped.
+
+<a id="quixstreams.state.base.partition.StorePartition.complete_recovery"></a>
+
+#### StorePartition.complete\_recovery
+
+```python
+def complete_recovery() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/partition.py#L117)
+
+Recovery-finalize hook, called once by the recovery manager after this
+partition has replayed every changelog message up to the high-watermark
+and before it is handed to live processing.
+
+The default is a no-op. The RocksDB and memory backends both override
+this to complete an interrupted legacy-TTL migration whose changelog
+replayed as MIXED (some ``__ttl_stamped__``-header records + some
+header-absent legacy records) — see
+``RocksDBStorePartition.complete_recovery`` and
+``MemoryStorePartition.complete_recovery``.
+
+<a id="quixstreams.state.base.partition.StorePartition.has_incomplete_ttl_migration"></a>
+
+#### StorePartition.has\_incomplete\_ttl\_migration
+
+```python
+def has_incomplete_ttl_migration() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/partition.py#L132)
+
+Whether this partition has a durably-recorded, not-yet-finished legacy-TTL
+migration that must be completed via :meth:`complete_recovery`.
+
+True iff the partition is persisted-flipped into TTL mode AND its
+``__ttl_backfill_pending__`` census still holds leftover legacy keys AND
+no durable "migration done" marker is present. The recovery layer consults
+this so a restart whose changelog offset is already caught up
+(``highwater-1 == offset``, so the normal "state behind" check is False)
+still runs the completion pass instead of stranding the leftovers.
+
+The default is ``False`` — only the RocksDB backend has the durable
+pending census + flip flag on disk that this detects. The memory backend
+re-recovers from the changelog on every open (full replay), so the
+offset-caught-up crash window does not apply to it.
 
 <a id="quixstreams.state.base.partition.StorePartition.begin"></a>
 
@@ -14665,7 +15577,7 @@ Updates state from a given changelog message.
 def begin() -> PartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/partition.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/partition.py#L152)
 
 Start a new `PartitionTransaction`
 
@@ -14683,7 +15595,7 @@ Using `PartitionTransaction` is a recommended way for accessing the data.
 class PartitionTransactionCache()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L57)
 
 A cache with the data updated in the current PartitionTransaction.
 It is used to read-your-own-writes before the transaction is committed to the Store.
@@ -14701,7 +15613,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[bytes, Marker]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L78)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L80)
 
 Get a value for the key.
 
@@ -14725,7 +15637,7 @@ If the key is not present in the cache, returns "UNDEFINED sentinel
 def set(key: bytes, value: bytes, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L108)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L110)
 
 Set a value for the key.
 
@@ -14743,7 +15655,7 @@ Set a value for the key.
 def delete(key: Any, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L121)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L123)
 
 Delete a key.
 
@@ -14760,7 +15672,7 @@ Delete a key.
 def is_empty() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L133)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L135)
 
 Return True if any changes have been made (updates or deletes), otherwise
 return False.
@@ -14773,7 +15685,7 @@ return False.
 def get_column_families() -> Set[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L140)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L142)
 
 Get all update column families.
 
@@ -14785,7 +15697,7 @@ Get all update column families.
 def get_updates(cf_name: str = "default") -> Dict[bytes, Dict[bytes, bytes]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L146)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L148)
 
 Get all updated keys (excluding deleted)
 
@@ -14802,7 +15714,7 @@ in the format "{<prefix>: {<key>: <value>}}".
 def get_deletes(cf_name: str = "default") -> Set[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L155)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L157)
 
 Get all deleted keys (excluding updated) as a set.
 
@@ -14814,7 +15726,7 @@ Get all deleted keys (excluding updated) as a set.
 class PartitionTransactionStatus(enum.Enum)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L162)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L164)
 
 <a id="quixstreams.state.base.transaction.PartitionTransactionStatus.STARTED"></a>
 
@@ -14848,7 +15760,7 @@ Transaction is failed, it cannot be used anymore
 def validate_transaction_status(*allowed: PartitionTransactionStatus)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L173)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L175)
 
 Check that the status of `RocksDBTransaction` is valid before calling a method
 
@@ -14860,7 +15772,7 @@ Check that the status of `RocksDBTransaction` is valid before calling a method
 class PartitionTransaction(ABC, Generic[K, V])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L197)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L199)
 
 A transaction class to perform simple key-value operations like
 "get", "set", "delete" and "exists" on a single storage partition.
@@ -14874,7 +15786,7 @@ A transaction class to perform simple key-value operations like
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L229)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L231)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -14893,7 +15805,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L239)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L241)
 
 Return `True` if transaction is successfully completed.
 
@@ -14912,7 +15824,7 @@ bool
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L249)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L251)
 
 Return `True` if transaction is prepared completed.
 
@@ -14931,7 +15843,7 @@ bool
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L259)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L261)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -14950,7 +15862,7 @@ def as_state(prefix: Any = DEFAULT_PREFIX,
              timestamp: Optional[int] = None) -> State[K, V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L286)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L288)
 
 Create an instance implementing the `State` protocol to be provided
 
@@ -14983,7 +15895,7 @@ def get(key: K,
         timestamp: Optional[int] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L336)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L338)
 
 Get a key from the store.
 
@@ -15016,7 +15928,7 @@ def get_bytes(key: K,
               timestamp: Optional[int] = None) -> Optional[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L386)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L388)
 
 Get a key from the store.
 
@@ -15049,7 +15961,7 @@ def set(key: K,
         ttl: Optional[timedelta] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L433)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L435)
 
 Set value for the key.
 
@@ -15079,7 +15991,7 @@ def set_bytes(key: K,
               ttl: Optional[timedelta] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L471)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L473)
 
 Set bytes value for the key.
 
@@ -15104,7 +16016,7 @@ implementation.
 def delete(key: K, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L532)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L534)
 
 Delete value for the key.
 
@@ -15128,7 +16040,7 @@ def exists(key: K,
            timestamp: Optional[int] = None) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L551)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L553)
 
 Check if the key exists in state.
 
@@ -15154,7 +16066,7 @@ True if key exists, False otherwise
 def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L580)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L582)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -15181,7 +16093,7 @@ to the changelog topic.
 def flush(changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L646)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L677)
 
 Flush the recent updates to the database.
 
@@ -15203,6 +16115,261 @@ optional.
 <a id="quixstreams.state.base"></a>
 
 ## quixstreams.state.base
+
+<a id="quixstreams.state.base.migration_flush"></a>
+
+## quixstreams.state.base.migration\_flush
+
+Shared migration delivery-confirm loop for the legacy-TTL migration produce
+sites, used by both state backends:
+
+- ``RocksDBStorePartition._flush_backfill_changelog`` — chunked on-disk path,
+  progress-sliced loop (``max_slices=10``).
+- ``MemoryStorePartition._confirm_migration_delivery_or_raise`` — single-shot
+  in-RAM path (``max_slices=1``).
+
+Both backends must enforce the same changelog-first invariant: a stamped
+chunk / marker has to be **confirmed delivered on the changelog BEFORE the
+local commit finalizes the migration locally**, or a crash would leave the
+local store ahead of the changelog and a peer rebuild would diverge. The two
+methods used to hand-mirror this logic, and the same accounting bugs had to be
+fixed twice (the memory side was missed first time round) — hence one shared
+implementation. The *decision* lives here; each caller maps the returned
+verdict onto its own error message wording, which is legitimately local
+(RocksDB embeds ``path=...``; memory embeds a caller-supplied context phrase).
+
+The accounting the decision consumes is **per produce phase**, not per
+partition: :class:`MigrationDeliveryPhase` (below) is constructed as a local by
+each phase function, hands its own bound ``on_delivery`` to every record that
+phase produces, and hands its own bound ``counters`` to this helper. A phase is
+therefore judged exclusively on the records it produced itself.
+
+The shared decision table, per flush slice:
+
+1. ``None`` producer -> ``CONFIRMED`` without touching the producer.
+2. ``flush(timeout=slice_timeout_s, migration=True)``; a non-``int`` return
+   (an unconfigured test double / a producer with no delivery accounting) ->
+   ``INDETERMINATE`` — do not block the local commit (the pre-existing "flush
+   and proceed" behavior).
+3. ``remaining == 0``: the SHARED producer's global send queue is fully
+   drained, so every delivery callback has been served and THIS PHASE's
+   records are each either acked or FAILED. A record that FAILED delivery is
+   ALSO removed from the queue (its callback fired with ``err != None``, which
+   never increments the acked counter) — so drained-but-unacked on a phase
+   that produced through the counter-tracked route means a failed delivery,
+   not a success (e.g. a sibling partition drained the global queue while this
+   phase's own record failed). Waiting is pointless (a failed delivery
+   never acks): ``DRAINED_UNACKED``. With ``produced == 0`` (counter-less
+   direct-call test doubles), the pre-existing "0 backlog -> ``CONFIRMED``"
+   is preserved unchanged.
+4. ``remaining > 0``: prefer THIS PHASE's own ``produced - acked`` when it
+   produced through the counter-tracked migration route — NOT ``flush()``'s
+   int return, which is the GLOBAL in-flight count across every
+   topic/partition on the shared migration producer; a sibling partition's
+   wedged records would otherwise hold that count static and falsely abort a
+   phase that has fully delivered its own records. Fall back to the int
+   return only when this phase produced nothing through the
+   counter-tracked route. ``outstanding <= 0`` -> ``CONFIRMED``.
+5. A full slice with zero progress (``outstanding >= prev``) ->
+   ``NO_PROGRESS`` — the timeout measures *lack of progress*, not total time,
+   so a large-but-progressing chunk keeps going while a wedged broker
+   surfaces after ~2 slices.
+6. ``max_slices`` exhausted -> ``SLICES_EXHAUSTED`` (runaway cap), so an
+   ever-shrinking trickle still terminates within the consumer's poll budget.
+
+``counters`` is a zero-argument callable returning ``(produced, acked)`` and
+is re-invoked on every slice, after each ``flush()``: the acked counter is
+mutated by delivery callbacks that ``flush()`` itself serves, so passing plain
+ints once would freeze the accounting mid-loop. In production it is always a
+bound :meth:`MigrationDeliveryPhase.counters`.
+
+**Structural invariant: ``acked <= produced``.** A phase's ``on_delivery`` is
+only ever handed to that phase's own ``produce()`` calls, and each of those
+calls is paired with exactly one ``record_produced()``, so no ack from any
+other phase (or any other partition) can be counted here. The ``<= 0``
+comparisons below are therefore retained as cheap *totality* over the int
+domain, not as a guard against a reachable state: a negative ``outstanding``
+returns ``CONFIRMED`` before ``prev`` is ever assigned, and ``DRAINED_UNACKED``
+is gated on ``produced > acked``, so the arithmetic stays sound even if a
+caller passes an arbitrary ``counters`` callable (test doubles do).
+
+<a id="quixstreams.state.base.migration_flush.MigrationDeliveryPhase"></a>
+
+### MigrationDeliveryPhase
+
+```python
+class MigrationDeliveryPhase()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/migration_flush.py#L91)
+
+Delivery accounting for ONE legacy-TTL migration produce phase.
+
+A "phase" is a single migration produce operation on one partition: a live
+populated-legacy backfill (all of its chunks), a recovery-completion
+re-stamp pass (all of its chunks), or one done-marker produce. Each phase
+function constructs **its own** instance as a local, passes
+:meth:`on_delivery` to every record it produces through the migration
+route, calls :meth:`record_produced` once per such produce, and passes
+:meth:`counters` to :func:`confirm_migration_delivery`. **One instance per
+phase — never shared between phases and never reused.**
+
+Why per phase and not per partition. A single shared ``(produced, acked)``
+pair on the partition credits a *late* ack from phase N to whichever phase
+is running when the callback is finally served — so a phase could be
+falsely CONFIRMED by a sibling phase's ack (skipping the changelog-first
+guarantee), or permanently wedged by a predecessor's unacked record (the
+swallowed empty-census done marker used to pin corroboration, and with it
+the TTL sweep, off for the life of the instance). Attributing the ack to
+the **producing** phase removes both directions structurally, with no
+counter reset to place and no per-site reachability argument to maintain.
+
+**The dead-phase object is the landing pad, not a leak.** The producer's
+callback queue keeps a finished phase's instance alive until it drops the
+callback. That is intended: the late ack of a failed-or-slow record from a
+finished phase must land *somewhere*, and landing on an otherwise
+unreferenced two-int object is exactly how it is made harmless. Do NOT
+"clean this up" by hoisting the instance onto the partition — that
+reintroduces the shared-counter bug this class exists to remove.
+
+<a id="quixstreams.state.base.migration_flush.MigrationDeliveryPhase.produced"></a>
+
+#### MigrationDeliveryPhase.produced
+
+```python
+@property
+def produced() -> int
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/migration_flush.py#L130)
+
+Records this phase produced through the migration route.
+
+<a id="quixstreams.state.base.migration_flush.MigrationDeliveryPhase.acked"></a>
+
+#### MigrationDeliveryPhase.acked
+
+```python
+@property
+def acked() -> int
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/migration_flush.py#L135)
+
+Records of this phase whose delivery was confirmed successful.
+
+<a id="quixstreams.state.base.migration_flush.MigrationDeliveryPhase.record_produced"></a>
+
+#### MigrationDeliveryPhase.record\_produced
+
+```python
+def record_produced() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/migration_flush.py#L139)
+
+Count one record produced through this phase's migration route. Call
+once immediately after each ``changelog_producer.produce(...,
+on_delivery=self.on_delivery)``.
+
+<a id="quixstreams.state.base.migration_flush.MigrationDeliveryPhase.on_delivery"></a>
+
+#### MigrationDeliveryPhase.on\_delivery
+
+```python
+def on_delivery(err: Optional[object], msg: Optional[object] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/migration_flush.py#L147)
+
+``on_delivery``-compatible chained delivery callback for this phase's
+migration produce calls. Counts a SUCCESSFUL delivery so
+:func:`confirm_migration_delivery` can measure THIS PHASE's own
+outstanding records rather than the shared producer's global queue
+depth. Delivery errors are surfaced by the producer's own internal
+callback (``InternalProducer._on_delivery`` latches them and
+``flush()`` re-raises) and by the stall detector (a wedged record
+simply never acks and trips the drained-but-unacked / no-progress
+abort), so only successful acks are counted here.
+
+<a id="quixstreams.state.base.migration_flush.MigrationDeliveryPhase.counters"></a>
+
+#### MigrationDeliveryPhase.counters
+
+```python
+def counters() -> tuple[int, int]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/migration_flush.py#L162)
+
+``(produced, acked)`` snapshot for
+:func:`confirm_migration_delivery`'s ``counters=`` argument. Passed as
+a **bound method** so the helper re-reads live values per flush slice.
+
+<a id="quixstreams.state.base.migration_flush.MigrationFlushVerdict"></a>
+
+### MigrationFlushVerdict
+
+```python
+class MigrationFlushVerdict(Enum)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/migration_flush.py#L171)
+
+Outcome classes of :func:`confirm_migration_delivery`.
+
+<a id="quixstreams.state.base.migration_flush.MigrationFlushOutcome"></a>
+
+### MigrationFlushOutcome
+
+```python
+@dataclass(frozen=True)
+class MigrationFlushOutcome()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/migration_flush.py#L189)
+
+Verdict plus the accounting the caller needs for its error message.
+
+<a id="quixstreams.state.base.migration_flush.confirm_migration_delivery"></a>
+
+#### confirm\_migration\_delivery
+
+```python
+def confirm_migration_delivery(
+    changelog_producer: Optional["ChangelogProducer"],
+    *,
+    counters: Callable[[], tuple[int, int]],
+    slice_timeout_s: float,
+    max_slices: int,
+    on_slice_progress: Optional[Callable[[int, int], None]] = None
+) -> MigrationFlushOutcome
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/migration_flush.py#L207)
+
+Run the bounded, progress-based migration flush loop and return a verdict.
+
+See the module docstring for the full decision table and its rationale.
+This function never converts a verdict into a raise — mapping a
+non-CONFIRMED verdict onto
+
+**Arguments**:
+
+- `changelog_producer`: the partition's changelog producer, or ``None``
+(no changelog configured -> ``CONFIRMED`` no-op).
+- `counters`: zero-argument callable returning the produce phase's
+``(produced, acked)`` migration-delivery counters — in production the
+bound :meth:`MigrationDeliveryPhase.counters` of the phase whose
+records are being confirmed. Re-invoked after every ``flush()`` slice —
+the acked counter is mutated by the delivery callbacks that ``flush()``
+serves.
+- `slice_timeout_s`: per-slice flush timeout in seconds.
+- `max_slices`: runaway cap on the number of flush slices (>= 1 on all
+production paths; honoured verbatim, including ``max_slices == 1``).
+- `on_slice_progress`: optional callback invoked once per *progressing*
+slice with ``(outstanding, slice_no)`` (1-based slice number), for
+per-slice debug logging.
 
 <a id="quixstreams.state.base.state"></a>
 
@@ -15792,6 +16959,24 @@ Polls the producer for events and calls `on_delivery` callbacks.
 - `timeout`: poll timeout seconds; Default: 0 (unlike others)
 > NOTE: -1 will hang indefinitely if there are no messages to acknowledge
 
+<a id="quixstreams.kafka.producer.Producer.instantiated"></a>
+
+#### Producer.instantiated
+
+```python
+@property
+def instantiated() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L225)
+
+Whether the underlying confluent producer has been created.
+
+It is created lazily on first use, so this stays ``False`` for a
+producer that never produced — callers can use it to skip teardown
+work (e.g. a shutdown ``flush()``) without spinning up a librdkafka
+handle just to flush nothing.
+
 <a id="quixstreams.kafka.producer.Producer.flush"></a>
 
 #### Producer.flush
@@ -15800,7 +16985,7 @@ Polls the producer for events and calls `on_delivery` callbacks.
 def flush(timeout: Optional[float] = None) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L247)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L259)
 
 Wait for all messages in the Producer queue to be delivered.
 
@@ -15821,7 +17006,7 @@ number of messages remaining to flush
 def purge()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L260)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L272)
 
 Purge messages currently handled by the producer instance.
 
@@ -15839,7 +17024,7 @@ why swallowing those errors is safe.
 def raise_if_broker_unavailable(timeout: float)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L347)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L359)
 
 Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
 
@@ -16686,7 +17871,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L457)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L471)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -16707,7 +17892,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L489)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L503)
 
 Create a topic definition.
 
@@ -16779,7 +17964,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L569)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L583)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -16827,7 +18012,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L625)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L639)
 
 Stop the internal poll loop and the message processing.
 
@@ -16850,7 +18035,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer(transactional: bool = False) -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L672)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L705)
 
 Create and return a pre-configured Producer instance.
 
@@ -16889,7 +18074,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L740)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L773)
 
 Create and return a pre-configured Consumer instance.
 
@@ -16940,7 +18125,7 @@ Default - True
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L789)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L822)
 
 Clear the state of the application.
 
@@ -16952,7 +18137,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L795)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L828)
 
 Add a source to the application.
 
@@ -16979,7 +18164,7 @@ def run(dataframe: Optional[StreamingDataFrame] = None,
         metadata: bool = False) -> list[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L829)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L862)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -17051,7 +18236,7 @@ Default - `False`.
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1344)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1384)
 
 Immutable object holding the application configuration
 
@@ -17072,7 +18257,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1382)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1422)
 
 Included to ignore reading/setting values from the environment
 
@@ -17084,7 +18269,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1395)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1435)
 
 Update the application config and return a copy
 
@@ -17097,7 +18282,7 @@ def resolve_transactional_id(transactional_id: Optional[str],
                              prefix: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1421)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1461)
 
 Utility function to resolve the transactional.id based
 on existing config and provided prefix.
