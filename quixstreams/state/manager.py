@@ -364,6 +364,19 @@ class StateStoreManager:
         if self._recovery_manager:
             self._recovery_manager.resume_reassigned_data_partitions(partitions)
 
+    def pause_assigned_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        """
+        Pause the data partitions of a fresh assignment while recovery is running.
+
+        Delegates to the RecoveryManager; no-op when state recovery is not enabled
+        or no recovery loop is running.
+        See `RecoveryManager.pause_assigned_data_partitions`.
+        """
+        if self._recovery_manager:
+            self._recovery_manager.pause_assigned_data_partitions(partitions)
+
     def on_partition_revoke(
         self,
         stream_id: str,
