@@ -61,19 +61,15 @@ Blob credentials are read automatically from the `Quix__BlobStorage__Connection_
 
 ### Parquet row groups
 
-Each file is written with row groups of about `row_group_mb` (default 32 MB) — the same
-target the lakehouse compaction uses. A reader needs roughly four storage range requests
-per row group, so many small groups make every query pay a round-trip storm on a
+Each file is written with at most `row_group_rows` rows per row group (default 1,000,000,
+the same default the lakehouse compaction uses). A reader needs roughly one storage range
+request per row group, so many small groups make every query pay a round-trip storm on a
 high-latency storage path, while one enormous group forfeits intra-file skipping and
-inflates reader memory. Parquet sizes groups in rows, so the sink converts the target using
-the table's density: it tracks the rows and compressed bytes of the files it has already
-written and uses `rows_per_MB × row_group_mb` rows per group for the next file (clamped to
-122,880–50,000,000 rows; 1,000,000 rows before the first file, which is also pyarrow's
-default). Files smaller than one group are, as always, a single group — splitting only
-matters for large flushes.
+inflates reader memory. A flush smaller than the limit is, as always, a single row group —
+only large flushes are split.
 
 ```python
-sink = QuixTSDataLakeSink(..., row_group_mb=32)
+sink = QuixTSDataLakeSink(..., row_group_rows=1_000_000)
 ```
 
 ## Per-Key Silence Detection

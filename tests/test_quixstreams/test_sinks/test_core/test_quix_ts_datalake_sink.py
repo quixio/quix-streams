@@ -175,49 +175,19 @@ def sample_batch():
 
 
 class TestRowGroupSizing:
-    """Row groups are sized in rows from the table's observed density so each
-    comes to about ``row_group_mb`` (default 32 MB) — the lakehouse compaction
-    rule. A reader pays ~4 range requests per row group, so this bounds the
-    request count of every query over sink-written files."""
+    """Row groups are capped at a fixed, configurable row count (default
+    1,000,000 — the lakehouse compaction's default). A reader pays about one
+    range request per row group, so this bounds the request count of every
+    query over sink-written files; small flushes stay a single group."""
 
-    R = QuixTSDataLakeSink
+    def test_default_matches_lakehouse_compaction(self, sink_factory):
+        assert sink_factory()._row_group_rows == 1_000_000
+        assert QuixTSDataLakeSink.ROW_GROUP_ROWS_DEFAULT == 1_000_000
+        assert sink_factory(row_group_rows=250_000)._row_group_rows == 250_000
 
-    def test_default_target_matches_lakehouse_compaction(self, sink_factory):
-        assert sink_factory()._row_group_mb == 32.0
-        assert sink_factory(row_group_mb=8)._row_group_mb == 8.0
-
-    def test_rejects_non_positive_target(self, sink_factory):
+    def test_rejects_non_positive(self, sink_factory):
         with pytest.raises(ValueError):
-            sink_factory(row_group_mb=0)
-
-    def test_rows_per_group_from_density(self):
-        mb = 1024 * 1024
-        # 50k rows/MB (CAN-shaped data) x 32 MB -> 1.6M rows per group
-        assert self.R._row_group_rows(1_000_000, 20 * mb, 32) == 1_600_000
-        # wide rows: 1k rows/MB -> 32k rows, clamped up to the minimum group
-        assert self.R._row_group_rows(1_000, 1 * mb, 32) == self.R.ROW_GROUP_ROWS_MIN
-        # extremely dense rows: clamped to the maximum
-        assert self.R._row_group_rows(10_000_000, 1 * mb, 32) == self.R.ROW_GROUP_ROWS_MAX
-        # target scales linearly
-        assert self.R._row_group_rows(1_000_000, 20 * mb, 8) == 400_000
-
-    def test_fallback_when_density_unknown(self):
-        assert self.R._row_group_rows(0, 0, 32) == self.R.ROW_GROUP_ROWS_FALLBACK
-        assert self.R._row_group_rows(None, None, 32) == self.R.ROW_GROUP_ROWS_FALLBACK
-        assert self.R._row_group_rows(100, 100, 0) == self.R.ROW_GROUP_ROWS_FALLBACK
-        assert self.R._row_group_rows("x", 5, 32) == self.R.ROW_GROUP_ROWS_FALLBACK
-
-    def test_first_file_uses_fallback_then_learns_density(self, sink_factory, mock_blob_client):
-        sink = sink_factory(row_group_mb=32)
-        assert sink._row_group_size() == self.R.ROW_GROUP_ROWS_FALLBACK
-        df = pd.DataFrame({"ts_ms": range(1_000), "v": [1.5] * 1_000, "__key": ["k"] * 1_000})
-        sink._write_parquet_to_storage(df, "p/data_1.parquet", [], ())
-        parquet_bytes = mock_blob_client.put_object_async.call_args.args[1]
-        assert sink._written_rows == 1_000
-        assert sink._written_bytes == len(parquet_bytes) > 0
-        # density now known -> a sizing derived from it (not the fallback)
-        expected = self.R._row_group_rows(1_000, len(parquet_bytes), 32)
-        assert sink._row_group_size() == expected != self.R.ROW_GROUP_ROWS_FALLBACK
+            sink_factory(row_group_rows=0)
 
     def test_small_files_are_one_row_group(self, sink_factory, sample_batch, mock_blob_client):
         sink = sink_factory()
@@ -225,49 +195,23 @@ class TestRowGroupSizing:
         parquet_bytes = mock_blob_client.put_object_async.call_args.args[1]
         assert pq.ParquetFile(io.BytesIO(parquet_bytes)).num_row_groups == 1
 
-    def test_large_file_is_split_into_target_sized_groups(self, sink_factory, mock_blob_client):
-        """Learn density from one file, then a big flush is cut into groups of
-        the derived row count — verified on the serialised parquet bytes."""
-        import numpy as np
+    def test_large_flush_is_split_at_the_configured_rows(self, sink_factory, mock_blob_client):
+        sink = sink_factory(row_group_rows=100_000)
+        n = 250_000
+        df = pd.DataFrame({"ts_ms": range(n), "v": [1.5] * n, "__key": ["k"] * n})
+        sink._write_parquet_to_storage(df, "p/data.parquet", [], ())
+        meta = pq.ParquetFile(io.BytesIO(mock_blob_client.put_object_async.call_args.args[1])).metadata
+        assert meta.num_row_groups == 3
+        assert [meta.row_group(i).num_rows for i in range(3)] == [100_000, 100_000, 50_000]
+        pending = sink._pending_futures[-1]
+        assert pending["row_count"] == n  # the catalog entry is per FILE, unaffected by splitting
 
-        rng = np.random.default_rng(0)
-        sink = sink_factory(row_group_mb=1)  # 1 MB groups keep the test data small
-
-        def frame(n):
-            return pd.DataFrame({
-                "ts_ms": np.arange(n, dtype=np.int64),
-                "v": rng.random(n),  # incompressible -> stable density
-                "__key": ["k"] * n,
-            })
-
-        sink._write_parquet_to_storage(frame(50_000), "p/data_1.parquet", [], ())
-        first_bytes = mock_blob_client.put_object_async.call_args.args[1]
-        assert pq.ParquetFile(io.BytesIO(first_bytes)).num_row_groups == 1  # fallback 1M rows
-
-        rows_per_group = sink._row_group_size()
-        assert rows_per_group == self.R._row_group_rows(50_000, len(first_bytes), 1)
-        n = 3 * rows_per_group + 10  # -> exactly 4 groups
-        sink._write_parquet_to_storage(frame(n), "p/data_2.parquet", [], ())
-        second_bytes = mock_blob_client.put_object_async.call_args.args[1]
-        meta = pq.ParquetFile(io.BytesIO(second_bytes)).metadata
-        assert meta.num_row_groups == 4
-        assert [meta.row_group(i).num_rows for i in range(4)] == [rows_per_group] * 3 + [10]
-        # and each full group is about the 1 MB target (random doubles ~ 8 B/row
-        # + int64 ts -> the byte target is what the row count was derived from)
-        rg0 = meta.row_group(0)
-        full_group_bytes = sum(rg0.column(c).total_compressed_size for c in range(rg0.num_columns))
-        assert 0.5 * 1024 * 1024 < full_group_bytes < 2 * 1024 * 1024, full_group_bytes
-
-    def test_row_count_reported_to_catalog_unchanged_by_splitting(self, sink_factory, mock_blob_client):
-        sink = sink_factory(row_group_mb=1)
-        sink._written_rows, sink._written_bytes = 1_000_000, 8 * 1024 * 1024  # pretend: 125k rows/MB
-        n = 300_000
+    def test_default_keeps_a_million_row_flush_in_one_group(self, sink_factory, mock_blob_client):
+        sink = sink_factory()
+        n = 1_000_000
         df = pd.DataFrame({"ts_ms": range(n), "__key": ["k"] * n})
         sink._write_parquet_to_storage(df, "p/data.parquet", [], ())
-        pending = sink._pending_futures[-1]
-        assert pending["row_count"] == n
-        assert pending["file_size"] == len(mock_blob_client.put_object_async.call_args.args[1])
-        assert pq.ParquetFile(io.BytesIO(mock_blob_client.put_object_async.call_args.args[1])).num_row_groups > 1
+        assert pq.ParquetFile(io.BytesIO(mock_blob_client.put_object_async.call_args.args[1])).num_row_groups == 1
 
 
 # =============================================================================

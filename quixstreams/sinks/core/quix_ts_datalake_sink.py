@@ -123,16 +123,13 @@ class QuixTSDataLakeSink(BatchingSink):
     :param namespace: Catalog namespace (default: "default")
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
     :param max_workers: Maximum number of parallel upload threads (default: 10)
-    :param row_group_mb: Target size in MB of each Parquet ROW GROUP in the
-        files this sink writes (default 32, the lakehouse compaction target).
-        A reader pays ~4 storage range requests per row group, so many small
-        groups make every query slow on a high-latency storage path, while
-        one huge group forfeits intra-file skipping and inflates reader memory.
-        Row groups are sized in rows: the sink learns the table's rows-per-MB
-        from the compressed bytes of the files it has already written and
-        uses ``rows_per_mb x row_group_mb`` rows per group for the next file
-        (clamped to [122,880; 50,000,000]; 1,000,000 rows before the first
-        file). Files smaller than the target are, as always, a single group.
+    :param row_group_rows: Maximum rows per Parquet ROW GROUP in the files this
+        sink writes (default 1,000,000, the same as the lakehouse compaction's
+        ``COMPACTION_ROW_GROUP_ROWS``). A reader pays about one storage range
+        request per row group, so many small groups make every query slow on a
+        high-latency storage path, while one huge group forfeits intra-file
+        skipping and inflates reader memory. A flush smaller than this is, as
+        always, a single row group.
     :param stats_columns: Optional list of column names to compute per-file
         min/max statistics ("zone maps") for. These are sent to the REST
         Catalog with each file and let the query layer skip files whose value
@@ -180,7 +177,7 @@ class QuixTSDataLakeSink(BatchingSink):
         auto_create_bucket: bool = True,
         max_workers: int = 10,
         stats_columns: Optional[List[str]] = None,
-        row_group_mb: Optional[float] = None,
+        row_group_rows: Optional[int] = None,
         stream_timeout_ms: Optional[int] = None,
         on_stream_timeout: Optional[Callable[[Any], None]] = None,
         silence_azure_http_logs: bool = True,
@@ -233,17 +230,14 @@ class QuixTSDataLakeSink(BatchingSink):
         # entry as ``column_stats`` and are consumed by the catalog's pruning.
         self._stats_columns = set(stats_columns) if stats_columns else None
 
-        # Parquet row-group sizing (see ROW_GROUP_* below): target MB per row
-        # group, and the running rows/bytes totals of everything this sink has
-        # serialised, from which the table's density (rows per MB) is derived.
-        if row_group_mb is not None and float(row_group_mb) <= 0:
-            raise ValueError("row_group_mb must be > 0")
-        self._row_group_mb = (
-            float(row_group_mb) if row_group_mb is not None
-            else float(self.ROW_GROUP_TARGET_MB_DEFAULT)
+        # Parquet row-group size: a fixed, configurable row count (no
+        # statistics-derived sizing — owner decision, keep it simple).
+        if row_group_rows is not None and int(row_group_rows) < 1:
+            raise ValueError("row_group_rows must be >= 1")
+        self._row_group_rows = (
+            int(row_group_rows) if row_group_rows is not None
+            else self.ROW_GROUP_ROWS_DEFAULT
         )
-        self._written_rows = 0
-        self._written_bytes = 0
 
         # Blob storage client and bucket name will be initialized in setup()
         self._blob_client: Optional[BlobStorageClient] = None
@@ -577,40 +571,16 @@ class QuixTSDataLakeSink(BatchingSink):
             }
         return stats
 
-    # ---- Parquet row-group sizing -------------------------------------------
+    # ---- Parquet row-group size ----------------------------------------------
     # Same rule as the lakehouse compaction/repartition rewrites: a reader needs
-    # ~4 storage range requests PER ROW GROUP (column chunks are coalesced within
-    # a group, never across), so a file cut into many small groups costs a
-    # round-trip storm on a high-latency storage path, while one enormous group
-    # forfeits intra-file skipping and inflates reader memory. Parquet writers
-    # size groups in ROWS, so we convert the MB target with the table's density:
-    # rows_per_mb (from the compressed bytes of files already written by this
-    # sink — same columns, same encodings) x row_group_mb rows per group.
-    # Before the first file the density is unknown -> ROW_GROUP_ROWS_FALLBACK,
-    # which is also pyarrow's own default (~1Mi rows), so behaviour is unchanged
-    # until there is something to learn from. Files smaller than one group are,
-    # as always, a single group; splitting only kicks in for large flushes.
-    ROW_GROUP_TARGET_MB_DEFAULT = 32
-    ROW_GROUP_ROWS_FALLBACK = 1_000_000  # density unknown (nothing written yet)
-    ROW_GROUP_ROWS_MIN = 122_880  # never smaller than DuckDB's default group
-    ROW_GROUP_ROWS_MAX = 50_000_000  # bounds the writer's in-memory buffer
-
-    @classmethod
-    def _row_group_rows(cls, total_rows: Any, total_bytes: Any, target_mb: Any) -> int:
-        """Rows per row group that come to about ``target_mb`` at the density
-        ``total_rows / total_bytes``; the fallback when either is unknown."""
-        try:
-            rows, size, target = float(total_rows or 0), float(total_bytes or 0), float(target_mb or 0)
-        except (TypeError, ValueError):
-            return cls.ROW_GROUP_ROWS_FALLBACK
-        if rows <= 0 or size <= 0 or target <= 0:
-            return cls.ROW_GROUP_ROWS_FALLBACK
-        rows_per_mb = rows / (size / (1024 * 1024))
-        return int(max(cls.ROW_GROUP_ROWS_MIN, min(cls.ROW_GROUP_ROWS_MAX, round(rows_per_mb * target))))
-
-    def _row_group_size(self) -> int:
-        """Row-group size (rows) for the next file, from what was written so far."""
-        return self._row_group_rows(self._written_rows, self._written_bytes, self._row_group_mb)
+    # about one storage range request PER ROW GROUP (column chunks are coalesced
+    # within a group, never across), so a file cut into many small groups costs
+    # a round-trip storm on a high-latency storage path, while one enormous
+    # group forfeits intra-file skipping and inflates reader memory. The size is
+    # a fixed row count (default 1,000,000 = the lakehouse's
+    # COMPACTION_ROW_GROUP_ROWS default and ~pyarrow's own default), so small
+    # flushes are a single group and only large flushes are split.
+    ROW_GROUP_ROWS_DEFAULT = 1_000_000
 
     def _write_parquet_to_storage(
         self,
@@ -630,20 +600,13 @@ class QuixTSDataLakeSink(BatchingSink):
         # add-files call (see _register_files_in_manifest).
         column_stats = self._compute_column_stats(table)
 
-        row_group_size = self._row_group_size()
         buf = pa.BufferOutputStream()
-        pq.write_table(table, buf, row_group_size=row_group_size)
+        pq.write_table(table, buf, row_group_size=self._row_group_rows)
         parquet_bytes = buf.getvalue().to_pybytes()
-        # Feed the density estimate for the next file (weighted by bytes, so
-        # large files dominate and the per-file footer overhead of tiny files
-        # does not skew it).
-        self._written_rows += table.num_rows
-        self._written_bytes += len(parquet_bytes)
-        if table.num_rows > row_group_size:
+        if table.num_rows > self._row_group_rows:
             logger.debug(
-                "Wrote %s with %d row groups of <= %d rows (target %.1f MB, %.0f rows/MB observed)",
-                storage_key, -(-table.num_rows // row_group_size), row_group_size, self._row_group_mb,
-                self._written_rows / max(self._written_bytes / (1024 * 1024), 1e-9),
+                "Wrote %s with %d row groups of <= %d rows",
+                storage_key, -(-table.num_rows // self._row_group_rows), self._row_group_rows,
             )
 
         # Submit async upload
