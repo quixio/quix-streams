@@ -51,6 +51,7 @@ class TimeWindow(Window):
         on_late: Optional[WindowOnLateCallback] = None,
         before_update: Optional[WindowBeforeUpdateCallback] = None,
         after_update: Optional[WindowAfterUpdateCallback] = None,
+        close_on_idle: bool = False,
     ):
         super().__init__(
             name=name,
@@ -63,8 +64,15 @@ class TimeWindow(Window):
         self._on_late = on_late
         self._before_update = before_update
         self._after_update = after_update
+        self._close_on_idle = close_on_idle
 
         self._closing_strategy = ClosingStrategy.KEY
+
+    @property
+    def close_on_idle(self) -> bool:
+        """Whether this window closes on wall-clock idle timeout, not only on
+        new messages. See `expire_idle`."""
+        return self._close_on_idle
 
     def final(
         self, closing_strategy: ClosingStrategyValues = "key"
@@ -96,6 +104,15 @@ class TimeWindow(Window):
               Default - `"key"`.
         """
         self._closing_strategy = ClosingStrategy.new(closing_strategy)
+        if (
+            self._close_on_idle
+            and self._closing_strategy != ClosingStrategy.PARTITION
+        ):
+            raise ValueError(
+                'close_on_idle=True requires closing_strategy="partition"; '
+                "idle (wall-clock) closing is not supported for the "
+                f'"{closing_strategy}" strategy.'
+            )
         return super().final()
 
     def current(
@@ -125,7 +142,11 @@ class TimeWindow(Window):
               If timestamps between keys are not ordered, it may increase the number of discarded late messages.
               Default - `"key"`.
         """
-
+        if self._close_on_idle:
+            raise ValueError(
+                "close_on_idle=True is only supported with final() windows; "
+                "current() already emits results on every update."
+            )
         self._closing_strategy = ClosingStrategy.new(closing_strategy)
         return super().current()
 
@@ -290,6 +311,31 @@ class TimeWindow(Window):
             delete=True,
         ):
             yield key, self._results(aggregated, collected, window_start, window_end)
+
+    def expire_idle(
+        self,
+        transaction: WindowedPartitionTransaction,
+        now_ms: int,
+    ) -> Iterable[WindowKeyResult]:
+        """
+        Close windows based on wall-clock time instead of event time, so that
+        windows on an idle stream (no new messages) still emit their results.
+
+        A window is closed once `now_ms` passes `window_end + grace_ms`, which
+        mirrors the normal event-time expiry but uses the real clock as the
+        driver. Only takes effect when `close_on_idle=True`; requires the
+        "partition" closing strategy.
+
+        :param transaction: the windowed partition transaction to expire from.
+        :param now_ms: current wall-clock time in milliseconds.
+        :return: an iterable of closed (key, window result) pairs.
+        """
+        if not self._close_on_idle:
+            return
+        max_expired_window_end = now_ms - self._grace_ms
+        yield from self.expire_by_partition(
+            transaction, max_expired_window_end, self.collect
+        )
 
     def expire_by_key(
         self,
