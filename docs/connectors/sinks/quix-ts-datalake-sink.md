@@ -161,6 +161,24 @@ sink = QuixTSDataLakeSink(
 )
 ```
 
+## Parquet Row Groups
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `row_group_rows` | `Optional[int]` | `1_000_000` | Maximum rows per Parquet row group in the files the sink writes. Must be at least 1. |
+
+Each file is written with at most `row_group_rows` rows per row group (the default matches the lakehouse compaction's row-group size). A reader needs roughly one storage range request per row group, so many small groups make every query pay a round-trip storm on a high-latency storage path, while one enormous group forfeits intra-file skipping and inflates reader memory. A flush smaller than the limit is, as always, a single row group — only large flushes are split.
+
+```python
+sink = QuixTSDataLakeSink(
+    s3_prefix="data-lake/time-series",
+    table_name="telemetry",
+    hive_columns=["year", "month", "day"],
+    timestamp_column="ts_ms",
+    row_group_rows=250_000,
+)
+```
+
 ## Per-Key Silence Detection
 
 The sink can detect when individual Kafka message keys go quiet and fire a callback for each one. The canonical use case is sensor drop-out detection: if `sensor-a` stops publishing while `sensor-b` continues, the callback fires only for `sensor-a`.
