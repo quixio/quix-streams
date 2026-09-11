@@ -162,6 +162,17 @@ class QuixTSDataLakeSink(BatchingSink):
         Callback must resolve (or propagate/re-raise) the Exception.
     """
 
+    # ---- Parquet row-group size ----------------------------------------------
+    # Same rule as the lakehouse compaction/repartition rewrites: a reader needs
+    # about one storage range request PER ROW GROUP (column chunks are coalesced
+    # within a group, never across), so a file cut into many small groups costs
+    # a round-trip storm on a high-latency storage path, while one enormous
+    # group forfeits intra-file skipping and inflates reader memory. The size is
+    # a fixed row count (default 1,000,000 = the lakehouse's
+    # COMPACTION_ROW_GROUP_ROWS default and ~pyarrow's own default), so small
+    # flushes are a single group and only large flushes are split.
+    ROW_GROUP_ROWS_DEFAULT = 1_000_000
+
     def __init__(
         self,
         s3_prefix: str,
@@ -230,12 +241,12 @@ class QuixTSDataLakeSink(BatchingSink):
         # entry as ``column_stats`` and are consumed by the catalog's pruning.
         self._stats_columns = set(stats_columns) if stats_columns else None
 
-        # Parquet row-group size: a fixed, configurable row count (no
-        # statistics-derived sizing — owner decision, keep it simple).
+        # Parquet row-group size: a fixed, configurable row count.
         if row_group_rows is not None and int(row_group_rows) < 1:
             raise ValueError("row_group_rows must be >= 1")
         self._row_group_rows = (
-            int(row_group_rows) if row_group_rows is not None
+            int(row_group_rows)
+            if row_group_rows is not None
             else self.ROW_GROUP_ROWS_DEFAULT
         )
 
@@ -532,7 +543,11 @@ class QuixTSDataLakeSink(BatchingSink):
                 continue
 
             t = field.type
-            if pa.types.is_integer(t) or pa.types.is_floating(t) or pa.types.is_decimal(t):
+            if (
+                pa.types.is_integer(t)
+                or pa.types.is_floating(t)
+                or pa.types.is_decimal(t)
+            ):
                 vtype = "numeric"
             elif pa.types.is_timestamp(t) or pa.types.is_date(t):
                 vtype = "timestamp"
@@ -571,17 +586,6 @@ class QuixTSDataLakeSink(BatchingSink):
             }
         return stats
 
-    # ---- Parquet row-group size ----------------------------------------------
-    # Same rule as the lakehouse compaction/repartition rewrites: a reader needs
-    # about one storage range request PER ROW GROUP (column chunks are coalesced
-    # within a group, never across), so a file cut into many small groups costs
-    # a round-trip storm on a high-latency storage path, while one enormous
-    # group forfeits intra-file skipping and inflates reader memory. The size is
-    # a fixed row count (default 1,000,000 = the lakehouse's
-    # COMPACTION_ROW_GROUP_ROWS default and ~pyarrow's own default), so small
-    # flushes are a single group and only large flushes are split.
-    ROW_GROUP_ROWS_DEFAULT = 1_000_000
-
     def _write_parquet_to_storage(
         self,
         df: pd.DataFrame,
@@ -606,7 +610,9 @@ class QuixTSDataLakeSink(BatchingSink):
         if table.num_rows > self._row_group_rows:
             logger.debug(
                 "Wrote %s with %d row groups of <= %d rows",
-                storage_key, -(-table.num_rows // self._row_group_rows), self._row_group_rows,
+                storage_key,
+                -(-table.num_rows // self._row_group_rows),
+                self._row_group_rows,
             )
 
         # Submit async upload
@@ -630,7 +636,9 @@ class QuixTSDataLakeSink(BatchingSink):
         # (navigation reads it via DuckDB) — the SOLE virtual index; nothing
         # virtual is sent to Postgres anymore. column_stats (zone maps) still go
         # to the catalog above.
-        self._write_virtual_sidecar(df, storage_key, partition_columns, partition_values)
+        self._write_virtual_sidecar(
+            df, storage_key, partition_columns, partition_values
+        )
 
     def _sidecar_key(self, storage_key: str) -> str:
         """Blob key of a data file's virtual-index sidecar: in a ``.vidx/``
@@ -644,8 +652,13 @@ class QuixTSDataLakeSink(BatchingSink):
         folder, _, basename = storage_key.rpartition("/")
         return f"{folder}/.vidx/{basename}" if folder else f".vidx/{basename}"
 
-    def _write_virtual_sidecar(self, df: pd.DataFrame, storage_key: str,
-                               partition_columns: List[str], partition_values: tuple):
+    def _write_virtual_sidecar(
+        self,
+        df: pd.DataFrame,
+        storage_key: str,
+        partition_columns: List[str],
+        partition_values: tuple,
+    ):
         """Write this data file's virtual-index sidecar Parquet to ``.vidx/``.
 
         Content: one row per DISTINCT tuple of the table's VIRTUAL columns present
@@ -674,9 +687,11 @@ class QuixTSDataLakeSink(BatchingSink):
             pq.write_table(pa.Table.from_pandas(vdf, preserve_index=False), buf)
             sidecar_key = self._sidecar_key(storage_key)
             future = self._blob_client.put_object_async(
-                sidecar_key, buf.getvalue().to_pybytes())
+                sidecar_key, buf.getvalue().to_pybytes()
+            )
             self._pending_sidecar_futures.append(
-                {"future": future, "key": sidecar_key, "row_count": len(vdf)})
+                {"future": future, "key": sidecar_key, "row_count": len(vdf)}
+            )
         except Exception as e:
             logger.warning("Failed to write virtual sidecar for %s: %s", storage_key, e)
 
@@ -733,9 +748,14 @@ class QuixTSDataLakeSink(BatchingSink):
                     item["future"].result()
                     ok += 1
                 except Exception as e:
-                    logger.warning("Virtual sidecar upload failed (%s): %s", item["key"], e)
-            logger.debug("Uploaded %d/%d virtual sidecar(s)", ok,
-                         len(self._pending_sidecar_futures))
+                    logger.warning(
+                        "Virtual sidecar upload failed (%s): %s", item["key"], e
+                    )
+            logger.debug(
+                "Uploaded %d/%d virtual sidecar(s)",
+                ok,
+                len(self._pending_sidecar_futures),
+            )
         finally:
             self._pending_sidecar_futures.clear()
 

@@ -180,6 +180,16 @@ class TestRowGroupSizing:
     range request per row group, so this bounds the request count of every
     query over sink-written files; small flushes stay a single group."""
 
+    @staticmethod
+    def _data_file_bytes(mock_blob_client) -> bytes:
+        """Bytes of the last DATA file upload (skips any .vidx sidecar)."""
+        calls = [
+            c
+            for c in mock_blob_client.put_object_async.call_args_list
+            if "/.vidx/" not in c[0][0]
+        ]
+        return calls[-1][0][1]
+
     def test_default_matches_lakehouse_compaction(self, sink_factory):
         assert sink_factory()._row_group_rows == 1_000_000
         assert QuixTSDataLakeSink.ROW_GROUP_ROWS_DEFAULT == 1_000_000
@@ -189,29 +199,43 @@ class TestRowGroupSizing:
         with pytest.raises(ValueError):
             sink_factory(row_group_rows=0)
 
-    def test_small_files_are_one_row_group(self, sink_factory, sample_batch, mock_blob_client):
+    def test_small_files_are_one_row_group(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
         sink = sink_factory()
         sink.write(sample_batch())
-        parquet_bytes = mock_blob_client.put_object_async.call_args.args[1]
+        parquet_bytes = self._data_file_bytes(mock_blob_client)
         assert pq.ParquetFile(io.BytesIO(parquet_bytes)).num_row_groups == 1
 
-    def test_large_flush_is_split_at_the_configured_rows(self, sink_factory, mock_blob_client):
+    def test_large_flush_is_split_at_the_configured_rows(
+        self, sink_factory, mock_blob_client
+    ):
         sink = sink_factory(row_group_rows=100_000)
         n = 250_000
         df = pd.DataFrame({"ts_ms": range(n), "v": [1.5] * n, "__key": ["k"] * n})
         sink._write_parquet_to_storage(df, "p/data.parquet", [], ())
-        meta = pq.ParquetFile(io.BytesIO(mock_blob_client.put_object_async.call_args.args[1])).metadata
+        meta = pq.ParquetFile(
+            io.BytesIO(self._data_file_bytes(mock_blob_client))
+        ).metadata
         assert meta.num_row_groups == 3
-        assert [meta.row_group(i).num_rows for i in range(3)] == [100_000, 100_000, 50_000]
+        assert [meta.row_group(i).num_rows for i in range(3)] == [
+            100_000,
+            100_000,
+            50_000,
+        ]
         pending = sink._pending_futures[-1]
-        assert pending["row_count"] == n  # the catalog entry is per FILE, unaffected by splitting
+        # The catalog entry is per FILE, unaffected by row-group splitting.
+        assert pending["row_count"] == n
 
-    def test_default_keeps_a_million_row_flush_in_one_group(self, sink_factory, mock_blob_client):
+    def test_default_keeps_a_million_row_flush_in_one_group(
+        self, sink_factory, mock_blob_client
+    ):
         sink = sink_factory()
         n = 1_000_000
         df = pd.DataFrame({"ts_ms": range(n), "__key": ["k"] * n})
         sink._write_parquet_to_storage(df, "p/data.parquet", [], ())
-        assert pq.ParquetFile(io.BytesIO(mock_blob_client.put_object_async.call_args.args[1])).num_row_groups == 1
+        parquet_bytes = self._data_file_bytes(mock_blob_client)
+        assert pq.ParquetFile(io.BytesIO(parquet_bytes)).num_row_groups == 1
 
 
 # =============================================================================
@@ -359,9 +383,9 @@ class TestSilenceChattyLoggers:
         silence_chatty_loggers()
 
         for name in self._SILENCED:
-            assert (
-                _logging.getLogger(name).level == _logging.WARNING
-            ), f"{name} not raised to WARNING"
+            assert _logging.getLogger(name).level == _logging.WARNING, (
+                f"{name} not raised to WARNING"
+            )
 
     def test_setup_silences_when_flag_is_true(self, sink_factory, mock_blob_client):
         import logging as _logging
@@ -945,7 +969,9 @@ class TestPartitionValidation:
         )
         sink._catalog = mock_catalog_client
 
-        table_metadata = {"partition_spec": ["year", "month", "driver"]}  # phys + virtual
+        table_metadata = {
+            "partition_spec": ["year", "month", "driver"]
+        }  # phys + virtual
         # Should NOT raise.
         sink._validate_partition_strategy(table_metadata)
 
@@ -1560,15 +1586,25 @@ class TestQuixTSDataLakeSinkColumnStats:
         stats = sink._compute_column_stats(table)
         assert set(stats.keys()) == {"speed"}
 
-    def test_safe_float_bounds_widen_for_large_ints(self, sink_factory):
+    @pytest.mark.parametrize("value", [2**53 + 1, 2**53 + 3])
+    def test_safe_float_bounds_widen_for_large_ints(self, sink_factory, value):
+        # Neither value is exactly representable as float64, and they round in
+        # OPPOSITE directions: 2**53+1 rounds DOWN (only _safe_float_max has to
+        # widen) and 2**53+3 rounds UP (only _safe_float_min has to). Covering
+        # both is what exercises both widening loops.
         sink = sink_factory()
-        # 2**53 + 1 is not exactly representable as float64 (rounds down).
-        v = 2**53 + 1
-        lo = sink._safe_float_min(v)
-        hi = sink._safe_float_max(v)
+        assert float(value) != value  # precondition: this value really is lossy
+
+        lo = sink._safe_float_min(value)
+        hi = sink._safe_float_max(value)
+
         # Stored bounds must ENCLOSE the true value so pruning never wrongly
-        # skips a file: lo <= v <= hi.
-        assert lo <= v <= hi
+        # skips a file holding matching rows.
+        assert lo <= value <= hi
+        # ...and STRICTLY bracket it: an unrepresentable int can equal neither
+        # bound, so a naive float() would have been wrong on one side. Without
+        # this the test would still pass if a widening loop were deleted.
+        assert lo < value < hi
 
     def test_write_attaches_column_stats_to_manifest_payload(
         self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
@@ -1611,146 +1647,164 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         batch = SinkBatch(topic="test", partition=0)
         for r in records:
             batch.append(
-                value=r["value"], key=r["key"], timestamp=r["timestamp"],
-                headers=[], offset=r["offset"],
+                value=r["value"],
+                key=r["key"],
+                timestamp=r["timestamp"],
+                headers=[],
+                offset=r["offset"],
             )
         return batch
 
     def _drivers_batch(self):
         # Two drivers, same day -> would be one physical partition group.
-        return self._batch([
-            {"value": {"driver": "HAM", "speed": 100, "ts_ms": 1704067200000},
-             "key": "k1", "timestamp": 1704067200000, "offset": 0},
-            {"value": {"driver": "VER", "speed": 200, "ts_ms": 1704067200000},
-             "key": "k2", "timestamp": 1704067200000, "offset": 1},
-        ])
+        return self._batch(
+            [
+                {
+                    "value": {"driver": "HAM", "speed": 100, "ts_ms": 1704067200000},
+                    "key": "k1",
+                    "timestamp": 1704067200000,
+                    "offset": 0,
+                },
+                {
+                    "value": {"driver": "VER", "speed": 200, "ts_ms": 1704067200000},
+                    "key": "k2",
+                    "timestamp": 1704067200000,
+                    "offset": 1,
+                },
+            ]
+        )
 
     def test_tilde_prefix_parsing(self, sink_factory):
         sink = sink_factory(hive_columns=["year", "month", "~driver"])
-        assert sink.hive_columns == ["year", "month"]          # physical only
+        assert sink.hive_columns == ["year", "month"]  # physical only
         assert sink._virtual_columns == ["driver"]
         assert sink._partition_spec_order == ["year", "month", "driver"]
 
-    def test_virtual_column_does_not_split_files(self, sink_factory, mock_blob_client):
-        # physical=year, virtual=driver: two drivers in one year -> ONE file.
-        sink = sink_factory(hive_columns=["year", "~driver"])
-        sink.write(self._drivers_batch())
-        assert mock_blob_client.put_object_async.call_count == 1
+    @staticmethod
+    def _uploads(mock_blob_client):
+        """Split put_object_async calls into (data files, .vidx sidecars).
 
-    def test_virtual_column_kept_in_data_physical_dropped(self, sink_factory, mock_blob_client):
+        Every data file is accompanied by a virtual-index sidecar upload, so a
+        raw ``call_count`` conflates the two. Assertions about file *splitting*
+        must look at data files only.
+        """
+        calls = mock_blob_client.put_object_async.call_args_list
+        data = [c for c in calls if "/.vidx/" not in c[0][0]]
+        sidecars = [c for c in calls if "/.vidx/" in c[0][0]]
+        return data, sidecars
+
+    def test_virtual_column_does_not_split_files(self, sink_factory, mock_blob_client):
+        # physical=year, virtual=driver: two drivers in one year -> ONE data file,
+        # plus its .vidx sidecar (metadata, not a data split).
         sink = sink_factory(hive_columns=["year", "~driver"])
         sink.write(self._drivers_batch())
-        parquet_bytes = mock_blob_client.put_object_async.call_args[0][1]
-        df = pq.read_table(io.BytesIO(parquet_bytes)).to_pandas()
-        assert "driver" in df.columns   # virtual column stays in the data
+        data, sidecars = self._uploads(mock_blob_client)
+        assert len(data) == 1
+        assert len(sidecars) == 1
+
+    def test_virtual_column_kept_in_data_physical_dropped(
+        self, sink_factory, mock_blob_client
+    ):
+        sink = sink_factory(hive_columns=["year", "~driver"])
+        sink.write(self._drivers_batch())
+        data, _ = self._uploads(mock_blob_client)
+        df = pq.read_table(io.BytesIO(data[0][0][1])).to_pandas()
+        assert "driver" in df.columns  # virtual column stays in the data
         assert "year" not in df.columns  # physical partition column is foldered away
         assert set(df["driver"]) == {"HAM", "VER"}
 
-    def test_virtual_column_not_split_stays_single_file(self, sink_factory, mock_blob_client):
-        # A virtual column is kept in the data, not foldered -> one file per
-        # physical group regardless of how many virtual values it holds.
+    def test_sidecar_carries_full_partition_tuple(self, sink_factory, mock_blob_client):
+        # The sidecar holds one row per distinct VIRTUAL tuple, with the file's
+        # PHYSICAL partition values added as constant columns, so a reader gets
+        # the full tuple without hive_partitioning.
         sink = sink_factory(hive_columns=["year", "~driver"])
         sink.write(self._drivers_batch())
-        assert mock_blob_client.put_object_async.call_count == 1
+        _, sidecars = self._uploads(mock_blob_client)
+        key, payload = sidecars[0][0]
+        assert "/.vidx/" in key
+        vdf = pq.read_table(io.BytesIO(payload)).to_pandas()
+        assert set(vdf["driver"]) == {"HAM", "VER"}
+        assert set(vdf["year"]) == {"2024"}
 
-    def test_compute_partition_combinations(self, sink_factory):
-        sink = sink_factory(hive_columns=["year", "~driver", "~channel"])
-        # HAM only ever on radio, VER only on tv — they never share a row.
-        df = pd.DataFrame({
-            "driver": ["HAM", "HAM", "VER"],
-            "channel": ["radio", "radio", "tv"],
-            "x": [1, 2, 3],
-        })
-        combos = sink._compute_partition_combinations(df, ["year"], ("2024",))
-        # Only the tuples that CO-OCCUR — NOT the cross-product (no HAM/tv, VER/radio).
-        assert {tuple(sorted(c.items())) for c in combos} == {
-            (("channel", "radio"), ("driver", "HAM"), ("year", "2024")),
-            (("channel", "tv"), ("driver", "VER"), ("year", "2024")),
-        }
+    # -- Durability of the sidecar lane -------------------------------------
+    # Both handlers below back an explicit promise in the sink: the virtual
+    # index is a HINT, not the data, so a sidecar failure is logged and never
+    # raised. write() retries a failed batch 3x, so "exactly one data upload"
+    # is also the assertion that no retry was triggered.
 
-    def test_compute_partition_combinations_no_virtual_columns(self, sink_factory):
-        sink = sink_factory(hive_columns=["year"])  # physical only
-        df = pd.DataFrame({"x": [1, 2]})
-        assert sink._compute_partition_combinations(df, ["year"], ("2024",)) == []
+    @staticmethod
+    def _split_futures(mock_blob_client, sidecar_future):
+        """Route .vidx uploads to `sidecar_future`, data uploads to a good one."""
+        ok = MagicMock()
+        ok.result.return_value = None
 
-    def test_high_cardinality_combinations_skipped(self, sink_factory):
-        sink = sink_factory(hive_columns=["~id"])
-        df = pd.DataFrame({"id": [str(i) for i in range(50)]})
-        assert sink._compute_partition_combinations(df, [], (), max_distinct=10) == []
+        def route(key, _payload):
+            if "/.vidx/" in key:
+                if isinstance(sidecar_future, Exception):
+                    raise sidecar_future
+                return sidecar_future
+            return ok
 
-    def test_add_files_payload_has_partition_combinations(
-        self, sink_factory, mock_blob_client, mock_catalog_client
-    ):
-        sink = sink_factory(hive_columns=["year", "~driver"], catalog_url="http://catalog:8080")
-        sink._catalog = mock_catalog_client
-        sink.table_registered = True
-        sink.write(self._drivers_batch())
+        mock_blob_client.put_object_async.side_effect = route
 
+    def _assert_data_write_unaffected(self, mock_blob_client, mock_catalog_client):
+        data, sidecars = self._uploads(mock_blob_client)
+        # Exactly one -> the data file landed AND write() did not retry.
+        assert len(data) == 1
         manifest_calls = [
             c for c in mock_catalog_client.post.call_args_list if "manifest" in str(c)
         ]
-        body = manifest_calls[0].kwargs["json"]
-        combos = body["partition_combinations"]
-        # year (from ts_ms) x {HAM, VER}; deduped across the batch.
-        assert len(combos) == 2
-        assert {c["driver"] for c in combos} == {"HAM", "VER"}
-        assert all("year" in c for c in combos)
+        assert len(manifest_calls) == 1
+        assert len(manifest_calls[0].kwargs["json"]["files"]) == 1
+        return data, sidecars
 
-    def test_compute_virtual_values(self, sink_factory):
-        sink = sink_factory(hive_columns=["year", "~driver", "~channel"])
-        df = pd.DataFrame({
-            "driver": ["HAM", "HAM", "VER"],
-            "channel": ["radio", "radio", "tv"],
-            "x": [1, 2, 3],
-        })
-        vv = sink._compute_virtual_values(df)
-        assert set(vv.keys()) == {"driver", "channel"}
-        assert sorted(vv["driver"]) == ["HAM", "VER"]
-        assert sorted(vv["channel"]) == ["radio", "tv"]
-
-    def test_compute_virtual_values_no_virtual_columns(self, sink_factory):
-        sink = sink_factory(hive_columns=["year"])  # physical only
-        assert sink._compute_virtual_values(pd.DataFrame({"x": [1, 2]})) == {}
-
-    def test_compute_virtual_values_partial_coverage_returns_empty(self, sink_factory):
-        # A file missing one virtual column must NOT be marked indexed (the
-        # catalog's virtual_indexed flag is per-file, not per-column) — otherwise
-        # a query on the missing column would wrongly prune it.
-        sink = sink_factory(hive_columns=["year", "~driver", "~channel"])
-        df = pd.DataFrame({"driver": ["HAM"], "x": [1]})  # channel absent
-        assert sink._compute_virtual_values(df) == {}
-
-    def test_compute_virtual_values_high_cardinality_returns_empty(self, sink_factory):
-        sink = sink_factory(hive_columns=["~id"])
-        df = pd.DataFrame({"id": [str(i) for i in range(50)]})
-        assert sink._compute_virtual_values(df, max_distinct=10) == {}
-
-    def test_add_files_payload_has_virtual_values(
+    def test_sidecar_submit_failure_does_not_fail_the_write(
         self, sink_factory, mock_blob_client, mock_catalog_client
     ):
-        sink = sink_factory(hive_columns=["year", "~driver"], catalog_url="http://catalog:8080")
+        # The sidecar upload CALL itself raises (_write_virtual_sidecar's except).
+        self._split_futures(mock_blob_client, RuntimeError("sidecar submit failed"))
+        sink = sink_factory(
+            hive_columns=["year", "~driver"], catalog_url="http://catalog:8080"
+        )
         sink._catalog = mock_catalog_client
         sink.table_registered = True
-        sink.write(self._drivers_batch())
 
-        manifest_calls = [
-            c for c in mock_catalog_client.post.call_args_list if "manifest" in str(c)
-        ]
-        entries = manifest_calls[0].kwargs["json"]["files"]
-        # driver is virtual (not split), so each file carries its per-file distinct
-        # driver values; the union across files is {HAM, VER}.
-        assert all("virtual_values" in e for e in entries)
-        seen = set()
-        for e in entries:
-            seen |= set(e["virtual_values"]["driver"])
-        assert seen == {"HAM", "VER"}
+        sink.write(self._drivers_batch())  # must not raise
+
+        self._assert_data_write_unaffected(mock_blob_client, mock_catalog_client)
+        # Nothing was queued to await, so the tracking list is clean for next batch.
+        assert sink._pending_sidecar_futures == []
+
+    def test_sidecar_upload_failure_does_not_fail_the_write(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        # Submit succeeds; the future raises when awaited (_await_sidecar_uploads).
+        bad = MagicMock()
+        bad.result.side_effect = RuntimeError("sidecar upload failed")
+        self._split_futures(mock_blob_client, bad)
+        sink = sink_factory(
+            hive_columns=["year", "~driver"], catalog_url="http://catalog:8080"
+        )
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        sink.write(self._drivers_batch())  # must not raise
+
+        _, sidecars = self._assert_data_write_unaffected(
+            mock_blob_client, mock_catalog_client
+        )
+        assert len(sidecars) == 1  # it was submitted; only the await failed
+        bad.result.assert_called_once()
+        # Drained even though it failed — a stale future must not be re-awaited.
+        assert sink._pending_sidecar_futures == []
 
     def test_register_table_declares_virtual_partitions(
         self, sink_factory, mock_blob_client, mock_catalog_client
     ):
         sink = sink_factory(
             hive_columns=["year", "month", "~driver"],
-            catalog_url="http://catalog:8080", auto_discover=True,
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
         )
         sink._catalog = mock_catalog_client
         sink._register_table()
@@ -1764,8 +1818,10 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         self, sink_factory, mock_blob_client, mock_catalog_client
     ):
         sink = sink_factory(
-            timestamp_column="ts_ms", sort_column="seq",
-            catalog_url="http://catalog:8080", auto_discover=True,
+            timestamp_column="ts_ms",
+            sort_column="seq",
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
         )
         sink._catalog = mock_catalog_client
         sink._register_table()
@@ -1779,7 +1835,8 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
     ):
         sink = sink_factory(
             timestamp_column="ts_ms",
-            catalog_url="http://catalog:8080", auto_discover=True,
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
         )
         sink._catalog = mock_catalog_client
         sink._register_table()
@@ -1789,77 +1846,3 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         # timestamp column (which is still recorded).
         assert "sort_column" not in props
         assert props["timestamp_column"] == "ts_ms"
-
-
-# =============================================================================
-# Auto-indexing of low-cardinality non-numeric columns (prune without ~)
-# =============================================================================
-
-
-class TestQuixTSDataLakeSinkAutoIndex:
-    """Tests for _compute_auto_index_values (the auto-index lane)."""
-
-    def _df(self):
-        return pd.DataFrame({
-            "machine": ["A", "B", "A"],       # low-card string -> indexed
-            "region": ["EU", "EU", "US"],      # low-card string -> indexed
-            "speed": [1, 2, 3],                # numeric -> column_stats, not here
-            "ts_ms": [1, 2, 3],                # timestamp col -> excluded
-            "__key": ["k1", "k2", "k3"],       # internal -> excluded
-        })
-
-    def test_indexes_low_cardinality_strings_only(self, sink_factory):
-        sink = sink_factory()  # default cap 100
-        out = sink._compute_auto_index_values(self._df())
-        assert set(out.keys()) == {"machine", "region"}
-        assert out["machine"] == ["A", "B"]      # sorted distinct
-        assert out["region"] == ["EU", "US"]
-        assert "speed" not in out and "ts_ms" not in out and "__key" not in out
-
-    def test_over_cap_column_skipped_per_column(self, sink_factory):
-        # cap=2: 'region' (2 distinct) kept, 'machine' would need <=2 too — make
-        # machine exceed the cap and confirm only it is dropped, region stays.
-        sink = sink_factory(auto_index_max_cardinality=2)
-        df = pd.DataFrame({
-            "machine": ["A", "B", "C"],   # 3 distinct > cap -> skipped
-            "region": ["EU", "US", "EU"], # 2 distinct <= cap -> kept
-        })
-        out = sink._compute_auto_index_values(df)
-        assert "machine" not in out
-        assert out["region"] == ["EU", "US"]
-
-    def test_disabled_when_cap_zero(self, sink_factory):
-        sink = sink_factory(auto_index_max_cardinality=0)
-        assert sink._compute_auto_index_values(self._df()) == {}
-
-    def test_excludes_virtual_and_partition_columns(self, sink_factory):
-        # 'region' is a ~virtual column and 'machine' physical -> neither should
-        # be auto-indexed (handled by their own lanes / dropped from data).
-        sink = sink_factory(hive_columns=["machine", "~region"])
-        out = sink._compute_auto_index_values(self._df())
-        assert "region" not in out   # virtual lane
-        assert "machine" not in out  # physical partition
-
-    def test_write_attaches_indexed_values_to_manifest(
-        self, sink_factory, mock_blob_client, mock_catalog_client
-    ):
-        sink = sink_factory(catalog_url="http://catalog:8080")
-        sink._catalog = mock_catalog_client
-        sink.table_registered = True
-        records = [
-            {"value": {"machine": "A", "speed": 1, "ts_ms": 1704067200000},
-             "key": "k1", "timestamp": 1704067200000, "offset": 0},
-            {"value": {"machine": "B", "speed": 2, "ts_ms": 1704067260000},
-             "key": "k2", "timestamp": 1704067260000, "offset": 1},
-        ]
-        batch = SinkBatch(topic="t", partition=0)
-        for r in records:
-            batch.append(value=r["value"], key=r["key"], timestamp=r["timestamp"],
-                         headers=[], offset=r["offset"])
-        sink.write(batch)
-
-        files = [c for c in mock_catalog_client.post.call_args_list
-                 if "manifest" in str(c)][0].kwargs["json"]["files"]
-        assert set(files[0]["indexed_values"]["machine"]) == {"A", "B"}
-        # numeric columns are NOT in the auto-index lane (they use column_stats)
-        assert "speed" not in files[0].get("indexed_values", {})

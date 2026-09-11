@@ -1,6 +1,7 @@
 import os
 import shutil
 import uuid
+from datetime import timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,8 +14,9 @@ from quixstreams.state.exceptions import (
     StoreAlreadyRegisteredError,
     StoreNotRegisteredError,
 )
-from quixstreams.state.manager import SUPPORTED_STORES
-from quixstreams.state.rocksdb import RocksDBStore
+from quixstreams.state.manager import SUPPORTED_STORES, StateStoreManager
+from quixstreams.state.memory import MemoryStore
+from quixstreams.state.rocksdb import RocksDBOptions, RocksDBStore
 from tests.utils import TopicPartitionStub
 
 
@@ -320,3 +322,48 @@ class TestStateStoreManagerWithRecovery:
 
         # Check that RecoveryManager has a partition revoked too
         assert not recovery_manager.partitions
+
+
+class TestMemoryStoreOptionForwarding:
+    """Fix 7 (review re-review): the manager forwards the app-wide TTL scalars
+    (from ``rocksdb_options``) into a ``MemoryStore`` so a ``MemoryStorePartition``
+    created via ``Application`` reflects ``legacy_records_ttl`` /
+    ``ttl_changelog_tombstones`` / ``max_evictions_per_flush``. (v3.24.0-stamp
+    adoption is now automatic — no flag — so nothing adoption-related is
+    forwarded.)"""
+
+    def test_manager_forwards_ttl_options_to_memory_partition(self, tmp_path):
+        manager = StateStoreManager(
+            group_id="g",
+            state_dir=str(tmp_path / "state"),
+            rocksdb_options=RocksDBOptions(
+                legacy_records_ttl=timedelta(days=7),
+                ttl_changelog_tombstones=False,
+                max_evictions_per_flush=123,
+            ),
+            default_store_type=MemoryStore,
+        )
+        manager.init()
+        manager.register_store("topic", store_name="default")
+        store = manager.get_store("topic", "default")
+        assert isinstance(store, MemoryStore)
+
+        partition = store.create_new_partition(0)
+        assert partition.legacy_records_ttl == timedelta(days=7)
+        assert partition.ttl_changelog_tombstones is False
+        assert partition.max_evictions_per_flush == 123
+        manager.close()
+
+    def test_manager_memory_defaults_when_no_options(self, tmp_path):
+        # No rocksdb_options -> the manager uses RocksDBOptions() defaults.
+        manager = StateStoreManager(
+            group_id="g",
+            state_dir=str(tmp_path / "state"),
+            default_store_type=MemoryStore,
+        )
+        manager.init()
+        manager.register_store("topic", store_name="default")
+        partition = manager.get_store("topic", "default").create_new_partition(0)
+        assert partition.legacy_records_ttl is None
+        assert partition.ttl_changelog_tombstones is True
+        manager.close()

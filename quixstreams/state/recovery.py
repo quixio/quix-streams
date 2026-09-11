@@ -1,6 +1,7 @@
+import inspect
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from confluent_kafka import OFFSET_BEGINNING
 from confluent_kafka import TopicPartition as ConfluentPartition
@@ -23,9 +24,32 @@ from .exceptions import (
 from .metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TTL_STAMPED_HEADER,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _accepts_ttl_stamped(method: Callable) -> bool:
+    """
+    Return whether ``method`` accepts a ``ttl_stamped`` keyword argument.
+
+    ``StorePartition.recover_from_changelog_message`` declares ``ttl_stamped``
+    (default ``False``), but a third-party subclass may override it with a rigid
+    signature that predates the parameter. Introspecting once lets the recovery
+    loop omit the kwarg for such subclasses instead of failing with
+    a ``TypeError`` — the dropped bit is a no-op for a non-TTL store. An
+    un-introspectable callable (e.g. a C implementation) is assumed to honor the
+    base contract and accept it.
+    """
+    try:
+        params = inspect.signature(method).parameters
+    except (TypeError, ValueError):
+        return True
+    if "ttl_stamped" in params:
+        return True
+    return any(p.kind is p.VAR_KEYWORD for p in params.values())
+
 
 __all__ = (
     "ChangelogProducer",
@@ -64,6 +88,12 @@ class RecoveryPartition:
         self._initial_offset: Optional[int] = None
         self._invalid_offset_count = 0  # Track consecutive invalid offset attempts
         self._last_valid_position_time: Optional[float] = None
+        # Whether the store partition's recovery hook accepts ``ttl_stamped``.
+        # Computed once so per-message dispatch stays cheap and a
+        # third-party subclass with a rigid override signature does not raise.
+        self._partition_accepts_ttl_stamped = _accepts_ttl_stamped(
+            store_partition.recover_from_changelog_message
+        )
 
     def __repr__(self):
         return (
@@ -110,7 +140,19 @@ class RecoveryPartition:
         """
         has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
         state_potentially_behind = self._changelog_highwater - 1 > self.offset
-        return has_consumable_offsets and state_potentially_behind
+        # Force recovery when the store has a flipped-but-unfinished legacy-TTL
+        # migration (durable pending census, no done-marker), INDEPENDENTLY of the
+        # consumable-offsets / behind checks. The incomplete-migration term is
+        # hoisted OUT of the ``has_consumable_offsets`` guard: a warm,
+        # offset-caught-up store whose changelog has been fully truncated
+        # (``lowwater == highwater`` → ``has_consumable_offsets`` False) would
+        # otherwise never be flagged for recovery, so ``complete_recovery`` would
+        # never run and the leftover legacy records would be permanently stranded.
+        # The normal (changelog-present) path is unchanged: it still gates on
+        # ``has_consumable_offsets and state_potentially_behind``.
+        return (
+            has_consumable_offsets and state_potentially_behind
+        ) or self._store_partition.has_incomplete_ttl_migration()
 
     @property
     def has_invalid_offset(self) -> bool:
@@ -191,6 +233,12 @@ class RecoveryPartition:
         processed_offsets = json_loads(
             headers.get(CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER, b"null")
         )
+
+        # Stamped-vs-legacy bit. Out-of-band, never inferred from
+        # value content. Absent header → legacy / un-stamped (default False, also
+        # covers pre-header changelog messages for back-compat).
+        ttl_stamped = bool(headers.get(CHANGELOG_TTL_STAMPED_HEADER))
+
         if processed_offsets is None or self._should_apply_changelog(
             processed_offsets=processed_offsets
         ):
@@ -206,18 +254,43 @@ class RecoveryPartition:
                     f'Invalid changelog value type {type(value)}, expected "bytes"'
                 )
 
-            self._store_partition.recover_from_changelog_message(
-                cf_name=cf_name,
-                key=key,
-                value=value,
-                offset=changelog_message.offset(),
-            )
+            if self._partition_accepts_ttl_stamped:
+                self._store_partition.recover_from_changelog_message(
+                    cf_name=cf_name,
+                    key=key,
+                    value=value,
+                    offset=changelog_message.offset(),
+                    ttl_stamped=ttl_stamped,
+                )
+            else:
+                # Third-party StorePartition subclass whose override predates the
+                # ``ttl_stamped`` parameter: omit the kwarg so the
+                # rigid signature still works. Such stores are non-TTL, so the
+                # dropped stamped bit is a no-op (it would default to False).
+                self._store_partition.recover_from_changelog_message(
+                    cf_name=cf_name,
+                    key=key,
+                    value=value,
+                    offset=changelog_message.offset(),
+                )
         else:
             # Even if the changelog update is skipped, roll the changelog offset
             # to move forward within the changelog topic
             self._store_partition.write_changelog_offset(
                 offset=changelog_message.offset(),
             )
+
+    def complete_recovery(self):
+        """
+        Finalize recovery for the underlying `StorePartition`.
+
+        Called once by the recovery manager after this partition has reached its
+        changelog high-watermark and before it is unassigned / handed to live
+        processing. Delegates to ``StorePartition.complete_recovery`` (a no-op on
+        the base class; both the RocksDB and memory backends override it to
+        complete an interrupted legacy-TTL migration).
+        """
+        self._store_partition.complete_recovery()
 
     def set_recovery_consume_position(self, offset: int):
         """
@@ -256,15 +329,25 @@ class ChangelogProducerFactory:
     Generates ChangelogProducers, which produce changelog messages to a StorePartition.
     """
 
-    def __init__(self, changelog_name: str, producer: InternalProducer):
+    def __init__(
+        self,
+        changelog_name: str,
+        producer: InternalProducer,
+        migration_producer: Optional[InternalProducer] = None,
+    ):
         """
         :param changelog_name: changelog topic name
         :param producer: a InternalProducer (not shared with `Application` instance)
+        :param migration_producer: an optional dedicated NON-transactional
+            InternalProducer for legacy-TTL migration / backfill records only.
+            Supplied only when the app runs
+            exactly-once — see :class:`ChangelogProducer`. ``None`` otherwise.
 
         :return: a ChangelogWriter instance
         """
         self._changelog_name = changelog_name
         self._producer = producer
+        self._migration_producer = migration_producer
 
     def get_partition_producer(self, partition_num) -> "ChangelogProducer":
         """
@@ -277,6 +360,7 @@ class ChangelogProducerFactory:
             changelog_name=self._changelog_name,
             partition=partition_num,
             producer=self._producer,
+            migration_producer=self._migration_producer,
         )
 
 
@@ -291,15 +375,32 @@ class ChangelogProducer:
         changelog_name: str,
         partition: int,
         producer: InternalProducer,
+        migration_producer: Optional[InternalProducer] = None,
     ):
         """
         :param changelog_name: A changelog topic name
         :param partition: source topic partition number
         :param producer: an InternalProducer (not shared with `Application` instance)
+        :param migration_producer: an optional dedicated NON-transactional
+            InternalProducer used ONLY for legacy-TTL migration / backfill records.
+            It is set only when the app runs
+            exactly-once: the main ``producer`` is then transactional, so a
+            ``flush()`` does NOT make records durable until the checkpoint
+            transaction commits — but the migration paths write local RocksDB
+            state immediately after producing each chunk and rely on the
+            changelog-first invariant (produced+flushed == durable BEFORE the
+            local write). Routing migration records through a non-transactional
+            producer restores ``flush()==durable`` so a crash before the
+            transaction commits cannot leave local stamps + resume ledger ahead of
+            an aborted (never-republished) changelog record. When ``None``
+            (non-exactly-once) migration records fall back to the main producer,
+            which is already non-transactional. NORMAL changelog production is
+            never routed here.
         """
         self._changelog_name = changelog_name
         self._partition = partition
         self._producer = producer
+        self._migration_producer = migration_producer
 
     @property
     def changelog_name(self) -> str:
@@ -309,11 +410,21 @@ class ChangelogProducer:
     def partition(self) -> int:
         return self._partition
 
+    def _producer_for(self, migration: bool) -> InternalProducer:
+        """Pick the underlying producer: the dedicated non-transactional
+        migration producer for migration/backfill records when one is configured
+        (exactly-once), else the main producer."""
+        if migration and self._migration_producer is not None:
+            return self._migration_producer
+        return self._producer
+
     def produce(
         self,
         key: bytes,
         value: Optional[bytes] = None,
         headers: Optional[Headers] = None,
+        migration: bool = False,
+        on_delivery: Optional[Callable] = None,
     ):
         """
         Produce a message to a changelog topic partition.
@@ -321,17 +432,27 @@ class ChangelogProducer:
         :param key: message key (same as state key, including prefixes)
         :param value: message value (same as state value)
         :param headers: message headers (includes column family info)
+        :param migration: route through the dedicated non-transactional migration
+            producer when configured. Set only by the legacy-TTL
+            backfill / recovery-completion / done-marker sites; normal changelog
+            production leaves it ``False``.
+        :param on_delivery: optional per-record delivery callback, chained with the
+            producer's internal callback (never replacing it). The legacy-TTL
+            migration sites pass a per-partition ack counter so the backfill flush
+            stall detector measures THIS partition's outstanding records rather
+            than the shared producer's global queue depth.
         """
-        self._producer.produce(
+        self._producer_for(migration).produce(
             key=key,
             value=value,
             headers=headers,
             partition=self._partition,
             topic=self._changelog_name,
+            on_delivery=on_delivery,
         )
 
-    def flush(self, timeout: Optional[float] = None) -> int:
-        return self._producer.flush(timeout=timeout)
+    def flush(self, timeout: Optional[float] = None, migration: bool = False) -> int:
+        return self._producer_for(migration).flush(timeout=timeout)
 
 
 class RecoveryManager:
@@ -365,6 +486,9 @@ class RecoveryManager:
         # Cache position results to avoid double calls in same iteration
         self._position_cache: Dict[str, Tuple[float, ConfluentPartition]] = {}
         self._recovery_paused_data_tps: set[tuple[str, int]] = set()
+        # Data topic-partitions the recovery loop had to rewind because they were
+        # fetching while recovery was running. Reset by every `do_recovery` call.
+        self._recovery_rewound_data_tps: set[tuple[str, int]] = set()
 
     @property
     def partitions(self) -> Dict[int, Dict[str, RecoveryPartition]]:
@@ -419,21 +543,13 @@ class RecoveryManager:
         """
         logger.info("Beginning recovery check...")
         self._running = True
-        # note: technically it should be rp.offset + 1, but to remain backwards
-        # compatible with <v2.7 +1 ALOS offsetting, it remains rp.offset.
-        # This means we will always re-write the "first" recovery message.
-        # More specifically, this is only covering for a very edge case:
-        # when first upgrading from <v2.7 AND a recovery was actually needed.
-        # Once on >=v2.7, this is no longer an issue...so we could eventually
-        # remove this, potentially.
+        self._recovery_rewound_data_tps.clear()
 
-        # Seek the changelog partitions to the previously saved position and resume them
+        # Seek the changelog partitions to the previously saved position and resume
+        # them. Partitions added later by a rebalance are primed the same way by
+        # `assign_partition` while the loop below is running.
         for rp in dict_values(self._recovery_partitions):
-            tp = ConfluentPartition(
-                topic=rp.changelog_name, partition=rp.partition_num, offset=rp.offset
-            )
-            self._consumer.seek(tp)
-            self._consumer.resume([tp])
+            self._prime_changelog_partition(rp)
 
         self._recovery_loop()
         if self._running:
@@ -450,6 +566,34 @@ class RecoveryManager:
             self._forget_recovery_paused_data_partitions(non_changelog_tps)
         else:
             logger.debug("Recovery process interrupted; stopping.")
+
+    def _prime_changelog_partition(self, rp: RecoveryPartition) -> None:
+        """
+        Seek a `RecoveryPartition`'s changelog partition to its saved position and
+        resume consuming it, making it readable by the recovery loop.
+
+        Called by `do_recovery` for the partitions known when recovery starts, and
+        by `assign_partition` for partitions a rebalance adds while the loop is
+        already running. A changelog partition that is never seeked keeps an
+        OFFSET_INVALID (-1001) consumer position, which `_get_changelog_offset`
+        eventually turns into a "Recovery stuck" RuntimeError once
+        MAX_INVALID_OFFSET_ATTEMPTS is exceeded.
+
+        Note: technically it should be rp.offset + 1, but to remain backwards
+        compatible with <v2.7 +1 ALOS offsetting, it remains rp.offset.
+        This means we will always re-write the "first" recovery message.
+        More specifically, this is only covering for a very edge case:
+        when first upgrading from <v2.7 AND a recovery was actually needed.
+        Once on >=v2.7, this is no longer an issue...so we could eventually
+        remove this, potentially.
+
+        :param rp: the `RecoveryPartition` whose changelog partition to prime
+        """
+        tp = ConfluentPartition(
+            topic=rp.changelog_name, partition=rp.partition_num, offset=rp.offset
+        )
+        self._consumer.seek(tp)
+        self._consumer.resume([tp])
 
     def _pause_for_recovery(self, partitions: List[ConfluentPartition]) -> None:
         self._track_recovery_paused_data_partitions(partitions)
@@ -507,12 +651,47 @@ class RecoveryManager:
         in which case `assign_partition` never runs and the partition would stay
         paused indefinitely. Application calls this on every assignment to cover it.
 
-        Skipped while a recovery is pending/active (`has_assignments`): those pauses
-        are intentional and get resumed by `do_recovery`/`assign_partition`.
+        Skipped while a recovery is pending (`has_assignments`) or running
+        (`self._running`): those pauses are intentional and get resumed by
+        `do_recovery`/`assign_partition`. The `self._running` half matters when a
+        rebalance revokes the last recovering partition, which empties
+        `_recovery_partitions` while the loop is still on its way out.
         """
-        if not self._recovery_paused_data_tps or self.has_assignments:
+        if not self._recovery_paused_data_tps or self.has_assignments or self._running:
             return
         self._resume_recovery_paused_data_partitions(partitions)
+
+    def pause_assigned_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        """
+        Pause the data partitions of a fresh assignment while recovery is running.
+
+        `Consumer.assign()` resets the paused state of every partition in the new
+        assignment, so a rebalance landing mid-recovery (this runs from the
+        assignment callback fired inside `_recovery_loop`'s `poll`) un-pauses the
+        data partitions recovery paused. Any of them would then feed source-topic
+        messages into the recovery loop. Partitions with no stateful store never
+        reach `assign_partition`, so that is not enough to re-pause them.
+
+        No-op unless a recovery loop is running; `do_recovery` resumes every
+        non-changelog partition of the assignment when the loop finishes.
+
+        :param partitions: the topic partitions just assigned to the consumer
+        """
+        if not self._running:
+            return
+
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+        to_pause = [tp for tp in partitions if tp.topic in non_changelog_topics]
+        if not to_pause:
+            return
+
+        logger.debug(
+            f"Pausing data partitions assigned during recovery: "
+            f"{[(tp.topic, tp.partition) for tp in to_pause]}"
+        )
+        self._pause_for_recovery(to_pause)
 
     def _generate_recovery_partitions(
         self,
@@ -558,6 +737,13 @@ class RecoveryManager:
         Assigns `StorePartition`s (as `RecoveryPartition`s) ONLY IF recovery required.
 
         Pauses active consumer partitions as needed.
+
+        When a rebalance calls this while a recovery is already running, the newly
+        added changelog partitions are also seeked+resumed so the running recovery
+        loop can consume them, every assigned data partition is (re-)paused
+        regardless of whether this call produced a `RecoveryPartition`, and data
+        partitions paused for recovery stay paused (`do_recovery` resumes them
+        once the loop finishes).
         """
         recovery_partitions = self._generate_recovery_partitions(
             topic_name=topic,
@@ -569,6 +755,7 @@ class RecoveryManager:
         current_assignment = self._consumer.assignment()
         assigned_tps = set((tp.topic, tp.partition) for tp in current_assignment)
 
+        added_partitions: List[RecoveryPartition] = []
         for rp in recovery_partitions:
             changelog_name, partition = rp.changelog_name, rp.partition_num
             # Validate that the changelog topic-partition is assigned to consumer before
@@ -579,10 +766,23 @@ class RecoveryManager:
                     f"must be assigned to recover from it"
                 )
 
-            if rp.needs_recovery_check:
-                logger.debug(f"Adding a recovery check for {rp}")
-                self._recovery_partitions.setdefault(partition, {})[changelog_name] = rp
-            elif rp.has_invalid_offset:
+            if rp.has_invalid_offset:
+                # Check invalid-offset BEFORE
+                # ``needs_recovery_check``. The latter is force-True whenever
+                # ``has_incomplete_ttl_migration()`` is True (the incomplete-
+                # migration hoist above), which broke the invariant that a
+                # partition can never be
+                # both "needs recovery" and "invalid offset" at once. A store
+                # mid-TTL-migration whose changelog was deleted+recreated
+                # (``highwater <= stored offset`` with ``highwater > 0``) would
+                # otherwise take the recovery branch, silently rebuild from a
+                # changelog that cannot reconstruct its state, and then cement the
+                # inconsistency with a done-marker. An invalid offset must always
+                # raise so the operator clears state. The warm-completion
+                # path is preserved: a fully-truncated changelog has
+                # ``highwater == 0`` → ``has_invalid_offset`` early-returns False,
+                # and a caught-up warm store has ``offset == highwater - 1`` →
+                # False, so both still fall through to the recovery branch below.
                 raise InvalidStoreChangelogOffset(
                     "The offset in the state store is greater than or equal to its "
                     "respective changelog highwater. This can happen if the changelog "
@@ -590,20 +790,40 @@ class RecoveryManager:
                     "invalid state store can be deleted by manually calling "
                     "Application.clear_state() before running the application again."
                 )
+            elif rp.needs_recovery_check:
+                logger.debug(f"Adding a recovery check for {rp}")
+                self._recovery_partitions.setdefault(partition, {})[changelog_name] = rp
+                added_partitions.append(rp)
 
         # Figure out if we need to pause any topic partitions
-        if self._recovery_partitions:
-            if self._running:
-                # Some partitions are already recovering,
-                # pausing only the source topic partition
-                self._pause_for_recovery(
-                    [ConfluentPartition(topic=topic, partition=partition)]
-                )
-            else:
-                # Recovery hasn't started yet, so pause ALL partitions
-                # and wait for Application to start recovery
-                self._pause_for_recovery(self._consumer.assignment())
+        if self._running:
+            # Some partitions are already recovering: pause the source topic
+            # partition being assigned, and then every other assigned data
+            # partition, because the `Consumer.assign()` that preceded this
+            # callback reset the paused state of the whole new assignment. This
+            # runs whether or not this call produced a `RecoveryPartition`: a
+            # stateless partition assigned mid-recovery must wait for recovery
+            # like every other data partition.
+            self._pause_for_recovery(
+                [ConfluentPartition(topic=topic, partition=partition)]
+            )
+            self.pause_assigned_data_partitions(current_assignment)
+            # The running loop is already past `do_recovery`'s seek+resume
+            # block, so prime the changelog partitions added just now here.
+            for rp in added_partitions:
+                self._prime_changelog_partition(rp)
+        elif self._recovery_partitions:
+            # Recovery hasn't started yet, so pause ALL partitions
+            # and wait for Application to start recovery
+            self._pause_for_recovery(self._consumer.assignment())
         else:
+            # Nothing to recover here and no recovery in progress: release data
+            # partitions still paused by an earlier recovery generation. Reached
+            # only when `self._running` is False, so a recovery-paused partition
+            # can never be resumed under a running loop — during an eager rebalance
+            # `_recovery_partitions` is momentarily empty between the revoke and the
+            # reassign of the same stateful partition, and resuming a data partition
+            # then would feed the loop source-topic messages.
             self._resume_recovery_paused_data_partitions(current_assignment)
 
     def _revoke_recovery_partitions(self, recovery_partitions: List[RecoveryPartition]):
@@ -658,6 +878,12 @@ class RecoveryManager:
 
             rp.set_recovery_consume_position(position)
             if rp.finished_recovery_check:
+                # Recovery-finalize seam: the partition has reached
+                # its changelog high-watermark. Complete any interrupted legacy-
+                # TTL migration before the partition is unassigned and handed to
+                # live processing. A no-op on every shape except a MIXED changelog
+                # restored with ``legacy_records_ttl`` set.
+                rp.complete_recovery()
                 rp_revokes.append(rp)
                 if rp.had_recovery_changes:
                     logger.info(f"Recovery successful for {rp}")
@@ -671,6 +897,13 @@ class RecoveryManager:
         messages until recovery is "complete" (i.e. no assigned `RecoveryPartition`s).
 
         A RecoveryPartition is unassigned immediately once fully updated.
+
+        A polled message may not belong to any tracked `RecoveryPartition`. A
+        message from a changelog partition no longer under recovery (the tail of a
+        partition revoked by a rebalance) is dropped: its state is gone. A message
+        from a data topic means a pause gap, and is rewound rather than dropped
+        (see `_rewind_data_partition`), because dropping it would lose it for the
+        whole session.
         """
         while self.recovering:
             self._log_recovery_progress()
@@ -678,13 +911,62 @@ class RecoveryManager:
                 self._update_recovery_status()
             else:
                 msg = raise_for_msg_error(msg)
-                rp = self._recovery_partitions[msg.partition()][msg.topic()]
-                rp.recover_from_changelog_message(changelog_message=msg)
+                changelogs = self._recovery_partitions.get(msg.partition(), {})
+                if (rp := changelogs.get(msg.topic())) is not None:
+                    rp.recover_from_changelog_message(changelog_message=msg)
+                elif msg.topic() in self._topic_manager.non_changelog_topics:
+                    self._rewind_data_partition(msg)
+                else:
+                    logger.debug(
+                        f'Skipping a message for "{msg.topic()}[{msg.partition()}]" '
+                        f"at offset {msg.offset()}: not under recovery"
+                    )
                 self._consumer._broker_available()  # noqa: SLF001
             if self._broker_availability_timeout:
                 self._consumer.raise_if_broker_unavailable(
                     self._broker_availability_timeout
                 )
+
+    def _rewind_data_partition(self, msg: SuccessfulConfluentKafkaMessageProto) -> None:
+        """
+        Pause a data partition the recovery loop should never have polled and rewind
+        it so the delivered message is read again after recovery.
+
+        The recovery loop only ever consumes changelog partitions, so a data-topic
+        message proves the partition escaped its recovery pause: the consumer-side
+        `assign()` of a rebalance resets the paused state of the whole new
+        assignment. Dropping the message loses it for the rest of the session: it is
+        never processed, yet the consumer position has moved past it and only the
+        pre-rebalance committed offset would bring it back. Pausing and seeking back
+        to `msg.offset()` makes it the next message read once `do_recovery` resumes
+        the partition.
+
+        Only the first message per topic-partition is acted on. Messages are
+        delivered in offset order per partition, so the first one seen is the
+        earliest; seeking again for a later message would skip the earlier rewind
+        target. Later messages are dropped, and re-read after the rewind.
+
+        :param msg: a message polled by the recovery loop from a data topic
+        """
+        topic, partition = msg.topic(), msg.partition()
+        if (topic, partition) in self._recovery_rewound_data_tps:
+            logger.debug(
+                f'Dropping a message for "{topic}[{partition}]" at offset '
+                f"{msg.offset()}: partition already rewound for recovery"
+            )
+            return
+
+        self._recovery_rewound_data_tps.add((topic, partition))
+        self._pause_for_recovery([ConfluentPartition(topic=topic, partition=partition)])
+        self._consumer.seek(
+            ConfluentPartition(topic=topic, partition=partition, offset=msg.offset())
+        )
+        logger.warning(
+            f'Data partition "{topic}[{partition}]" was consumed by the recovery '
+            f"loop; it is now paused and rewound to offset {msg.offset()} so no "
+            f"message is lost. This means the partition escaped its recovery pause, "
+            f"most likely a rebalance re-assigning it while recovery was running."
+        )
 
     def _get_position_with_cache(self, rp: RecoveryPartition) -> ConfluentPartition:
         """
