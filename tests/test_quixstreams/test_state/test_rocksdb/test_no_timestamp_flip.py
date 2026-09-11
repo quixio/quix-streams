@@ -25,6 +25,7 @@ import pytest
 
 from quixstreams.state.exceptions import IncompatibleStateStoreError
 from quixstreams.state.rocksdb import RocksDBOptions
+from quixstreams.state.rocksdb.ttl_codec import SENTINEL_NEVER, decode_ttl_value
 
 # Kafka's NO_TIMESTAMP. Messages produced without a timestamp arrive with this.
 NO_TIMESTAMP = -1
@@ -157,5 +158,19 @@ class TestNoTimestampFlip:
             assert (
                 partition.uses_ttl_stamps
             ), "a batch containing a well-timestamped ttl= write should still flip"
+            # The un-anchorable write must not be born expired. With no
+            # timestamp able to anchor its expiry, it must fall back to
+            # SENTINEL_NEVER rather than a bogus 1970 stamp derived from
+            # NO_TIMESTAMP (-1) + ttl.
+            cf = partition.get_or_create_column_family("default")
+            with partition.begin() as tx:
+                raw_key = tx._serialize_key("kbad", prefix=b"pfx")
+            stamp, payload = decode_ttl_value(cf[raw_key])
+            assert stamp == SENTINEL_NEVER, (
+                "an un-anchorable NO_TIMESTAMP ttl= write must be stored as "
+                "never-expiring, not with a bogus expiry derived from "
+                "NO_TIMESTAMP + ttl"
+            )
+            assert payload == b'"vbad"'
         finally:
             partition.close()
