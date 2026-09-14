@@ -164,6 +164,7 @@ doc_map = {
             "quixstreams.sources.community.file.formats.parquet",
             "quixstreams.sources.community.kinesis.kinesis",
             "quixstreams.sources.community.mqtt",
+            "quixstreams.sources.community.mysql_cdc.mysql_cdc",
             "quixstreams.sources.community.pubsub.pubsub",
             "quixstreams.sources.community.pandas",
             "quixstreams.sources.community.influxdb3.influxdb3",

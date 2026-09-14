@@ -1,23 +1,103 @@
-import base64
-import json
-import logging
-import os
-import time
+"""
+MySQL access layer for the CDC source.
 
-import pymysql
-from pymysqlreplication import BinLogStreamReader
-from pymysqlreplication.row_event import (
-    DeleteRowsEvent,
-    UpdateRowsEvent,
-    WriteRowsEvent,
+Everything that talks to MySQL lives here: connections, server validation, binlog
+coordinates, the binlog stream and the snapshot generator. Nothing in this module
+persists anything - the binlog position is owned by `MySqlCdcSource` and stored in
+its Quix Streams state store.
+"""
+
+import logging
+from typing import Any, Dict, Iterator, List, Optional, Tuple
+
+from .snapshot import (
+    discover_primary_key,
+    estimate_row_count,
+    iter_snapshot_batches,
+    serialize_value,
 )
 
-__all__ = ("MySqlHelper",)
+try:
+    import pymysql
+    from pymysql.cursors import DictCursor
+    from pymysql.err import (
+        InterfaceError,
+        MySQLError,
+        OperationalError,
+        ProgrammingError,
+    )
+    from pymysqlreplication import BinLogStreamReader
+    from pymysqlreplication.row_event import (
+        DeleteRowsEvent,
+        UpdateRowsEvent,
+        WriteRowsEvent,
+    )
+except ImportError as exc:
+    raise ImportError(
+        'Packages "pymysql" and "mysql-replication" are missing: '
+        "run pip install quixstreams[mysql] to fix it"
+    ) from exc
+
+
+__all__ = ("MySqlCdcError", "MySqlHelper", "is_connection_error")
 
 logger = logging.getLogger(__name__)
 
+# MySQL renamed both status statements: `SHOW MASTER STATUS` became `SHOW BINARY LOG
+# STATUS` in 8.4, and `SHOW SLAVE STATUS` became `SHOW REPLICA STATUS` in 8.0.22 (the
+# old spelling survived until 8.4). Every spelling is tried in turn, which covers 5.7
+# through 8.4; a spelling this server rejects is skipped, never substituted for a
+# statement that means something else.
+_BINLOG_STATUS_STATEMENTS = ("SHOW MASTER STATUS", "SHOW BINARY LOG STATUS")
+_REPLICA_STATUS_STATEMENTS = ("SHOW REPLICA STATUS", "SHOW SLAVE STATUS")
+
+# 1227 = ER_SPECIFIC_ACCESS_DENIED_ERROR: the user lacks REPLICATION CLIENT.
+_ACCESS_DENIED_ERROR_CODE = 1227
+
+_NO_PRIMARY_KEY_ERROR = (
+    "Table {table_name} has no PRIMARY KEY. The initial snapshot requires one for "
+    "stable pagination. Add a primary key, or set initial_snapshot=False to stream "
+    "binlog changes only."
+)
+
+
+class MySqlCdcError(Exception):
+    """Raised for MySQL configuration/validation problems the user must fix."""
+
+
+def is_connection_error(exc: BaseException) -> bool:
+    """
+    True for failures a reconnect can plausibly clear.
+
+    Used by the source to decide whether to rebuild the binlog stream or to let the
+    error kill the process. Anything not listed here (a purged binlog position, a
+    revoked grant, a producer timeout) is fatal on purpose: retrying it forever would
+    hide it.
+    """
+    return isinstance(
+        exc, (OperationalError, InterfaceError, BrokenPipeError, ConnectionResetError)
+    )
+
+
+def _first_present(row: Dict[str, Any], *names: str) -> Any:
+    """Return the first non-None value among `names` in a DictCursor row."""
+    for name in names:
+        value = row.get(name)
+        if value is not None:
+            return value
+    return None
+
 
 class MySqlHelper:
+    """
+    Owns every MySQL connection the CDC source needs.
+
+    Each method opens and closes its own short-lived connection. The two exceptions
+    are `create_binlog_stream()`, whose returned reader owns its connections, and
+    `perform_initial_snapshot()`, a generator that holds one connection open for the
+    duration of the table walk.
+    """
+
     def __init__(
         self,
         host: str,
@@ -26,7 +106,6 @@ class MySqlHelper:
         password: str,
         database: str,
         table: str,
-        state_dir: str,
         snapshot_host: str,
     ):
         self._host = host
@@ -35,10 +114,11 @@ class MySqlHelper:
         self._password = password
         self._database = database
         self._table = table
+        self._table_name = f"{database}.{table}"
         self._snapshot_host = snapshot_host
-        self._state_dir = state_dir
 
-    def connect_mysql(self, override_host=None):
+    def connect_mysql(self, override_host: Optional[str] = None) -> Any:
+        """Open a new connection to `host`, or to `override_host` when given."""
         return pymysql.connect(
             host=override_host or self._host,
             port=self._port,
@@ -48,278 +128,352 @@ class MySqlHelper:
             charset="utf8mb4",
         )
 
-    def enable_binlog_if_needed(self):
-        """Check and enable binary logging if not already enabled"""
+    # ------------------------------------------------------------------ validation
+
+    def validate_server_config(self, require_primary_key: bool) -> None:
+        """
+        Check everything that must hold before streaming, failing loudly if it does not.
+
+        :param require_primary_key: when True (the initial snapshot is enabled), also
+            require the table to have a PRIMARY KEY to paginate on. Streaming-only
+            mode does not need one.
+        """
         conn = self.connect_mysql()
         try:
             with conn.cursor() as cursor:
-                # Check if binary logging is enabled
-                cursor.execute("SHOW VARIABLES LIKE 'log_bin'")
-                result = cursor.fetchone()
-
-                if result and result[1] == "ON":
-                    logger.info("Binary logging is already enabled")
-                else:
-                    logger.warning(
-                        "Binary logging is not enabled. Please enable it in MySQL configuration."
-                    )
-                    logger.warning("Add the following to your MySQL config:")
-                    logger.warning("log-bin=mysql-bin")
-                    logger.warning("binlog-format=ROW")
-                    raise Exception("Binary logging must be enabled for CDC")
-
-                # Check binlog format
-                cursor.execute("SHOW VARIABLES LIKE 'binlog_format'")
-                result = cursor.fetchone()
-
-                if result and result[1] != "ROW":
-                    logger.warning(
-                        f"Binlog format is {result[1]}, should be ROW for CDC"
-                    )
-                    logger.warning(
-                        "Please set binlog_format=ROW in MySQL configuration"
-                    )
-
+                self._require_binlog_enabled(cursor)
+                self._require_row_format(cursor)
+                self._warn_on_row_image(cursor)
+                self._require_table(cursor)
+                if require_primary_key:
+                    self.require_primary_key(cursor)
         finally:
             conn.close()
 
-    def setup_mysql_cdc(self):
-        """Setup MySQL for CDC - mainly validation"""
-        conn = self.connect_mysql()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(f"SHOW TABLES LIKE '{self._table}'")
-                if not cursor.fetchone():
-                    raise Exception(f"Table {self._table} not found")
-        finally:
-            conn.close()
+        if self._snapshot_host != self._host:
+            # Fail here, on the source's connect path, rather than hours later when
+            # the snapshot actually opens this connection.
+            self.connect_mysql(override_host=self._snapshot_host).close()
+            logger.info("Snapshot host %s is reachable", self._snapshot_host)
 
-    def get_binlog_position_file(self):
-        os.makedirs(self._state_dir, exist_ok=True)
-        return os.path.join(
-            self._state_dir, f"binlog_position_{self._database}_{self._table}.json"
+    def _require_binlog_enabled(self, cursor: Any) -> None:
+        if self._show_variable(cursor, "log_bin") != "ON":
+            raise MySqlCdcError(
+                f"Binary logging is disabled on {self._host}. CDC requires it: set "
+                "log_bin (e.g. log-bin=mysql-bin) in the MySQL configuration and "
+                "restart the server."
+            )
+
+    def _require_row_format(self, cursor: Any) -> None:
+        binlog_format = self._show_variable(cursor, "binlog_format")
+        if binlog_format != "ROW":
+            raise MySqlCdcError(
+                f"binlog_format is {binlog_format!r} on {self._host}, but CDC requires "
+                "'ROW'. Any other format carries statements instead of row images, so "
+                "this source would stream a binlog it cannot read. Set "
+                "binlog_format=ROW in the MySQL configuration."
+            )
+
+    def _warn_on_row_image(self, cursor: Any) -> None:
+        row_image = self._show_variable(cursor, "binlog_row_image")
+        if row_image is not None and row_image != "FULL":
+            # Not fatal: MINIMAL still carries the primary key in the "before" image,
+            # so change events remain usable, just with partial column sets.
+            logger.warning(
+                "binlog_row_image is %r on %s; 'FULL' is recommended so update and "
+                "delete events carry every column instead of only the primary key",
+                row_image,
+                self._host,
+            )
+
+    def _require_table(self, cursor: Any) -> None:
+        cursor.execute(
+            "SELECT 1 FROM information_schema.TABLES "
+            "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s",
+            (self._database, self._table),
         )
-
-    def save_binlog_position(self, log_file, log_pos):
-        position_file = self.get_binlog_position_file()
-        position_data = {
-            "log_file": log_file,
-            "log_pos": log_pos,
-            "timestamp": time.time(),
-            "readable_time": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-        }
-        try:
-            with open(position_file, "w") as f:
-                json.dump(position_data, f, indent=2)
-            logger.debug(f"Saved binlog position: {log_file}:{log_pos}")
-        except Exception as e:
-            logger.error(f"Failed to save binlog position: {e}")
-
-    def load_binlog_position(self):
-        position_file = self.get_binlog_position_file()
-        if os.path.exists(position_file):
-            try:
-                with open(position_file, "r") as f:
-                    position_data = json.load(f)
-                logger.info(
-                    f"Loaded binlog position: {position_data['log_file']}:{position_data['log_pos']} from {position_data.get('readable_time', 'unknown time')}"
-                )
-                return position_data["log_file"], position_data["log_pos"]
-            except Exception as e:
-                logger.error(f"Failed to load binlog position: {e}")
-        return None, None
-
-    def create_binlog_stream(self, server_id=1):
-        mysql_settings = {
-            "host": self._host,
-            "port": self._port,
-            "user": self._user,
-            "passwd": self._password,
-        }
-
-        log_file, log_pos = self.load_binlog_position()
-
-        stream_kwargs = {
-            "connection_settings": mysql_settings,
-            "server_id": server_id,
-            "only_events": [DeleteRowsEvent, WriteRowsEvent, UpdateRowsEvent],
-            "resume_stream": True,
-            "blocking": False,
-        }
-
-        # If we have a saved position, use it
-        if log_file and log_pos:
-            stream_kwargs["log_file"] = log_file
-            stream_kwargs["log_pos"] = log_pos
-            logger.info(
-                f"Resuming binlog stream from saved position: {log_file}:{log_pos}"
-            )
-        else:
-            logger.info(
-                "No saved binlog position found, starting from current position"
+        if not cursor.fetchone():
+            raise MySqlCdcError(
+                f"Table {self._table_name} does not exist on {self._host}, or the "
+                "configured user cannot see it."
             )
 
-        return BinLogStreamReader(**stream_kwargs)
-
-    def get_changes(self, stream):
-        """Get changes from MySQL binlog stream and save position after processing"""
-        changes = []
-        last_position = None
-
-        # Read available events (non-blocking)
-        for binlogevent in stream:
-            # Update position tracking
-            if hasattr(stream, "log_file") and hasattr(stream, "log_pos"):
-                last_position = (stream.log_file, stream.log_pos)
-
-            # Filter by schema and table
-            if (
-                binlogevent.schema == self._database
-                and binlogevent.table == self._table
-            ):
-                if isinstance(binlogevent, WriteRowsEvent):
-                    # INSERT operation
-                    for row in binlogevent.rows:
-                        change = {
-                            "kind": "insert",
-                            "schema": binlogevent.schema,
-                            "table": binlogevent.table,
-                            "columnnames": list(row["values"].keys()),
-                            "columnvalues": [
-                                self.serialize_value(v) for v in row["values"].values()
-                            ],
-                            "oldkeys": {},
-                        }
-                        changes.append(change)
-
-                elif isinstance(binlogevent, UpdateRowsEvent):
-                    # UPDATE operation
-                    for row in binlogevent.rows:
-                        change = {
-                            "kind": "update",
-                            "schema": binlogevent.schema,
-                            "table": binlogevent.table,
-                            "columnnames": list(row["after_values"].keys()),
-                            "columnvalues": [
-                                self.serialize_value(v)
-                                for v in row["after_values"].values()
-                            ],
-                            "oldkeys": {
-                                "keynames": list(row["before_values"].keys()),
-                                "keyvalues": [
-                                    self.serialize_value(v)
-                                    for v in row["before_values"].values()
-                                ],
-                            },
-                        }
-                        changes.append(change)
-
-                elif isinstance(binlogevent, DeleteRowsEvent):
-                    # DELETE operation
-                    for row in binlogevent.rows:
-                        change = {
-                            "kind": "delete",
-                            "schema": binlogevent.schema,
-                            "table": binlogevent.table,
-                            "columnnames": [],
-                            "columnvalues": [],
-                            "oldkeys": {
-                                "keynames": list(row["values"].keys()),
-                                "keyvalues": [
-                                    self.serialize_value(v)
-                                    for v in row["values"].values()
-                                ],
-                            },
-                        }
-                        changes.append(change)
-
-        # Save position if we processed any events
-        if last_position and changes:
-            self.save_binlog_position(last_position[0], last_position[1])
-
-        return changes
-
-    def perform_initial_snapshot(self, batch_size=1000):
-        conn = self.connect_mysql(override_host=self._snapshot_host)
-        changes = []
-
-        try:
-            with conn.cursor() as cursor:
-                # Get total row count for logging
-                cursor.execute(
-                    f"SELECT COUNT(*) FROM `{self._database}`.`{self._table}`"  # noqa: S608
-                )
-                total_rows = cursor.fetchone()[0]
-                logger.info(
-                    f"Starting initial snapshot of {self._database}.{self._table} - {total_rows} rows"
-                )
-
-                # Use LIMIT with OFFSET for batching to avoid memory issues with large tables
-                offset = 0
-                processed_rows = 0
-
-                while True:
-                    # Fetch batch of rows
-                    cursor.execute(
-                        f"SELECT * FROM `{self._database}`.`{self._table}` LIMIT {batch_size} OFFSET {offset}"  # noqa: S608
-                    )
-                    rows = cursor.fetchall()
-
-                    if not rows:
-                        break
-
-                    # Get column names
-                    column_names = [desc[0] for desc in cursor.description]
-
-                    # Convert each row to a change event
-                    for row in rows:
-                        # Convert row tuple to dictionary
-                        row_dict = dict(zip(column_names, row))
-
-                        # Convert values to JSON-serializable format
-                        serialized_values = [
-                            self.serialize_value(value) for value in row_dict.values()
-                        ]
-
-                        change = {
-                            "kind": "snapshot_insert",  # Different kind to distinguish from real inserts
-                            "schema": self._database,
-                            "table": self._table,
-                            "columnnames": column_names,
-                            "columnvalues": serialized_values,
-                            "oldkeys": {},
-                        }
-                        changes.append(change)
-
-                    processed_rows += len(rows)
-                    offset += batch_size
-
-                    if processed_rows % 50000 == 0:  # Log progress every 50k rows
-                        logger.info(
-                            f"Snapshot progress: {processed_rows}/{total_rows} rows processed"
-                        )
-
-                logger.info(
-                    f"Initial snapshot completed: {processed_rows} rows captured"
-                )
-
-        except Exception as e:
-            logger.error(f"Error during initial snapshot: {e}")
-            raise
-        finally:
-            conn.close()
-
-        return changes
+    def require_primary_key(self, cursor: Any) -> List[str]:
+        """Return the table's PK columns in index order, raising if it has none."""
+        pk_columns = discover_primary_key(cursor, self._database, self._table)
+        if not pk_columns:
+            raise MySqlCdcError(
+                _NO_PRIMARY_KEY_ERROR.format(table_name=self._table_name)
+            )
+        return pk_columns
 
     @staticmethod
-    def serialize_value(value):
-        if value is None:
+    def _show_variable(cursor: Any, name: str) -> Optional[str]:
+        cursor.execute("SHOW VARIABLES LIKE %s", (name,))
+        row = cursor.fetchone()
+        return row[1] if row else None
+
+    # ------------------------------------------------------------ binlog positions
+
+    def fetch_start_position(self) -> Tuple[str, int]:
+        """
+        Return the current binlog coordinates of `host` as `(log_file, log_pos)`.
+
+        Tries both spellings of the statement (see `_BINLOG_STATUS_STATEMENTS`) and
+        raises if neither yields a position: the source must never guess a starting
+        point, because guessing "now" silently drops everything before it.
+        """
+        conn = self.connect_mysql()
+        try:
+            with conn.cursor() as cursor:
+                for statement in _BINLOG_STATUS_STATEMENTS:
+                    row = self._run_status_statement(cursor, statement)
+                    if row:
+                        # Both spellings return File, Position as the first columns.
+                        return str(row[0]), int(row[1])
+        finally:
+            conn.close()
+
+        raise MySqlCdcError(
+            f"Could not read the binary log position from {self._host}: none of "
+            f"{', '.join(_BINLOG_STATUS_STATEMENTS)} returned a row. Binary logging "
+            "must be enabled and the user needs the REPLICATION CLIENT privilege."
+        )
+
+    def fetch_replica_executed_position(self, host: str) -> Tuple[str, int]:
+        """
+        Return the primary coordinates a replica has already *executed*.
+
+        Reads `Relay_Source_Log_File`/`Exec_Source_Log_Pos` (MySQL 8.0.22+), falling
+        back to the legacy `Relay_Master_Log_File`/`Exec_Master_Log_Pos`. With parallel
+        appliers `Exec_*` is a low-water mark, which errs towards replaying changes
+        rather than skipping them.
+        """
+        conn = self.connect_mysql(override_host=host)
+        try:
+            with conn.cursor(DictCursor) as cursor:
+                for statement in _REPLICA_STATUS_STATEMENTS:
+                    row = self._run_status_statement(cursor, statement)
+                    if not row:
+                        continue
+                    log_file = _first_present(
+                        row, "Relay_Source_Log_File", "Relay_Master_Log_File"
+                    )
+                    log_pos = _first_present(
+                        row, "Exec_Source_Log_Pos", "Exec_Master_Log_Pos"
+                    )
+                    # A zero Exec_* position means the applier has never run, so there
+                    # is no coordinate to start from; fall through to the error below.
+                    if log_file and log_pos:
+                        return str(log_file), int(log_pos)
+        finally:
+            conn.close()
+
+        raise MySqlCdcError(
+            f"Could not read an executed replication position from snapshot host "
+            f"{host}: none of {', '.join(_REPLICA_STATUS_STATEMENTS)} returned "
+            "coordinates. Either that host is not a replica of "
+            f"{self._host} - point snapshot_host at the primary instead - or the "
+            "configured user lacks the REPLICATION CLIENT privilege on it. The "
+            "source will not fall back to the primary's current position, because "
+            "that would silently drop every change the replica has not applied yet."
+        )
+
+    def fetch_snapshot_start_position(self) -> Tuple[str, int]:
+        """
+        Return the coordinates on `host` to start the binlog stream from, given where
+        the snapshot rows will be read.
+
+        Same host: its current position. A separate snapshot host: the primary
+        coordinates that replica has already executed. Rows read from the replica
+        afterwards reflect a state at or after those coordinates, so streaming the
+        primary from there can only duplicate changes, never miss them.
+        """
+        if self._snapshot_host == self._host:
+            return self.fetch_start_position()
+        return self.fetch_replica_executed_position(self._snapshot_host)
+
+    @staticmethod
+    def _run_status_statement(cursor: Any, statement: str) -> Any:
+        """
+        Execute a SHOW ... STATUS statement, returning its first row or None.
+
+        None means "this spelling is unusable here", so the caller should try the next
+        one and raise if they all come back empty. Two failures qualify: a
+        `ProgrammingError`, which is what a server that does not know the statement
+        answers, and an access-denied error, which is what a server that knows it but
+        will not run it for this user answers. Every other MySQL error - a dropped
+        connection above all - propagates, so a broken link is never mistaken for an
+        unsupported statement.
+        """
+        try:
+            cursor.execute(statement)
+        except ProgrammingError as exc:
+            logger.debug("%s is not available on this server: %s", statement, exc)
             return None
-        elif isinstance(value, (bytes, bytearray)):
-            return base64.b64encode(value).decode("utf-8")
-        elif hasattr(value, "isoformat"):
-            return value.isoformat()
-        elif isinstance(value, (int, float, str, bool)):
-            return value
-        else:
-            return str(value)
+        except MySQLError as exc:
+            code = exc.args[0] if exc.args else None
+            if code != _ACCESS_DENIED_ERROR_CODE:
+                raise
+            logger.debug("%s is not permitted for this user: %s", statement, exc)
+            return None
+        return cursor.fetchone()
+
+    # ----------------------------------------------------------------- binlog read
+
+    def create_binlog_stream(
+        self, server_id: int, log_file: str, log_pos: int
+    ) -> BinLogStreamReader:
+        """
+        Open a binlog stream positioned at `log_file`:`log_pos`.
+
+        `resume_stream=True` makes the server continue with the event *after*
+        `log_pos` (which is the end position of the last processed event), so resuming
+        does not duplicate the event at the boundary.
+        """
+        return BinLogStreamReader(
+            connection_settings={
+                "host": self._host,
+                "port": self._port,
+                "user": self._user,
+                "passwd": self._password,
+            },
+            server_id=server_id,
+            only_events=[DeleteRowsEvent, WriteRowsEvent, UpdateRowsEvent],
+            only_schemas=[self._database],
+            only_tables=[self._table],
+            resume_stream=True,
+            blocking=False,
+            log_file=log_file,
+            log_pos=log_pos,
+        )
+
+    def read_changes(
+        self, stream: BinLogStreamReader, max_rows: int
+    ) -> Tuple[List[Dict[str, Any]], Optional[Tuple[str, int]]]:
+        """
+        Read up to `max_rows` row-changes and return them with the position they cover.
+
+        The stream is non-blocking, so this returns as soon as the server has nothing
+        more queued. The position is read once, after the loop: `BinLogStreamReader`
+        advances `log_pos`/`log_file` for every packet it decodes, including events its
+        own `only_events`/`only_tables` filters discard, so committing that position
+        skips past uninteresting events instead of re-reading them after a restart.
+
+        The returned position can be non-None alongside an empty change list - the
+        normal case for a quiet table in a busy database - and committing it is safe
+        precisely because those events were read and deliberately not emitted.
+        """
+        changes: List[Dict[str, Any]] = []
+        for event in stream:
+            # The library-side only_schemas/only_tables filter depends on
+            # binlog_row_metadata being populated, so re-check here.
+            if event.schema == self._database and event.table == self._table:
+                changes.extend(self._event_to_changes(event))
+            if len(changes) >= max_rows:
+                break
+
+        log_file, log_pos = stream.log_file, stream.log_pos
+        position = (log_file, log_pos) if log_file and log_pos else None
+        return changes, position
+
+    def _event_to_changes(self, event: Any) -> List[Dict[str, Any]]:
+        """Convert one row event into the connector's change dicts, one per row."""
+        if isinstance(event, WriteRowsEvent):
+            return [
+                {
+                    "kind": "insert",
+                    "schema": event.schema,
+                    "table": event.table,
+                    "columnnames": list(row["values"].keys()),
+                    "columnvalues": [
+                        serialize_value(value) for value in row["values"].values()
+                    ],
+                    "oldkeys": {},
+                }
+                for row in event.rows
+            ]
+
+        if isinstance(event, UpdateRowsEvent):
+            return [
+                {
+                    "kind": "update",
+                    "schema": event.schema,
+                    "table": event.table,
+                    "columnnames": list(row["after_values"].keys()),
+                    "columnvalues": [
+                        serialize_value(value) for value in row["after_values"].values()
+                    ],
+                    "oldkeys": {
+                        "keynames": list(row["before_values"].keys()),
+                        "keyvalues": [
+                            serialize_value(value)
+                            for value in row["before_values"].values()
+                        ],
+                    },
+                }
+                for row in event.rows
+            ]
+
+        if isinstance(event, DeleteRowsEvent):
+            return [
+                {
+                    "kind": "delete",
+                    "schema": event.schema,
+                    "table": event.table,
+                    "columnnames": [],
+                    "columnvalues": [],
+                    "oldkeys": {
+                        "keynames": list(row["values"].keys()),
+                        "keyvalues": [
+                            serialize_value(value) for value in row["values"].values()
+                        ],
+                    },
+                }
+                for row in event.rows
+            ]
+
+        # `only_events` restricts the stream to the three row events handled above;
+        # anything else that reaches here carries no rows to emit.
+        return []
+
+    # -------------------------------------------------------------------- snapshot
+
+    def perform_initial_snapshot(
+        self, batch_size: int, start_after: Optional[List[Any]] = None
+    ) -> Iterator[Tuple[List[Dict[str, Any]], List[Any]]]:
+        """
+        Walk the table on `snapshot_host`, yielding one keyset page at a time.
+
+        The generator owns its connection and closes it when it is exhausted or
+        closed, so callers should wrap it in `contextlib.closing()` to release the
+        connection promptly when producing a page raises.
+
+        :param batch_size: maximum rows per page.
+        :param start_after: primary-key values of the last row committed by a previous
+            run; the walk resumes strictly after that row.
+        :return: an iterator of `(changes, last_key_values)`.
+        """
+        conn = self.connect_mysql(override_host=self._snapshot_host)
+        try:
+            with conn.cursor() as cursor:
+                pk_columns = self.require_primary_key(cursor)
+                estimated_rows = estimate_row_count(cursor, self._database, self._table)
+                logger.info(
+                    "Starting initial snapshot of %s from %s: ~%s rows (estimate), "
+                    "paginating on %s",
+                    self._table_name,
+                    self._snapshot_host,
+                    estimated_rows if estimated_rows is not None else "unknown",
+                    ", ".join(pk_columns),
+                )
+                yield from iter_snapshot_batches(
+                    cursor,
+                    database=self._database,
+                    table=self._table,
+                    pk_columns=pk_columns,
+                    batch_size=batch_size,
+                    start_after=start_after,
+                )
+        finally:
+            conn.close()

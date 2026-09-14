@@ -12,4 +12,4 @@ $PREFIX/bin/pip install \
 'httpx>=0.28.1' \
 'paho-mqtt>=2.1.0,<3' \
 'pymysql>=1.0,<2' \
-'mysql-replication>=1.1,<2'
+'mysql-replication>=1.0.17,<2'
