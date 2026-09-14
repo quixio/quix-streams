@@ -28,7 +28,10 @@ SAMPLE_BEARING_TYPES: frozenset[str] = frozenset(
 _ALLOWED_FILTER_KEYS: frozenset[str] = frozenset({"types", "signals"})
 
 
-@dataclass(frozen=True, slots=True)
+# NOTE: no ``slots=True`` here - that keyword is Python 3.10+ and this
+# package must import on 3.9 (``requires-python = ">=3.9"``). The
+# instance is built once per deserializer, so slots buy nothing here.
+@dataclass(frozen=True)
 class ResolvedFilter:
     """Immutable resolved filter consulted by the deserializer.
 
