@@ -170,6 +170,75 @@ def sample_batch():
 
 
 # =============================================================================
+# Parquet row-group sizing
+# =============================================================================
+
+
+class TestRowGroupSizing:
+    """Row groups are capped at a fixed, configurable row count (default
+    1,000,000 — the lakehouse compaction's default). A reader pays about one
+    range request per row group, so this bounds the request count of every
+    query over sink-written files; small flushes stay a single group."""
+
+    @staticmethod
+    def _data_file_bytes(mock_blob_client) -> bytes:
+        """Bytes of the last DATA file upload (skips any .vidx sidecar)."""
+        calls = [
+            c
+            for c in mock_blob_client.put_object_async.call_args_list
+            if "/.vidx/" not in c[0][0]
+        ]
+        return calls[-1][0][1]
+
+    def test_default_matches_lakehouse_compaction(self, sink_factory):
+        assert sink_factory()._row_group_rows == 1_000_000
+        assert QuixTSDataLakeSink.ROW_GROUP_ROWS_DEFAULT == 1_000_000
+        assert sink_factory(row_group_rows=250_000)._row_group_rows == 250_000
+
+    def test_rejects_non_positive(self, sink_factory):
+        with pytest.raises(ValueError):
+            sink_factory(row_group_rows=0)
+
+    def test_small_files_are_one_row_group(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        sink = sink_factory()
+        sink.write(sample_batch())
+        parquet_bytes = self._data_file_bytes(mock_blob_client)
+        assert pq.ParquetFile(io.BytesIO(parquet_bytes)).num_row_groups == 1
+
+    def test_large_flush_is_split_at_the_configured_rows(
+        self, sink_factory, mock_blob_client
+    ):
+        sink = sink_factory(row_group_rows=100_000)
+        n = 250_000
+        df = pd.DataFrame({"ts_ms": range(n), "v": [1.5] * n, "__key": ["k"] * n})
+        sink._write_parquet_to_storage(df, "p/data.parquet", [], ())
+        meta = pq.ParquetFile(
+            io.BytesIO(self._data_file_bytes(mock_blob_client))
+        ).metadata
+        assert meta.num_row_groups == 3
+        assert [meta.row_group(i).num_rows for i in range(3)] == [
+            100_000,
+            100_000,
+            50_000,
+        ]
+        pending = sink._pending_futures[-1]
+        # The catalog entry is per FILE, unaffected by row-group splitting.
+        assert pending["row_count"] == n
+
+    def test_default_keeps_a_million_row_flush_in_one_group(
+        self, sink_factory, mock_blob_client
+    ):
+        sink = sink_factory()
+        n = 1_000_000
+        df = pd.DataFrame({"ts_ms": range(n), "__key": ["k"] * n})
+        sink._write_parquet_to_storage(df, "p/data.parquet", [], ())
+        parquet_bytes = self._data_file_bytes(mock_blob_client)
+        assert pq.ParquetFile(io.BytesIO(parquet_bytes)).num_row_groups == 1
+
+
+# =============================================================================
 # 1. Initialization Tests
 # =============================================================================
 

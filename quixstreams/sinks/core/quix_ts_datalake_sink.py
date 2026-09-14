@@ -123,6 +123,13 @@ class QuixTSDataLakeSink(BatchingSink):
     :param namespace: Catalog namespace (default: "default")
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
     :param max_workers: Maximum number of parallel upload threads (default: 10)
+    :param row_group_rows: Maximum rows per Parquet ROW GROUP in the files this
+        sink writes (default 1,000,000, the same as the lakehouse compaction's
+        ``COMPACTION_ROW_GROUP_ROWS``). A reader pays about one storage range
+        request per row group, so many small groups make every query slow on a
+        high-latency storage path, while one huge group forfeits intra-file
+        skipping and inflates reader memory. A flush smaller than this is, as
+        always, a single row group.
     :param stats_columns: Optional list of column names to compute per-file
         min/max statistics ("zone maps") for. These are sent to the REST
         Catalog with each file and let the query layer skip files whose value
@@ -155,6 +162,17 @@ class QuixTSDataLakeSink(BatchingSink):
         Callback must resolve (or propagate/re-raise) the Exception.
     """
 
+    # ---- Parquet row-group size ----------------------------------------------
+    # Same rule as the lakehouse compaction/repartition rewrites: a reader needs
+    # about one storage range request PER ROW GROUP (column chunks are coalesced
+    # within a group, never across), so a file cut into many small groups costs
+    # a round-trip storm on a high-latency storage path, while one enormous
+    # group forfeits intra-file skipping and inflates reader memory. The size is
+    # a fixed row count (default 1,000,000 = the lakehouse's
+    # COMPACTION_ROW_GROUP_ROWS default and ~pyarrow's own default), so small
+    # flushes are a single group and only large flushes are split.
+    ROW_GROUP_ROWS_DEFAULT = 1_000_000
+
     def __init__(
         self,
         s3_prefix: str,
@@ -170,6 +188,7 @@ class QuixTSDataLakeSink(BatchingSink):
         auto_create_bucket: bool = True,
         max_workers: int = 10,
         stats_columns: Optional[List[str]] = None,
+        row_group_rows: Optional[int] = None,
         stream_timeout_ms: Optional[int] = None,
         on_stream_timeout: Optional[Callable[[Any], None]] = None,
         silence_azure_http_logs: bool = True,
@@ -221,6 +240,15 @@ class QuixTSDataLakeSink(BatchingSink):
         # growth on very wide tables. Stats ride along with each add-files
         # entry as ``column_stats`` and are consumed by the catalog's pruning.
         self._stats_columns = set(stats_columns) if stats_columns else None
+
+        # Parquet row-group size: a fixed, configurable row count.
+        if row_group_rows is not None and int(row_group_rows) < 1:
+            raise ValueError("row_group_rows must be >= 1")
+        self._row_group_rows = (
+            int(row_group_rows)
+            if row_group_rows is not None
+            else self.ROW_GROUP_ROWS_DEFAULT
+        )
 
         # Blob storage client and bucket name will be initialized in setup()
         self._blob_client: Optional[BlobStorageClient] = None
@@ -577,8 +605,15 @@ class QuixTSDataLakeSink(BatchingSink):
         column_stats = self._compute_column_stats(table)
 
         buf = pa.BufferOutputStream()
-        pq.write_table(table, buf)
+        pq.write_table(table, buf, row_group_size=self._row_group_rows)
         parquet_bytes = buf.getvalue().to_pybytes()
+        if table.num_rows > self._row_group_rows:
+            logger.debug(
+                "Wrote %s with %d row groups of <= %d rows",
+                storage_key,
+                -(-table.num_rows // self._row_group_rows),
+                self._row_group_rows,
+            )
 
         # Submit async upload
         if self._blob_client is None:
