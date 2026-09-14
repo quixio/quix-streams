@@ -50,8 +50,8 @@ memories/
 
 .claude/
 
-# scratch
+# local QA / scratch test harnesses
 .tmp/
 
-# local planning artifacts (spec + architecture)
+# planning artifacts (specs, architecture docs, etc.)
 dev-planning/

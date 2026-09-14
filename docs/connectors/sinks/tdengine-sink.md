@@ -77,7 +77,7 @@ TDengineSink accepts the following configuration parameters:
 - `on_client_connect_success` - Optional callback after successful client authentication.
 - `on_client_connect_failure` - Optional callback after failed client authentication (should accept the raised Exception as an argument).
 
-See the [What data can be sent to TDengine](#what-data-can-be-sent-to-tdengine) section for more info on `fields_keys` and `tags_keys`.
+See the [TDengineSink API](../../api-reference/sinks.md#tdenginesink) page for more info on `fields_keys` and `tags_keys`.
 
 
 ### Parameter Examples
@@ -156,7 +156,7 @@ taos> select * from cpu;
 
 
 
-## Testing Locally  
+## Testing Locally
 
 Rather than connect to a hosted TDengine instance, you can alternatively test your 
 application using a local instance of TDengine using Docker:  

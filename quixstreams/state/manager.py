@@ -1,7 +1,10 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, Optional, Type, Union
+from threading import Event
+from typing import Dict, List, Optional, Type, Union
+
+from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.internal_producer import InternalProducer
 from quixstreams.models.topics import TopicConfig
@@ -14,7 +17,7 @@ from .exceptions import (
 )
 from .memory import MemoryStore
 from .recovery import ChangelogProducerFactory, RecoveryManager
-from .rocksdb import RocksDBOptionsType, RocksDBStore
+from .rocksdb import OpenDeadline, RocksDBOptions, RocksDBOptionsType, RocksDBStore
 from .rocksdb.timestamped import TimestampedStore
 from .rocksdb.windowed.store import WindowedRocksDBStore
 
@@ -47,6 +50,9 @@ class StateStoreManager:
         producer: Optional[InternalProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
         default_store_type: StoreTypes = RocksDBStore,
+        migration_producer: Optional[InternalProducer] = None,
+        stop_event: Optional[Event] = None,
+        open_deadline: Optional[OpenDeadline] = None,
     ):
         if state_dir is not None:
             state_dir = Path(state_dir).absolute()
@@ -58,8 +64,14 @@ class StateStoreManager:
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[Optional[str], Dict[str, Store]] = {}
         self._producer = producer
+        # Optional dedicated NON-transactional producer for legacy-TTL migration /
+        # backfill records only. Set by the app
+        # only under exactly-once; threaded into each changelog producer factory.
+        self._migration_producer = migration_producer
         self._recovery_manager = recovery_manager
         self._default_store_type = default_store_type
+        self._stop_event = stop_event
+        self._open_deadline = open_deadline
 
     def _init_state_dir(self) -> None:
         if self._state_dir is None:
@@ -161,6 +173,7 @@ class StateStoreManager:
         return ChangelogProducerFactory(
             changelog_name=changelog_topic.name,
             producer=self._producer,
+            migration_producer=self._migration_producer,
         )
 
     def register_store(
@@ -183,30 +196,45 @@ class StateStoreManager:
         :param changelog_config: changelog topic config.
             Note: the compaction will be enabled for the changelog topic.
         """
-        if self._stores.get(stream_id, {}).get(store_name) is None:
-            changelog_producer_factory = self._setup_changelogs(
-                stream_id, store_name, topic_config=changelog_config
+        if self._stores.get(stream_id, {}).get(store_name) is not None:
+            return
+
+        changelog_producer_factory = self._setup_changelogs(
+            stream_id, store_name, topic_config=changelog_config
+        )
+
+        store_type = store_type or self.default_store_type
+        if store_type == RocksDBStore:
+            store: Store = RocksDBStore(
+                name=store_name,
+                stream_id=stream_id,
+                base_dir=str(self._state_dir),
+                changelog_producer_factory=changelog_producer_factory,
+                options=self._rocksdb_options,
+                stop_event=self._stop_event,
+                open_deadline=self._open_deadline,
             )
+        elif store_type == MemoryStore:
+            # Forward the app-wide TTL scalars so the
+            # memory backend honors legacy_records_ttl / ttl_changelog_tombstones /
+            # max_evictions_per_flush. The v3.24.0-stamp adoption is now automatic
+            # (no flag) on both backends, so nothing adoption-related is forwarded.
+            # ``RocksDBOptions`` is the app-wide options dataclass regardless of
+            # backend; this reads its scalar fields (it does not couple MemoryStore
+            # to a RocksDB partition).
+            opts = self._rocksdb_options or RocksDBOptions()
+            store = MemoryStore(
+                name=store_name,
+                stream_id=stream_id,
+                changelog_producer_factory=changelog_producer_factory,
+                legacy_records_ttl=opts.legacy_records_ttl,
+                ttl_changelog_tombstones=opts.ttl_changelog_tombstones,
+                max_evictions_per_flush=opts.max_evictions_per_flush,
+            )
+        else:
+            raise ValueError(f"invalid store type: {store_type}")
 
-            store_type = store_type or self.default_store_type
-            if store_type == RocksDBStore:
-                store: Store = RocksDBStore(
-                    name=store_name,
-                    stream_id=stream_id,
-                    base_dir=str(self._state_dir),
-                    changelog_producer_factory=changelog_producer_factory,
-                    options=self._rocksdb_options,
-                )
-            elif store_type == MemoryStore:
-                store = MemoryStore(
-                    name=store_name,
-                    stream_id=stream_id,
-                    changelog_producer_factory=changelog_producer_factory,
-                )
-            else:
-                raise ValueError(f"invalid store type: {store_type}")
-
-            self._stores.setdefault(stream_id, {})[store_name] = store
+        self._stores.setdefault(stream_id, {})[store_name] = store
 
     def register_timestamped_store(
         self,
@@ -233,6 +261,8 @@ class StateStoreManager:
                 topic_config=changelog_config,
             ),
             options=self._rocksdb_options,
+            stop_event=self._stop_event,
+            open_deadline=self._open_deadline,
         )
         self._stores.setdefault(stream_id, {})[store_name] = store
 
@@ -272,6 +302,8 @@ class StateStoreManager:
                 topic_config=changelog_config,
             ),
             options=self._rocksdb_options,
+            stop_event=self._stop_event,
+            open_deadline=self._open_deadline,
         )
 
     def clear_stores(self) -> None:
@@ -320,6 +352,31 @@ class StateStoreManager:
             )
         return store_partitions
 
+    def resume_reassigned_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        """
+        Resume data partitions still paused from a previous recovery generation.
+
+        Delegates to the RecoveryManager; no-op when state recovery is not enabled.
+        See `RecoveryManager.resume_reassigned_data_partitions`.
+        """
+        if self._recovery_manager:
+            self._recovery_manager.resume_reassigned_data_partitions(partitions)
+
+    def pause_assigned_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        """
+        Pause the data partitions of a fresh assignment while recovery is running.
+
+        Delegates to the RecoveryManager; no-op when state recovery is not enabled
+        or no recovery loop is running.
+        See `RecoveryManager.pause_assigned_data_partitions`.
+        """
+        if self._recovery_manager:
+            self._recovery_manager.pause_assigned_data_partitions(partitions)
+
     def on_partition_revoke(
         self,
         stream_id: str,
@@ -338,6 +395,21 @@ class StateStoreManager:
             for store in stores:
                 store.revoke_partition(partition=partition)
 
+    def destroy_partition_state(self, stream_id: str, partition: int) -> list[str]:
+        """
+        Destroy persisted state for all stores of a stream partition.
+
+        :param stream_id: stream id
+        :param partition: partition number
+        :return: names of stores whose persisted state was destroyed.
+        """
+        destroyed = []
+        for store in self._stores.get(stream_id, {}).values():
+            store.revoke_partition(partition=partition)
+            if store.destroy_partition(partition=partition):
+                destroyed.append(store.name)
+        return destroyed
+
     def init(self) -> None:
         """
         Initialize `StateStoreManager` and create a store directory
@@ -347,11 +419,22 @@ class StateStoreManager:
 
     def close(self) -> None:
         """
-        Close all registered stores
+        Close all registered stores and flush the dedicated migration
+        producer, if one was ever used.
         """
         for stream_stores in self._stores.values():
             for store in stream_stores.values():
                 store.close()
+        # The manager owns the dedicated non-transactional migration producer
+        # (the app only creates it and hands it over), so it is flushed here on
+        # shutdown — mirroring how the main producer is flushed on teardown.
+        # The migration paths already flush after each chunk (changelog-first),
+        # so this is a safety net for records produced right before shutdown.
+        # Guarded on ``instantiated`` so the common no-migration case stays a
+        # no-op and does not spin up a librdkafka handle just to flush nothing.
+        migration_producer = self._migration_producer
+        if migration_producer is not None and migration_producer.instantiated:
+            migration_producer.flush()
 
     def __enter__(self):
         self.init()

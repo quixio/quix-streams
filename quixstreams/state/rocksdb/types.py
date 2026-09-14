@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Literal, Optional, Protocol
 
 import rocksdict
@@ -24,5 +25,11 @@ class RocksDBOptionsType(Protocol):
     open_retry_backoff: float
     use_fsync: bool
     on_corrupted_recreate: bool
+    max_evictions_per_flush: int
+    legacy_records_ttl: Optional[timedelta]
+    legacy_backfill_chunk_size: int
+    ttl_changelog_tombstones: bool
+    ttl_rollback: bool
+    ttl_force_flip: bool
 
     def to_options(self) -> rocksdict.Options: ...

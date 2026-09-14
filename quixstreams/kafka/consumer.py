@@ -15,7 +15,11 @@ from confluent_kafka import (
 )
 from confluent_kafka.admin import ClusterMetadata, GroupMetadata
 
-from quixstreams.exceptions import KafkaPartitionError, PartitionAssignmentError
+from quixstreams.exceptions import (
+    KafkaPartitionError,
+    PartitionAssignmentError,
+    QuixException,
+)
 from quixstreams.models.types import (
     RawConfluentKafkaMessageProto,
     SuccessfulConfluentKafkaMessageProto,
@@ -69,6 +73,8 @@ def _wrap_assignment_errors(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
+        except QuixException:
+            raise
         except Exception as exc:
             raise PartitionAssignmentError("Error during partition assignment") from exc
 

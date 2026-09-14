@@ -22,9 +22,9 @@ Other sinks may write the data straight away.
 
 2. When the current checkpoint is committed, the app calls `BaseSink.flush()`.  
 For example, `BatchingSink` will write the accumulated data during `flush()`.
-   1. If the destination cannot accept new data, sinks can raise a special exception `SinkBackpressureError(topic, partition, retry_after)` and specify the timeout for the writes to be retried later.  
-   2. The application will react to `SinkBackpressureError` by pausing the corresponding topic-partition for the given time and seeking the partition offset back to the beginning of the checkpoint.  
-   3. When the timeout elapses, the app will resume consuming from this partition, re-process the data, and try to sink it again.
+   1. If the destination cannot accept new data, sinks can raise a special exception `SinkBackpressureError(retry_after)` and specify the timeout for the writes to be retried later.  
+   2. The application will react to `SinkBackpressureError` by pausing all assigned topic partitions for the given time and seeking their offsets back to the beginning of the checkpoint.  
+   3. When the timeout elapses, the app will resume consuming from these partitions, re-process the data, and try to sink it again.
 
 3. If any of the sinks fail during `flush()`, the application will abort the checkpoint, and the data will be re-processed again. 
 
@@ -37,9 +37,9 @@ For example, some databases may rate limit the number of bytes written in a give
 
 To handle these scenarios, Sinks provide the **backpressure mechanism**.
 
-The Sink can tell the application to pause consuming from the given topic-partition and reprocess the data later by raising a [SinkBackpressureError(topic, partition, retry_after)](../../api-reference/sinks.md#sinkbackpressureerror).
+The Sink can tell the application to pause consuming and reprocess the data later by raising a [SinkBackpressureError(retry_after)](../../api-reference/sinks.md#sinkbackpressureerror).
 
-The app will catch the `SinkBackpressureError`, pause the topic-partition for the `retry_after` timeout, seek the partition offset back to the beginning of the checkpoint, and remove this partition from the current checkpoint commit.
+The app will catch the `SinkBackpressureError`, pause all assigned topic partitions for the `retry_after` timeout, seek their offsets back to the beginning of the checkpoint, and exit the current checkpoint without committing offsets.
 
 This way, the processing will continue, and the backpressured data will be re-processed and sinked again after the timeout.
 
@@ -74,9 +74,5 @@ class MyDatabaseSink(BatchingSink):
         except TimeoutError:
             # In case of timeout, tell the app to wait for 30s 
             # and retry the writing later
-            raise SinkBackpressureError(
-               retry_after=30.0, 
-               topic=batch.topic, 
-               partition=batch.partition,
-            )
+            raise SinkBackpressureError(retry_after=30.0)
 ```

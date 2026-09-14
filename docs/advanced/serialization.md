@@ -79,7 +79,7 @@ output_topic = app.topic('output', value_serializer=JSONSerializer(schema=MY_SCH
 Apache Avro is a row-based binary serialization format. Avro stores the schema in JSON format alongside the data, enabling efficient processing and schema evolution.
 
 You can learn more about the Apache Avro format [here](https://avro.apache.org/docs/).
-The Avro serializer and deserializer need to be passed explicitly and must include the schema.
+The Avro serializer and deserializer need to be passed explicitly. Local schemaless Avro deserialization must include the schema; Schema Registry-backed deserialization can fetch the writer schema when `schema_registry_client_config` is provided.
 
 > **WARNING**: The Avro serializer and deserializer require the `fastavro` library.  
 > You can install Quix Streams with the necessary dependencies using:  

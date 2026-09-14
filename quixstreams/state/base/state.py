@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, Literal, Optional, TypeVar, overload
 
 if TYPE_CHECKING:
@@ -52,20 +53,28 @@ class State(ABC, Generic[K, V]):
         """
 
     @abstractmethod
-    def set(self, key: K, value: V) -> None:
+    def set(self, key: K, value: V, ttl: Optional[timedelta] = None) -> None:
         """
-        Set value for the key.
+        Set value for the key, optionally with a per-write expiry.
+
         :param key: key
         :param value: value
+        :param ttl: optional event-time TTL. When set, the entry expires
+            ``ttl`` after the current record's event-time and is filtered
+            from subsequent reads. ``None`` (default) writes a sentinel
+            stamp meaning "never expires", overwriting any prior TTL on
+            the same key.
         """
         ...
 
     @abstractmethod
-    def set_bytes(self, key: K, value: bytes) -> None:
+    def set_bytes(self, key: K, value: bytes, ttl: Optional[timedelta] = None) -> None:
         """
-        Set value for the key.
+        Set bytes value for the key, optionally with a per-write expiry.
+
         :param key: key
-        :param value: value
+        :param value: value as bytes
+        :param ttl: see :meth:`set`.
         """
         ...
 
@@ -93,16 +102,29 @@ class TransactionState(State):
     __slots__ = (
         "_transaction",
         "_prefix",
+        "_timestamp",
     )
 
-    def __init__(self, prefix: bytes, transaction: "PartitionTransaction"):
+    def __init__(
+        self,
+        prefix: bytes,
+        transaction: "PartitionTransaction",
+        timestamp: Optional[int] = None,
+    ):
         """
         Simple key-value state to be provided into `StreamingDataFrame` functions
 
         :param transaction: instance of `PartitionTransaction`
+        :param prefix: serialized key prefix shared across calls
+        :param timestamp: optional event-time of the current record (ms).
+            Used by TTL-aware partitions to stamp values on ``set()`` with
+            ``record.timestamp + ttl`` and to filter expired entries on
+            ``get()``. The framework injects this on every record via the
+            ``StreamingDataFrame`` stateful wrapper.
         """
         self._prefix = prefix
         self._transaction = transaction
+        self._timestamp = timestamp
 
     @overload
     def get(self, key: K, default: Literal[None] = None) -> Optional[V]: ...
@@ -118,7 +140,12 @@ class TransactionState(State):
         :param default: default value to return if the key is not found
         :return: value or None if the key is not found and `default` is not provided
         """
-        return self._transaction.get(key=key, prefix=self._prefix, default=default)
+        return self._transaction.get(
+            key=key,
+            prefix=self._prefix,
+            default=default,
+            timestamp=self._timestamp,
+        )
 
     @overload
     def get_bytes(self, key: K, default: Literal[None] = None) -> Optional[bytes]: ...
@@ -135,24 +162,43 @@ class TransactionState(State):
         :return: value or None if the key is not found and `default` is not provided
         """
         return self._transaction.get_bytes(
-            key=key, prefix=self._prefix, default=default
+            key=key,
+            prefix=self._prefix,
+            default=default,
+            timestamp=self._timestamp,
         )
 
-    def set(self, key: K, value: V) -> None:
+    def set(self, key: K, value: V, ttl: Optional[timedelta] = None) -> None:
         """
-        Set value for the key.
-        :param key: key
-        :param value: value
-        """
-        return self._transaction.set(key=key, value=value, prefix=self._prefix)
+        Set value for the key, optionally with a per-write expiry.
 
-    def set_bytes(self, key: K, value: bytes) -> None:
-        """
-        Set value for the key.
         :param key: key
         :param value: value
+        :param ttl: optional event-time TTL. See :class:`State.set`.
         """
-        return self._transaction.set_bytes(key=key, value=value, prefix=self._prefix)
+        return self._transaction.set(
+            key=key,
+            value=value,
+            prefix=self._prefix,
+            timestamp=self._timestamp,
+            ttl=ttl,
+        )
+
+    def set_bytes(self, key: K, value: bytes, ttl: Optional[timedelta] = None) -> None:
+        """
+        Set bytes value for the key, optionally with a per-write expiry.
+
+        :param key: key
+        :param value: value as bytes
+        :param ttl: optional event-time TTL. See :class:`State.set`.
+        """
+        return self._transaction.set_bytes(
+            key=key,
+            value=value,
+            prefix=self._prefix,
+            timestamp=self._timestamp,
+            ttl=ttl,
+        )
 
     def delete(self, key: K):
         """
@@ -170,4 +216,6 @@ class TransactionState(State):
         :return: True if key exists, False otherwise
         """
 
-        return self._transaction.exists(key=key, prefix=self._prefix)
+        return self._transaction.exists(
+            key=key, prefix=self._prefix, timestamp=self._timestamp
+        )

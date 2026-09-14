@@ -466,7 +466,14 @@ class TestPartitionTransaction:
                 data, changelog_producer_mock.produce.call_args_list
             ):
                 assert call.kwargs["key"] == tx._serialize_key(key=key, prefix=prefix)
-                assert call.kwargs["value"] == tx._serialize_value(value=value)
+                # v3: a fresh partition that never sees a ``state.set(...,
+                # ttl=...)`` write stays byte-identical to v3.23.6 — values
+                # on the changelog are the raw serializer bytes, no stamp
+                # prefix. The TTL machinery only kicks in once the
+                # partition flips into TTL mode (see
+                # ``RocksDBPartitionTransaction._maybe_flip_or_reject``).
+                expected_value = tx._serialize_value(value=value)
+                assert call.kwargs["value"] == expected_value
                 assert call.kwargs["headers"] == {
                     CHANGELOG_CF_MESSAGE_HEADER: cf,
                     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(
@@ -535,6 +542,31 @@ class TestPartitionTransaction:
                 CHANGELOG_CF_MESSAGE_HEADER: cf,
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(processed_offsets),
             }
+
+    def test_ttl_refresh_after_expiry_survives_sweep(self, store_partition_factory):
+        """A key refreshed with a fresh TTL after its previous stamp expired must
+        survive the same-flush sweep. The sweep reads committed disk state, so it
+        must not delete a key the batch just re-wrote (regression: data loss).
+        """
+        from datetime import timedelta
+
+        prefix = b"__key__"
+        ttl = timedelta(milliseconds=100)
+        with store_partition_factory() as partition:
+            # t=1000: write k -> expires 1100
+            tx1 = partition.begin()
+            tx1.set(key="k", value="v1", prefix=prefix, timestamp=1000, ttl=ttl)
+            tx1.prepare(processed_offsets={"topic": 1})
+            tx1.flush(changelog_offset=1)
+
+            # t=2000: refresh k with a fresh ttl -> expires 2100 (still alive)
+            tx2 = partition.begin()
+            tx2.set(key="k", value="v2", prefix=prefix, timestamp=2000, ttl=ttl)
+            tx2.prepare(processed_offsets={"topic": 2})
+            tx2.flush(changelog_offset=2)
+
+            tx3 = partition.begin()
+            assert tx3.get(key="k", prefix=prefix) == "v2"
 
 
 class TestPartitionTransactionCache:

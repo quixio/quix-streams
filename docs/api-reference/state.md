@@ -10,7 +10,7 @@
 class State(ABC, Generic[K, V])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L18)
 
 Primary interface for working with key-value state data from `StreamingDataFrame`
 
@@ -25,7 +25,7 @@ Primary interface for working with key-value state data from `StreamingDataFrame
 def get(key: K, default: Optional[V] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L30)
 
 Get the value for key if key is present in the state, else default
 
@@ -52,7 +52,7 @@ value or None if the key is not found and `default` is not provided
 def get_bytes(key: K, default: Optional[bytes] = None) -> Optional[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L45)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L46)
 
 Get the value for key if key is present in the state, else default
 
@@ -77,12 +77,12 @@ value as bytes or None if the key is not found and `default` is not provided
 
 ```python
 @abstractmethod
-def set(key: K, value: V) -> None
+def set(key: K, value: V, ttl: Optional[timedelta] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L56)
 
-Set value for the key.
+Set value for the key, optionally with a per-write expiry.
 
 
 <br>
@@ -90,6 +90,11 @@ Set value for the key.
 
 - `key`: key
 - `value`: value
+- `ttl`: optional event-time TTL. When set, the entry expires
+``ttl`` after the current record's event-time and is filtered
+from subsequent reads. ``None`` (default) writes a sentinel
+stamp meaning "never expires", overwriting any prior TTL on
+the same key.
 
 <a id="quixstreams.state.base.state.State.set_bytes"></a>
 
@@ -99,19 +104,20 @@ Set value for the key.
 
 ```python
 @abstractmethod
-def set_bytes(key: K, value: bytes) -> None
+def set_bytes(key: K, value: bytes, ttl: Optional[timedelta] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L71)
 
-Set value for the key.
+Set bytes value for the key, optionally with a per-write expiry.
 
 
 <br>
 ***Arguments:***
 
 - `key`: key
-- `value`: value
+- `value`: value as bytes
+- `ttl`: see :meth:`set`.
 
 <a id="quixstreams.state.base.state.State.delete"></a>
 
@@ -124,7 +130,7 @@ Set value for the key.
 def delete(key: K)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L73)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L82)
 
 Delete value for the key.
 
@@ -147,7 +153,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: K) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L92)
 
 Check if the key exists in state.
 
@@ -171,7 +177,7 @@ True if key exists, False otherwise
 class TransactionState(State)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L92)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L101)
 
 <a id="quixstreams.state.base.state.TransactionState.__init__"></a>
 
@@ -180,10 +186,12 @@ class TransactionState(State)
 #### TransactionState.\_\_init\_\_
 
 ```python
-def __init__(prefix: bytes, transaction: "PartitionTransaction")
+def __init__(prefix: bytes,
+             transaction: "PartitionTransaction",
+             timestamp: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L98)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L108)
 
 Simple key-value state to be provided into `StreamingDataFrame` functions
 
@@ -192,6 +200,12 @@ Simple key-value state to be provided into `StreamingDataFrame` functions
 ***Arguments:***
 
 - `transaction`: instance of `PartitionTransaction`
+- `prefix`: serialized key prefix shared across calls
+- `timestamp`: optional event-time of the current record (ms).
+Used by TTL-aware partitions to stamp values on ``set()`` with
+``record.timestamp + ttl`` and to filter expired entries on
+``get()``. The framework injects this on every record via the
+``StreamingDataFrame`` stateful wrapper.
 
 <a id="quixstreams.state.base.state.TransactionState.get"></a>
 
@@ -203,7 +217,7 @@ Simple key-value state to be provided into `StreamingDataFrame` functions
 def get(key: K, default: Optional[V] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L113)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L135)
 
 Get the value for key if key is present in the state, else default
 
@@ -230,7 +244,7 @@ value or None if the key is not found and `default` is not provided
 def get_bytes(key: K, default: Optional[bytes] = None) -> Optional[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L129)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L156)
 
 Get the bytes value for key if key is present in the state, else default
 
@@ -254,12 +268,12 @@ value or None if the key is not found and `default` is not provided
 #### TransactionState.set
 
 ```python
-def set(key: K, value: V) -> None
+def set(key: K, value: V, ttl: Optional[timedelta] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L141)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L171)
 
-Set value for the key.
+Set value for the key, optionally with a per-write expiry.
 
 
 <br>
@@ -267,6 +281,7 @@ Set value for the key.
 
 - `key`: key
 - `value`: value
+- `ttl`: optional event-time TTL. See :class:`State.set`.
 
 <a id="quixstreams.state.base.state.TransactionState.set_bytes"></a>
 
@@ -275,19 +290,20 @@ Set value for the key.
 #### TransactionState.set\_bytes
 
 ```python
-def set_bytes(key: K, value: bytes) -> None
+def set_bytes(key: K, value: bytes, ttl: Optional[timedelta] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L149)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L187)
 
-Set value for the key.
+Set bytes value for the key, optionally with a per-write expiry.
 
 
 <br>
 ***Arguments:***
 
 - `key`: key
-- `value`: value
+- `value`: value as bytes
+- `ttl`: optional event-time TTL. See :class:`State.set`.
 
 <a id="quixstreams.state.base.state.TransactionState.delete"></a>
 
@@ -299,7 +315,7 @@ Set value for the key.
 def delete(key: K)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L157)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L203)
 
 Delete value for the key.
 
@@ -321,7 +337,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: K) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L166)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L212)
 
 Check if the key exists in state.
 
@@ -369,6 +385,12 @@ If this option is True, but `use_changelog_topics=False`,
 the DB won't be destroyed.
 Note: risk of data loss! Make sure that the changelog topics are up-to-date before disabling it in production.
 Default - `True`.
+- `max_evictions_per_flush`: cap on TTL-driven evictions performed
+during a single ``flush()`` for stores with TTL enabled. Larger values
+increase per-flush latency but let the sweep keep up with higher
+steady-state expiration rates. Only meaningful for TTL-enabled
+stores; ignored otherwise.
+Default - ``10_000``.
 
 Please see `rocksdict.Options` for a complete description of other options.
 
@@ -382,7 +404,7 @@ Please see `rocksdict.Options` for a complete description of other options.
 def to_options() -> rocksdict.Options
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/options.py#L62)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/options.py#L69)
 
 Convert parameters to `rocksdict.Options`
 
