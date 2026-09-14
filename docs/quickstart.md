@@ -80,6 +80,9 @@ app = Application(
 # Define a topic with chat messages in JSON format
 messages_topic = app.topic(name="messages", value_deserializer="json")
 
+# Define a topic to write the split words back to Kafka
+words_topic = app.topic(name="words", value_serializer="json")
+
 # Create a StreamingDataFrame - the stream processing pipeline
 # with a Pandas-like interface on streaming data
 sdf = app.dataframe(topic=messages_topic)
@@ -89,6 +92,7 @@ sdf = sdf.update(lambda message: print(f"Input:  {message}"))
 
 # Define a transformation to split incoming sentences
 # into words using a lambda function
+# expand=True means each item in the returned list is emitted as a separate message downstream
 sdf = sdf.apply(
     lambda message: [{"text": word} for word in message["text"].split()],
     expand=True,
@@ -99,6 +103,9 @@ sdf["length"] = sdf["text"].apply(lambda word: len(word))
 
 # Print the output result
 sdf = sdf.update(lambda row: print(f"Output: {row}"))
+
+# Write the results back to Kafka
+sdf = sdf.to_topic(words_topic)
 
 # Run the streaming application
 if __name__ == "__main__":
@@ -134,8 +141,8 @@ python consumer.py
 [2024-02-21 19:57:38,669] [INFO] : Topics required for this application: "messages", "words"
 [2024-02-21 19:57:38,699] [INFO] : Validating Kafka topics exist and are configured correctly...
 [2024-02-21 19:57:38,718] [INFO] : Kafka topics validation complete
-[2024-02-21 19:57:38,718] [INFO] : Initializing state directory at "/app/state/text-splitter-v1"
-[2024-02-21 19:57:38,718] [INFO] : Waiting for incoming messages
+[2024-02-21 19:57:38,718] [INFO] : Initializing state directory at "<current-directory>/state/text-splitter-v1"
+[2024-02-21 19:57:38,718] [INFO] : The application started and is now processing incoming messages
 Input:  {'chat_id': 'id1', 'text': 'Lorem ipsum dolor sit amet'}
 Output: {'text': 'Lorem', 'length': 5}
 Output: {'text': 'ipsum', 'length': 5}

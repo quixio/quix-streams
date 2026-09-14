@@ -5,7 +5,7 @@ import uuid
 from concurrent.futures import Future
 from json import dumps, loads
 from pathlib import Path
-from unittest.mock import create_autospec, patch
+from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
 from confluent_kafka import KafkaException, TopicPartition
@@ -32,9 +32,10 @@ from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.sinks import SinkBackpressureError, SinkBatch
 from quixstreams.sources import SourceException, multiprocessing
 from quixstreams.state import RecoveryManager, State
+from quixstreams.state.exceptions import StateRecoveryOffsetOutOfRange
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.rocksdb import RocksDBStore
-from tests.utils import DummySink, DummySource, DummyStatefulSource
+from tests.utils import DummySink, DummySource, DummyStatefulSource, Timeout
 
 
 def _stop_app_on_future(app: Application, future: Future, timeout: float):
@@ -469,6 +470,23 @@ class TestApplication:
         with app.get_producer() as x:
             assert x._producer_config["linger.ms"] == 10
 
+    @pytest.mark.parametrize(
+        ["processing_guarantee", "transactional"],
+        [
+            ("exactly-once", True),
+            ("exactly-once", False),
+            ("at-least-once", False),
+            ("at-least-once", True),
+        ],
+    )
+    def test_get_producer_transactional(
+        self, app_factory, processing_guarantee, transactional
+    ):
+        app = app_factory(processing_guarantee=processing_guarantee)
+        with app.get_producer(transactional=transactional) as producer:
+            transactional_id = producer._producer_config.get("transactional.id")
+            assert bool(transactional_id) == transactional
+
     def test_missing_broker_id_raise(self):
         # confirm environment is empty
         with patch.dict(os.environ, {}, clear=True):
@@ -511,6 +529,38 @@ class TestApplication:
         with patch.dict(os.environ, {"Quix__State__Dir": "/path/to/state"}):
             app = Application(broker_address="my_address", state_dir="/path/to/other")
         assert app.config.state_dir == Path("/path/to/other")
+
+    def test_stop_event_shared_with_state_manager(self):
+        """
+        The application's stop signal is threaded into the StateStoreManager so
+        state partitions can abort their open-retry loop on shutdown. See
+        docs/rocksdb-lock-contention-analysis.md (stage 3).
+        """
+        app = Application(broker_address="my_address", use_changelog_topics=False)
+        assert app._state_manager._stop_event is app._stop_event
+
+    def test_stop_sets_stop_event(self):
+        app = Application(broker_address="my_address", use_changelog_topics=False)
+        assert not app._stop_event.is_set()
+        app.stop()
+        assert app._stop_event.is_set()
+
+    def test_on_revoke_commits_checkpoint_with_revoking(self):
+        """
+        A rebalance revoke must commit the checkpoint in "fast revoke" mode so
+        the local state flush is skipped for changelog-backed stores.
+        """
+        app = Application(broker_address="my_address", use_changelog_topics=False)
+        with (
+            patch.object(
+                app._processing_context, "commit_checkpoint"
+            ) as commit_checkpoint,
+            patch.object(app, "_revoke_state_partitions"),
+            patch.object(InternalConsumer, "reset_backpressure"),
+        ):
+            app._on_revoke(None, [])
+
+        commit_checkpoint.assert_called_once_with(force=True, revoking=True)
 
 
 @pytest.mark.parametrize("number_of_partitions", [1, 2])
@@ -814,21 +864,20 @@ class TestAppExactlyOnce:
 
 
 class TestQuixApplication:
-    @pytest.mark.parametrize(
-        "quix_portal_api_arg, quix_portal_api_expected",
-        [
-            (None, "https://portal-api.platform.quix.io/"),
-            ("http://example.com", "http://example.com"),
-        ],
-    )
-    def test_init_with_quix_sdk_token_arg(
-        self, quix_portal_api_arg, quix_portal_api_expected
-    ):
+    def test_init_with_no_quix_portal_api(self):
+        with pytest.raises(
+            ValueError,
+            match='Either "quix_portal_api" must be provided or "Quix__Portal__Api" environment variable must be set',
+        ):
+            Application(quix_sdk_token="my_sdk_token")
+
+    def test_init_with_quix_sdk_token_arg(self):
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
         quix_extras = {"quix": "extras"}
         extra_config = {"extra": "config"}
+        quix_portal_api = "http://example.com"
         connection_config = ConnectionConfig.from_librdkafka_dict(
             {
                 "bootstrap.servers": "address1,address2",
@@ -873,7 +922,7 @@ class TestQuixApplication:
             app = Application(
                 consumer_group=consumer_group,
                 quix_sdk_token=quix_sdk_token,
-                quix_portal_api=quix_portal_api_arg,
+                quix_portal_api=quix_portal_api,
                 consumer_extra_config=extra_config,
                 producer_extra_config=extra_config,
             )
@@ -881,7 +930,7 @@ class TestQuixApplication:
 
         # Check that quix_portal_api is passed correctly
         cfg_builder.from_credentials.assert_called_with(
-            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api_expected
+            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api
         )
 
         # Check if items from the Quix config have been passed
@@ -895,21 +944,13 @@ class TestQuixApplication:
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
         assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
-    @pytest.mark.parametrize(
-        "quix_portal_api_arg, quix_portal_api_expected",
-        [
-            ("", "https://portal-api.platform.quix.io/"),
-            ("http://example.com", "http://example.com"),
-        ],
-    )
-    def test_init_with_quix_sdk_token_env(
-        self, monkeypatch, quix_portal_api_arg, quix_portal_api_expected
-    ):
+    def test_init_with_quix_sdk_token_env(self, monkeypatch):
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
         extra_config = {"extra": "config"}
         quix_extras = {"quix": "extras"}
+        quix_portal_api = "http://example.com"
         connection_config = ConnectionConfig.from_librdkafka_dict(
             {
                 "bootstrap.servers": "address1,address2",
@@ -946,7 +987,7 @@ class TestQuixApplication:
         cfg_builder.from_credentials.return_value = cfg_builder
 
         monkeypatch.setenv("Quix__Sdk__Token", quix_sdk_token)
-        monkeypatch.setenv("Quix__Portal__Api", quix_portal_api_arg)
+        monkeypatch.setenv("Quix__Portal__Api", quix_portal_api)
         with (
             patch("quixstreams.app.QuixKafkaConfigsBuilder", cfg_builder),
             patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
@@ -960,7 +1001,7 @@ class TestQuixApplication:
 
         # Check that quix_portal_api is passed correctly
         cfg_builder.from_credentials.assert_called_with(
-            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api_expected
+            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api
         )
 
         # Check if items from the Quix config have been passed
@@ -1083,6 +1124,27 @@ class TestQuixApplication:
         )
         assert expected_topic.broker_config.num_partitions == topic_partitions
 
+    def test_transactional_id_prefixed_with_workspace_id(
+        self,
+        quix_app_factory,
+        quix_topic_manager_factory,
+        quix_mock_config_builder_factory,
+    ):
+        workspace_id = "my-workspace"
+        cfg_builder = quix_mock_config_builder_factory(workspace_id=workspace_id)
+        topic_manager = quix_topic_manager_factory(
+            workspace_id=workspace_id, quix_config_builder=cfg_builder
+        )
+        app = quix_app_factory(
+            workspace_id=workspace_id,
+            topic_manager=topic_manager,
+            quix_config_builder=cfg_builder,
+            processing_guarantee="exactly-once",
+        )
+        assert app._config.producer_extra_config["transactional.id"].startswith(
+            workspace_id
+        )
+
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestQuixApplicationWithState:
@@ -1150,8 +1212,166 @@ def test_quix_app_state_dir_default(
     assert app._config.state_dir == Path(expected_state_dir)
 
 
+def test_quix_app_state_dir_from_deployment_state_path(
+    monkeypatch, quix_mock_config_builder_factory
+):
+    """Test that Quix__Deployment__State__Path takes priority"""
+    monkeypatch.setenv(QuixEnvironment.DEPLOYMENT_ID, "123")
+    monkeypatch.setenv(QuixEnvironment.STATE_PATH, "/custom/state/path")
+    app = Application(quix_config_builder=quix_mock_config_builder_factory())
+    assert app._config.state_dir == Path("/custom/state/path")
+
+
+def test_quix_app_state_dir_fallback_to_state_dir(
+    monkeypatch, quix_mock_config_builder_factory
+):
+    """Test fallback to Quix__State__Dir when STATE_PATH not set (with deprecation warning)"""
+    monkeypatch.setenv(QuixEnvironment.DEPLOYMENT_ID, "123")
+    monkeypatch.setenv(QuixEnvironment.STATE_DIR, "/legacy/state")
+    with pytest.warns(DeprecationWarning, match="Quix__State__Dir is deprecated"):
+        app = Application(quix_config_builder=quix_mock_config_builder_factory())
+    assert app._config.state_dir == Path("/legacy/state")
+
+
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestApplicationWithState:
+    def _app_with_out_of_range_committed_offset(
+        self,
+        auto_recover_from_source_offset_out_of_range=True,
+        auto_offset_reset="earliest",
+        state_recovery_offset_reset="earliest",
+    ):
+        app = Application(
+            broker_address="localhost:9092",
+            consumer_group=str(uuid.uuid4()),
+            auto_offset_reset=auto_offset_reset,
+            auto_recover_from_source_offset_out_of_range=auto_recover_from_source_offset_out_of_range,
+            state_recovery_offset_reset=state_recovery_offset_reset,
+            loglevel=None,
+        )
+        topic_name = str(uuid.uuid4())
+        changelog_topic_name = f"changelog__{topic_name}--default"
+
+        app._source_manager = MagicMock()
+        app._topic_manager = MagicMock()
+        app._topic_manager.non_changelog_topics = {topic_name: object()}
+        app._dataframe_registry = MagicMock()
+        app._dataframe_registry.get_stream_ids.return_value = [topic_name]
+        app._state_manager = MagicMock()
+        app._state_manager.stores = {topic_name: {"default": object()}}
+
+        source_tp = TopicPartition(topic=topic_name, partition=0)
+        changelog_tp = TopicPartition(topic=changelog_topic_name, partition=0)
+
+        app._consumer.assign = MagicMock()
+        app._consumer.pause = MagicMock()
+        app._consumer.seek = MagicMock()
+        app._consumer.committed = MagicMock()
+        app._consumer.committed.return_value = [
+            TopicPartition(topic=topic_name, partition=0, offset=10)
+        ]
+        app._consumer.get_watermark_offsets = MagicMock()
+        app._consumer.get_watermark_offsets.return_value = (20, 30)
+
+        return app, topic_name, source_tp, changelog_tp
+
+    def test_on_assign_stateful_committed_offset_below_low_watermark_auto_recovers(
+        self, store_type
+    ):
+        app, topic_name, source_tp, changelog_tp = (
+            self._app_with_out_of_range_committed_offset()
+        )
+        app._state_manager.destroy_partition_state.return_value = ["default"]
+
+        app._on_assign(None, [source_tp, changelog_tp])
+
+        app._state_manager.destroy_partition_state.assert_called_once_with(
+            stream_id=topic_name,
+            partition=0,
+        )
+        app._state_manager.on_partition_assign.assert_called_once_with(
+            stream_id=topic_name,
+            partition=0,
+            committed_offsets={topic_name: 20},
+        )
+        app._consumer.seek.assert_called_once_with(
+            TopicPartition(topic=topic_name, partition=0, offset=20)
+        )
+
+    @pytest.mark.parametrize(
+        ("state_recovery_offset_reset", "auto_offset_reset"),
+        [("latest", "earliest"), ("match", "latest")],
+    )
+    def test_on_assign_stateful_committed_offset_below_low_watermark_recovers_to_latest(
+        self, store_type, state_recovery_offset_reset, auto_offset_reset
+    ):
+        app, topic_name, source_tp, changelog_tp = (
+            self._app_with_out_of_range_committed_offset(
+                auto_offset_reset=auto_offset_reset,
+                state_recovery_offset_reset=state_recovery_offset_reset,
+            )
+        )
+        app._state_manager.destroy_partition_state.return_value = ["default"]
+
+        app._on_assign(None, [source_tp, changelog_tp])
+
+        app._state_manager.destroy_partition_state.assert_called_once_with(
+            stream_id=topic_name,
+            partition=0,
+        )
+        app._state_manager.on_partition_assign.assert_called_once_with(
+            stream_id=topic_name,
+            partition=0,
+            committed_offsets={topic_name: 0},
+        )
+        app._consumer.seek.assert_called_once_with(
+            TopicPartition(topic=topic_name, partition=0, offset=30)
+        )
+
+    def test_on_assign_stateful_committed_offset_below_low_watermark_match_error_fails(
+        self, store_type
+    ):
+        app, topic_name, source_tp, changelog_tp = (
+            self._app_with_out_of_range_committed_offset(
+                auto_offset_reset="error",
+                state_recovery_offset_reset="match",
+            )
+        )
+
+        with pytest.raises(
+            StateRecoveryOffsetOutOfRange,
+            match=(
+                rf'Cannot automatically recover state for "{topic_name}\[0\]" '
+                'with `state_recovery_offset_reset="match"`'
+            ),
+        ):
+            app._on_assign(None, [source_tp, changelog_tp])
+
+        app._state_manager.destroy_partition_state.assert_not_called()
+        app._state_manager.on_partition_assign.assert_not_called()
+        app._consumer.seek.assert_not_called()
+
+    def test_on_assign_stateful_committed_offset_below_low_watermark_fails_when_auto_recovery_disabled(
+        self, store_type
+    ):
+        app, topic_name, source_tp, changelog_tp = (
+            self._app_with_out_of_range_committed_offset(
+                auto_recover_from_source_offset_out_of_range=False
+            )
+        )
+
+        with pytest.raises(
+            StateRecoveryOffsetOutOfRange,
+            match=(
+                rf"Consumer group offset 10 for topic {topic_name}\[0\] "
+                "is below the broker low watermark 20"
+            ),
+        ):
+            app._on_assign(None, [source_tp, changelog_tp])
+
+        app._state_manager.destroy_partition_state.assert_not_called()
+        app._state_manager.on_partition_assign.assert_not_called()
+
     def _validate_state(
         self,
         stores,
@@ -1331,9 +1551,9 @@ class TestApplicationWithState:
             auto_offset_reset="earliest",
             state_dir=state_dir,
             # Suppress errors during message processing
-            on_processing_error=lambda exc, *args: True
-            if isinstance(exc, ValueError)
-            else False,
+            on_processing_error=lambda exc, *args: (
+                True if isinstance(exc, ValueError) else False
+            ),
         )
 
         topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
@@ -1460,6 +1680,152 @@ class TestApplicationWithState:
         """
         app = app_factory(use_changelog_topics=False)
         assert not app._state_manager.using_changelogs
+
+
+class TestApplicationSourceOffsetRecoveryProof:
+    @pytest.mark.timeit
+    @pytest.mark.parametrize("store_type", [RocksDBStore], indirect=True)
+    @pytest.mark.parametrize("state_recovery_offset_reset", ["earliest", "latest"])
+    def test_stateful_recovery_when_source_committed_offset_is_deleted(
+        self,
+        app_factory,
+        executor,
+        internal_consumer_factory,
+        kafka_admin_client,
+        tmp_path,
+        caplog,
+        store_type,
+        state_recovery_offset_reset,
+    ):
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        topic_name = str(uuid.uuid4())
+        partition = 0
+        message_count = 50
+        message_key = b"key"
+
+        def build_app(
+            on_message_processed,
+            auto_offset_reset="earliest",
+            recovery_offset_reset="earliest",
+        ):
+            app = app_factory(
+                consumer_group=consumer_group,
+                state_dir=state_dir,
+                auto_offset_reset=auto_offset_reset,
+                state_recovery_offset_reset=recovery_offset_reset,
+                commit_every=1,
+                commit_interval=999,
+                on_message_processed=on_message_processed,
+            )
+            topic = app.topic(
+                topic_name,
+                config=TopicConfig(num_partitions=1, replication_factor=1),
+            )
+
+            def count(value, state: State):
+                state.set("seen", state.get("seen", 0) + 1)
+                return value
+
+            return app, app.dataframe(topic).update(count, stateful=True), topic
+
+        first_run_offsets = []
+
+        def on_first_run_processed(topic, partition, offset):
+            first_run_offsets.append(offset)
+            app1.stop()
+
+        app1, sdf1, topic = build_app(on_first_run_processed)
+        with app1.get_producer() as producer:
+            for index in range(message_count):
+                producer.produce(
+                    topic=topic.name,
+                    key=message_key,
+                    value=dumps({"value": index}).encode(),
+                    partition=partition,
+                )
+
+        app1.run(sdf1)
+        assert first_run_offsets
+
+        with internal_consumer_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+        ) as consumer:
+            committed = consumer.committed([TopicPartition(topic.name, partition)])[0]
+
+        assert 0 < committed.offset < message_count
+
+        target_lowwater = committed.offset + 5
+        delete_futures = kafka_admin_client.delete_records(
+            [TopicPartition(topic.name, partition, target_lowwater)]
+        )
+        for future in delete_futures.values():
+            future.result(timeout=30)
+
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
+            timeout = Timeout(120)
+            while timeout:
+                lowwater, highwater = consumer.get_watermark_offsets(
+                    TopicPartition(topic.name, partition), timeout=5
+                )
+                if lowwater >= target_lowwater:
+                    break
+                time.sleep(0.5)
+
+        assert lowwater > committed.offset
+        assert highwater == message_count
+
+        second_run_offsets = []
+
+        def on_second_run_processed(topic, partition, offset):
+            second_run_offsets.append(offset)
+            app2.stop()
+
+        app2, sdf2, _ = build_app(
+            on_second_run_processed,
+            auto_offset_reset="latest",
+            recovery_offset_reset=state_recovery_offset_reset,
+        )
+        caplog.set_level("CRITICAL", logger="quixstreams.app")
+
+        if state_recovery_offset_reset == "latest":
+
+            def produce_after_recovery():
+                timeout = Timeout(60)
+                while timeout and "DESTRUCTIVE STATE RECOVERY" not in caplog.text:
+                    time.sleep(0.1)
+                assert "DESTRUCTIVE STATE RECOVERY" in caplog.text
+                producer.produce(
+                    topic=topic.name,
+                    key=message_key,
+                    value=dumps({"value": message_count}).encode(),
+                    partition=partition,
+                )
+
+            with app2.get_producer() as producer:
+                future = executor.submit(produce_after_recovery)
+                app2.run(sdf2, timeout=60)
+                future.result(timeout=30)
+        else:
+            app2.run(sdf2)
+
+        assert second_run_offsets
+        expected_recovered_offset = (
+            highwater if state_recovery_offset_reset == "latest" else lowwater
+        )
+        assert second_run_offsets[0] == expected_recovered_offset
+        assert "DESTRUCTIVE STATE RECOVERY" in caplog.text
+
+        with internal_consumer_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+        ) as consumer:
+            recovered_committed = consumer.committed(
+                [TopicPartition(topic.name, partition)]
+            )[0]
+
+        assert recovered_committed.offset == expected_recovered_offset + 1
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
@@ -3156,7 +3522,7 @@ class TestApplicationRun:
         """
         Timeout is set only after recovery is complete
         """
-        timeout = 1.0
+        timeout = 3.0
 
         app = app_factory(
             auto_offset_reset="earliest",

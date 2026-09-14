@@ -21,13 +21,24 @@ See the [Configuration](../configuration.md#processing-guarantees) page to learn
 - The `Checkpoint` object is responsible for keeping track of processed Kafka offsets and pending state transactions.
 - After the message is successfully processed, its offset is marked as processed in the current checkpoint.
 - When checkpoint commits, it will:
-    1. *Produce changelog messages for every pending state update to the changelog topics (if they are enabled).*
-    2. *Flush the Kafka Producer and verify the delivery of every outgoing message both to output and changelog topics.*
-    3. *Synchronously commit the topic offsets to Kafka.*
-    4. *Flush the pending state transactions to the durable state stores.*
+    1. *Flush registered sinks. If a sink raises `SinkBackpressureError`, processing pauses assigned partitions and the checkpoint exits early without committing offsets.*
+    2. *Produce changelog messages for every pending state update to the changelog topics (if they are enabled).*
+    3. *Flush the Kafka Producer and verify the delivery of every outgoing message both to output and changelog topics.*
+    4. *Synchronously commit the topic offsets to Kafka.*
+    5. *Flush the pending state transactions to the durable state stores.*
         
 - After the checkpoint is fully committed, a new one is created and the processing continues.
 - Besides the regular intervals, the checkpoint is also committed when Kafka partitions are rebalanced.
+
+## Committing During Partition Revocation
+
+When a Kafka rebalance revokes a partition, the application commits the current checkpoint before handing the partition over to the new owner. This revoke commit uses the same five steps as a regular commit, with three differences that keep the revoke sequence short enough to stay within Kafka's `max.poll.interval.ms` deadline.
+
+**Bounded sink and producer flushes.** Steps 1 and 3 each run under a wall-clock timeout equal to `max.poll.interval.ms × 0.2`. At the default `max.poll.interval.ms` of 300,000 ms this gives each step a 60 s budget. If a sink flush times out or raises an unexpected error, the checkpoint aborts without committing offsets (step 4 is skipped). The new owner reprocesses the batch and re-flushes, which is safe under at-least-once semantics. `SinkBackpressureError` still triggers the normal backpressure path. If the producer flush times out, changelog delivery is unconfirmed: the checkpoint aborts without committing offsets and the still-queued (undelivered) changelog and output messages are purged. Messages still queued in the client cannot be delivered after the partition is handed over; requests already transmitted to the broker may still be appended there (their acknowledgements are only voided locally), so the new owner reprocesses the batch and duplicates are possible (at-least-once).
+
+**Fast-revoke skip of the local state flush.** Step 5 is skipped for stores that have a changelog topic, provided changelog delivery was confirmed in step 3. The changelog already holds the delta; the new owner replays it during recovery. Skipping the on-disk write releases the RocksDB file lock sooner, which is the main mechanism that prevents lock-contention between the outgoing and incoming consumers. Stores without a changelog topic are always flushed — skipping would lose state. When changelog delivery is unconfirmed (producer flush timed out), the checkpoint has already aborted in step 3, so step 5 never runs and no offsets are committed.
+
+**Operator note.** Pipelines with several slow sinks should raise `max.poll.interval.ms` — all per-step budgets scale proportionally. The revoke sequence shares a single wall-clock budget across the sink flush, producer flush, and transaction abort/commit, so the whole callback stays bounded by that budget rather than a multiple of it.
 
 ## Recovering the State Stores
 
@@ -106,4 +117,3 @@ In the At-Least-Once setting, it is still possible that unwanted changelog chang
 - Since the changelogs are already produced, during recovery from scratch they will be applied to the state even though the messages are now filtered.
 
 Though this case is rare, the best way to avoid it is to stop the application clean and ensure the latest checkpoint successfully commits before updating the processing code.
-

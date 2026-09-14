@@ -1,4 +1,4 @@
-from typing import Literal, Union
+from typing import Literal, Type, Union
 
 from .base import Format
 from .json import JSONFormat
@@ -8,9 +8,9 @@ __all__ = ("Format", "FormatName", "JSONFormat", "ParquetFormat", "resolve_forma
 
 FormatName = Literal["json", "parquet"]
 
-_FORMATS: dict[FormatName, Format] = {
-    "json": JSONFormat(),
-    "parquet": ParquetFormat(),
+_FORMATS: dict[FormatName, Type[Format]] = {
+    "json": JSONFormat,
+    "parquet": ParquetFormat,
 }
 
 
@@ -31,8 +31,8 @@ def resolve_format(format: Union[FormatName, Format]) -> Format:
     """
     if isinstance(format, Format):
         return format
-    elif format_obj := _FORMATS.get(format):
-        return format_obj
+    elif format_cls := _FORMATS.get(format):
+        return format_cls()
 
     allowed_formats = ", ".join(FormatName.__args__)  # type: ignore[attr-defined]
     raise InvalidFormatError(

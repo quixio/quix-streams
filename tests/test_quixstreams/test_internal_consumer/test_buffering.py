@@ -198,6 +198,44 @@ class TestInternalConsumerBuffer:
         # is empty but its watermark is -1001 (unknown)
         assert buffer.pop() is None
 
+    def test_pop_item_multiple_topics_single_partition_empty_but_position_at_high_watermark(
+        self,
+    ):
+        """
+        Test that InternalConsumerBuffer returns a message if another assigned topic
+        is empty but the consumer position shows it is already at the high watermark.
+        """
+
+        buffer = InternalConsumerBuffer()
+        buffer.assign_partitions(
+            [
+                TopicPartition(topic="test", partition=0),
+                TopicPartition(topic="test1", partition=0),
+            ]
+        )
+
+        messages = [
+            ConfluentKafkaMessageStub(
+                topic="test", partition=0, value=b"1", timestamp=(1, 10), offset=462
+            ),
+        ]
+        high_watermarks = {
+            ("test", 0): 909,
+            ("test1", 0): 3,
+        }
+        positions = {
+            ("test", 0): 463,
+            ("test1", 0): 3,
+        }
+
+        buffer.feed(
+            messages=messages,
+            high_watermarks=high_watermarks,
+            positions=positions,
+        )
+
+        assert buffer.pop() is messages[0]
+
     def test_feed_invalid_offset(self):
         buffer = InternalConsumerBuffer()
         buffer.assign_partitions([TopicPartition(topic="test", partition=0)])

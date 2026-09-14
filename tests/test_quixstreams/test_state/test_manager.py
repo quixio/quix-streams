@@ -1,6 +1,7 @@
 import os
 import shutil
 import uuid
+from datetime import timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,8 +14,9 @@ from quixstreams.state.exceptions import (
     StoreAlreadyRegisteredError,
     StoreNotRegisteredError,
 )
-from quixstreams.state.manager import SUPPORTED_STORES
-from quixstreams.state.rocksdb import RocksDBStore
+from quixstreams.state.manager import SUPPORTED_STORES, StateStoreManager
+from quixstreams.state.memory import MemoryStore
+from quixstreams.state.rocksdb import RocksDBOptions, RocksDBStore
 from tests.utils import TopicPartitionStub
 
 
@@ -51,6 +53,27 @@ class TestStateStoreManager:
             stream_id="topic", partition=0, committed_offsets={"topic": -1001}
         )
         state_manager.on_partition_revoke(stream_id="topic", partition=0)
+
+    def test_resume_reassigned_data_partitions_delegates_to_recovery_manager(
+        self, state_manager_factory
+    ):
+        recovery_manager = MagicMock()
+        state_manager = state_manager_factory(
+            recovery_manager=recovery_manager, producer=MagicMock()
+        )
+        partitions = [TopicPartition("topic", 0)]
+
+        state_manager.resume_reassigned_data_partitions(partitions)
+
+        recovery_manager.resume_reassigned_data_partitions.assert_called_once_with(
+            partitions
+        )
+
+    def test_resume_reassigned_data_partitions_noop_without_recovery_manager(
+        self, state_manager
+    ):
+        # Must be a no-op (not an error) when state recovery is not enabled
+        state_manager.resume_reassigned_data_partitions([TopicPartition("topic", 0)])
 
     def test_register_store(self, state_manager):
         state_manager = state_manager
@@ -188,6 +211,21 @@ class TestStateStoreManager:
             shutil.rmtree(base_dir_path, ignore_errors=True)
             st.clear_stores()
 
+    def test_destroy_partition_state(self, state_manager):
+        store = MagicMock()
+        store.name = "default"
+        store.destroy_partition.return_value = True
+        state_manager._stores["topic"] = {"default": store}
+
+        destroyed = state_manager.destroy_partition_state(
+            stream_id="topic",
+            partition=0,
+        )
+
+        assert destroyed == ["default"]
+        store.revoke_partition.assert_called_once_with(partition=0)
+        store.destroy_partition.assert_called_once_with(partition=0)
+
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestStateStoreManagerWithRecovery:
@@ -284,3 +322,48 @@ class TestStateStoreManagerWithRecovery:
 
         # Check that RecoveryManager has a partition revoked too
         assert not recovery_manager.partitions
+
+
+class TestMemoryStoreOptionForwarding:
+    """Fix 7 (review re-review): the manager forwards the app-wide TTL scalars
+    (from ``rocksdb_options``) into a ``MemoryStore`` so a ``MemoryStorePartition``
+    created via ``Application`` reflects ``legacy_records_ttl`` /
+    ``ttl_changelog_tombstones`` / ``max_evictions_per_flush``. (v3.24.0-stamp
+    adoption is now automatic — no flag — so nothing adoption-related is
+    forwarded.)"""
+
+    def test_manager_forwards_ttl_options_to_memory_partition(self, tmp_path):
+        manager = StateStoreManager(
+            group_id="g",
+            state_dir=str(tmp_path / "state"),
+            rocksdb_options=RocksDBOptions(
+                legacy_records_ttl=timedelta(days=7),
+                ttl_changelog_tombstones=False,
+                max_evictions_per_flush=123,
+            ),
+            default_store_type=MemoryStore,
+        )
+        manager.init()
+        manager.register_store("topic", store_name="default")
+        store = manager.get_store("topic", "default")
+        assert isinstance(store, MemoryStore)
+
+        partition = store.create_new_partition(0)
+        assert partition.legacy_records_ttl == timedelta(days=7)
+        assert partition.ttl_changelog_tombstones is False
+        assert partition.max_evictions_per_flush == 123
+        manager.close()
+
+    def test_manager_memory_defaults_when_no_options(self, tmp_path):
+        # No rocksdb_options -> the manager uses RocksDBOptions() defaults.
+        manager = StateStoreManager(
+            group_id="g",
+            state_dir=str(tmp_path / "state"),
+            default_store_type=MemoryStore,
+        )
+        manager.init()
+        manager.register_store("topic", store_name="default")
+        partition = manager.get_store("topic", "default").create_new_partition(0)
+        assert partition.legacy_records_ttl is None
+        assert partition.ttl_changelog_tombstones is True
+        manager.close()

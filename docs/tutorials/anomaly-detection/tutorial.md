@@ -196,7 +196,7 @@ Now we do a (5 second) windowing operation on our temperature value. A few very 
     - Since we care about temperature readings PER MACHINE, our example producer used MACHINE_ID as the Kafka message key. 
     - If we had instead used a static key, say "my_machines", our Anomaly Detector would have evaluated the machines together as one.
 
-- The event's windowing timestamp comes from the "Timestamp" (case-sensitive!!!) field, which SDF looks for in the message value when first receiving it. If it doesn't exist, the kafka message timestamp is used. [A custom function can also be used](../../windowing.md#extracting-timestamps-from-messages).
+- The event's windowing timestamp comes from the Kafka/source message timestamp in this tutorial. To derive event time from a value field such as `"Timestamp"`, configure a [`timestamp_extractor`](../../windowing.md#extracting-timestamps-from-messages) on the topic or source.
 
 
 

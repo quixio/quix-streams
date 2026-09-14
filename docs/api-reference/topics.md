@@ -600,7 +600,7 @@ Multiple topics are expected for merged and joins streams.
 def stream_id_from_topics(topics: Sequence[Topic]) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L350)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L352)
 
 Generate a stream_id by combining names of the provided topics.
 

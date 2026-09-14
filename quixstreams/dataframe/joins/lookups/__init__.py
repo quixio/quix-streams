@@ -1,7 +1,8 @@
 from .base import BaseField, BaseLookup
 from .quix_configuration_service import (
     QuixConfigurationService,
-    QuixConfigurationServiceField,
+    QuixConfigurationServiceBytesField,
+    QuixConfigurationServiceJSONField,
 )
 from .sqlite import SQLiteLookup, SQLiteLookupField, SQLiteLookupQueryField
 
@@ -13,4 +14,6 @@ __all__ = [
     "SQLiteLookup",
     "SQLiteLookupField",
     "SQLiteLookupQueryField",
+    "QuixConfigurationServiceJSONField",
+    "QuixConfigurationServiceBytesField",
 ]

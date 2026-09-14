@@ -2,20 +2,30 @@ import hashlib
 import logging
 import threading
 import time
-from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional, Union
 
 import httpx
 import orjson
+from confluent_kafka import TopicPartition
 
 from quixstreams.kafka import ConnectionConfig, Consumer
+from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import HeadersMapping, Topic
+from quixstreams.platforms.quix.env import QUIX_ENVIRONMENT
 
 from ..base import BaseLookup
 from ..utils import CacheInfo
 from .cache import VersionDataLRU
 from .environment import QUIX_REPLICA_NAME
-from .models import Configuration, ConfigurationVersion, Event, Field
+from .models import (
+    RAISE_ON_MISSING,
+    BaseField,
+    BytesField,
+    Configuration,
+    ConfigurationVersion,
+    Event,
+    JSONField,
+)
 
 if TYPE_CHECKING:
     from quixstreams.app import ApplicationConfig
@@ -23,12 +33,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-FALLBACK_DEFAULT = object()
 DEFAULT_REQUEST_TIMEOUT = 5
 DEFAULT_CONSUMER_GROUP = "enrich"
 
 
-class Lookup(BaseLookup[Field]):
+class Lookup(BaseLookup[BaseField]):
     """
     Lookup join implementation for enriching streaming data with configuration data from a Kafka topic.
 
@@ -62,6 +71,7 @@ class Lookup(BaseLookup[Field]):
         consumer_group: str = DEFAULT_CONSUMER_GROUP,
         consumer_extra_config: Optional[dict] = None,
         request_timeout: int = DEFAULT_REQUEST_TIMEOUT,
+        quix_sdk_token: Optional[str] = None,
         cache_size: int = 1000,
         fallback: Literal["error", "default"] = "error",
     ):
@@ -91,7 +101,18 @@ class Lookup(BaseLookup[Field]):
         self._fallback = fallback
 
         self._started = threading.Event()
-        self._client = httpx.Client(follow_redirects=True)
+
+        headers = {
+            "User-Agent": "quixstreams-lookup",
+        }
+        token = quix_sdk_token or QUIX_ENVIRONMENT.sdk_token
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        self._client = httpx.Client(
+            follow_redirects=True,
+            headers=headers,
+        )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._configurations: dict[str, Configuration] = {}
 
@@ -99,7 +120,7 @@ class Lookup(BaseLookup[Field]):
             self._version_data, maxsize=cache_size
         )
 
-        self._consumer = Consumer(
+        self._config_consumer = Consumer(
             broker_address=broker_address,
             consumer_group=consumer_group,
             auto_offset_reset="earliest",
@@ -107,17 +128,59 @@ class Lookup(BaseLookup[Field]):
             extra_config=consumer_extra_config,
         )
 
-        self._start()
+        self._start_consumer_thread()
 
-        self._fields_by_type: dict[int, dict[str, dict[str, Field]]] = defaultdict(dict)
+        self._fields_by_type: dict[int, dict[str, dict[str, BaseField]]] = {}
 
-    def _fetch_version_content(self, version: ConfigurationVersion) -> Optional[Any]:
+    def json_field(
+        self,
+        jsonpath: str,
+        type: str,
+        first_match_only: bool = True,
+        default: Any = RAISE_ON_MISSING,
+    ) -> JSONField:
         """
-        Fetch and parse JSON content from the URL specified in the version's contentUrl attribute.
+        Create a JSON field for extracting values from configuration content using JSONPath.
 
-        :param version: The configuration version containing the contentUrl to fetch JSON content from.
+        :param jsonpath: The JSONPath expression to extract the value.
+        :param type: The configuration type.
+        :param first_match_only: If True, only the first match is returned, otherwise all matches are returned.
+        :param default: The default value if the field is missing.
 
-        :returns: The parsed JSON content, or FALLBACK_DEFAULT if fetching fails and fallback is enabled.
+        :returns: A JSONField instance.
+        """
+        return JSONField(
+            jsonpath=jsonpath,
+            type=type,
+            first_match_only=first_match_only,
+            default=default,
+        )
+
+    def bytes_field(
+        self,
+        type: str,
+        default: Any = RAISE_ON_MISSING,
+    ) -> BytesField:
+        """
+        Create a bytes field for extracting binary content from configuration.
+
+        :param type: The configuration type.
+        :param default: The default value if the field is missing.
+
+        :returns: A BytesField instance.
+        """
+        return BytesField(
+            type=type,
+            default=default,
+        )
+
+    def _fetch_version_content(self, version: ConfigurationVersion) -> Optional[bytes]:
+        """
+        Fetch raw content from the URL specified in the version's contentUrl attribute.
+
+        :param version: The configuration version containing the contentUrl to fetch raw content from.
+
+        :returns: The raw content, or None if fetching fails and fallback is enabled.
 
         :raises: Exception: If fetching fails and fallback is set to "error".
         """
@@ -128,7 +191,7 @@ class Lookup(BaseLookup[Field]):
             )
             response.raise_for_status()
             version.success()
-            return orjson.loads(response.content)
+            return response.content
         except Exception as e:
             logger.error(
                 f"Failed to fetch configuration content from {version.contentUrl}: {e}"
@@ -137,9 +200,9 @@ class Lookup(BaseLookup[Field]):
                 raise
 
             version.failed()
-            return FALLBACK_DEFAULT
+            return None
 
-    def _start(self) -> None:
+    def _start_consumer_thread(self) -> None:
         """
         Start the enrichment process in a background thread and wait for initialization to complete.
         """
@@ -150,26 +213,31 @@ class Lookup(BaseLookup[Field]):
 
     def _consumer_thread(self) -> None:
         """
-        Background thread for consuming configuration events from Kafka and updating internal state.
+        Background thread for consuming configuration events from Kafka
+        and updating internal state.
         """
-        assigned = False
-
-        def on_assign(consumer: Consumer, partitions: list[tuple[str, int]]) -> None:
-            """
-            Callback for partition assignment.
-            """
-            nonlocal assigned
-            assigned = True
-
         try:
-            self._consumer.subscribe(topics=[self._topic.name], on_assign=on_assign)
+            # Assign all available partitions of the config updates topic
+            # bypassing the consumer group protocol.
+            tps = [
+                TopicPartition(topic=self._topic.name, partition=i)
+                for i in range(self._topic.broker_config.num_partitions or 0)
+            ]
+            self._config_consumer.assign(tps)
 
             while True:
-                message = self._consumer.poll(timeout=self._consumer_poll_timeout)
+                # Check if the consumer processed all the available config messages
+                # and set the "started" event.
+                if not self._started.is_set() and self._configs_ready():
+                    self._started.set()
+
+                message = self._config_consumer.poll(
+                    timeout=self._consumer_poll_timeout
+                )
                 if message is None:
-                    if assigned and not self._started.is_set():
-                        self._started.set()
                     continue
+                elif message.error():
+                    raise KafkaConsumerException(error=message.error())
 
                 value = message.value()
                 if value is None:
@@ -203,7 +271,9 @@ class Lookup(BaseLookup[Field]):
 
         :raises: RuntimeError: If the event type is unknown.
         """
-        logger.info(f"Processing event: {event['event']} for ID: {event['id']}")
+        logger.info(
+            f'Processing update for configuration ID "{event["id"]}" ({event["event"]})'
+        )
         if event["event"] in {"created", "updated"}:
             if event["id"] not in self._configurations:
                 logger.debug(f"Creating new configuration for ID: {event['id']}")
@@ -265,33 +335,40 @@ class Lookup(BaseLookup[Field]):
 
         :returns: The valid configuration version, or None if not found.
         """
-        logger.debug(
-            f"Fetching data for type: {type}, on: {on}, timestamp: {timestamp}"
-        )
+
         configuration = self._configurations.get(self._config_id(type, on))
-        if not configuration:
+        if configuration is None:
             logger.debug(
-                f"No configuration found for type: {type}, on: {on}. Trying wildcard."
+                "No configuration found for type: %s, on: %s. Trying wildcard.",
+                type,
+                on,
             )
             configuration = self._configurations.get(self._config_id(type, "*"))
-        if not configuration:
-            logger.debug(f"No configuration found for type: {type}, on: *")
+        if configuration is None:
+            logger.debug("No configuration found for type: %s, on: *", type)
             return None
 
         version = configuration.find_valid_version(timestamp)
         if version is None:
             logger.debug(
-                f"No valid version found for type: {type}, on: {on}, timestamp: {timestamp}"
+                "No valid configuration version found for type: %s, on: %s, timestamp: %s",
+                type,
+                on,
+                timestamp,
             )
             return None
 
         logger.debug(
-            f"Found valid version '{version.version}' for type: {type}, on: {on}, timestamp: {timestamp}"
+            "Found valid configuration version '%s' for type: %s, on: %s, timestamp: %s",
+            version.version,
+            type,
+            on,
+            timestamp,
         )
         return version
 
     def _version_data(
-        self, version: Optional[ConfigurationVersion], fields: dict[str, Field]
+        self, version: Optional[ConfigurationVersion], fields: dict[str, BaseField]
     ) -> dict[str, Any]:
         """
         Retrieve the configuration data for a given version and fields.
@@ -305,7 +382,7 @@ class Lookup(BaseLookup[Field]):
             return {key: field.missing() for key, field in fields.items()}
 
         content = self._fetch_version_content(version)
-        if content is FALLBACK_DEFAULT:
+        if content is None:
             return {key: field.missing() for key, field in fields.items()}
 
         return {
@@ -327,7 +404,7 @@ class Lookup(BaseLookup[Field]):
 
     def join(
         self,
-        fields: Mapping[str, Field],
+        fields: Mapping[str, BaseField],
         on: str,
         value: dict[str, Any],
         key: Any,
@@ -352,18 +429,42 @@ class Lookup(BaseLookup[Field]):
         start = time.time()
         logger.debug(f"Joining message with key: {on}, timestamp: {timestamp}")
 
-        fields_by_type = self._fields_by_type.get(id(fields))
-        if fields_by_type is None:
-            fields_by_type = defaultdict(dict)
-            for key, field in fields.items():
-                fields_by_type[field.type][key] = field
-            self._fields_by_type[id(fields)] = fields_by_type
+        fields_ids = id(fields)
+        fields_by_type = self._fields_by_type.get(fields_ids)
 
-        for type, fields in fields_by_type.items():
-            version = self._find_version(type, on, timestamp)
+        if fields_by_type is None:
+            fields_by_type = {}
+            for key, field in fields.items():
+                fields_by_type.setdefault(field.type, {})[key] = field
+            self._fields_by_type[fields_ids] = fields_by_type
+
+        for type_, fields in fields_by_type.items():
+            version = self._find_version(type_, on, timestamp)
+
             if version is not None and version.retry_at < start:
                 self._version_data_cached.remove(version, fields)
 
             value.update(self._version_data_cached(version, fields))
 
         logger.debug("Join took %.2f ms", (time.time() - start) * 1000)
+
+    def _configs_ready(self) -> bool:
+        """
+        Return True if the configs are loaded from the topic until the available HWM.
+        If there are outstanding messages in the config topic or the assignment is not
+        available yet, return False.
+        """
+
+        if not self._config_consumer.assignment():
+            return False
+
+        positions = self._config_consumer.position(self._config_consumer.assignment())
+        for position in positions:
+            # Check if the consumer reached the end of the configuration topic
+            # for each assigned partition.
+            _, hwm = self._config_consumer.get_watermark_offsets(
+                partition=position, cached=True
+            )
+            if hwm < 0 or (hwm > 0 and position.offset < hwm):
+                return False
+        return True

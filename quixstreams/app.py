@@ -1,12 +1,15 @@
 import contextlib
+import copy
 import functools
 import logging
 import signal
 import time
+import uuid
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
+from threading import Event
+from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union, cast
 
 from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
@@ -36,7 +39,6 @@ from .models import (
     TopicManager,
 )
 from .platforms.quix import (
-    DEFAULT_PORTAL_API_URL,
     QuixKafkaConfigsBuilder,
     QuixTopicManager,
     check_state_dir,
@@ -49,14 +51,16 @@ from .runtracker import RunTracker
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
 from .state import StateStoreManager
+from .state.exceptions import StateRecoveryOffsetOutOfRange
 from .state.recovery import RecoveryManager
-from .state.rocksdb import RocksDBOptionsType
+from .state.rocksdb import OpenDeadline, RocksDBOpenAborted, RocksDBOptionsType
 from .utils.settings import BaseSettings
 
 __all__ = ("Application", "ApplicationConfig")
 
 logger = logging.getLogger(__name__)
 ProcessingGuarantee = Literal["at-least-once", "exactly-once"]
+StateRecoveryOffsetReset = Literal["earliest", "latest", "match"]
 MessageProcessedCallback = Callable[[str, int, int], None]
 
 # Enforce idempotent producing for InternalProducer
@@ -71,6 +75,16 @@ _default_consumer_extra_config = {
 consumer_extra_config_overrides = {"partition.assignment.strategy": "range"}
 
 _default_max_poll_interval_ms = 300000
+
+# Fraction of max.poll.interval.ms allotted to each bounded flush during a
+# partition revoke. The revoke runs inside the rebalance callback (itself inside
+# poll()), so each blocking step must finish well within the poll budget;
+# overrunning re-triggers the livelock this PR fixes.
+_REVOKE_FLUSH_FRACTION = 0.2
+
+# Fraction of max.poll.interval.ms allotted to the *total* RocksDB open time
+# across all partitions in a single _on_assign, shared via a per-assign deadline.
+_REBALANCE_OPEN_BUDGET_FRACTION = 0.5
 
 
 class TopicManagerFactory(Protocol):
@@ -145,12 +159,15 @@ class Application:
         loglevel: Optional[Union[int, LogLevel]] = "INFO",
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
+        auto_recover_from_source_offset_out_of_range: bool = True,
+        state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest",
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         topic_manager: Optional[TopicManager] = None,
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         max_partition_buffer_size: int = 10000,
+        broker_availability_timeout: float = 120.0,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -169,7 +186,6 @@ class Application:
         :param quix_portal_api: If using the Quix Cloud, the cluster API URL to use.
             Use it to connect to the dedicated Quix Cloud environment.
             Linked Environment Variable: `Quix__Portal__Api`.
-            Default: `https://portal-api.platform.quix.io/`.
               >***NOTE:*** the environment variable is set for you in the Quix Cloud
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
@@ -211,6 +227,21 @@ class Application:
             Default - `True`
         :param use_changelog_topics: Use changelog topics to back stateful operations
             Default - `True`
+        :param auto_recover_from_source_offset_out_of_range: If `True`, stateful
+            applications will delete local state for an assigned partition when the
+            committed source offset is older than the broker's retained offsets. The
+            source offset used after recovery is controlled by
+            `state_recovery_offset_reset`. If `False`, the application raises
+            `StateRecoveryOffsetOutOfRange` instead. Default - `True`.
+        :param state_recovery_offset_reset: Source offset reset policy to use after
+            automatic state recovery deletes local state because the committed source
+            offset is no longer retained by Kafka. Use `"earliest"` to use the broker
+            low watermark as the changelog recovery boundary and resume source
+            consumption from there. Use `"latest"` to resume source consumption from
+            the broker high watermark and skip changelog records that carry processed
+            source-offset metadata; older changelog records without this metadata may
+            still be applied. Use `"match"` to follow `auto_offset_reset` (`"error"`
+            raises `StateRecoveryOffsetOutOfRange`). Default - `"earliest"`.
         :param topic_manager: A `TopicManager` instance
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
@@ -220,6 +251,12 @@ class Application:
             It is a soft limit, and the actual number of buffered messages can be up to x2 higher.
             Lower value decreases the memory use, but increases the latency.
             Default - `10000`.
+        :param broker_availability_timeout: timeout in seconds. If all Kafka brokers
+            are unavailable for longer than this, the Application will raise a
+            ``KafkaBrokerUnavailableError`` to allow the orchestrator to restart
+            the application with fresh connections.
+            Set to ``0`` to disable the check.
+            Default - ``120.0``s (2 minutes).
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -249,11 +286,6 @@ class Application:
         state_dir = Path(state_dir)
 
         broker_address = broker_address or QUIX_ENVIRONMENT.broker_address
-        quix_sdk_token = quix_sdk_token or QUIX_ENVIRONMENT.sdk_token
-        quix_portal_api = (
-            quix_portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
-        )
-
         consumer_group = (
             consumer_group or QUIX_ENVIRONMENT.consumer_group or "quixstreams-default"
         )
@@ -264,8 +296,10 @@ class Application:
             self._topic_manager_factory: TopicManagerFactory = TopicManager
             if isinstance(broker_address, str):
                 broker_address = ConnectionConfig(bootstrap_servers=broker_address)
+            consumer_group_prefix = ""
         else:
             self._is_quix_app = True
+            quix_sdk_token = quix_sdk_token or QUIX_ENVIRONMENT.sdk_token
 
             if quix_config_builder:
                 quix_app_source = "Quix Config Builder"
@@ -276,8 +310,15 @@ class Application:
                     )
             elif quix_sdk_token:
                 quix_app_source = "Quix SDK Token"
+                quix_portal_api = quix_portal_api or QUIX_ENVIRONMENT.portal_api
+                if not quix_portal_api:
+                    raise ValueError(
+                        'Either "quix_portal_api" must be provided or '
+                        '"Quix__Portal__Api" environment variable must be set'
+                    )
                 quix_config_builder = QuixKafkaConfigsBuilder.from_credentials(
-                    quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api
+                    quix_sdk_token=quix_sdk_token,
+                    quix_portal_api=cast(str, quix_portal_api),  # cast to please mypy
                 )
             else:
                 raise ValueError(
@@ -301,13 +342,17 @@ class Application:
             consumer_group = quix_app_config.consumer_group
             consumer_extra_config.update(quix_app_config.librdkafka_extra_config)
             producer_extra_config.update(quix_app_config.librdkafka_extra_config)
+            consumer_group_prefix = quix_config_builder.workspace_id
+
+        if processing_guarantee == "exactly-once":
+            producer_extra_config["transactional.id"] = resolve_transactional_id(
+                producer_extra_config.get("transactional.id"), consumer_group_prefix
+            )
 
         self._config = ApplicationConfig(
             broker_address=broker_address,
             consumer_group=consumer_group,
-            consumer_group_prefix=(
-                quix_config_builder.workspace_id if quix_config_builder else ""
-            ),
+            consumer_group_prefix=consumer_group_prefix,
             auto_offset_reset=auto_offset_reset,
             commit_interval=commit_interval,
             commit_every=commit_every,
@@ -330,11 +375,19 @@ class Application:
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
             use_changelog_topics=use_changelog_topics,
+            auto_recover_from_source_offset_out_of_range=auto_recover_from_source_offset_out_of_range,
+            state_recovery_offset_reset=state_recovery_offset_reset,
             max_partition_buffer_size=max_partition_buffer_size,
         )
 
         self._on_message_processed = on_message_processed
         self._on_processing_error = on_processing_error or default_on_processing_error
+        if broker_availability_timeout < 0:
+            raise ValueError(
+                f"broker_availability_timeout must be >= 0, "
+                f"got {broker_availability_timeout}"
+            )
+        self._broker_availability_timeout = broker_availability_timeout
 
         self._consumer = self._get_internal_consumer(
             on_error=on_consumer_error,
@@ -343,17 +396,41 @@ class Application:
         self._producer = self._get_internal_producer(on_error=on_producer_error)
         self._running = False
         self._failed = False
+        # Signals to state store partitions that the application is stopping, so
+        # a partition stuck in its open-retry loop (e.g. waiting on a RocksDB
+        # lock held by another instance) aborts promptly instead of sleeping
+        # through the whole retry budget.
+        self._stop_event = Event()
+        # Shared per-assign RocksDB-open budget. Armed at the start of
+        # _on_assign and disarmed in its finally, it bounds the *total* serial
+        # open time across all partitions in one rebalance so multiple contended
+        # partitions cannot push _on_assign past max.poll.interval.ms.
+        self._open_deadline = OpenDeadline()
 
         self._topic_manager = topic_manager or self._get_topic_manager()
 
         producer = None
+        migration_producer = None
         recovery_manager = None
         if self._config.use_changelog_topics:
             producer = self._producer
             recovery_manager = RecoveryManager(
                 consumer=self._consumer,
                 topic_manager=self._topic_manager,
+                broker_availability_timeout=self._broker_availability_timeout,
             )
+            if self._config.exactly_once:
+                # Under exactly-once the main
+                # changelog producer is transactional, so flush() does not make
+                # records durable until the checkpoint transaction commits. The
+                # legacy-TTL migration/backfill paths write local state right after
+                # producing each chunk (changelog-first), so they need a producer
+                # whose flush()==durable. Create a dedicated NON-transactional
+                # producer used ONLY for those migration records; normal changelog
+                # production stays on the transactional producer. The underlying
+                # librdkafka producer is created lazily on first use, so this is a
+                # no-op object for the common no-migration case.
+                migration_producer = self._get_internal_producer(transactional=False)
 
         self._state_manager = StateStoreManager(
             group_id=self._config.consumer_group,
@@ -361,6 +438,9 @@ class Application:
             rocksdb_options=self._config.rocksdb_options,
             producer=producer,
             recovery_manager=recovery_manager,
+            migration_producer=migration_producer,
+            stop_event=self._stop_event,
+            open_deadline=self._open_deadline,
         )
 
         self._source_manager = SourceManager()
@@ -375,6 +455,7 @@ class Application:
             exactly_once=self._config.exactly_once,
             sink_manager=self._sink_manager,
             dataframe_registry=self._dataframe_registry,
+            revoke_flush_timeout=self._config.revoke_flush_timeout,
         )
         self._run_tracker = RunTracker()
 
@@ -570,6 +651,8 @@ class Application:
         """
 
         self._run_tracker.stop()
+        # Unblock any state partition waiting on its open-retry backoff
+        self._stop_event.set()
         if fail:
             # Update "_failed" only when fail=True to prevent stop(failed=False) from
             # resetting it
@@ -592,15 +675,34 @@ class Application:
         if transactional is None:
             transactional = self._config.exactly_once
 
+        extra_config = self._config.producer_extra_config
+        if not transactional:
+            # A non-transactional InternalProducer (the legacy-TTL migration
+            # producer created under exactly-once at __init__, or a Sources
+            # producer) must NOT inherit the shared ``transactional.id`` injected
+            # into ``producer_extra_config`` under exactly-once (see __init__): a
+            # non-transactional producer carrying a transactional.id corrupts it
+            # for itself and for any transactional producer created afterwards.
+            # Strip it on a SHALLOW copy: the only mutation is this top-level
+            # ``pop``, so copying the dict is enough to leave the shared config
+            # untouched. Deep-copying would also copy every VALUE, which breaks
+            # any legitimately non-picklable entry (an ``ssl.SSLContext``, a lock,
+            # a client handle) with ``TypeError: cannot pickle ...`` -- and this
+            # runs from ``__init__`` for every non-transactional app producer.
+            # The transactional path keeps the config verbatim (id resolves as
+            # before).
+            extra_config = dict(extra_config)
+            extra_config.pop("transactional.id", None)
+
         return InternalProducer(
             broker_address=self._config.broker_address,
-            extra_config=self._config.producer_extra_config,
+            extra_config=extra_config,
             flush_timeout=self._config.flush_timeout,
             on_error=on_error,
             transactional=transactional,
         )
 
-    def get_producer(self) -> Producer:
+    def get_producer(self, transactional: bool = False) -> Producer:
         """
         Create and return a pre-configured Producer instance.
         The Producer is initialized with params passed to Application.
@@ -609,6 +711,11 @@ class Application:
         (e.g. to produce test data into a topic).
         Using this within the StreamingDataFrame functions is not recommended, as it creates a new Producer
         instance each time, which is not optimized for repeated use in a streaming pipeline.
+
+        :param transactional: if True, the producer will be configured to use transactions
+            regardless of Application's processing guarantee setting. But the responsibility
+            for beginning and committing the transaction is on the user.
+            Default - False.
 
         Example Snippet:
 
@@ -623,10 +730,18 @@ class Application:
                 producer.produce(topic=topic.name, key=b"key", value=b"value")
         ```
         """
+        extra_config = copy.deepcopy(self._config.producer_extra_config)
+        if transactional:
+            extra_config["transactional.id"] = resolve_transactional_id(
+                extra_config.get("transactional.id"), self._config.consumer_group_prefix
+            )
+        else:
+            extra_config.pop("transactional.id", None)
 
         return Producer(
             broker_address=self._config.broker_address,
-            extra_config=self._config.producer_extra_config,
+            extra_config=extra_config,
+            transactional=transactional,
         )
 
     def _get_internal_consumer(
@@ -740,6 +855,7 @@ class Application:
                 extra_config_overrides=consumer_extra_config_overrides
             ),
             self._get_topic_manager(),
+            broker_availability_timeout=self._broker_availability_timeout,
         )
         return topic
 
@@ -827,6 +943,7 @@ class Application:
                     "a plain Source (no StreamingDataFrame)."
                 )
         self._run_tracker.reset()
+        self._stop_event.clear()
         self._run_tracker.set_stop_condition(timeout=timeout, count=count)
         self._setup_signal_handlers()
 
@@ -862,14 +979,19 @@ class Application:
         return self._run_tracker.collected
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
-        fail = False
+        # A RocksDBOpenAborted means the open-retry loop was intentionally
+        # interrupted by a graceful stop (SIGTERM / stop()). Exit clean and keep
+        # _failed False so the consumer close still commits healthy partitions
+        # in _on_revoke.
+        if exc_type is not None and issubclass(exc_type, RocksDBOpenAborted):
+            self.stop(fail=False)
+            return True  # suppress: graceful stop, not a failure
 
         # Sources and the application are independent.
         # If a source fails, the application can shutdown gracefully.
-        if exc_val is not None and exc_type is not SourceException:
-            fail = True
-
+        fail = exc_val is not None and exc_type is not SourceException
         self.stop(fail=fail)
+        return False
 
     def _run_dataframe(self, sink: Optional[VoidExecutor] = None):
         changelog_topics = self._topic_manager.changelog_topics_list
@@ -894,7 +1016,7 @@ class Application:
 
         processing_context.init_checkpoint()
         run_tracker.set_as_running()
-        logger.info("Waiting for incoming messages")
+        logger.info("The application started and is now processing incoming messages")
         # Start polling Kafka for messages and callbacks
         while run_tracker.running:
             if state_manager.recovery_required:
@@ -905,10 +1027,17 @@ class Application:
                 processing_context.commit_checkpoint()
                 consumer.resume_backpressured()
                 source_manager.raise_for_error()
+                if self._broker_availability_timeout:
+                    self._producer.raise_if_broker_unavailable(
+                        self._broker_availability_timeout
+                    )
+                    self._consumer.raise_if_broker_unavailable(
+                        self._broker_availability_timeout
+                    )
                 printer.print()
                 run_tracker.update_status()
 
-        logger.info("Stop processing of StreamingDataFrame")
+        logger.info("Stopping the application")
         processing_context.commit_checkpoint(force=True)
 
     def _run_sources(self):
@@ -919,6 +1048,13 @@ class Application:
         source_manager.start_sources()
         while run_tracker.running and source_manager.is_alive():
             source_manager.raise_for_error()
+            if self._broker_availability_timeout:
+                self._producer.raise_if_broker_unavailable(
+                    self._broker_availability_timeout
+                )
+                self._consumer.raise_if_broker_unavailable(
+                    self._broker_availability_timeout
+                )
             run_tracker.update_status()
             time.sleep(1)
         self.stop()
@@ -981,9 +1117,40 @@ class Application:
             topic=topic_name, partition=partition, offset=offset
         )
         self._run_tracker.set_message_consumed(True)
+        self._producer._broker_available()  # noqa: SLF001
+        self._consumer._broker_available()  # noqa: SLF001
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)
+
+    def _resolve_source_offset_recovery_targets(
+        self,
+        topic: str,
+        partition: int,
+        lowwater: int,
+        highwater: int,
+    ) -> tuple[Literal["earliest", "latest"], int, int]:
+        offset_reset = self._config.state_recovery_offset_reset
+        if offset_reset == "match":
+            if self._config.auto_offset_reset == "error":
+                message = (
+                    f'Cannot automatically recover state for "{topic}[{partition}]" '
+                    'with `state_recovery_offset_reset="match"` because '
+                    '`auto_offset_reset` is "error". Set '
+                    '`state_recovery_offset_reset` to "earliest" or "latest", or set '
+                    "`auto_recover_from_source_offset_out_of_range=False` to fail "
+                    "without deleting local state."
+                )
+                logger.error(message)
+                raise StateRecoveryOffsetOutOfRange(message)
+            offset_reset = self._config.auto_offset_reset
+
+        if offset_reset == "earliest":
+            return "earliest", lowwater, lowwater
+
+        # Use a recovery boundary of zero so existing changelog records with processed
+        # source offsets are skipped after the local state has been intentionally reset.
+        return "latest", highwater, 0
 
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
         """
@@ -996,6 +1163,26 @@ class Application:
             return
         logger.debug("Rebalancing: assigning partitions")
 
+        # Arm the shared per-assign RocksDB-open budget for the whole callback so
+        # the total open time across all assigned partitions is bounded. Disarmed
+        # in the finally so opens outside a rebalance (e.g. sources) stay
+        # unbounded.
+        self._open_deadline.arm(
+            self._config.flush_timeout * _REBALANCE_OPEN_BUDGET_FRACTION
+        )
+        try:
+            self._assign_partitions(topic_partitions)
+        finally:
+            self._open_deadline.disarm()
+
+    def _assign_partitions(self, topic_partitions: List[TopicPartition]):
+        """
+        Assign store partitions for the given topic partitions under the armed
+        per-assign open budget. Split out of `_on_assign` so the arm/disarm of
+        the shared open deadline stays readable.
+
+        :param topic_partitions: list of `TopicPartition` from Kafka
+        """
         # Only start the sources once the consumer is assigned. Otherwise a source
         # can produce data before the consumer starts. If that happens on a new
         # consumer with `auto_offset_reset` set to `latest` the consumer will not
@@ -1010,6 +1197,13 @@ class Application:
             tp for tp in topic_partitions if tp.topic not in non_changelog_topics
         ]
         self._consumer.pause(changelog_tps)
+        # The `assign()` above also resets the paused state of the data partitions.
+        # When this callback fires from the `poll()` inside a running recovery loop,
+        # those partitions must go back to paused before anything else runs, or the
+        # recovery loop starts fetching source messages it cannot process. Covers
+        # partitions that never reach `RecoveryManager.assign_partition` because
+        # they have no stateful store. No-op outside an active recovery.
+        self._state_manager.pause_assigned_data_partitions(topic_partitions)
 
         if self._state_manager.stores:
             non_changelog_tps = [
@@ -1025,7 +1219,79 @@ class Application:
                         f"Failed to get committed offsets for "
                         f'"{tp.topic}[{tp.partition}]" from the broker: {tp.error}'
                     )
-                committed_offsets[tp.partition][tp.topic] = tp.offset
+                lowwater, highwater = self._consumer.get_watermark_offsets(
+                    TopicPartition(topic=tp.topic, partition=tp.partition),
+                    timeout=30,
+                )
+                if 0 <= tp.offset < lowwater:
+                    if not self._config.auto_recover_from_source_offset_out_of_range:
+                        message = (
+                            f"Consumer group offset {tp.offset} for topic "
+                            f"{tp.topic}[{tp.partition}] is below the broker low "
+                            f"watermark {lowwater}. State cannot be recovered safely "
+                            f"from retained source data. Broker high watermark is "
+                            f"{highwater}; auto_offset_reset is "
+                            f'"{self._config.auto_offset_reset}". Reset the consumer '
+                            "group offset and clear/rebuild local state, or start "
+                            "with a new consumer group/state directory."
+                        )
+                        logger.error(message)
+                        raise StateRecoveryOffsetOutOfRange(message)
+
+                    (
+                        source_offset_reset,
+                        source_offset_target,
+                        recovery_offset_target,
+                    ) = self._resolve_source_offset_recovery_targets(
+                        topic=tp.topic,
+                        partition=tp.partition,
+                        lowwater=lowwater,
+                        highwater=highwater,
+                    )
+
+                    for stream_id in self._dataframe_registry.get_stream_ids(
+                        topic_name=tp.topic
+                    ):
+                        destroyed_stores = self._state_manager.destroy_partition_state(
+                            stream_id=stream_id,
+                            partition=tp.partition,
+                        )
+                        logger.critical(
+                            "DESTRUCTIVE STATE RECOVERY: consumer group offset %s "
+                            "for topic %s[%s] is below the broker low watermark %s "
+                            "(high watermark %s). Local state for stream %s[%s] "
+                            "has been deleted for stores %s because "
+                            "`auto_recover_from_source_offset_out_of_range` is True. "
+                            "Source consumption will resume from offset %s according "
+                            "to `state_recovery_offset_reset=%s`. This recovery "
+                            "necessarily loses state/source history before that "
+                            "offset. To avoid automatic state deletion, set "
+                            "`auto_recover_from_source_offset_out_of_range=False` "
+                            "and manually reset the consumer group offset plus "
+                            "clear/rebuild local state, or start with a new consumer "
+                            "group/state directory.",
+                            tp.offset,
+                            tp.topic,
+                            tp.partition,
+                            lowwater,
+                            highwater,
+                            stream_id,
+                            tp.partition,
+                            destroyed_stores or "<no persisted stores>",
+                            source_offset_target,
+                            source_offset_reset,
+                        )
+
+                    committed_offsets[tp.partition][tp.topic] = recovery_offset_target
+                    self._consumer.seek(
+                        TopicPartition(
+                            topic=tp.topic,
+                            partition=tp.partition,
+                            offset=source_offset_target,
+                        )
+                    )
+                else:
+                    committed_offsets[tp.partition][tp.topic] = tp.offset
 
             # Match the assigned TP with a stream ID via DataFrameRegistry
             for tp in non_changelog_tps:
@@ -1039,6 +1305,13 @@ class Application:
                         partition=tp.partition,
                         committed_offsets=committed_offsets[tp.partition],
                     )
+
+        # Resume any data partition left paused by a previous recovery generation
+        # that this rebalance reassigned without (re)triggering a recovery check
+        # (e.g. a consumer that now holds only stateless partitions). Without this,
+        # such a partition can stay paused indefinitely. No-op during active
+        # recovery or when no state recovery is in play.
+        self._state_manager.resume_reassigned_data_partitions(topic_partitions)
         self._run_tracker.timeout_refresh()
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
@@ -1050,16 +1323,23 @@ class Application:
         # In this case, we should drop the checkpoint and let another consumer
         # pick up from the latest one
         logger.debug("Rebalancing: revoking partitions")
-        if self._failed:
-            logger.warning(
-                "Application is stopping due to failure, "
-                "latest checkpoint will not be committed."
-            )
-        else:
-            self._processing_context.commit_checkpoint(force=True)
-
-        self._revoke_state_partitions(topic_partitions=topic_partitions)
-        self._consumer.reset_backpressure()
+        try:
+            if self._failed:
+                logger.warning(
+                    "Application is stopping due to failure, "
+                    "latest checkpoint will not be committed."
+                )
+            else:
+                self._processing_context.commit_checkpoint(force=True, revoking=True)
+        finally:
+            # Always release the RocksDB store locks (and clear backpressure),
+            # even if the bounded revoke commit exhausted its budget and raised:
+            # otherwise the lock leaks and the incoming owner livelocks trying to
+            # open the same partition (the contention this branch fixes). The
+            # revoke commit is already bounded, so at worst this runs a little
+            # later, never not-at-all.
+            self._revoke_state_partitions(topic_partitions=topic_partitions)
+            self._consumer.reset_backpressure()
 
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
         """
@@ -1134,6 +1414,8 @@ class ApplicationConfig(BaseSettings):
     state_dir: Path = Path("state")
     rocksdb_options: Optional[RocksDBOptionsType] = None
     use_changelog_topics: bool = True
+    auto_recover_from_source_offset_out_of_range: bool = True
+    state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest"
     max_partition_buffer_size: int = 10000
 
     @classmethod
@@ -1168,5 +1450,18 @@ class ApplicationConfig(BaseSettings):
         )  # convert to seconds
 
     @property
+    def revoke_flush_timeout(self) -> float:
+        return self.flush_timeout * _REVOKE_FLUSH_FRACTION
+
+    @property
     def exactly_once(self) -> bool:
         return self.processing_guarantee == "exactly-once"
+
+
+def resolve_transactional_id(transactional_id: Optional[str], prefix: str) -> str:
+    """
+    Utility function to resolve the transactional.id based
+    on existing config and provided prefix.
+    """
+    transactional_id = transactional_id or str(uuid.uuid4())
+    return f"{prefix}-{transactional_id}" if prefix else transactional_id

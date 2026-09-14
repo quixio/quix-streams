@@ -17,11 +17,12 @@ With `StreamingDataFrame`, you can:
 
 ### How It Works
 
-`StreamingDataFrame` is a lazy object.  
+`StreamingDataFrame` is a lazy object.
 You may think of it as a pipeline containing all transformations for incoming messages.
 
 It doesn't store the actual consumed data in memory, but only declares how the data
-should be transformed.
+should be transformed. Each call to `.apply()`, `.filter()`, etc. builds up a processing
+plan. The plan is only executed when `app.run()` is called and real messages start flowing.
 
 All manipulations to a `StreamingDataFrame` updates its processing pipeline, and 
 operations can be added either individually, or as a chain of them.
@@ -42,7 +43,7 @@ to ensure they are applied correctly. For example:
 ```python
 from quixstreams import Application
 
-# Initialize the Appication
+# Initialize the Application
 app = Application(...)
 
 # Create a StreamingDataFrame
@@ -84,7 +85,7 @@ from quixstreams import Application
 # Define an application and input topic with JSON deserialization
 app = Application(broker_address='localhost:9092')
 input_topic = app.topic('temperature', value_deserializer='json')
-output_topic = app.topic('temperature-celsius', value_deserializer='json')
+output_topic = app.topic('temperature-celsius', value_serializer='json')
 
 # Create StreamingDataFrame and connect it to the input topic 
 sdf = app.dataframe(topic=input_topic)
@@ -331,7 +332,7 @@ sdf = sdf.update(add_fahrenheit)
 To filter data with `StreamingDataFrame`, you may use:
 
 - DataFrame API with conditional expressions on columns.  
-  Use it if the message value is decode to a dictionary.
+  Use it if the message value is decoded to a dictionary.
 
 - Custom functions using `sdf.filter(...)`
   Use this approach if the value is not a dictionary, or you need to perform a more
@@ -385,7 +386,65 @@ To publish the current value of the `StreamingDataFrame` to a topic, simply call
 from `Application.topic()`
 as an argument.
 
-Similarly to other methods, `.to_topic()` creates a new `StreamingDataFrame` object.
+Similarly to other methods, `.to_topic()` creates a new `StreamingDataFrame` object:
+
+```python
+from quixstreams import Application
+
+app = Application(broker_address='localhost:9092')
+
+# Declare input and output topics
+input_topic = app.topic('input', value_deserializer='json')
+output_topic = app.topic('output', value_serializer='json')
+
+sdf = app.dataframe(input_topic)
+ 
+# Produce data to the output topic
+sdf = sdf.to_topic(topic=output_topic)
+```
+
+### Splitting data into multiple topics
+
+To dynamically route messages to different topics based on the message content, you can provide a callable that returns a `Topic` object to the `StreamingDataFrame.to_topic()` method:
+
+```python
+from quixstreams import Application
+from typing import Any
+
+app = Application(broker_address='localhost:9092')
+
+# Declare topics
+input_topic = app.topic('sensor-data', value_deserializer='json')
+normal_topic = app.topic('normal-readings', value_serializer='json')
+alert_topic = app.topic('high-temp-alerts', value_serializer='json')
+
+sdf = app.dataframe(input_topic)
+ 
+def route_by_temperature(value: Any, key: Any, timestamp: int, headers):
+    """
+    Send messages to different topics based on temperature sensor value
+    """
+    if value.get('temperature', 0) > 80:
+        return alert_topic
+    else:
+        return normal_topic
+
+sdf = sdf.to_topic(topic=route_by_temperature)
+
+# You can also combine it together with `key` transformation to change the message key
+sdf = sdf.to_topic(
+    topic=route_by_temperature,
+    key=lambda value: f"sensor-{value['sensor_id']}"
+)
+```
+
+!!! warning "Important Considerations"
+    
+    We recommend declaring all `Topic` instances before starting the application instead of creating them dynamically within the passed callback.
+    
+    Creating topics dynamically can lead to accidentally creating numerous topics and saturating the broker's partitions limits.  
+    Also, each `app.topic()` calls checks if the topic exists in the cluster and attempts to create the missing one when `auto_create_topics=True` is passed to the `Application`.
+
 
 ### Changing Message Key Before Producing
 
@@ -394,7 +453,7 @@ you can optionally provide a `key` callback generating a new key.
 
 This callback can use the current value and must return a new message key.
 
-The returned key must be compatible with `key_serializer` provided to the `Topic`object.
+The returned key must be compatible with `key_serializer` provided to the `Topic` object.
 
 **Example:**
 
@@ -465,7 +524,7 @@ Here are some examples of the column operations:
 ```python
 sdf = app.dataframe(...)
 
-# Input: {"total": 3, "count" 2}
+# Input: {"total": 3, "count": 2}
 
 # Use columns to filter data based on condition
 sdf = sdf[(sdf['total'] > 0) | (sdf['count'] > 1)]
@@ -484,7 +543,7 @@ sdf['average_is_null'] = sdf["average"].isnull()
 
 ### How it works
 
-Under the good, when you access a column on `StreamingDataFrame` it generates the new `StreamingSeries` instance that refers to the value of the passed key.
+Under the hood, when you access a column on `StreamingDataFrame` it generates the new `StreamingSeries` instance that refers to the value of the passed key.
 
 These objects are also lazy, and they are evaluated only when the `StreamingDataFrame`is
 executed by `app.run()`.
@@ -584,12 +643,10 @@ For example, to log input data, or to update a counter in the State.
 The return of the callback passed to `.update()` will be ignored, and the original input
 will be sent to downstream operations instead.
 
-This operation occurs in-place, meaning reassigning the operation to your `sdf` is 
-entirely OPTIONAL; the original `StreamingDataFrame` is still returned to allow the 
-chaining of commands like `sdf.update().print()`.
-
-> Note: chains that include any non-inplace function will still require reassignment: 
-> `sdf = sdf.update().filter().print()`
+`.update()` returns the same `StreamingDataFrame`, so reassigning to `sdf` is optional
+when chaining only other in-place operations (like `.print()`). However, if the chain
+includes a non-in-place operation such as `.filter()` or `.apply()`, reassignment is
+required: `sdf = sdf.update().filter().print()`.
 
 **Example:**
 
@@ -690,7 +747,7 @@ sdf = sdf.set_headers(
 ## Accessing Kafka Keys, Timestamps and Headers
 By leveraging the power of custom functions in `apply()`, `update()`, and `filter()` methods of `StreamingDataFrame`, you can conveniently access message keys, timestamps and headers of the records.
 
-To get a key and a timestamp in your callback, you need to pass an additional keyword-only parameter, `metadata=True.`
+To receive the key, timestamp, and headers as arguments in your callback, pass `metadata=True` to the `.apply()`, `.update()`, or `.filter()` method — not to the callback itself. Your callback must then accept four positional arguments: `value, key, timestamp, headers`.
 
 
 > **_NOTE:_** You should never mutate keys during processing.  

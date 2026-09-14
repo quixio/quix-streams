@@ -105,7 +105,7 @@ Here are some important configurations to be aware of (see [File Source API](../
 
 ### Optional:
 
-- `format`: what format the message files are in (ex: `"json"`, `"parquet"`).    
+- `file_format`: what format the message files are in (ex: `"json"`, `"parquet"`).    
     **Advanced**: can optionally provide a `Format` instance (`compression` will then be ignored).    
     **Default**: `"json"`
 - `compression`: what compression is used on the given files, if any (ex: `"gzip"`)    
@@ -245,7 +245,7 @@ This will result in the following Kafka message format for `Application`:
 ### Custom Schemas (Advanced)
 
 If the original files are not formatted as expected, custom loaders can be configured 
-on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(format=<Format>)`.
+on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(file_format=<Format>)`.
 
 Formats can be imported from `quixstreams.sources.community.file.formats`.
 
@@ -263,27 +263,35 @@ beginning (reproducing all previously processed messages).
 The default topic will have a partition count that reflects the partition count found 
 within the provided topic's folder structure.
 
-The default topic name the Application dumps to is based on the last folder name of 
-the `FileSource` `directory` as: `source__<last folder name>`.
-
-## Testing Locally
+The default source topic name is based on the bucket and last path name as `s3_<bucket>_<last path name>`. When passed to `Application.dataframe(source=...)` without a custom topic, the Kafka topic name is prefixed as `source__s3_<bucket>_<last path name>`.
 
 Rather than connect to AWS, you can alternatively test your application using a local 
-emulated S3 host via Docker:
+emulated S3 host via Docker (using minio):
 
 1. Execute in terminal:
 
     ```bash
-    docker run --rm -d --name s3 \
-    -p 4566:4566 \
-    -e SERVICES=s3 \
-    -e EDGE_PORT=4566 \
-    -e DEBUG=1 \
-    localstack/localstack:latest
+    docker run --rm -d --name minio \
+    -p 9000-9001:9000-9001 \
+    -e MINIO_ROOT_USER=admin \
+    -e MINIO_ROOT_PASSWORD=admin_pw \
+    -v /data \
+    quay.io/minio/minio server /data --console-address ":9001"
     ```
+2. 
+    - Navigate to the UI at `http://localhost:9001`
+    - Authenticate with `username=admin`, `password=admin_pw`
+    - Create a bucket.
 
-2. Set `endpoint_url` for `S3Origin` _OR_ the `AWS_ENDPOINT_URL_S3` 
-    environment variable to `http://localhost:4566`
-
-3. Set all other `aws_` parameters for `S3Origin` to _any_ string. 
-They will not be used, but they must still be populated!
+3. Connect using the following:
+    ```python
+    from quixstreams.sources.community.file.s3 import S3FileSource
+    
+    S3FileSource(
+        bucket="<YOUR BUCKET NAME>",
+        aws_access_key_id='admin',
+        aws_secret_access_key='admin_pw',
+        region_name='us-east-1',
+        endpoint_url='http://localhost:9000',
+    )
+    ```

@@ -15,6 +15,8 @@ from .aggregations import (
 )
 from .base import (
     Window,
+    WindowAfterUpdateCallback,
+    WindowBeforeUpdateCallback,
     WindowOnLateCallback,
 )
 from .count_based import (
@@ -54,11 +56,15 @@ class WindowDefinition(abc.ABC, Generic[WindowT]):
         name: Optional[str],
         dataframe: "StreamingDataFrame",
         on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ) -> None:
         super().__init__()
 
         self._name = name
         self._on_late = on_late
+        self._before_update = before_update
+        self._after_update = after_update
         self._dataframe = dataframe
 
     @abstractmethod
@@ -239,6 +245,8 @@ class TimeWindowDefinition(WindowDefinition[WindowT], Generic[WindowT]):
         name: Optional[str] = None,
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ):
         if not isinstance(duration_ms, int):
             raise TypeError("Window size must be an integer")
@@ -253,7 +261,7 @@ class TimeWindowDefinition(WindowDefinition[WindowT], Generic[WindowT]):
                 f"got {step_ms}ms"
             )
 
-        super().__init__(name, dataframe, on_late)
+        super().__init__(name, dataframe, on_late, before_update, after_update)
 
         self._duration_ms = duration_ms
         self._grace_ms = grace_ms
@@ -281,6 +289,8 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ):
         super().__init__(
             duration_ms=duration_ms,
@@ -289,6 +299,8 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
             name=name,
             step_ms=step_ms,
             on_late=on_late,
+            before_update=before_update,
+            after_update=after_update,
         )
 
     def _get_name(self, func_name: Optional[str]) -> str:
@@ -320,6 +332,8 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
             aggregators=aggregators or {},
             collectors=collectors or {},
             on_late=self._on_late,
+            before_update=self._before_update,
+            after_update=self._after_update,
         )
 
 
@@ -331,6 +345,8 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ):
         super().__init__(
             duration_ms=duration_ms,
@@ -338,6 +354,8 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
             dataframe=dataframe,
             name=name,
             on_late=on_late,
+            before_update=before_update,
+            after_update=after_update,
         )
 
     def _get_name(self, func_name: Optional[str]) -> str:
@@ -368,6 +386,8 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
             aggregators=aggregators or {},
             collectors=collectors or {},
             on_late=self._on_late,
+            before_update=self._before_update,
+            after_update=self._after_update,
         )
 
 
@@ -379,13 +399,22 @@ class SlidingTimeWindowDefinition(TimeWindowDefinition[SlidingWindow]):
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ):
+        if before_update is not None or after_update is not None:
+            raise ValueError(
+                "Sliding windows do not support trigger callbacks (before_update/after_update). "
+                "Use tumbling or hopping windows instead."
+            )
         super().__init__(
             duration_ms=duration_ms,
             grace_ms=grace_ms,
             dataframe=dataframe,
             name=name,
             on_late=on_late,
+            before_update=before_update,
+            after_update=after_update,
         )
 
     def _get_name(self, func_name: Optional[str]) -> str:
@@ -417,6 +446,8 @@ class SlidingTimeWindowDefinition(TimeWindowDefinition[SlidingWindow]):
             aggregators=aggregators or {},
             collectors=collectors or {},
             on_late=self._on_late,
+            before_update=self._before_update,
+            after_update=self._after_update,
         )
 
 

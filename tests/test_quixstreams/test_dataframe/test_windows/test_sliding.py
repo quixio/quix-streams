@@ -21,9 +21,13 @@ AGGREGATE_PARAMS = {
 }
 
 
-def process(window, value, key, transaction, timestamp_ms):
+def process(window, value, key, transaction, timestamp_ms, headers=None):
     updated, expired = window.process_window(
-        value=value, key=key, transaction=transaction, timestamp_ms=timestamp_ms
+        value=value,
+        key=key,
+        transaction=transaction,
+        timestamp_ms=timestamp_ms,
+        headers=headers,
     )
     return list(updated), list(expired)
 

@@ -314,7 +314,9 @@ class TopicManager:
 
         # Pick the maximum "retention.bytes" value across topics. -1 means infinity
         retention_bytes_values = [
-            int(t.broker_config.extra_config["retention.bytes"]) for t in topics
+            # On some Kafka-like platforms (e.g. Azure Event Hub) this param may be empty
+            int(t.broker_config.extra_config.get("retention.bytes", "-1"))
+            for t in topics
         ]
         retention_bytes = (
             -1 if -1 in retention_bytes_values else max(retention_bytes_values)

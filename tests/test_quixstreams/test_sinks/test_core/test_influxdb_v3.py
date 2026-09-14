@@ -1,6 +1,6 @@
 import datetime
 from typing import Optional
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import influxdb_client_3
 import pytest
@@ -28,6 +28,7 @@ def influxdb3_sink_factory():
         time_precision: TimePrecision = "ms",
         convert_ints_to_floats: bool = False,
         include_metadata_tags: bool = False,
+        raise_on_retention_violation: bool = False,
     ) -> InfluxDB3Sink:
         sink = InfluxDB3Sink(
             token="",
@@ -42,6 +43,7 @@ def influxdb3_sink_factory():
             include_metadata_tags=include_metadata_tags,
             convert_ints_to_floats=convert_ints_to_floats,
             batch_size=batch_size,
+            raise_on_retention_violation=raise_on_retention_violation,
         )
         sink._client = client_mock
         return sink
@@ -551,3 +553,136 @@ class TestInfluxDB3Sink:
         error_str = str(e)
         assert precision in error_str
         assert "got 16" in error_str
+
+    def test_get_influx_version(self, influxdb3_sink_factory):
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock,
+            measurement=measurement,
+        )
+
+        test_host = "https://example.org"
+        test_token = "test-token"
+        test_version = 30
+
+        sink._client_args["host"] = test_host
+        sink._client_args["token"] = test_token
+        response_mock = MagicMock(
+            status_code=204,
+            headers={"X-Influxdb-Version": f"{test_version}.1.2"},
+        )
+        with patch(
+            "quixstreams.sinks.core.influxdb3.httpx.get",
+            return_value=response_mock,
+        ) as httpx_get_mock:
+            import httpx
+
+            version = sink._get_influx_version()
+            httpx_get_mock.assert_called_once_with(
+                httpx.URL(url=test_host, path="/ping"),
+                headers={"Authorization": f"Token {test_token}"},
+                timeout=sink._request_timeout_ms / 1000,
+                verify=sink._client_args["verify_ssl"],
+            )
+            response_mock.raise_for_status.assert_called_once_with()
+            assert version == str(test_version)
+
+    def test_write_422_continues_by_default(self, influxdb3_sink_factory, caplog):
+        """422 errors with retention policy violations should be logged but not raise by default"""
+
+        class Response:
+            status = 422
+
+        influx_422_err = influxdb_client_3.InfluxDBError(
+            message="failure writing points to database: partial write: dropped 3 points outside retention policy"
+        )
+        influx_422_err.response = Response()
+        influx_422_err.retry_after = None
+
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        client_mock.write.side_effect = influx_422_err
+
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock,
+            measurement="measurement",
+            raise_on_retention_violation=False,
+        )
+
+        sink.add(
+            value={"key": "value1"},
+            key="key",
+            timestamp=1234567890123,
+            headers=[],
+            topic="test-topic",
+            partition=0,
+            offset=1,
+        )
+
+        with caplog.at_level("WARNING"):
+            sink.flush()
+            assert "retention policy violation" in caplog.text
+
+    def test_write_422_raises_when_strict_mode(self, influxdb3_sink_factory):
+        """422 errors with retention violations should raise when raise_on_retention_violation=True"""
+
+        class Response:
+            status = 422
+
+        influx_422_err = influxdb_client_3.InfluxDBError(
+            message="failure writing points to database: partial write: dropped 3 points outside retention policy"
+        )
+        influx_422_err.response = Response()
+
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        client_mock.write.side_effect = influx_422_err
+
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock,
+            measurement="measurement",
+            raise_on_retention_violation=True,
+        )
+
+        sink.add(
+            value={"key": "value1"},
+            key="key",
+            timestamp=1234567890123,
+            headers=[],
+            topic="test-topic",
+            partition=0,
+            offset=1,
+        )
+        with pytest.raises(influxdb_client_3.InfluxDBError):
+            sink.flush()
+
+    def test_write_422_other_error_raises(self, influxdb3_sink_factory):
+        """422 errors WITHOUT retention/partial write should always raise"""
+
+        class Response:
+            status = 422
+
+        influx_422_err = influxdb_client_3.InfluxDBError(
+            message="schema conflict: field type mismatch"
+        )
+        influx_422_err.response = Response()
+
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        client_mock.write.side_effect = influx_422_err
+
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock,
+            measurement="measurement",
+            raise_on_retention_violation=False,
+        )
+
+        sink.add(
+            value={"key": "value1"},
+            key="key",
+            timestamp=1234567890123,
+            headers=[],
+            topic="test-topic",
+            partition=0,
+            offset=1,
+        )
+        with pytest.raises(influxdb_client_3.InfluxDBError):
+            sink.flush()

@@ -2,7 +2,7 @@
 
 Serializers and deserializers for JSON Schema, Avro, and Protobuf support integration with a Schema Registry.
 
-The current implementation wraps Confluent's serializers and deserializers, which are tightly coupled with the Schema Registry.
+The current implementation wraps Confluent's serializers and deserializers. JSON Schema and Avro deserializers use Schema Registry lookups; Protobuf deserialization uses the provided `msg_type` and Confluent wire-format handling, while accepting Schema Registry config for API consistency.
 
 To integrate your existing Schema Registry, pass `SchemaRegistryClientConfig` to your serializers and deserializers. Additional optional configuration can be provided via `SchemaRegistrySerializationConfig`. 
 
@@ -110,5 +110,7 @@ serializer = ProtobufSerializer(
     schema_registry_serialization_config=schema_registry_serialization_config,
 )
 ```
+
+`ProtobufDeserializer` requires the local `msg_type`; it does not fetch the Protobuf message type from Schema Registry.
 
 See the [Serialization and Deserialization](./serialization.md) page to learn more about how to integrate the serializer and deserializer with your application.

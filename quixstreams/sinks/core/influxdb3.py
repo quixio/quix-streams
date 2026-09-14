@@ -3,9 +3,8 @@ import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
-from urllib.parse import urljoin
 
-import requests
+import httpx
 
 from quixstreams.models import HeadersTuples
 
@@ -34,8 +33,8 @@ TimePrecision = Literal["ms", "ns", "us", "s"]
 TIME_PRECISION_LEN = {
     "s": 10,
     "ms": 13,
-    "ns": 16,
-    "us": 19,
+    "us": 16,
+    "ns": 19,
 }
 
 InfluxDBValueMap = dict[str, Union[str, int, float, bool]]
@@ -79,6 +78,8 @@ class InfluxDB3Sink(BatchingSink):
         debug: bool = False,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
+        raise_on_retention_violation: bool = False,
+        verify_ssl: bool = True,
     ):
         """
         A connector to sink processed data to InfluxDB v3.
@@ -151,6 +152,15 @@ class InfluxDB3Sink(BatchingSink):
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
+        :param raise_on_retention_violation: if True, raises an exception when InfluxDB
+        rejects points due to retention policy violations, stopping the pipeline.
+            If False (default), logs a warning and continues processing.
+            Keeping this False (default) is recommended for production to handle old
+            data gracefully without blocking the pipeline.
+            Default - `False`.
+        :param verify_ssl: if True, verifies SSL certificates when connecting to InfluxDB.
+            Set this to false to skip verifying SSL certificate when calling APIs, useful for environments using self-signed certificates.
+            Default - `True`.
         """
 
         super().__init__(
@@ -179,10 +189,11 @@ class InfluxDB3Sink(BatchingSink):
             "database": database,
             "debug": debug,
             "enable_gzip": enable_gzip,
-            "timeout": self._request_timeout_ms,
+            "verify_ssl": verify_ssl,
             "write_client_options": {
                 "write_options": WriteOptions(
                     write_type=WriteType.synchronous,
+                    timeout=self._request_timeout_ms,
                 )
             },
         }
@@ -196,21 +207,23 @@ class InfluxDB3Sink(BatchingSink):
         self._batch_size = batch_size
         self._allow_missing_fields = allow_missing_fields
         self._convert_ints_to_floats = convert_ints_to_floats
+        self._raise_on_retention_violation = raise_on_retention_violation
 
     def _get_influx_version(self):
         # This validates the token is valid regardless of version
         try:
-            r = requests.get(
-                urljoin(self._client_args["host"], "ping"),
+            r = httpx.get(
+                httpx.URL(url=self._client_args["host"], path="/ping"),
                 headers={"Authorization": f"Token {self._client_args['token']}"},
                 timeout=self._request_timeout_ms / 1000,
+                verify=self._client_args["verify_ssl"],
             )
             r.raise_for_status()
         except Exception:
             logger.error("Ping to InfluxDB failed, likely due to an invalid token.")
             raise
         version = r.headers.get("X-Influxdb-Version") or r.json()["version"]
-        return version.split(".")[0][-1]
+        return version.split(".")[0]
 
     def setup(self):
         self._client = InfluxDBClient3(**self._client_args)
@@ -350,6 +363,22 @@ class InfluxDB3Sink(BatchingSink):
                     raise SinkBackpressureError(
                         retry_after=int(exc.retry_after)
                     ) from exc
+                if (
+                    exc.response
+                    and exc.response.status == 422
+                    and "retention policy" in str(exc).lower()
+                    and not self._raise_on_retention_violation
+                ):
+                    logger.warning(
+                        f"InfluxDB rejected batch (retention policy violation); "
+                        f"min_timestamp={min_timestamp} "
+                        f"max_timestamp={max_timestamp} "
+                        f"topic={batch.topic} "
+                        f"partition={batch.partition} "
+                        f"error={exc}"
+                    )
+                    continue
+
                 raise
 
 

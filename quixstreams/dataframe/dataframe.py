@@ -72,7 +72,11 @@ from .windows import (
     TumblingCountWindowDefinition,
     TumblingTimeWindowDefinition,
 )
-from .windows.base import WindowOnLateCallback
+from .windows.base import (
+    WindowAfterUpdateCallback,
+    WindowBeforeUpdateCallback,
+    WindowOnLateCallback,
+)
 
 if typing.TYPE_CHECKING:
     from quixstreams.processing import ProcessingContext
@@ -667,8 +671,24 @@ class StreamingDataFrame:
 
         return StreamingSeries.from_apply_callback(callback, sdf_id=id(self))
 
+    @overload
     def to_topic(
-        self, topic: Topic, key: Optional[Callable[[Any], Any]] = None
+        self,
+        topic: Topic,
+        key: Optional[Callable[[Any], Any]] = None,
+    ) -> "StreamingDataFrame": ...
+
+    @overload
+    def to_topic(
+        self,
+        topic: Callable[[Any, Any, int, Any], Topic],
+        key: Optional[Callable[[Any], Any]] = None,
+    ) -> "StreamingDataFrame": ...
+
+    def to_topic(
+        self,
+        topic: Union[Topic, Callable[[Any, Any, int, Any], Topic]],
+        key: Optional[Callable[[Any], Any]] = None,
     ) -> "StreamingDataFrame":
         """
         Produce current value to a topic. You can optionally specify a new key.
@@ -692,18 +712,40 @@ class StreamingDataFrame:
         sdf = sdf.to_topic(output_topic_0)
         # does not require reassigning
         sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
+
+        # Dynamic topic selection based on message content
+        def select_topic(value, key, timestamp, headers):
+            if value.get("priority") == "high":
+                return output_topic_0
+            else:
+                return output_topic_1
+
+        sdf = sdf.to_topic(select_topic)
         ```
 
-        :param topic: instance of `Topic`
+        :param topic: instance of `Topic` or a callable that returns a `Topic`.
+            If a callable is provided, it will receive four arguments:
+            value, key, timestamp, and headers of the current message.
+            The callable must return a `Topic` object.
+            **Important**: We recommend declaring all `Topic` instances before
+            staring the application instead of creating them dynamically
+            within the passed callback. Creating topics dynamically can lead
+            to accidentally creating numerous topics and
+            saturating the broker's partitions limits.
         :param key: a callable to generate a new message key, optional.
             If passed, the return type of this callable must be serializable
             by `key_serializer` defined for this Topic object.
             By default, the current message key will be used.
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
+        if isinstance(topic, Topic):
+            topic_callback = lambda value, orig_key, timestamp, headers: topic
+        else:
+            topic_callback = topic
+
         return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce(
-                topic=topic,
+                topic=topic_callback(value, orig_key, timestamp, headers),
                 value=value,
                 key=orig_key if key is None else key(value),
                 timestamp=timestamp,
@@ -1047,6 +1089,8 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ) -> TumblingTimeWindowDefinition:
         """
         Create a time-based tumbling window transformation on this StreamingDataFrame.
@@ -1113,6 +1157,20 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
+        :param before_update: an optional callback to trigger early window expiration
+            before the window is updated.
+            The callback receives `aggregated` (current aggregated value or default/None),
+            `value`, `key`, `timestamp`, and `headers`.
+            If it returns `True`, the window will be expired immediately.
+            Default - `None`.
+
+        :param after_update: an optional callback to trigger early window expiration
+            after the window is updated.
+            The callback receives `aggregated` (updated aggregated value), `value`, `key`,
+            `timestamp`, and `headers`.
+            If it returns `True`, the window will be expired immediately.
+            Default - `None`.
+
         :return: `TumblingTimeWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
@@ -1128,6 +1186,8 @@ class StreamingDataFrame:
             dataframe=self,
             name=name,
             on_late=on_late,
+            before_update=before_update,
+            after_update=after_update,
         )
 
     def tumbling_count_window(
@@ -1187,6 +1247,8 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ) -> HoppingTimeWindowDefinition:
         """
         Create a time-based hopping window transformation on this StreamingDataFrame.
@@ -1264,6 +1326,20 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
+        :param before_update: an optional callback to trigger early window expiration
+            before the window is updated.
+            The callback receives `aggregated` (current aggregated value or default/None),
+            `value`, `key`, `timestamp`, and `headers`.
+            If it returns `True`, the window will be expired immediately.
+            Default - `None`.
+
+        :param after_update: an optional callback to trigger early window expiration
+            after the window is updated.
+            The callback receives `aggregated` (updated aggregated value), `value`, `key`,
+            `timestamp`, and `headers`.
+            If it returns `True`, the window will be expired immediately.
+            Default - `None`.
+
         :return: `HoppingTimeWindowDefinition` instance representing the hopping
             window configuration.
             This object can be further configured with aggregation functions
@@ -1281,6 +1357,8 @@ class StreamingDataFrame:
             dataframe=self,
             name=name,
             on_late=on_late,
+            before_update=before_update,
+            after_update=after_update,
         )
 
     def hopping_count_window(
@@ -1928,9 +2006,14 @@ class StreamingDataFrame:
         self._stream = self._stream.add_update(func, metadata=metadata)  # type: ignore[call-overload]
         return self
 
-    def register_store(self, store_type: Optional[StoreTypes] = None) -> None:
+    def register_store(
+        self,
+        store_type: Optional[StoreTypes] = None,
+    ) -> None:
         """
         Register the default store for the current stream_id in StateStoreManager.
+
+        :param store_type: optional store implementation override.
         """
         TopicManager.ensure_topics_copartitioned(*self._topics)
 
@@ -2105,11 +2188,14 @@ def _as_stateful(
     @functools.wraps(func)
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
         # Pass a State object with an interface limited to the key updates only
-        # and prefix all the state keys by the message key
+        # and prefix all the state keys by the message key. The record's
+        # event-time timestamp is plumbed in so TTL-enabled stores can
+        # stamp values and filter expired reads without changing the
+        # public state.set/state.get signatures.
         state = sdf.processing_context.checkpoint.get_store_transaction(
             stream_id=sdf.stream_id,
             partition=message_context().partition,
-        ).as_state(prefix=key)
+        ).as_state(prefix=key, timestamp=timestamp)
         return func(value, key, timestamp, headers, state)
 
     return wrapper

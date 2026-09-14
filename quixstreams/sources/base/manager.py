@@ -45,6 +45,7 @@ class SourceProcess(process):
         producer: InternalProducer,
         consumer: InternalConsumer,
         topic_manager: TopicManager,
+        broker_availability_timeout: float = 0,
     ) -> None:
         super().__init__()
         self.topic = topic
@@ -58,6 +59,7 @@ class SourceProcess(process):
 
         self._consumer = consumer
         self._producer = producer
+        self._broker_availability_timeout = broker_availability_timeout
 
         # copy parent process log level to the child process
         self._loglevel = logging.getLogger(LOGGER_NAME).level
@@ -130,6 +132,7 @@ class SourceProcess(process):
         recovery_manager = RecoveryManager(
             consumer=self._consumer,
             topic_manager=self._topic_manager,
+            broker_availability_timeout=self._broker_availability_timeout,
         )
 
         state_manager = StateStoreManager(
@@ -264,6 +267,7 @@ class SourceManager:
         producer,
         consumer,
         topic_manager,
+        broker_availability_timeout: float = 0,
     ) -> SourceProcess:
         """
         Register a new source in the manager.
@@ -281,6 +285,7 @@ class SourceManager:
             producer=producer,
             consumer=consumer,
             topic_manager=topic_manager,
+            broker_availability_timeout=broker_availability_timeout,
         )
         self.processes.append(process)
         return process

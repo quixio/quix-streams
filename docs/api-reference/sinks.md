@@ -322,7 +322,7 @@ a timeout specified in `retry_after`, and resume them when it's elapsed.
 class InfluxDB3Sink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L53)
 
 <a id="quixstreams.sinks.core.influxdb3.InfluxDB3Sink.__init__"></a>
 
@@ -350,10 +350,12 @@ def __init__(token: str,
              on_client_connect_success: Optional[
                  ClientConnectSuccessCallback] = None,
              on_client_connect_failure: Optional[
-                 ClientConnectFailureCallback] = None)
+                 ClientConnectFailureCallback] = None,
+             raise_on_retention_violation: bool = False,
+             verify_ssl: bool = True)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L62)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L61)
 
 A connector to sink processed data to InfluxDB v3.
 
@@ -429,6 +431,15 @@ client authentication, primarily for additional logging.
 client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
+- `raise_on_retention_violation`: if True, raises an exception when InfluxDB
+rejects points due to retention policy violations, stopping the pipeline.
+If False (default), logs a warning and continues processing.
+Keeping this False (default) is recommended for production to handle old
+data gracefully without blocking the pipeline.
+Default - `False`.
+- `verify_ssl`: if True, verifies SSL certificates when connecting to InfluxDB.
+Set this to false to skip verifying SSL certificate when calling APIs, useful for environments using self-signed certificates.
+Default - `True`.
 
 <a id="quixstreams.sinks.core.csv"></a>
 
@@ -479,11 +490,420 @@ Default - `str`.
 - `value_serializer`: a callable to convert values to strings.
 Default - `json.dumps`.
 
-<a id="quixstreams.sinks.community.file.sink"></a>
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink"></a>
 
-## quixstreams.sinks.community.file.sink
+## quixstreams.sinks.core.quix\_ts\_datalake\_sink
 
-<a id="quixstreams.sinks.community.file.sink.FileSink"></a>
+Quix Lake Blob Storage Sink
+
+This module provides a sink that writes Kafka batches to blob storage as
+Hive-partitioned Parquet files, with optional REST Catalog integration.
+
+Uses quixportal for unified blob storage access (Azure, AWS S3, GCP, MinIO, local).
+
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.silence_chatty_loggers"></a>
+
+<br><br>
+
+#### silence\_chatty\_loggers
+
+```python
+def silence_chatty_loggers() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L75)
+
+Mute per-request HTTP logging from the cloud-storage SDKs used by
+this sink (Azure SDK + adlfs, botocore/boto3 + s3transfer).
+
+Safe to call from application code at any point. Levels are raised to
+WARNING, so anything actually noteworthy (auth failures, retries,
+throttling, server errors) still propagates. Call after configuring
+your own logging (e.g. after instantiating quixstreams.Application)
+so the framework's logging setup does not reset these levels.
+
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.QuixTSDataLakeSink"></a>
+
+### QuixTSDataLakeSink
+
+```python
+class QuixTSDataLakeSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L89)
+
+Writes Kafka batches directly to blob storage as Hive-partitioned Parquet files,
+
+then optionally registers the table using the REST Catalog.
+
+It batches the processed records in memory per topic partition, converts
+them to Parquet format with Hive-style partitioning, and flushes them to
+blob storage at the checkpoint.
+
+>***NOTE***: QuixTSDataLakeSink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+
+<br>
+***Arguments:***
+
+- `s3_prefix`: Path prefix for data files (e.g., "data-lake/time-series")
+- `table_name`: Table name for registration
+- `workspace_id`: Workspace ID for workspace-scoped storage paths
+(auto-injected by platform)
+- `hive_columns`: List of columns to use for Hive partitioning. Include
+'year', 'month', 'day', 'hour' to extract these from timestamp_column
+- `timestamp_column`: Column containing timestamp to extract time partitions from
+- `catalog_url`: Optional REST Catalog URL for table registration
+- `catalog_auth_token`: If using REST Catalog, the respective auth token for it
+- `auto_discover`: Whether to auto-register table on first write
+- `namespace`: Catalog namespace (default: "default")
+- `auto_create_bucket`: If True, attempt to create bucket/path in storage if missing
+- `max_workers`: Maximum number of parallel upload threads (default: 10)
+- `stream_timeout_ms`: Optional **per-key** silence threshold in
+milliseconds. Paired with ``on_stream_timeout``; both must be
+provided to enable the feature. See
+:class:`quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker`
+for the full behavioural contract (per-key tracking, fire-and-evict
+semantics, re-arm on next record, 3x TTL safety sweep,
+background check cadence, and zero-overhead disabled path).
+- `on_stream_timeout`: Optional callback
+``Callable[[str], None]`` invoked once per silence period per
+Kafka message key. See ``stream_timeout_ms`` above.
+- `silence_azure_http_logs`: If True (default), raise the log levels of
+the Azure SDK / adlfs / botocore HTTP-logging loggers to WARNING during
+setup(). These libraries log one INFO record per HTTP round-trip with
+the full URL and headers, which buries the sink's own logs under
+hundreds of lines per minute of partition probing. Set to False to
+keep the verbose request/response logs (useful for low-level SDK
+debugging).
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.QuixTSDataLakeSink.s3_bucket"></a>
+
+<br><br>
+
+#### QuixTSDataLakeSink.s3\_bucket
+
+```python
+@property
+def s3_bucket() -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L209)
+
+Get the S3 bucket name (extracted from quixportal config).
+
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.QuixTSDataLakeSink.add"></a>
+
+<br><br>
+
+#### QuixTSDataLakeSink.add
+
+```python
+def add(value: Any, key: Any, timestamp: int, headers: Any, topic: str,
+        partition: int, offset: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L229)
+
+Accumulate the record, then refresh the per-key last-seen
+stamp via the tracker.
+
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.QuixTSDataLakeSink.flush"></a>
+
+<br><br>
+
+#### QuixTSDataLakeSink.flush
+
+```python
+def flush()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L245)
+
+Flush the parent batch, then run a timeout check.
+
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.QuixTSDataLakeSink.on_paused"></a>
+
+<br><br>
+
+#### QuixTSDataLakeSink.on\_paused
+
+```python
+def on_paused()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L250)
+
+Inherit parent ``on_paused()`` — do **not** touch tracker state.
+
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.QuixTSDataLakeSink.setup"></a>
+
+<br><br>
+
+#### QuixTSDataLakeSink.setup
+
+```python
+def setup()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L255)
+
+Initialize blob storage client and test connection.
+
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.QuixTSDataLakeSink.write"></a>
+
+<br><br>
+
+#### QuixTSDataLakeSink.write
+
+```python
+def write(batch: SinkBatch)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L322)
+
+Write batch directly to blob storage.
+
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.QuixTSDataLakeSink.cleanup"></a>
+
+<br><br>
+
+#### QuixTSDataLakeSink.cleanup
+
+```python
+def cleanup()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L774)
+
+Cleanup resources when sink is stopped.
+
+<a id="quixstreams.sinks.core.stream_timeout_tracker"></a>
+
+## quixstreams.sinks.core.stream\_timeout\_tracker
+
+Stream-timeout tracker for sinks.
+
+Provides ``StreamTimeoutTracker`` — a sink-agnostic, per-key silence
+detector that fires a user callback when a tracked "stream" (typically a
+Kafka message key) has been silent past a configurable threshold.
+
+The tracker owns all state and threading for the feature; host sinks
+compose it via four one-liners (``touch`` on add, ``check_now`` on
+flush, ``start`` on setup, ``stop`` on cleanup). See spec v6 of the
+Quix Lake sink timeout feature for the behavioural contract that this
+module implements verbatim.
+
+This module intentionally has **zero imports** from any specific sink,
+from ``quixstreams.sinks.core``, or from any Quix-platform-specific
+type. Only the standard library is used so any sink (core, community,
+or third-party) can drop it in.
+
+<a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker"></a>
+
+### StreamTimeoutTracker
+
+```python
+class StreamTimeoutTracker()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L26)
+
+Per-key silence detector, extracted from ``QuixTSDataLakeSink``.
+
+One "stream" = one key. Callers invoke :meth:`touch` every time a
+record arrives for a key; the tracker records the last-seen wall
+clock time and fires the configured callback exactly once per
+silence period per key. On fire the key is evicted — a later
+:meth:`touch` for the same key resurrects it as a fresh stream
+eligible to fire again.
+
+Keys are stored and surfaced **as-is** (raw pass-through). Any
+hashable value is accepted: ``str``, ``bytes``, ``int``, etc. The
+callback receives the exact object that was passed to
+:meth:`touch`. ``None`` keys are silently skipped.
+
+The tracker exposes a property :attr:`enabled`. When ``False``,
+every public method is a no-op and no per-key dict is allocated.
+
+Two code paths drive checks:
+
+- :meth:`check_now`, called synchronously by the host sink at the
+  end of each flush.
+- A background daemon thread started by :meth:`start` that runs
+  :meth:`check_now` on a periodic cadence. The thread
+  **self-terminates** after ``idle_exit_cycles`` consecutive empty
+  cycles and is **respawned** by the next :meth:`touch` that
+  records a new stamp. This keeps the sink idle-zero-overhead
+  when no keys are tracked.
+
+Concurrency: :meth:`touch` and :meth:`check_now` can run on
+different threads. A single ``threading.Lock`` guards the per-key
+dict and timer-thread reference. Critical sections are tiny; user
+callbacks are invoked **outside** the lock so a blocking callback
+cannot stall :meth:`touch`.
+
+<a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker.__init__"></a>
+
+<br><br>
+
+#### StreamTimeoutTracker.\_\_init\_\_
+
+```python
+def __init__(stream_timeout_ms: Optional[int],
+             on_stream_timeout: Optional[Callable[[Any], None]],
+             *,
+             check_interval_ms: Optional[int] = None,
+             idle_exit_cycles: int = 3,
+             thread_name: str = "StreamTimeoutTracker-check",
+             logger: Optional[logging.Logger] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L62)
+
+Construct the tracker.
+
+
+<br>
+***Arguments:***
+
+- `stream_timeout_ms`: Positive ``int`` (milliseconds) to
+enable; ``None`` to disable. ``bool`` is rejected
+explicitly. Non-positive values raise ``ValueError`` when
+paired with a callable callback.
+- `on_stream_timeout`: Callable ``(stream_key: Any) -> None``
+to enable; ``None`` to disable. Mismatched pair (exactly
+one ``None``) raises ``ValueError``. The callback receives
+the raw key object that was passed to :meth:`touch`.
+- `check_interval_ms`: Kw-only. Override the periodic
+cadence. Positive ``int`` wins; anything else falls back
+to ``max(100, min(1000, stream_timeout_ms // 5))``.
+- `idle_exit_cycles`: Kw-only. Consecutive empty-tracker
+cycles before the timer thread self-terminates.
+- `thread_name`: Kw-only. Name for the daemon thread.
+- `logger`: Kw-only. Logger to emit INFO/WARNING/EXCEPTION
+lines on. Defaults to this module's logger.
+
+<a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker.enabled"></a>
+
+<br><br>
+
+#### StreamTimeoutTracker.enabled
+
+```python
+@property
+def enabled() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L174)
+
+``True`` iff the feature is active (both params valid).
+
+<a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker.touch"></a>
+
+<br><br>
+
+#### StreamTimeoutTracker.touch
+
+```python
+def touch(stream_key: Any,
+          *,
+          now_ms: Optional[int] = None,
+          **log_context: Any) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L178)
+
+Refresh the last-seen timestamp for ``stream_key``.
+
+The key is stored as-is (raw pass-through); any hashable value
+works (``str``, ``bytes``, ``int``, etc.). ``None`` keys are
+silently skipped.
+
+Callers may pass ``topic``/``partition``/``offset`` (or any
+other context) as keyword arguments; these are accepted for
+call-site compatibility with earlier versions of the tracker
+and are currently unused. The tracker remains sink-agnostic —
+it treats the context as opaque kwargs.
+
+
+<br>
+***Arguments:***
+
+- `stream_key`: The raw key from the record. Must be
+hashable if not ``None``.
+- `now_ms`: Kw-only. Explicit timestamp in milliseconds;
+defaults to :meth:`_now_ms`.
+- `log_context`: Kw-only. Reserved for future per-record
+log enrichment; currently ignored.
+
+<a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker.check_now"></a>
+
+<br><br>
+
+#### StreamTimeoutTracker.check\_now
+
+```python
+def check_now(*, now_ms: Optional[int] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L213)
+
+Run one pass of the silence check.
+
+Fires and evicts keys whose silence >= threshold; silently
+drops keys whose silence >= ``3 * stream_timeout_ms`` (TTL
+safety sweep). Callbacks run outside the tracker lock; a
+callback that raises leaves its key in the tracker for retry
+on the next cycle.
+
+<a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker.start"></a>
+
+<br><br>
+
+#### StreamTimeoutTracker.start
+
+```python
+def start() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L269)
+
+Start the background daemon check thread.
+
+Idempotent. No-op when :attr:`enabled` is ``False``. Hosts
+call this from ``setup()`` **after** their own resources are
+healthy, so a setup failure tears down cleanly without
+leaving an orphan timer thread running.
+
+<a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker.stop"></a>
+
+<br><br>
+
+#### StreamTimeoutTracker.stop
+
+```python
+def stop() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L298)
+
+Signal the background thread to exit. Idempotent. No-op when
+:attr:`enabled` is ``False``.
+
+<a id="quixstreams.sinks.community.file.base"></a>
+
+## quixstreams.sinks.community.file.base
+
+<a id="quixstreams.sinks.community.file.base.FileSink"></a>
 
 ### FileSink
 
@@ -491,7 +911,7 @@ Default - `json.dumps`.
 class FileSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L24)
 
 A sink that writes data batches to files using configurable formats and
 destinations.
@@ -505,7 +925,7 @@ The destination determines the storage location and write behavior. By default,
 it uses LocalDestination for writing to the local filesystem, but can be
 configured to use other storage backends (e.g., cloud storage).
 
-<a id="quixstreams.sinks.community.file.sink.FileSink.__init__"></a>
+<a id="quixstreams.sinks.community.file.base.FileSink.__init__"></a>
 
 <br><br>
 
@@ -515,13 +935,12 @@ configured to use other storage backends (e.g., cloud storage).
 def __init__(
     directory: str = "",
     format: Union[FormatName, Format] = "json",
-    destination: Optional[Destination] = None,
     on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
     on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
 ) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L38)
 
 Initialize the FileSink with the specified configuration.
 
@@ -533,8 +952,6 @@ Initialize the FileSink with the specified configuration.
 current directory.
 - `format`: Data serialization format, either as a string
 ("json", "parquet") or a Format instance.
-- `destination`: Storage destination handler. Defaults to
-LocalDestination if not specified.
 - `on_client_connect_success`: An optional callback made after successful
 client authentication, primarily for additional logging.
 - `on_client_connect_failure`: An optional callback made after failed
@@ -542,7 +959,22 @@ client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
 
-<a id="quixstreams.sinks.community.file.sink.FileSink.write"></a>
+<a id="quixstreams.sinks.community.file.base.FileSink.setup"></a>
+
+<br><br>
+
+#### FileSink.setup
+
+```python
+@abstractmethod
+def setup()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L76)
+
+Authenticate and validate connection here
+
+<a id="quixstreams.sinks.community.file.base.FileSink.write"></a>
 
 <br><br>
 
@@ -552,14 +984,9 @@ Callback must resolve (or propagate/re-raise) the Exception.
 def write(batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L90)
 
-Write a batch of data using the configured format and destination.
-
-The method performs the following steps:
-1. Serializes the batch data using the configured format
-2. Writes the serialized data to the destination
-3. Handles any write failures by raising a backpressure error
+Write a batch of data using the configured format.
 
 
 <br>
@@ -567,16 +994,11 @@ The method performs the following steps:
 
 - `batch`: The batch of data to write.
 
-**Raises**:
+<a id="quixstreams.sinks.community.file.azure"></a>
 
-- `SinkBackpressureError`: If the write operation fails, indicating
-that the sink needs backpressure with a 5-second retry delay.
+## quixstreams.sinks.community.file.azure
 
-<a id="quixstreams.sinks.community.file.destinations.azure"></a>
-
-## quixstreams.sinks.community.file.destinations.azure
-
-<a id="quixstreams.sinks.community.file.destinations.azure.AzureContainerNotFoundError"></a>
+<a id="quixstreams.sinks.community.file.azure.AzureContainerNotFoundError"></a>
 
 ### AzureContainerNotFoundError
 
@@ -584,11 +1006,11 @@ that the sink needs backpressure with a 5-second retry delay.
 class AzureContainerNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L29)
 
 Raised when the specified Azure File container does not exist.
 
-<a id="quixstreams.sinks.community.file.destinations.azure.AzureContainerAccessDeniedError"></a>
+<a id="quixstreams.sinks.community.file.azure.AzureContainerAccessDeniedError"></a>
 
 ### AzureContainerAccessDeniedError
 
@@ -596,36 +1018,43 @@ Raised when the specified Azure File container does not exist.
 class AzureContainerAccessDeniedError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L33)
 
 Raised when the specified Azure File container access is denied.
 
-<a id="quixstreams.sinks.community.file.destinations.azure.AzureFileDestination"></a>
+<a id="quixstreams.sinks.community.file.azure.AzureFileSink"></a>
 
-### AzureFileDestination
+### AzureFileSink
 
 ```python
-class AzureFileDestination(Destination)
+class AzureFileSink(FileSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L37)
 
 A destination that writes data to Microsoft Azure File.
 
 Handles writing data to Azure containers using the Azure Blob SDK. Credentials can
 be provided directly or via environment variables.
 
-<a id="quixstreams.sinks.community.file.destinations.azure.AzureFileDestination.__init__"></a>
+<a id="quixstreams.sinks.community.file.azure.AzureFileSink.__init__"></a>
 
 <br><br>
 
-#### AzureFileDestination.\_\_init\_\_
+#### AzureFileSink.\_\_init\_\_
 
 ```python
-def __init__(connection_string: str, container: str) -> None
+def __init__(
+    azure_connection_string: str,
+    azure_container: str,
+    directory: str = "",
+    format: Union[FormatName, Format] = "json",
+    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
+) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L40)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L45)
 
 Initialize the Azure File destination.
 
@@ -633,170 +1062,68 @@ Initialize the Azure File destination.
 <br>
 ***Arguments:***
 
-- `connection_string`: Azure client authentication string.
-- `container`: Azure container name.
+- `azure_connection_string`: Azure client authentication string.
+- `azure_container`: Azure container name.
+- `directory`: Base directory path for storing files. Defaults to
+current directory.
+- `format`: Data serialization format, either as a string
+("json", "parquet") or a Format instance.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 **Raises**:
 
 - `AzureContainerNotFoundError`: If the specified container doesn't exist.
 - `AzureContainerAccessDeniedError`: If access to the container is denied.
 
-<a id="quixstreams.sinks.community.file.destinations.azure.AzureFileDestination.write"></a>
+<a id="quixstreams.sinks.community.file.local"></a>
 
-<br><br>
+## quixstreams.sinks.community.file.local
 
-#### AzureFileDestination.write
+<a id="quixstreams.sinks.community.file.local.AppendNotSupported"></a>
 
-```python
-def write(data: bytes, batch: SinkBatch) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L94)
-
-Write data to Azure.
-
-
-<br>
-***Arguments:***
-
-- `data`: The serialized data to write.
-- `batch`: The batch information containing topic and partition details.
-
-<a id="quixstreams.sinks.community.file.destinations.base"></a>
-
-## quixstreams.sinks.community.file.destinations.base
-
-<a id="quixstreams.sinks.community.file.destinations.base.Destination"></a>
-
-### Destination
+### AppendNotSupported
 
 ```python
-class Destination(ABC)
+class AppendNotSupported(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/local.py#L15)
 
-Abstract base class for defining where and how data should be stored.
+Raised when append=True but specified format does not support it
 
-Destinations handle the storage of serialized data, whether that's to local
-disk, cloud storage, or other locations. They manage the physical writing of
-data while maintaining a consistent directory/path structure based on topics
-and partitions.
+<a id="quixstreams.sinks.community.file.local.LocalFileSink"></a>
 
-<a id="quixstreams.sinks.community.file.destinations.base.Destination.setup"></a>
-
-<br><br>
-
-#### Destination.setup
+### LocalFileSink
 
 ```python
-@abstractmethod
-def setup()
+class LocalFileSink(FileSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L29)
-
-Authenticate and validate connection here
-
-<a id="quixstreams.sinks.community.file.destinations.base.Destination.write"></a>
-
-<br><br>
-
-#### Destination.write
-
-```python
-@abstractmethod
-def write(data: bytes, batch: SinkBatch) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L34)
-
-Write the serialized data to storage.
-
-
-<br>
-***Arguments:***
-
-- `data`: The serialized data to write.
-- `batch`: The batch information containing topic, partition and offset
-details.
-
-<a id="quixstreams.sinks.community.file.destinations.base.Destination.set_directory"></a>
-
-<br><br>
-
-#### Destination.set\_directory
-
-```python
-def set_directory(directory: str) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L43)
-
-Configure the base directory for storing files.
-
-
-<br>
-***Arguments:***
-
-- `directory`: The base directory path where files will be stored.
-
-**Raises**:
-
-- `ValueError`: If the directory path contains invalid characters.
-Only alphanumeric characters (a-zA-Z0-9), spaces, dots, slashes, and
-underscores are allowed.
-
-<a id="quixstreams.sinks.community.file.destinations.base.Destination.set_extension"></a>
-
-<br><br>
-
-#### Destination.set\_extension
-
-```python
-def set_extension(format: Format) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L64)
-
-Set the file extension based on the format.
-
-
-<br>
-***Arguments:***
-
-- `format`: The Format instance that defines the file extension.
-
-<a id="quixstreams.sinks.community.file.destinations.local"></a>
-
-## quixstreams.sinks.community.file.destinations.local
-
-<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination"></a>
-
-### LocalDestination
-
-```python
-class LocalDestination(Destination)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L15)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/local.py#L19)
 
 A destination that writes data to the local filesystem.
 
 Handles writing data to local files with support for both creating new files
 and appending to existing ones.
 
-<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination.__init__"></a>
+<a id="quixstreams.sinks.community.file.local.LocalFileSink.__init__"></a>
 
 <br><br>
 
-#### LocalDestination.\_\_init\_\_
+#### LocalFileSink.\_\_init\_\_
 
 ```python
-def __init__(append: bool = False) -> None
+def __init__(append: bool = False,
+             directory: str = "",
+             format: Union[FormatName, Format] = "json") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/local.py#L26)
 
 Initialize the local destination.
 
@@ -805,59 +1132,23 @@ Initialize the local destination.
 ***Arguments:***
 
 - `append`: If True, append to existing files instead of creating new
-ones. Defaults to False.
-
-<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination.set_extension"></a>
-
-<br><br>
-
-#### LocalDestination.set\_extension
-
-```python
-def set_extension(format: Format) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L35)
-
-Set the file extension and validate append mode compatibility.
-
-
-<br>
-***Arguments:***
-
-- `format`: The Format instance that defines the file extension.
+ones by selecting the lexicographical last file in the given directory
+(or creates one).
+Defaults to False.
+- `directory`: Base directory path for storing files. Defaults to
+current directory.
+- `format`: Data serialization format, either as a string
+("json", "parquet") or a Format instance.
 
 **Raises**:
 
-- `ValueError`: If append mode is enabled but the format doesn't
-support appending.
+- `AppendNotSupported`: If append=True but given format does not support it.
 
-<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination.write"></a>
+<a id="quixstreams.sinks.community.file.s3"></a>
 
-<br><br>
+## quixstreams.sinks.community.file.s3
 
-#### LocalDestination.write
-
-```python
-def write(data: bytes, batch: SinkBatch) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L46)
-
-Write data to a local file.
-
-
-<br>
-***Arguments:***
-
-- `data`: The serialized data to write.
-- `batch`: The batch information containing topic and partition details.
-
-<a id="quixstreams.sinks.community.file.destinations.s3"></a>
-
-## quixstreams.sinks.community.file.destinations.s3
-
-<a id="quixstreams.sinks.community.file.destinations.s3.S3BucketNotFoundError"></a>
+<a id="quixstreams.sinks.community.file.s3.S3BucketNotFoundError"></a>
 
 ### S3BucketNotFoundError
 
@@ -865,11 +1156,11 @@ Write data to a local file.
 class S3BucketNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L29)
 
 Raised when the specified S3 bucket does not exist.
 
-<a id="quixstreams.sinks.community.file.destinations.s3.S3BucketAccessDeniedError"></a>
+<a id="quixstreams.sinks.community.file.s3.S3BucketAccessDeniedError"></a>
 
 ### S3BucketAccessDeniedError
 
@@ -877,30 +1168,37 @@ Raised when the specified S3 bucket does not exist.
 class S3BucketAccessDeniedError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L33)
 
 Raised when the specified S3 bucket access is denied.
 
-<a id="quixstreams.sinks.community.file.destinations.s3.S3Destination"></a>
+<a id="quixstreams.sinks.community.file.s3.S3FileSink"></a>
 
-### S3Destination
+### S3FileSink
 
 ```python
-class S3Destination(Destination)
+class S3FileSink(FileSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L37)
 
-A destination that writes data to Amazon S3.
+A sink that writes data batches to files using configurable formats and
+destinations.
 
-Handles writing data to S3 buckets using the AWS SDK. Credentials can be
-provided directly or via environment variables.
+The sink groups messages by their topic and partition, ensuring data from the
+same source is stored together. Each batch is serialized using the specified
+format (e.g., JSON, Parquet) before being written to the configured
+destination.
 
-<a id="quixstreams.sinks.community.file.destinations.s3.S3Destination.__init__"></a>
+The destination determines the storage location and write behavior. By default,
+it uses LocalDestination for writing to the local filesystem, but can be
+configured to use other storage backends (e.g., cloud storage).
+
+<a id="quixstreams.sinks.community.file.s3.S3FileSink.__init__"></a>
 
 <br><br>
 
-#### S3Destination.\_\_init\_\_
+#### S3FileSink.\_\_init\_\_
 
 ```python
 def __init__(bucket: str,
@@ -910,10 +1208,16 @@ def __init__(bucket: str,
              region_name: Optional[str] = getenv("AWS_REGION",
                                                  getenv("AWS_DEFAULT_REGION")),
              endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"),
+             directory: str = "",
+             format: Union[FormatName, Format] = "json",
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L51)
 
 Initialize the S3 destination.
 
@@ -937,27 +1241,6 @@ NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
 
 - `S3BucketNotFoundError`: If the specified bucket doesn't exist.
 - `S3BucketAccessDeniedError`: If access to the bucket is denied.
-
-<a id="quixstreams.sinks.community.file.destinations.s3.S3Destination.write"></a>
-
-<br><br>
-
-#### S3Destination.write
-
-```python
-def write(data: bytes, batch: SinkBatch) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L89)
-
-Write data to S3.
-
-
-<br>
-***Arguments:***
-
-- `data`: The serialized data to write.
-- `batch`: The batch information containing topic and partition details.
 
 <a id="quixstreams.sinks.community.file.formats.base"></a>
 
@@ -1165,7 +1448,7 @@ compressed with gzip.
 class ParquetFormat(Format)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L13)
 
 Serializes batches of messages into Parquet format.
 
@@ -1186,7 +1469,7 @@ def __init__(file_extension: str = ".parquet",
              compression: Compression = "snappy") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L26)
 
 Initializes the ParquetFormat.
 
@@ -1211,7 +1494,7 @@ or "zstd". Defaults to "snappy".
 def file_extension() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L63)
 
 Returns the file extension used for output files.
 
@@ -1231,7 +1514,7 @@ The file extension as a string.
 def serialize(batch: SinkBatch) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L71)
 
 Serializes a `SinkBatch` into bytes in Parquet format.
 
@@ -1758,6 +2041,82 @@ Note: Transactions could be an option here, but then each record requires a
 network call, and the transaction has size limits...so `bulk_write` is used
 instead, with the downside that duplicate writes may occur if errors arise.
 
+<a id="quixstreams.sinks.community.mqtt"></a>
+
+## quixstreams.sinks.community.mqtt
+
+<a id="quixstreams.sinks.community.mqtt.MQTTSink"></a>
+
+### MQTTSink
+
+```python
+class MQTTSink(BaseSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mqtt.py#L35)
+
+A sink that publishes messages to an MQTT broker.
+
+<a id="quixstreams.sinks.community.mqtt.MQTTSink.__init__"></a>
+
+<br><br>
+
+#### MQTTSink.\_\_init\_\_
+
+```python
+def __init__(client_id: str,
+             server: str,
+             port: int,
+             topic_root: str,
+             username: str = None,
+             password: str = None,
+             version: ProtocolVersion = "3.1.1",
+             tls_enabled: bool = True,
+             key_serializer: Callable[[Any], str] = bytes.decode,
+             value_serializer: Callable[[Any], str] = json.dumps,
+             qos: Literal[0, 1] = 1,
+             mqtt_flush_timeout_seconds: int = 10,
+             retain: Union[bool, Callable[[Any], bool]] = False,
+             properties: Optional[MqttPropertiesHandler] = None,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mqtt.py#L40)
+
+Initialize the MQTTSink.
+
+
+<br>
+***Arguments:***
+
+- `client_id`: MQTT client identifier.
+- `server`: MQTT broker server address.
+- `port`: MQTT broker server port.
+- `topic_root`: Root topic to publish messages to.
+- `username`: Username for MQTT broker authentication. Default = None
+- `password`: Password for MQTT broker authentication. Default = None
+- `version`: MQTT protocol version ("3.1", "3.1.1", or "5"). Defaults to 3.1.1
+- `tls_enabled`: Whether to use TLS encryption. Default = True
+- `key_serializer`: How to serialize the MQTT message key for producing.
+- `value_serializer`: How to serialize the MQTT message value for producing.
+- `qos`: Quality of Service level (0 or 1; 2 not yet supported) Default = 1.
+- `mqtt_flush_timeout_seconds`: how long to wait for publish acknowledgment
+of MQTT messages before failing. Default = 10.
+- `retain`: Retain last message for new subscribers. Default = False.
+Also accepts a callable that uses the current message value as input.
+- `properties`: An optional Properties instance for messages. Default = None.
+Also accepts a callable that uses the current message value as input.
+    :param on_client_connect_success: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+
+
 <a id="quixstreams.sinks.community.neo4j"></a>
 
 ## quixstreams.sinks.community.neo4j
@@ -1863,7 +2222,7 @@ if __name__ == "__main__":
 class PostgreSQLSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L68)
 
 <a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
 
@@ -1877,11 +2236,15 @@ def __init__(host: str,
              dbname: str,
              user: str,
              password: str,
-             table_name: Union[Callable[[SinkItem], str], str],
+             table_name: TableName,
              schema_name: str = "public",
              schema_auto_update: bool = True,
              connection_timeout_seconds: int = 30,
              statement_timeout_seconds: int = 30,
+             primary_key_columns: PrimaryKeyColumns = (),
+             upsert_on_primary_key: bool = False,
+             on_conflict_do_nothing: bool = False,
+             include_metadata: bool = True,
              on_client_connect_success: Optional[
                  ClientConnectSuccessCallback] = None,
              on_client_connect_failure: Optional[
@@ -1889,7 +2252,7 @@ def __init__(host: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L69)
 
 A connector to sink topic data to PostgreSQL.
 
@@ -1911,6 +2274,22 @@ PostrgeSQL uses "public" by default under the hood.
 - `connection_timeout_seconds`: Timeout for connection.
 - `statement_timeout_seconds`: Timeout for DDL operations such as table
 creation or schema updates.
+- `primary_key_columns`: An optional single (string) or list of primary key
+column(s); len>1 is a composite key, a non-empty str or len==1 is a primary
+key, and len<1 or empty string means no primary key.
+Can instead provide a callable, which uses the message value as input and
+returns a string or list of strings.
+Often paired with `upsert_on_primary_key=True`.
+It must include all currently defined primary key columns on a given table.
+- `upsert_on_primary_key`: Upsert based on the given `primary_key_columns`.
+If False, every message is treated as an independent entry, and any
+primary key collisions will consequently raise an exception.
+- `on_conflict_do_nothing`: If True, duplicate rows are silently ignored
+using `ON CONFLICT DO NOTHING`. Cannot be used together with
+`upsert_on_primary_key=True`.
+- `include_metadata`: If True (default), includes ``__key`` and ``timestamp``
+columns for every row written to PostgreSQL. Set to False to omit them.
+Defaults to True for backward compatibility.
 - `on_client_connect_success`: An optional callback made after successful
 client authentication, primarily for additional logging.
 - `on_client_connect_failure`: An optional callback made after failed
@@ -2201,4 +2580,132 @@ client authentication, primarily for additional logging.
 client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
+
+<a id="quixstreams.sinks.community.tdengine.sink"></a>
+
+## quixstreams.sinks.community.tdengine.sink
+
+<a id="quixstreams.sinks.community.tdengine.sink.TDengineSink"></a>
+
+### TDengineSink
+
+```python
+class TDengineSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L50)
+
+<a id="quixstreams.sinks.community.tdengine.sink.TDengineSink.__init__"></a>
+
+<br><br>
+
+#### TDengineSink.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             database: str,
+             supertable: SupertableSetter,
+             subtable: SubtableNameSetter,
+             fields_keys: FieldsSetter = (),
+             tags_keys: TagsSetter = (),
+             time_setter: Optional[TimeSetter] = None,
+             time_precision: TimePrecision = "ms",
+             allow_missing_fields: bool = False,
+             include_metadata_tags: bool = False,
+             convert_ints_to_floats: bool = False,
+             batch_size: int = 1000,
+             enable_gzip: bool = True,
+             request_timeout_ms: int = 10_000,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
+             verify_ssl: bool = True,
+             username: str = "",
+             password: str = "",
+             token: str = "",
+             max_retries: int = 5,
+             retry_backoff_factor: float = 1.0)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L51)
+
+A connector to sink processed data to TDengine.
+
+It batches the processed records in memory per topic partition, converts
+them to the InfluxDB line protocol, and flushes them to TDengine at the checkpoint.
+
+>***NOTE***: TDengineSink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+
+<br>
+***Arguments:***
+
+- `token`: TDengine cloud token
+- `host`: TDengine host in format "http[s]://<host>[:<port>]".
+- `username`: TDengine username
+- `password`: TDengine password
+- `verify_ssl`: if `True`, verifies the SSL certificate.
+Default - `True`.
+- `database`: database name
+- `supertable`: supertable name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+- `subtable`: subtable name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+If the subtable name is empty string, a hash value will be generated from the data as the subtable name.
+- `fields_keys`: an iterable (list) of strings used as InfluxDB line protocol "fields".
+Also accepts a single argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "tags_keys".
+- If empty, the whole record value will be used.
+>***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
+Default - `()`.
+- `tags_keys`: an iterable (list) of strings used as InfluxDB line protocol "tags".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "fields_keys".
+- Given keys are popped from the value dictionary since the same key
+cannot be both a tag and field.
+- If empty, no tags will be sent.
+>***NOTE***: always converts tag values to strings.
+Default - `()`.
+- `time_setter`: an optional column name to use as "time" when convert to InfluxDB line protocol.
+Also accepts a callable which receives the current message data and
+returns either the desired time or `None` (use default).
+The time can be an `int`, `string` (RFC3339 format), or `datetime`.
+The time must match the `time_precision` argument if not a `datetime` object, else raises.
+By default, a record's kafka timestamp with "ms" time precision is used.
+- `time_precision`: a time precision to use when convert to InfluxDB line protocol.
+Possible values: "ms", "ns", "us", "s".
+Default - `"ms"`.
+- `allow_missing_fields`: if `True`, skip the missing fields keys, else raise `KeyError`.
+Default - `False`
+- `include_metadata_tags`: if True, includes record's key, topic,
+and partition as tags.
+Default - `False`.
+- `convert_ints_to_floats`: if True, converts all integer values to floats.
+Default - `False`.
+- `batch_size`: how many records to write to TDengine in one request.
+Note that it only affects the size of one write request, and not the number
+of records flushed on each checkpoint.
+Default - `1000`.
+- `enable_gzip`: if True, enables gzip compression for writes.
+Default - `True`.
+- `request_timeout_ms`: an HTTP request timeout in milliseconds.
+Default - `10000`.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+- `max_retries`: maximum number of retries for failed requests.
+Default - `5`.
+- `retry_backoff_factor`: a backoff factor applied between retry attempts starting from the second retry.
+The sleep duration between retries is calculated as `{backoff factor} * (2 ** ({number of previous retries}))` seconds.
+Default - `1.0`.
 
