@@ -147,6 +147,32 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
         return [self._deserialize_value(value) for _, value in items]
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def delete_interval(self, start: int, end: int, prefix: Any) -> int:
+        """Delete every value stored for `prefix` with a timestamp in `[start, end)`.
+
+        Deletes exactly the set of entries `get_interval()` would return for the
+        same arguments, so a caller can read a range, act on it, and remove it
+        without the two views disagreeing. The deletes go through the update
+        cache, which means they are recorded in the changelog topic like any
+        other write and survive a rebalance.
+
+        :param start: Start of the range, inclusive, in milliseconds.
+        :param end: End of the range, exclusive, in milliseconds.
+        :param prefix: The key prefix.
+        :return: The number of deleted entries.
+        """
+        prefix = self._ensure_bytes(prefix)
+        # `_get_items()` merges the update cache with the store into a new list,
+        # so the cache is never mutated while it is being iterated. It also
+        # scopes the range to this prefix's namespace by appending the SEPARATOR,
+        # which stops the range from spilling into a neighbouring prefix that
+        # shares these bytes (e.g. b"key" vs b"key2").
+        items = self._get_items(start=start, end=end, prefix=prefix)
+        for key, _ in items:
+            self._update_cache.delete(key, prefix)
+        return len(items)
+
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def set_for_timestamp(self, timestamp: int, value: Any, prefix: Any) -> None:
         """Set a value for the timestamp.
 

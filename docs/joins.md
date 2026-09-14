@@ -244,55 +244,137 @@ if __name__ == '__main__':
     app.run()
 ```
 
-### Late-arriving configuration (`grace_ms`)
+### Late-arriving configuration (`LookupBuffer`)
 
-> _New in [3.23.7](https://github.com/quixio/quix-streams/releases/tag/v3.23.7)_
+By default, `join_lookup()` is non-blocking and never waits: if the matching configuration has not arrived when a record does, the join resolves every field to its declared `default=` immediately and the record moves on. That is safe and costs nothing, but it means a record that arrived one second before its configuration is enriched with defaults forever.
 
-By default, `QuixConfigurationService` is non-blocking: if the background consumer thread has not yet received the matching configuration version when a record arrives, the join resolves immediately to the missing/default value (per the `fallback` setting). This is safe and has no throughput impact.
+A `LookupBuffer` changes that without ever sleeping. A record whose lookup cannot be resolved is **withheld**: it is written to a durable state store and nothing is emitted for it. When a later record for the same key resolves — because the configuration has since landed — the withheld records are read back, enriched, and emitted ahead of it, each **with its own timestamp, key and headers**. A record that waits longer than `grace_ms` meets the fate you chose with `on_timeout`.
 
-`grace_ms` gives you a bounded wait for that config to arrive. When you pass a positive value, the join holds the partition in a poll loop — checking every 50 ms — until a valid version appears or the deadline elapses.
+Nothing blocks. Other keys and other partitions keep processing at full rate while a key waits.
 
 ```python
 from datetime import timedelta
 
 from quixstreams import Application
-from quixstreams.dataframe.joins.lookups import QuixConfigurationService
+from quixstreams.dataframe.joins.lookups import LookupBuffer, QuixConfigurationService
 
 app = Application()
+sdf = app.dataframe(app.topic("sensor-data"))
 
 lookup = QuixConfigurationService(
     topic=app.topic("device-configurations"),
     app_config=app.config,
-    grace_ms=timedelta(seconds=2),  # wait up to 2 s for a late config version
+    # Writes the list of configuration types that did not resolve onto each
+    # record, so `is_resolved` below has something to read.
+    unresolved_types_field="__unresolved__",
 )
-```
 
-You can also pass an integer number of milliseconds:
+fields = {
+    "threshold": lookup.json_field("$.threshold", type="device", default=None),
+    "region": lookup.json_field("$.region", type="device", default="unknown"),
+}
 
-```python
-lookup = QuixConfigurationService(
-    topic=app.topic("device-configurations"),
-    app_config=app.config,
-    grace_ms=500,  # wait up to 500 ms
+sdf = sdf.join_lookup(
+    lookup,
+    fields,
+    on="device_id",
+    buffer=LookupBuffer(
+        grace_ms=timedelta(seconds=30),
+        is_resolved=lambda value: not value["__unresolved__"],
+    ),
 )
+
+if __name__ == '__main__':
+    app.run()
 ```
-
-**When to use it.** Enable `grace_ms` only when you have a genuine race at startup or during a rolling update — for example, data records arrive on a partition before the config consumer thread has consumed the matching config version from its own topic. A value of a few hundred milliseconds to a few seconds is usually enough to cover the lag.
-
-Do not enable it for configs that are permanently absent or for high-throughput pipelines where you cannot afford the stall.
-
-!!! warning "Partition stall"
-    `grace_ms` is measured in **wall-clock real time**, not event time. It is not the same as the `grace_ms` on `join_asof` or `join_interval`, which passively retain state keyed by event timestamps.
-
-    When `grace_ms > 0`, a record with an unresolved config key **blocks the entire partition** for up to `grace_ms`. A single permanently-missing config key caps sustained throughput for that partition to roughly `1000 / grace_ms` records/second (e.g., 2 records/sec at `grace_ms=500`). Use the smallest value that covers your expected startup lag.
-
-    The deadline is shared across all field types in a single record, so total stall per record is bounded to `~grace_ms` regardless of how many field types are configured.
 
 **Parameter reference:**
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `grace_ms` | `int` (milliseconds) or `timedelta` | `0` | Maximum wall-clock wait for a late config version. `0` disables the feature; the hot path is unchanged. Must be `>= 0`. |
+| `grace_ms` | `int` (milliseconds) or `timedelta` | required | How long a record may wait for its configuration, in **wall-clock real time**. |
+| `is_resolved` | `Callable[[dict], bool]` | required | Predicate deciding whether a record's lookup succeeded, called with the value after the join. |
+| `on_timeout` | `"emit"` or `"drop"` | `"emit"` | What happens to a record that runs out of grace. |
+| `max_buffered_per_key` | `int` | `10_000` | Safety valve against a pathological rate of unresolvable records for one key. |
+| `on_overflow` | `"drop-newest"` or `"raise"` | `"drop-newest"` | What happens to a record that arrives when a key is already full. |
+| `store_name` | `str` | `"lookup-buffer"` | Name of the state store holding the buffer. |
+
+#### It makes your application stateful
+
+The buffer is a changelog-backed state store, and that is not optional. A record's Kafka offset is committed because the record was *consumed*, not because it was *emitted*, and there is no way to withhold an offset for a record still in flight. An in-memory buffer would therefore lose every withheld record on a rebalance or restart — silently, with the offsets already committed. In the state store, the buffer writes land in the same checkpoint transaction as the offset commit, so state and consumed offsets advance together and the new owner recovers the buffer from the changelog.
+
+The practical consequences:
+
+- The service needs a state directory, and on Quix Cloud it needs `state: {enabled: true}` in `quix.yaml`. A misconfigured deployment fails loudly at startup.
+- The buffer is written to a changelog topic. At a high rate of unresolvable records this can exceed the input topic's own volume — see sizing below.
+
+#### `on_timeout`: what happens when the grace runs out
+
+`"emit"` (the default) sends the record downstream carrying each field's declared `default=`. This is **exactly** what an unbuffered `join_lookup` would have produced for the same record immediately: there is one implementation of "no configuration", and only the timing differs. Spell nulls as `default=None` on the field:
+
+```python
+fields = {
+    "threshold": lookup.json_field("$.threshold", type="device", default=None),      # null
+    "region":    lookup.json_field("$.region",    type="device", default="unknown"),
+}
+```
+
+`"drop"` discards the record permanently, with a rate-limited warning naming the key.
+
+In both modes the record is **never enriched afterwards**, even if its configuration arrives a millisecond after the deadline. A record is enriched if and only if its configuration resolved within `grace_ms` of its arrival.
+
+With `unresolved_types_field` set, a timed-out emitted record still carries a non-empty list in that field, so the same `is_resolved` predicate is available downstream as a filter or a quarantine branch.
+
+#### Every field needs a `default=`
+
+`join_lookup` raises `ValueError` at build time, naming the field, if any field used with a buffer has no `default=`. A field without one raises `KeyError` the moment a configuration is missing — which happens *before* anything is buffered — so it does not merely break `on_timeout="emit"`, it breaks buffering entirely.
+
+#### `on_timeout` is not `fallback`
+
+They govern different failures and neither implies the other:
+
+| Failure | Governed by |
+|---|---|
+| No configuration for the key at all — the case the buffer is about | the per-field `default=` (what the record carries) and `on_timeout` (its fate after `grace_ms`) |
+| A configuration exists, but fetching its content over HTTP failed | `fallback` on `QuixConfigurationService` |
+
+`fallback="default"` does **not** rescue a record whose configuration is simply absent.
+
+#### `grace_ms` is wall-clock time
+
+Unlike the `grace_ms` of `join_asof` and `join_interval`, which retain state in *event* time, the buffer's deadline is wall-clock real time measured from the moment the record enters the operator. That is deliberate: what the record is waiting for is a configuration message landing on another topic in real time, which has no event-time analogue, and an event-time deadline would expire a backlog replay's records instantly.
+
+Consequences:
+
+- Replaying a backlog holds unresolvable records for up to `grace_ms` of real time — the same wall-clock cost a live stream pays.
+- A record's arrival time is stored and never recomputed, so a restart does not hand it a fresh window.
+- Wall clocks are neither monotonic nor synchronised across replicas. An NTP step shifts deadlines slightly; this is bounded and acceptable at second-to-minute windows.
+
+The record's **event** timestamp is untouched and is what gets emitted, on every path.
+
+#### Released records are late in event time
+
+A withheld record emits when its key's next record arrives, or when the buffer settles it. Its event timestamp is unchanged, so downstream sees out-of-order event time by up to `grace_ms`.
+
+This is fine for stateless transforms, per-key stateful aggregation, `group_by`, and sinks idempotent on `(key, timestamp)`. It is **not** fine for:
+
+- **Windowed aggregations.** A record whose event time falls before `latest_timestamp - window_grace_ms` is dropped as late. **Keep `buffer.grace_ms <= the downstream window's grace_ms`, or emissions are silently discarded.**
+- **`join_asof` / `join_interval` downstream**, whose store expiry advances on the newest observed timestamp.
+- Anything relying on per-partition event-time monotonicity after `to_topic()`.
+
+#### A key that goes silent
+
+The release trigger is the next record for the same key. A key that stops producing has nothing to trigger it, so the buffer settles its records itself: every record processed on a partition, whatever its key, settles a bounded slice of the other keys whose records have run out of grace. Under `on_timeout="emit"` those records are emitted at most `grace_ms` plus one settlement cycle after they arrived; under `"drop"` they are dropped.
+
+The one case with no delivery is a partition that goes **completely** silent — no records for any key — because nothing drives the settlement. That partition is also not growing, and the records emit when traffic resumes.
+
+#### Sizing
+
+The time bound is the one to tune. A key's steady-state buffer is roughly `rate x grace_ms` records, and the same volume is written to the changelog topic. At 100 msg/s, `grace_ms = 30_000` and 1 KB values, one unresolvable key holds ~3000 entries (~3 MB) in RocksDB and in the changelog.
+
+`max_buffered_per_key` is a safety valve, not the primary bound — and it is a **latency** knob as much as a memory one: a release deserializes a key's entire surviving buffer inside a single callback, so 10 000 records is a real pause on the processing thread. A warning is logged when one release exceeds 1000 records.
+
+An overflow drop is **not** governed by `on_timeout`: the record never entered the buffer, so it has no deadline to expire.
 
 ### Advanced Configuration Matching
 

@@ -60,7 +60,7 @@ from quixstreams.utils.printing import (
 from quixstreams.utils.stream_id import stream_id_from_strings
 
 from .joins import AsOfJoin, AsOfJoinHow, IntervalJoin, IntervalJoinHow, OnOverlap
-from .joins.lookups import BaseField, BaseLookup
+from .joins.lookups import BaseField, BaseLookup, LookupBuffer
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
@@ -1922,6 +1922,7 @@ class StreamingDataFrame:
         lookup: BaseLookup,
         fields: dict[str, BaseField],
         on: Optional[Union[str, Callable[[dict[str, Any], Any], str]]] = None,
+        buffer: Optional[LookupBuffer] = None,
     ) -> "StreamingDataFrame":
         """
         Note: This is an experimental feature, and its API is likely to change in the future.
@@ -1942,6 +1943,14 @@ class StreamingDataFrame:
             - If a string, it is interpreted as the column name in the value dict to use as the lookup key.
             - If a callable, it should accept (value, key) and return the target key as a string.
             - If None (default), the message key is used as the lookup key.
+        :param buffer: An optional `LookupBuffer` holding records whose lookup cannot be
+            resolved yet, instead of enriching them with their defaults straight away.
+            A held record is released - enriched, with its own timestamp, key and headers -
+            by the next record for the same key, as long as its configuration arrives
+            within the buffer's `grace_ms`.
+            Enabling it makes the application stateful: the buffer is a changelog-backed
+            state store.
+            If None (default), every record is emitted immediately, resolved or not.
 
         :returns: StreamingDataFrame: The same StreamingDataFrame instance with the enrichment applied in-place.
 
@@ -1975,6 +1984,19 @@ class StreamingDataFrame:
 
             def _on(value: dict[str, Any], key: Any) -> str:
                 return key
+
+        if buffer is not None:
+            # Withholding and releasing records needs a node that can emit any
+            # number of records, each with its own key, timestamp and headers -
+            # which `update()` cannot do. The Stream is modified directly, as
+            # the windowing operators do, to avoid adding a public `transform()`.
+            buffer.validate_fields(fields)
+            buffer.register_store(self)
+            return self.__dataframe_clone__(
+                stream=self.stream.add_transform(
+                    buffer.callback(self, lookup, fields, _on), expand=True
+                )
+            )
 
         def _join(
             value: dict[str, Any], key: Any, timestamp: int, headers: HeadersMapping
