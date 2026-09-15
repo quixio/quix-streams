@@ -1,59 +1,3 @@
-"""
-The stored representation of one withheld record.
-
-An envelope has to be self-describing, because
-`TimestampedPartitionTransaction.get_interval()` returns values without their
-store keys: the arrival time and the original event timestamp are unrecoverable
-unless they travel inside the value. The originating topic and offset travel
-with it for the same reason, one step further removed - the deadline tick
-(`buffer_tick.py`) emits a record with no input record in hand and has to
-rebuild its `MessageContext` from somewhere.
-
-Envelopes are serialized by the store's own `dumps`/`loads`, which default to
-orjson (`quixstreams/state/rocksdb/options.py`). A record path that crashes on a
-value orjson will not take is worse than useless - the crash happens *before* the
-offset is committed, so redelivery reproduces it forever, on the same record.
-
-So the envelope **lifts** the shapes orjson rejects out of the record value on
-the way in and puts them back on the way out:
-
-- `bytes`, `bytearray` and `memoryview` (orjson rejects all three) are
-  base64-encoded and recorded by path. Header values are base64-encoded in
-  place, by the same reasoning.
-- `tuple`, `set` and `frozenset` are stored as JSON arrays with their type
-  recorded by path. The tag is not decoration in the tuple's case: orjson *does*
-  encode a tuple, as an array, and it would come back a `list` - a silent type
-  change in a value a user put there deliberately.
-
-Two losses are accepted rather than encoded: `bytearray` and `memoryview` come
-back as `bytes`, and a subclass (a `NamedTuple`, an `OrderedDict`) comes back as
-its builtin base. Recording the exact class would mean importing and constructing
-it at restore time, on the record path, from data that has been through a
-changelog.
-
-What no encoding here can reach: a value holding an arbitrary object (a
-`datetime`, a `Decimal`, a custom class), a dict with non-`str` keys, an integer
-outside 64 bits, or a reference cycle. Each of those raises inside `orjson.dumps`
-exactly as a `bytes` leaf used to, and each is a property of every orjson-backed
-store in the SDK rather than of this buffer.
-
-None of them crashes the record path any more. `BufferOperator._buffer()` offers
-the finished envelope to the store's **own** serializer before the write, and a
-record that serializer refuses is not buffered at all - it is settled there and
-then by `on_timeout`, exactly as a record that ran out of grace is, with a
-rate-limited warning naming the key and the offending path.
-`describe_unstorable()` below produces that path, and it produces it by
-re-offering subtrees to the same serializer rather than by second-guessing its
-rules, so the diagnosis cannot disagree with the write that was refused.
-
-Both lifts address their targets **by path** rather than with an in-band marker,
-so no shape a user can put in a record value can be mistaken for one.
-
-The index of which keys currently hold withheld records lives in
-`buffer_state.py`; the operator logic that decides when to write or read an
-envelope lives in `buffer_operator.py`.
-"""
-
 import base64
 from typing import Any, Callable, Iterable, Mapping, NamedTuple, Optional, Union
 
@@ -77,8 +21,6 @@ __all__ = (
     "envelope_value",
 )
 
-# Envelope field names. Kept to one character each: every withheld record pays
-# for them twice, once in RocksDB and once in the changelog topic.
 ENVELOPE_VALUE = "v"
 ENVELOPE_TIMESTAMP = "t"
 ENVELOPE_RECEIVED = "r"
@@ -86,70 +28,34 @@ ENVELOPE_HEADERS = "h"
 ENVELOPE_HEADERS_MAPPING = "m"
 ENVELOPE_BYTES = "b"
 ENVELOPE_CONTAINERS = "c"
-# The originating topic name and offset. They exist only so the deadline tick
-# can rebuild a truthful `MessageContext` for a record it emits with no input
-# record in hand (`buffer_tick.py`). Caching the last-seen context per
-# partition instead would not survive the case the tick exists for: a cold
-# process that recovers a buffer from the changelog and then sees no traffic
-# has no last-seen context.
 ENVELOPE_TOPIC = "n"
 ENVELOPE_OFFSET = "o"
 
-# Stand-in offset for an envelope written before `ENVELOPE_OFFSET` existed.
-# Matches librdkafka's "unset" convention and is what `MessageContext.offset`
-# reports for such a record.
 NO_OFFSET = -1
 
-# Header value encodings used inside the envelope.
 _HEADER_BYTES = "b"
 _HEADER_STR = "s"
 _HEADER_NONE = "n"
 
-# Container types that are stored as a JSON array and rebuilt on the way out.
 _CONTAINER_TUPLE = "t"
 _CONTAINER_SET = "s"
 _CONTAINER_FROZENSET = "f"
 
-# Binary types that are stored as base64. `bytearray` and `memoryview` are
-# coerced to `bytes` and come back as `bytes`.
 _BINARY = (bytes, bytearray, memoryview)
 
-# One step of a path into the record value: a dict key or a sequence index.
 _Step = Union[str, int]
 
-# How deep `describe_unstorable()` walks before it reports where it got to.
-# Anything nested deeper is pathological in its own right, and this is the
-# diagnosis of a record that has already been given up on, not a validator.
 _DESCRIBE_MAX_DEPTH = 20
 
-# How many offending dict keys one warning names.
 _DESCRIBE_MAX_KEYS = 3
 
-# The envelope fields a user's own content can reach, under names that mean
-# something in a log line. Everything else is named by its raw envelope key.
 _DESCRIBE_FIELDS = {ENVELOPE_VALUE: "value", ENVELOPE_HEADERS: "headers"}
 
-# orjson takes any integer that fits a signed or unsigned 64-bit word and
-# refuses the rest - the one refusal a bare type name explains badly.
 _INT_MIN = -(2**63)
 _INT_MAX = 2**64 - 1
 
 
 class Emission(NamedTuple):
-    """
-    One record on its way downstream, as the buffer hands it over.
-
-    The first four fields are the `(value, key, timestamp, headers)` a composed
-    `Stream` executor takes. `topic` and `offset` are the record's **originals**,
-    carried alongside rather than inside so the deadline tick can rebuild a
-    `MessageContext` for a record emitted with no input record in hand. They are
-    unused on the record path, which keeps emitting under the arriving record's
-    own context.
-
-    `topic` is `None` for an envelope written before `ENVELOPE_TOPIC` existed;
-    the tick substitutes the dataframe's own topic name.
-    """
-
     value: Any
     key: Any
     timestamp: int
@@ -166,21 +72,6 @@ def encode_envelope(
     topic: Optional[str] = None,
     offset: int = NO_OFFSET,
 ) -> dict[str, Any]:
-    """
-    Build the stored representation of one withheld record.
-
-    :param value: The record value *after* `lookup.join()` — so already resolved
-        through every field's `missing()`. That is what makes emitting a
-        timed-out record free: the stored value is already the right answer.
-    :param timestamp: The original event timestamp, in milliseconds. Emitted
-        verbatim on both the release and the timeout path.
-    :param receive_ms: Wall-clock arrival time, in milliseconds. Drives the
-        deadline and the pending index's earliest-arrival bound.
-    :param headers: The record headers as received.
-    :param topic: The name of the topic the record arrived on.
-    :param offset: The record's offset on that topic-partition.
-    :return: An orjson-serializable dict.
-    """
     encoded_headers, is_mapping = _encode_headers(headers)
     stored_value, byte_paths, container_paths = _lift_value(value)
     return {
@@ -197,39 +88,11 @@ def encode_envelope(
 
 
 def envelope_value(envelope: Mapping[str, Any]) -> Any:
-    """
-    Restore a withheld record's value from its envelope.
-
-    Both lift fields are read with `get()` so that an envelope recovered from a
-    changelog written before either existed reads back as "nothing to restore"
-    rather than raising.
-
-    The order is fixed: the binary leaves go back first, while every container
-    on their path is still the mutable list the store returned, and the
-    containers are rebuilt afterwards.
-
-    :param envelope: An envelope produced by `encode_envelope()`.
-    :return: The value as it was when the record was withheld, with its binary
-        leaves and container types put back.
-    """
     value = _restore_bytes(envelope[ENVELOPE_VALUE], envelope.get(ENVELOPE_BYTES))
     return _restore_containers(value, envelope.get(ENVELOPE_CONTAINERS))
 
 
 def emit_tuple(envelope: Mapping[str, Any], key: Any) -> Emission:
-    """
-    Build the downstream emission for one stored record.
-
-    The topic and offset are read with `get()` so that an envelope recovered
-    from a changelog written before those fields existed reads back as "unknown
-    origin" rather than raising.
-
-    :param envelope: An envelope produced by `encode_envelope()`.
-    :param key: The message key to emit under.
-    :return: An `Emission` carrying the stored record's own event timestamp,
-        headers and origin rather than those of whatever record happened to
-        release it.
-    """
     return Emission(
         envelope_value(envelope),
         key,
@@ -241,13 +104,6 @@ def emit_tuple(envelope: Mapping[str, Any], key: Any) -> Emission:
 
 
 def decode_headers(envelope: Mapping[str, Any]) -> Any:
-    """
-    Restore a withheld record's headers from its envelope.
-
-    :param envelope: An envelope produced by `encode_envelope()`.
-    :return: The headers in their original shape - `None`, a list of
-        `(name, value)` tuples, or a mapping.
-    """
     encoded = envelope[ENVELOPE_HEADERS]
     if encoded is None:
         return None
@@ -270,36 +126,12 @@ def describe_unstorable(
     envelope: Mapping[str, Any],
     probe: Callable[[Any], Any],
 ) -> str:
-    """
-    Locate the part of an envelope the store's serializer will not take.
-
-    `probe` is that serializer itself, so the walk asks exactly the question the
-    refused write asked and cannot disagree with it. It descends into the first
-    child that is refused on its own; when a node is refused but none of its
-    children is, the node itself is the culprit - which is the shape a dict with
-    non-`str` keys has, since every one of its *values* encodes perfectly well.
-
-    The walk re-serializes subtrees, so it costs a pass over the value per level
-    of depth. It runs only for a record that is already being given up on, and
-    only when `BufferBookkeeping.log_unstorable()`'s rate limiter is about to
-    report, never per refused record.
-
-    :param envelope: An envelope produced by `encode_envelope()`, or - when the
-        encoding itself could not finish - a `{ENVELOPE_VALUE: value,
-        ENVELOPE_HEADERS: headers}` stand-in, so the rendered path reads the
-        same either way.
-    :param probe: A callable raising `StateSerializationError` for a value the
-        store cannot serialize.
-    :return: A one-line description naming the path and what was found there.
-    """
     path: list[_Step] = []
     node: Any = envelope
     seen: set[int] = set()
     for _ in range(_DESCRIBE_MAX_DEPTH):
         if id(node) in seen:
             return f"{_render_path(path)}: a reference cycle"
-        # Every node on the path stays referenced by `envelope`, so no `id()`
-        # recorded here can be reused by a later one.
         seen.add(id(node))
         refused = _refused_child(node, probe)
         if refused is None:
@@ -313,14 +145,6 @@ def _refused_child(
     node: Any,
     probe: Callable[[Any], Any],
 ) -> Optional[tuple[_Step, Any]]:
-    """
-    Return the first child of a node that the serializer refuses on its own.
-
-    :param node: The node the walk has reached.
-    :param probe: The store's value serializer.
-    :return: A `(step, child)` pair, or `None` when nothing below this node is
-        refused - which includes every node that is not a container.
-    """
     items: Iterable[tuple[Any, Any]]
     if isinstance(node, dict):
         items = node.items()
@@ -338,12 +162,6 @@ def _refused_child(
 
 
 def _refusal_reason(node: Any) -> str:
-    """
-    Say what is wrong with the node the walk stopped on.
-
-    :param node: The deepest refused node.
-    :return: A short phrase naming the shape, not the serializer's rule.
-    """
     if isinstance(node, dict):
         keys = [key for key in node if not isinstance(key, str)]
         if keys:
@@ -361,12 +179,6 @@ def _refusal_reason(node: Any) -> str:
 
 
 def _render_path(path: list[_Step]) -> str:
-    """
-    Render a walked path as something a user can find in their own code.
-
-    :param path: The dict keys and sequence indices walked into the envelope.
-    :return: A readable path, rooted at the envelope field it entered through.
-    """
     if not path:
         return "the envelope itself"
     head, rest = path[0], path[1:]
@@ -376,22 +188,6 @@ def _render_path(path: list[_Step]) -> str:
 
 
 def _encode_headers(headers: Any) -> tuple[Optional[list[list[Any]]], bool]:
-    """
-    Encode headers into an orjson-safe form, preserving duplicates and order.
-
-    At runtime headers reach a dataframe callback as `Optional[List[Tuple[str,
-    bytes]]]` (`Row.headers`), but the public `Headers` type also allows a
-    mapping, so the container shape is recorded alongside the items.
-
-    A value is base64-encoded if it is binary at all, not only if it is exactly
-    `bytes`: `HeadersValue` is `str | bytes`, but nothing enforces that on a
-    header a `sdf.apply()` has just written, and the branch this would otherwise
-    fall through to stores the object verbatim for orjson to reject.
-
-    :param headers: The headers as received.
-    :return: A `(items, is_mapping)` pair, where `items` is `None` for headers
-        that were `None`.
-    """
     if headers is None:
         return None, False
 
@@ -418,24 +214,6 @@ def _encode_headers(headers: Any) -> tuple[Optional[list[list[Any]]], bool]:
 def _lift_value(
     value: Any,
 ) -> tuple[Any, Optional[list[list[Any]]], Optional[list[list[Any]]]]:
-    """
-    Split a record value into an orjson-safe body and the two path lists that
-    describe what had to be taken out of it.
-
-    Both are addressed by path rather than by an in-band marker so that no shape
-    a user can put in a record value can be mistaken for one: a
-    `lookup.bytes_field()` resolving to real binary content (a certificate, say)
-    has to survive buffering, and the record value is otherwise arbitrary.
-
-    A value orjson can already take verbatim is returned unchanged and uncopied,
-    so the common case costs one read-only walk and nothing else.
-
-    :param value: The record value, already joined.
-    :return: A `(body, byte_paths, container_paths)` triple. Each path list is
-        `None` when there was nothing of that kind. `byte_paths` holds
-        `[path, base64]` entries, `container_paths` holds `[path, kind]` entries,
-        and a `path` is a list of dict keys and sequence indices.
-    """
     if not _needs_lift(value):
         return value, None, None
 
@@ -446,13 +224,6 @@ def _lift_value(
 
 
 def _needs_lift(value: Any) -> bool:
-    """
-    Report whether a value holds anything the envelope has to lift out of it.
-
-    :param value: Any part of a record value.
-    :return: `True` if a binary leaf, a `tuple`, a `set` or a `frozenset` is
-        reachable from it.
-    """
     if isinstance(value, _BINARY) or _container_kind(value) is not None:
         return True
     if isinstance(value, dict):
@@ -463,13 +234,6 @@ def _needs_lift(value: Any) -> bool:
 
 
 def _container_kind(value: Any) -> Optional[str]:
-    """
-    Return the tag for a container that has to be stored as a JSON array.
-
-    :param value: Any part of a record value.
-    :return: The kind tag, or `None` for anything else - `list` included, which
-        is already what it will be read back as.
-    """
     if isinstance(value, tuple):
         return _CONTAINER_TUPLE
     if isinstance(value, frozenset):
@@ -485,19 +249,6 @@ def _strip(
     byte_paths: list[list[Any]],
     container_paths: list[list[Any]],
 ) -> Any:
-    """
-    Copy a value into its orjson-safe form, recording what was taken out.
-
-    Binary leaves are replaced by `None` and `tuple`/`set`/`frozenset` by a
-    `list`; both record their path. A set's iteration order here is what defines
-    its elements' indices, so the paths recorded inside it stay valid.
-
-    :param value: Any part of a record value.
-    :param path: The path walked so far, mutated in place during the walk.
-    :param byte_paths: The accumulator of `[path, base64]` entries.
-    :param container_paths: The accumulator of `[path, kind]` entries.
-    :return: The orjson-safe copy.
-    """
     if isinstance(value, _BINARY):
         byte_paths.append([list(path), base64.b64encode(bytes(value)).decode()])
         return None
@@ -525,13 +276,6 @@ def _strip(
 
 
 def _restore_bytes(value: Any, paths: Optional[list[list[Any]]]) -> Any:
-    """
-    Put the binary leaves recorded by `_lift_value()` back into a value.
-
-    :param value: The body read out of the envelope.
-    :param paths: The `[path, base64]` entries, or `None` if there were none.
-    :return: The value with its binary leaves restored, always as `bytes`.
-    """
     if not paths:
         return value
 
@@ -547,25 +291,11 @@ def _restore_bytes(value: Any, paths: Optional[list[list[Any]]]) -> Any:
 
 
 def _restore_containers(value: Any, paths: Optional[list[list[Any]]]) -> Any:
-    """
-    Rebuild the containers recorded by `_lift_value()`, deepest path first.
-
-    The order is what makes one pass enough: a container is rebuilt only once
-    everything inside it already has its final type, and its parent is still the
-    mutable list or dict the store returned when the rebuilt object is written
-    back into it.
-
-    :param value: The body, with its binary leaves already restored.
-    :param paths: The `[path, kind]` entries, or `None` if there were none.
-    :return: The value with its container types restored.
-    """
     if not paths:
         return value
 
     for path, kind in sorted(paths, key=lambda entry: len(entry[0]), reverse=True):
         if not path:
-            # The whole value was a container. Its path is the shortest there
-            # is, so this is the last entry and there is nothing left to do.
             return _rebuild_container(value, kind)
         parent = value
         for step in path[:-1]:
@@ -575,16 +305,6 @@ def _restore_containers(value: Any, paths: Optional[list[list[Any]]]) -> Any:
 
 
 def _rebuild_container(items: Any, kind: str) -> Any:
-    """
-    Turn one stored array back into the container it came from.
-
-    :param items: The list read out of the envelope.
-    :param kind: The tag recorded by `_container_kind()`.
-    :return: The rebuilt container, or the list unchanged for a kind this
-        version does not know - which only a newer writer's envelope replayed
-        from the changelog can produce, and where the stored list is a better
-        answer than a crash on the record path.
-    """
     if kind == _CONTAINER_TUPLE:
         return tuple(items)
     if kind == _CONTAINER_SET:

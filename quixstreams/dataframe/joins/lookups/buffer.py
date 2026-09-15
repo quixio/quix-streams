@@ -1,12 +1,3 @@
-"""
-The public configuration surface of the non-blocking lookup buffer.
-
-`LookupBuffer` holds the knobs and the build-time checks; the record path lives
-in `buffer_operator.py`, the clock-driven deadline pass in `buffer_tick.py`, the
-stored form of a withheld record in `buffer_envelope.py` and the index of which
-keys are holding one in `buffer_state.py`.
-"""
-
 import logging
 from datetime import timedelta
 from typing import (
@@ -36,94 +27,12 @@ logger = logging.getLogger(__name__)
 OnTimeout = Literal["emit", "drop"]
 OnOverflow = Literal["drop-newest", "raise"]
 
-# Below this `grace_ms`, the deadline tick's granularity is worth warning about:
-# with no traffic a deadline is observed once per `consumer_poll_timeout`, whose
-# default is 1.0s.
 SUB_SECOND_GRACE_WARN_MS = 1000
 
-# Sentinel for "this field type has no `default` attribute at all", which is how
-# a non-quix-configuration field is told apart from one whose default is unset.
 _NO_DEFAULT = object()
 
 
 class LookupBuffer:
-    """
-    Hold records whose lookup key cannot be resolved yet, instead of enriching
-    them with defaults or dropping them immediately.
-
-    A held record is released - enriched, in arrival order, with its own
-    timestamp, key and headers - by the next record with the same **message
-    key**, provided its own configuration has arrived by then. The message key
-    groups the buffer, so it decides *when* a held record is looked at again;
-    whether that record leaves is decided by its own lookup key alone. With an
-    `on=` that derives the lookup key from the value, a record whose lookup
-    resolves therefore frees only the held records sharing its lookup key, and
-    every other one keeps waiting for the rest of its own `grace_ms`.
-
-    The price of that guarantee is ordering across lookup keys. Records sharing a
-    lookup key always go downstream in arrival order, but a record whose
-    configuration is already there can overtake an older record under the same
-    message key that is still waiting for a different one.
-
-    A record that reaches `grace_ms` with no configuration meets the fate chosen
-    by `on_timeout`, whether or not traffic is flowing, and is never enriched
-    afterwards: the Application's main loop settles deadlines on the clock, so a
-    partition that has gone completely silent still drains.
-
-    Nothing ever sleeps: an unresolvable record is written to a durable,
-    changelog-backed state store and the processing thread returns immediately,
-    so other keys and other partitions are unaffected.
-
-    Holding a record means serializing its value into that store, which is JSON
-    by default. `bytes`, `tuple`, `set` and `frozenset` survive the round trip
-    intact; a shape JSON cannot express at all - an arbitrary object such as a
-    `datetime` or a `Decimal`, a dict with non-`str` keys, an integer outside 64
-    bits, a reference cycle - cannot be held. Such a record is **not** an error:
-    it is resolved immediately by `on_timeout`, exactly as if its `grace_ms` had
-    already run out, and a rate-limited warning names the key and the offending
-    path. It therefore never waits for its configuration, and it can leave ahead
-    of records that are still waiting.
-
-    Pass an instance to `StreamingDataFrame.join_lookup(..., buffer=...)`.
-    Leaving `buffer` unset keeps today's behaviour exactly, with no store and no
-    cost.
-
-    Example:
-
-    ```python
-    from quixstreams import Application
-    from quixstreams.dataframe.joins.lookups import (
-        LookupBuffer,
-        QuixConfigurationService,
-    )
-
-    app = Application()
-    sdf = app.dataframe(app.topic("sensor-data"))
-
-    lookup = QuixConfigurationService(
-        topic=app.topic("device-configurations"),
-        app_config=app.config,
-        unresolved_types_field="__unresolved__",
-    )
-    fields = {
-        "threshold": lookup.json_field("$.threshold", type="device", default=None),
-        "region": lookup.json_field("$.region", type="device", default="unknown"),
-    }
-
-    sdf = sdf.join_lookup(
-        lookup,
-        fields,
-        buffer=LookupBuffer(
-            grace_ms=30_000,
-            is_resolved=lambda value: not value["__unresolved__"],
-        ),
-    )
-    ```
-
-    Enabling a buffer turns a stateless service into a stateful one: it needs a
-    state directory and, on Quix Cloud, `state: {enabled: true}`.
-    """
-
     def __init__(
         self,
         grace_ms: Union[int, timedelta],
@@ -133,62 +42,6 @@ class LookupBuffer:
         on_overflow: OnOverflow = "drop-newest",
         store_name: str = "lookup-buffer",
     ) -> None:
-        """
-        :param grace_ms: How long a record may wait for its configuration,
-            measured in **wall-clock real time** from the moment the record
-            enters the operator. An `int` is milliseconds; a `timedelta` is
-            converted. This is real time and not event time on purpose: what the
-            record is waiting for is a configuration message landing on another
-            topic, which has no event-time analogue, and an event-time deadline
-            would expire a backlog replay's records instantly.
-
-            It is passive retention, exactly like the `grace_ms` of `join_asof`
-            and `join_interval`: it never blocks a thread. Larger values cost
-            disk, changelog volume and emission latency.
-
-        :param is_resolved: Predicate deciding whether a record's lookup
-            succeeded, called with the record value after `lookup.join()`. With
-            `QuixConfigurationService`, set its `unresolved_types_field` and pass
-            `lambda value: not value["__unresolved__"]`.
-
-        :param on_timeout: What happens to a record that reaches `grace_ms` with
-            no configuration. The deadline is observed on the clock, so this
-            happens on a silent partition too - at a granularity of one
-            `Application(consumer_poll_timeout=...)`, 1.0s by default.
-
-            - `"emit"` (default): it goes downstream carrying each field's
-              declared `default=`, which is exactly what an unbuffered
-              `join_lookup` would have produced for it immediately. Spell nulls
-              as `default=None` on the field.
-            - `"drop"`: it is discarded permanently, and a rate-limited warning
-              names the key.
-
-            Neither mode re-runs the lookup, so a configuration arriving after a
-            record's deadline never enriches it.
-
-            This is also what happens, immediately and with its own warning, to
-            a record whose value the state store cannot serialize - see the
-            class docstring.
-
-        :param max_buffered_per_key: Safety valve against a pathological rate of
-            unresolvable records for one key. The primary bound is `grace_ms`:
-            steady-state size is roughly `rate x grace_ms` records per key. This
-            is also a latency knob, because a release deserializes a key's whole
-            surviving buffer inside one callback.
-
-            "Key" here is the **message** key, including the null key of an
-            unkeyed topic: records with no key share one buffer per partition, so
-            on such a topic this bounds the partition rather than a key.
-
-        :param on_overflow: What happens to a record that arrives when a key is
-            already holding `max_buffered_per_key` records. `"drop-newest"`
-            (default) discards it and logs; `"raise"` fails the application. An
-            overflowed record never entered the buffer, so it has no deadline and
-            `on_timeout` does not apply to it.
-
-        :param store_name: Name of the state store holding the buffer. Change it
-            if two `join_lookup` buffers share one stream.
-        """
         self._grace_ms = ensure_milliseconds(grace_ms)
         if self._grace_ms <= 0:
             raise ValueError(
@@ -198,10 +51,6 @@ class LookupBuffer:
             )
 
         if self._grace_ms < SUB_SECOND_GRACE_WARN_MS:
-            # A warning and not an error: the behaviour is correct, just
-            # coarser than the number suggests. `consumer_poll_timeout` lives on
-            # `ApplicationConfig`, which is not reachable from here, so the
-            # message names the default rather than the configured value.
             logger.warning(
                 "LookupBuffer grace_ms=%sms is shorter than the default "
                 "Application(consumer_poll_timeout=1.0). With no traffic on a "
@@ -238,32 +87,13 @@ class LookupBuffer:
 
     @property
     def grace_ms(self) -> int:
-        """The grace window in milliseconds."""
         return self._grace_ms
 
     @property
     def store_name(self) -> str:
-        """The name of the state store holding the buffer."""
         return self._store_name
 
     def validate_fields(self, fields: Mapping[str, BaseField]) -> None:
-        """
-        Reject fields that cannot survive buffering, before the application runs.
-
-        A field with no `default=` raises `KeyError` from `missing()`, and
-        `missing()` runs on **every** unresolvable record, before anything is
-        stored - so such a field does not merely break `on_timeout="emit"`, it
-        breaks buffering entirely. Turning that into a `ValueError` at build time
-        replaces a crash on the first unconfigured record in production with a
-        failure on the developer's machine.
-
-        Fields that have no `default` attribute belong to some other lookup
-        implementation and are skipped: only the Quix Configuration Service
-        fields carry `default` / `missing()` semantics.
-
-        :param fields: The field mapping passed to `join_lookup`.
-        :raises ValueError: If any field has no `default=`.
-        """
         for name, field in fields.items():
             if getattr(field, "default", _NO_DEFAULT) is RAISE_ON_MISSING:
                 field_type = getattr(field, "type", None)
@@ -277,26 +107,6 @@ class LookupBuffer:
                 )
 
     def register_store(self, dataframe: "StreamingDataFrame") -> None:
-        """
-        Register the timestamped store that holds the withheld records.
-
-        The buffer's durability rests on that store being changelog-backed: a
-        record's offset is committed because it was *consumed*, not because it
-        was emitted, and there is no API to withhold an offset for a record still
-        in flight. A held record that is not in a changelog is therefore gone for
-        good the moment its partition moves to another consumer.
-
-        Whether a changelog exists is not this buffer's decision to make -
-        `StateStoreManager` produces one only when the application was built with
-        a recovery manager, which is what `Application(use_changelog_topics=True)`
-        (the default) does, and that setting governs every store in the
-        application. So this is a warning and not an error: turning it into one
-        would fail an application whose other stores are perfectly happy without
-        changelogs. It is logged once per registration, at `WARNING`, naming the
-        exact consequence.
-
-        :param dataframe: The dataframe the operator is being added to.
-        """
         state_manager = dataframe.processing_context.state_manager
         if not state_manager.using_changelogs:
             logger.warning(
@@ -312,9 +122,6 @@ class LookupBuffer:
             stream_id=dataframe.stream_id,
             store_name=self._store_name,
             grace_ms=self._grace_ms,
-            # Withheld records that arrive in the same millisecond must all
-            # survive, and the duplicate counter is what makes their order
-            # within a key the arrival order.
             keep_duplicates=True,
             changelog_config=TopicManager.derive_topic_config(dataframe.topics),
         )
@@ -326,16 +133,6 @@ class LookupBuffer:
         fields: Mapping[str, BaseField],
         on: Callable[[dict[str, Any], Any], str],
     ) -> BufferOperator:
-        """
-        Build the expanded-transform callback for one `join_lookup` call.
-
-        :param dataframe: The dataframe the operator is being added to.
-        :param lookup: The lookup strategy.
-        :param fields: The field mapping passed to `join_lookup`.
-        :param on: The resolved lookup-key accessor.
-        :return: A callable taking `(value, key, timestamp, headers)` and
-            returning the records to emit.
-        """
         return BufferOperator(
             dataframe=dataframe,
             lookup=lookup,
