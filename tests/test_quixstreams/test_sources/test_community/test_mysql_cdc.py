@@ -7,12 +7,15 @@ import pytest
 pytest.importorskip("pymysql")
 pytest.importorskip("pymysqlreplication")
 
+from pymysql.err import InterfaceError, OperationalError
+
 from quixstreams.models.messages import KafkaMessage
 from quixstreams.sources.community.mysql_cdc.mysql_cdc import (
     MySqlCdcError,
     MySqlCdcSource,
     _derive_server_id,
 )
+from quixstreams.sources.community.mysql_cdc.mysql_helper import is_connection_error
 from quixstreams.sources.community.mysql_cdc.snapshot import (
     build_snapshot_query,
     is_checkpointable_key,
@@ -154,6 +157,43 @@ def test_serialize_value():
 )
 def test_is_checkpointable_key(values, expected):
     assert is_checkpointable_key(values) is expected
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected"),
+    [
+        # Retryable: the link broke and a new connection can plausibly replace it.
+        (OperationalError(2013, "Lost connection to MySQL server during query"), True),
+        (OperationalError(2006, "MySQL server has gone away"), True),
+        (InterfaceError("(0, '')"), True),
+        (BrokenPipeError(), True),
+        (ConnectionResetError(), True),
+        # 1236 is retryable on purpose: MySQL reuses it both for a purged position and
+        # for a transient same-server_id collision, and only a reconnect can tell them
+        # apart. The purged case still fails loudly once the attempts are exhausted.
+        (
+            OperationalError(
+                1236, "A replica with the same server_uuid/server_id has connected"
+            ),
+            True,
+        ),
+        (
+            OperationalError(
+                1236, "Could not find first log file name in binary log index file"
+            ),
+            True,
+        ),
+        # Fatal: a reconnect presents the same rejected credentials or the same missing
+        # grant forever, so retrying only hides the failure.
+        (OperationalError(1045, "Access denied for user 'cdc_user'@'%'"), False),
+        (OperationalError(1044, "Access denied to database 'db'"), False),
+        (OperationalError(1227, "Access denied; you need REPLICATION SLAVE"), False),
+        # Not a connection failure at all.
+        (ValueError("nope"), False),
+    ],
+)
+def test_is_connection_error(exc, expected):
+    assert is_connection_error(exc) is expected
 
 
 def test_commit_batch_order():

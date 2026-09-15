@@ -54,6 +54,24 @@ _REPLICA_STATUS_STATEMENTS = ("SHOW REPLICA STATUS", "SHOW SLAVE STATUS")
 # 1227 = ER_SPECIFIC_ACCESS_DENIED_ERROR: the user lacks REPLICATION CLIENT.
 _ACCESS_DENIED_ERROR_CODE = 1227
 
+# MySQL errors that arrive as `OperationalError` - the same class a dropped socket
+# raises - but that no reconnect can clear, so retrying them only delays the failure
+# and hides its cause. All three are credential or privilege failures: the reconnect
+# presents exactly the same rejected identity, forever.
+#   1044 ER_DBACCESS_DENIED_ERROR        - the grant on the database was revoked.
+#   1045 ER_ACCESS_DENIED_ERROR          - wrong password, or the account was dropped.
+#   1227 ER_SPECIFIC_ACCESS_DENIED_ERROR - the account lacks REPLICATION SLAVE/CLIENT.
+#
+# 1236 ER_MASTER_FATAL_ERROR_READING_BINLOG is deliberately NOT here. MySQL reuses it
+# for two opposite situations: "Could not find first log file name in binary log index
+# file", which is permanent, and "A replica with the same server_uuid/server_id as this
+# replica has connected to the source", which is transient and is exactly what a
+# redeploying source hits while the server still holds its previous connection. Marking
+# 1236 fatal would kill a source that only needed to reconnect. The permanent case is
+# still bounded and loud: it exhausts the five reconnect attempts and re-raises with
+# MySQL's own message.
+_FATAL_MYSQL_ERROR_CODES = frozenset({1044, 1045, _ACCESS_DENIED_ERROR_CODE})
+
 _NO_PRIMARY_KEY_ERROR = (
     "Table {table_name} has no PRIMARY KEY. The initial snapshot requires one for "
     "stable pagination. Add a primary key, or set initial_snapshot=False to stream "
@@ -70,13 +88,26 @@ def is_connection_error(exc: BaseException) -> bool:
     True for failures a reconnect can plausibly clear.
 
     Used by the source to decide whether to rebuild the binlog stream or to let the
-    error kill the process. Anything not listed here (a purged binlog position, a
-    revoked grant, a producer timeout) is fatal on purpose: retrying it forever would
-    hide it.
+    error kill the process. A broken socket is retryable; anything else is fatal on
+    purpose, because retrying it would hide it behind a reconnect loop.
+
+    The exception class alone cannot decide this. pymysql raises `OperationalError`
+    both for a dropped connection and for access-denied errors, so the MySQL error code
+    is checked too: the codes in `_FATAL_MYSQL_ERROR_CODES` - a revoked grant, a bad
+    password, a missing REPLICATION privilege - are reported as *not* retryable and
+    propagate to kill the process.
     """
-    return isinstance(
-        exc, (OperationalError, InterfaceError, BrokenPipeError, ConnectionResetError)
-    )
+    if isinstance(exc, (BrokenPipeError, ConnectionResetError)):
+        return True
+    if not isinstance(exc, (OperationalError, InterfaceError)):
+        return False
+    return _mysql_error_code(exc) not in _FATAL_MYSQL_ERROR_CODES
+
+
+def _mysql_error_code(exc: BaseException) -> Optional[int]:
+    """Return the MySQL error number a pymysql exception carries, or None."""
+    code = exc.args[0] if exc.args else None
+    return code if isinstance(code, int) else None
 
 
 def _first_present(row: Dict[str, Any], *names: str) -> Any:
