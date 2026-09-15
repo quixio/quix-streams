@@ -134,8 +134,8 @@ class PartitionTransactionCache:
 
     def is_empty(self) -> bool:
         """
-        Return True if any changes have been made (updates or deletes), otherwise
-        return False.
+        Return True if NO changes have been made (no updates and no deletes),
+        otherwise return False.
         """
         return self._empty
 
@@ -256,6 +256,20 @@ class PartitionTransaction(ABC, Generic[K, V]):
         :return: bool
         """
         return self._status == PartitionTransactionStatus.PREPARED
+
+    @property
+    def changed(self) -> bool:
+        """
+        Return `True` if the transaction holds any pending updates or deletes.
+
+        Read by `BaseCheckpoint.empty()` so that a checkpoint carrying state
+        changes but no consumer offsets - which is what an operator doing
+        clock-driven work between messages produces - is committed rather than
+        discarded.
+
+        :return: bool
+        """
+        return not self._update_cache.is_empty()
 
     @property
     def changelog_topic_partition(self) -> Optional[Tuple[str, int]]:

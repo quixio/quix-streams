@@ -1,13 +1,18 @@
 """
 The record path of the non-blocking lookup buffer.
 
-`BufferOperator` is the callable appended to the `Stream` by
-`StreamingDataFrame.join_lookup(..., buffer=...)`. It runs as an expanded
-transform, so one input record can produce any number of output records, each
-with its own value, key, timestamp and headers - which is the whole reason this
-is a transform and not an `apply(expand=True)`: released records must keep their
-*own* event timestamps, and the sweep must be able to emit records that belong
-to a different key entirely.
+`BufferOperator` is the callable behind the `Stream` node
+`StreamingDataFrame.join_lookup(..., buffer=...)` appends. One input record can
+produce any number of output records, each with its own value, key, timestamp
+and headers - which is the whole reason this is a transform and not an
+`apply(expand=True)`: released records must keep their *own* event timestamps,
+and the sweep must be able to emit records that belong to a different key
+entirely.
+
+The node itself is a `BufferTransformFunction` (`buffer_node.py`) rather than a
+plain `add_transform(..., expand=True)`, because the deadline tick
+(`buffer_tick.py`) has to emit with no input record to expand from and therefore
+needs the resolved child executor handed to it at compose time.
 
 Per record it does three things, in this order:
 
@@ -20,9 +25,17 @@ Per record it does three things, in this order:
 3. **Buffer, release, or pass through.** A record whose key has nothing withheld
    and whose lookup resolved goes straight out. A record whose lookup failed is
    written to the store and nothing is emitted for it. A record whose key *does*
-   have withheld records first settles everything past its deadline, then
-   releases the survivors ahead of itself if it resolved, or joins the queue
-   behind them if it did not.
+   have withheld records first settles everything past its deadline, then - if
+   it resolved - releases the survivors whose *own* lookup key resolves too and
+   goes out behind them, or joins the queue if it did not.
+
+A release is therefore per record and not per message key. The buffer is grouped
+by the message key while resolvability is decided by the lookup key, so one
+message key can carry several of them; a survivor whose own configuration has
+still not arrived stays buffered for the rest of its `grace_ms` instead of
+leaving with a sibling that resolved something else. `buffer_release.py` carries
+that decision into the store, and its module docstring is where the reasoning
+lives.
 
 The single most important line in the file is the `start=cutoff + 1` lower bound
 on the survivor read in `_release()`. `get_interval()` does not consult the
@@ -31,35 +44,42 @@ that has already passed its deadline would be read back and enriched, which is
 exactly what the design forbids.
 """
 
-import logging
 import time
-from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, cast
+from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Optional, cast
 
 from quixstreams.context import message_context
+from quixstreams.core.stream import VoidExecutor
 from quixstreams.state.rocksdb.timestamped import TimestampedPartitionTransaction
 
 from .base import BaseField, BaseLookup
 from .buffer_bookkeeping import BufferBookkeeping
 from .buffer_envelope import (
+    ENVELOPE_OFFSET,
+    ENVELOPE_RECEIVED,
     ENVELOPE_TIMESTAMP,
+    ENVELOPE_TOPIC,
+    NO_OFFSET,
+    Emission,
     decode_headers,
     emit_tuple,
     encode_envelope,
     envelope_value,
 )
+from .buffer_release import (
+    ReleasePlan,
+    Withheld,
+    crowded_milliseconds,
+    log_release,
+    snapshot_for_rewrite,
+)
 from .buffer_state import MAX_RECEIVE_MS, PendingIndex, prefix_for_key
 from .buffer_sweep import BufferSweeper
+from .buffer_tick import BufferTicker
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 __all__ = ("BufferOperator", "LookupBufferOverflowError")
-
-logger = logging.getLogger(__name__)
-
-# A release deserializes a key's entire surviving buffer inside one callback.
-# Past this many records that is a stall worth telling the user about.
-RELEASE_WARN_RECORDS = 1000
 
 
 class LookupBufferOverflowError(Exception):
@@ -108,6 +128,29 @@ class BufferOperator:
             emit_on_timeout=self._emit_on_timeout,
             bookkeeping=self._bookkeeping,
         )
+        self._ticker = BufferTicker(
+            dataframe=dataframe,
+            store_name=store_name,
+            grace_ms=grace_ms,
+            sweeper=self._sweeper,
+        )
+
+    def bind_downstream(self, downstream: VoidExecutor) -> None:
+        """
+        Hand the resolved child executor to the deadline tick.
+
+        :param downstream: The executor for this operator's Stream node.
+        """
+        self._ticker.bind_downstream(downstream)
+
+    def tick(self) -> None:
+        """
+        Settle everything past its deadline, with no input record.
+
+        Registered with `DataFrameRegistry.register_periodic_task()`, so it runs
+        once per Application loop iteration.
+        """
+        self._ticker.tick()
 
     def __call__(
         self,
@@ -115,7 +158,7 @@ class BufferOperator:
         key: Any,
         timestamp: int,
         headers: Any,
-    ) -> list[tuple[Any, Any, int, Any]]:
+    ) -> list[Emission]:
         """
         Handle one record and return everything that should go downstream.
 
@@ -123,12 +166,13 @@ class BufferOperator:
         :param key: The message key.
         :param timestamp: The event timestamp, in milliseconds.
         :param headers: The record headers.
-        :return: A list of `(value, key, timestamp, headers)` tuples, possibly
-            empty - an empty list is how a record is withheld.
+        :return: A list of `Emission`s, possibly empty - an empty list is how a
+            record is withheld.
         """
         now_ms = int(time.time() * 1000)
         cutoff = now_ms - self._grace_ms
-        partition = message_context().partition
+        context = message_context()
+        partition = context.partition
         transaction = self._get_transaction(partition)
         index = PendingIndex(transaction)
         prefix = prefix_for_key(key)
@@ -144,12 +188,18 @@ class BufferOperator:
         resolved = bool(self._is_resolved(value))
 
         # Every record drives the sweep - the traffic of healthy keys is what
-        # settles the deadlines of unconfigured ones.
-        out = self._sweeper.sweep(transaction, index, partition, cutoff, prefix)
+        # settles the deadlines of unconfigured ones. The deadline tick drives
+        # the same sweep when there is no traffic at all.
+        settled = self._sweeper.sweep(transaction, index, partition, cutoff, prefix)
+        out = settled.emissions
 
         if index.get(prefix) is None:
             if resolved:
-                out.append((value, key, timestamp, headers))
+                out.append(
+                    Emission(
+                        value, key, timestamp, headers, context.topic, context.offset
+                    )
+                )
             else:
                 self._buffer(
                     transaction=transaction,
@@ -161,13 +211,15 @@ class BufferOperator:
                     value=value,
                     timestamp=timestamp,
                     headers=headers,
+                    topic=context.topic,
+                    offset=context.offset,
                 )
             index.flush()
             return out
 
-        # This key already has withheld records, so this one joins the queue
-        # even if its own lookup resolved - that is what keeps within-key order
-        # intact, and it is why the index is consulted before `resolved`.
+        # This key already has withheld records, which is why the index is
+        # consulted before `resolved`: whatever this record does, it goes out
+        # behind every record of its own lookup key that is already waiting.
         # Settle everything past its deadline first, so the emission order
         # within the key stays the arrival order across both groups.
         out.extend(
@@ -195,6 +247,8 @@ class BufferOperator:
                 value=value,
                 timestamp=timestamp,
                 headers=headers,
+                topic=context.topic,
+                offset=context.offset,
             )
             index.flush()
             return out
@@ -209,8 +263,14 @@ class BufferOperator:
                 cutoff=cutoff,
             )
         )
-        # The releasing record was never in the buffer, so it goes out last.
-        out.append((value, key, timestamp, headers))
+        # The releasing record was never in the buffer, so it goes out behind
+        # everything the release emitted. Survivors whose own lookup key did not
+        # resolve stayed behind instead, so this record can overtake an older
+        # sibling that is still waiting on a different configuration - see
+        # `_release()`.
+        out.append(
+            Emission(value, key, timestamp, headers, context.topic, context.offset)
+        )
         index.flush()
         return out
 
@@ -223,9 +283,10 @@ class BufferOperator:
         prefix: bytes,
         key: Any,
         cutoff: int,
-    ) -> list[tuple[Any, Any, int, Any]]:
+    ) -> list[Emission]:
         """
-        Enrich and emit every record still inside its grace window.
+        Emit the survivors whose own lookup key resolves, and leave the rest
+        buffered.
 
         `start=cutoff + 1` is mandatory: `get_interval()` ignores the store's
         expiry floor, so a wider lower bound would read back records that have
@@ -235,9 +296,20 @@ class BufferOperator:
 
         Each survivor is re-joined under *its own* lookup key, because `on=` may
         derive that key from the value, and with its own event timestamp, because
-        configurations are versioned in event time. A survivor whose own
-        configuration still does not resolve is emitted with its declared
-        defaults: the release is the end of its wait, not a second window.
+        configurations are versioned in event time. The verdict is then that
+        record's alone:
+
+        - it resolves: emitted enriched, and its store entry goes;
+        - it does not: it stays exactly where it is, at the arrival time it has
+          always had, and goes on waiting for the rest of its own `grace_ms`.
+          Nothing else can end its wait early - not a sibling's configuration,
+          only its own or its deadline.
+
+        The second case is what lets the releasing record leave ahead of an
+        older sibling. Arrival order is preserved for every record sharing a
+        lookup key, which is the order that can carry meaning, and not across
+        lookup keys that merely share a message key. `buffer_release.py` carries
+        the verdicts into the store.
 
         :param transaction: The live store transaction.
         :param index: The partition's pending index.
@@ -253,16 +325,15 @@ class BufferOperator:
             end=MAX_RECEIVE_MS,
             prefix=prefix,
         )
-        transaction.delete_interval(
-            start=cutoff + 1,
-            end=MAX_RECEIVE_MS,
-            prefix=prefix,
-        )
-        index.drop(prefix)
-        self._bookkeeping.set_count(partition, prefix, 0)
+        crowded = crowded_milliseconds(survivors)
 
-        out: list[tuple[Any, Any, int, Any]] = []
+        plan = ReleasePlan()
+        out: list[Emission] = []
         for envelope in survivors:
+            # Before `envelope_value()` and `lookup.join()` get at it, because
+            # both write into the envelope this may have to put back.
+            keepsake = snapshot_for_rewrite(envelope, crowded)
+            receive_ms = envelope[ENVELOPE_RECEIVED]
             value = envelope_value(envelope)
             timestamp = envelope[ENVELOPE_TIMESTAMP]
             headers = decode_headers(envelope)
@@ -274,26 +345,44 @@ class BufferOperator:
                 timestamp,
                 headers,
             )
-            out.append((value, key, timestamp, headers))
+            if not self._is_resolved(value):
+                plan.keep(Withheld(receive_ms, keepsake))
+                continue
+            plan.release(receive_ms)
+            out.append(
+                Emission(
+                    value,
+                    key,
+                    timestamp,
+                    headers,
+                    envelope.get(ENVELOPE_TOPIC),
+                    envelope.get(ENVELOPE_OFFSET, NO_OFFSET),
+                )
+            )
 
-        if out:
-            elapsed_ms = (time.monotonic() - started) * 1000
-            if len(out) >= RELEASE_WARN_RECORDS:
-                logger.warning(
-                    "Lookup buffer released %s records for key %r in a single "
-                    "callback (%.1f ms). Lower `max_buffered_per_key` or "
-                    "`grace_ms` if this stalls the partition.",
-                    len(out),
-                    key,
-                    elapsed_ms,
-                )
-            else:
-                logger.debug(
-                    "Lookup buffer released %s records for key %r in %.1f ms",
-                    len(out),
-                    key,
-                    elapsed_ms,
-                )
+        plan.apply(transaction, prefix)
+
+        earliest = plan.earliest_retained
+        if earliest is None:
+            index.drop(prefix)
+        else:
+            # The marker moves FORWARD, onto the oldest record still waiting,
+            # and `flush()` moves its deadline-queue entry with it. Dropping it
+            # instead would hide these records from the sweep and the tick until
+            # their key's next record - the stranding this feature exists to
+            # remove. The tick's cached per-partition deadline needs no update:
+            # it is a lower bound, it was set from these records' own deadlines
+            # when they were withheld, and a marker that only ever moves forward
+            # can leave it too low but never too high.
+            index.set_earliest(prefix, earliest)
+        self._bookkeeping.set_count(partition, prefix, plan.retained_count)
+
+        log_release(
+            key=key,
+            emitted=len(out),
+            retained=plan.retained_count,
+            elapsed_ms=(time.monotonic() - started) * 1000,
+        )
         return out
 
     def _take_timed_out(
@@ -304,7 +393,7 @@ class BufferOperator:
         prefix: bytes,
         key: Any,
         cutoff: int,
-    ) -> list[tuple[Any, Any, int, Any]]:
+    ) -> list[Emission]:
         """
         Settle this key's records that have reached their deadline.
 
@@ -353,6 +442,8 @@ class BufferOperator:
         value: dict[str, Any],
         timestamp: int,
         headers: Any,
+        topic: Optional[str],
+        offset: int,
     ) -> None:
         """
         Withhold a record: write it to the store and emit nothing for it.
@@ -366,6 +457,8 @@ class BufferOperator:
         :param value: The record value, already joined.
         :param timestamp: The event timestamp, in milliseconds.
         :param headers: The record headers.
+        :param topic: The name of the topic the record arrived on.
+        :param offset: The record's offset on that topic-partition.
         :raises LookupBufferOverflowError: On overflow with
             `on_overflow="raise"`.
         """
@@ -387,11 +480,24 @@ class BufferOperator:
         # record the operator has not already emitted or dropped.
         transaction.set_for_timestamp(
             timestamp=receive_ms,
-            value=encode_envelope(value, timestamp, receive_ms, headers),
+            value=encode_envelope(
+                value=value,
+                timestamp=timestamp,
+                receive_ms=receive_ms,
+                headers=headers,
+                topic=topic,
+                offset=offset,
+            ),
             prefix=prefix,
         )
         self._bookkeeping.set_count(partition, prefix, count + 1)
         index.ensure(prefix, key, receive_ms)
+        # Withholding a record is the only event that can leave the tick's
+        # cached deadline later than something actually due. Telling it now is
+        # one `min` against a scalar, on a path that is already writing to
+        # RocksDB, and it only ever lowers the cache - which is the direction
+        # that stays a valid lower bound.
+        self._ticker.note_deadline(partition, receive_ms + self._grace_ms)
 
     def _get_transaction(self, partition: int) -> TimestampedPartitionTransaction:
         """

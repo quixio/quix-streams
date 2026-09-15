@@ -142,8 +142,24 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
 
         return self._deserialize_value(value) if value is not None else None
 
-    def get_interval(self, start: int, end: int, prefix: Any) -> list[Any]:
-        items = self._get_items(start=start, end=end, prefix=self._ensure_bytes(prefix))
+    def get_interval(
+        self, start: int, end: int, prefix: Any, limit: Optional[int] = None
+    ) -> list[Any]:
+        """Get every value stored for `prefix` with a timestamp in `[start, end)`.
+
+        :param start: Start of the range, inclusive, in milliseconds.
+        :param end: End of the range, exclusive, in milliseconds.
+        :param prefix: The key prefix.
+        :param limit: Return at most this many values, the oldest first. `None`
+            (default) reads the whole range. A caller that can only act on a
+            fixed number of entries per pass should pass it: the bound reaches
+            the store iteration, so neither the read nor the deserialization
+            grows with how much is in the range.
+        :return: The deserialized values, oldest first.
+        """
+        items = self._get_items(
+            start=start, end=end, prefix=self._ensure_bytes(prefix), limit=limit
+        )
         return [self._deserialize_value(value) for _, value in items]
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)

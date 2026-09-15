@@ -61,6 +61,7 @@ from quixstreams.utils.stream_id import stream_id_from_strings
 
 from .joins import AsOfJoin, AsOfJoinHow, IntervalJoin, IntervalJoinHow, OnOverlap
 from .joins.lookups import BaseField, BaseLookup, LookupBuffer
+from .joins.lookups.buffer_node import BufferTransformFunction
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
@@ -1946,8 +1947,12 @@ class StreamingDataFrame:
         :param buffer: An optional `LookupBuffer` holding records whose lookup cannot be
             resolved yet, instead of enriching them with their defaults straight away.
             A held record is released - enriched, with its own timestamp, key and headers -
-            by the next record for the same key, as long as its configuration arrives
-            within the buffer's `grace_ms`.
+            by the next record with the same **message key**, if its own configuration has
+            arrived by then; otherwise it keeps waiting for the rest of its `grace_ms`.
+            The buffer groups by the message key and not by the `on` lookup key, so the
+            message key decides when a held record is looked at again while its own lookup
+            key decides whether it leaves. Records sharing a lookup key keep their arrival
+            order; a record can overtake an older one waiting on a different lookup key.
             Enabling it makes the application stateful: the buffer is a changelog-backed
             state store.
             If None (default), every record is emitted immediately, resolved or not.
@@ -1990,12 +1995,18 @@ class StreamingDataFrame:
             # number of records, each with its own key, timestamp and headers -
             # which `update()` cannot do. The Stream is modified directly, as
             # the windowing operators do, to avoid adding a public `transform()`.
+            #
+            # `BufferTransformFunction` rather than `add_transform(expand=True)`
+            # because the operator also has to emit records that no input record
+            # triggered: a buffered record whose `grace_ms` expires on a silent
+            # partition is settled by `run_periodic_tasks()`, which needs the
+            # node's resolved child executor captured at compose time.
             buffer.validate_fields(fields)
             buffer.register_store(self)
+            operator = buffer.callback(self, lookup, fields, _on)
+            self._registry.register_periodic_task(operator.tick)
             return self.__dataframe_clone__(
-                stream=self.stream.add_transform(
-                    buffer.callback(self, lookup, fields, _on), expand=True
-                )
+                stream=self.stream.add_function(BufferTransformFunction(operator))
             )
 
         def _join(

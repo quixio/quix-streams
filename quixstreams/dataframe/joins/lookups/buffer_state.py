@@ -10,9 +10,10 @@ write or read them lives in `buffer_operator.py`, and the public knobs live in
 This module also owns the message key <-> store prefix mapping
 (`prefix_for_key()` / `key_from_prefix()`), which is not the identity: a key
 containing the store's `|` separator would otherwise share a shorter key's scan
-range. See `PREFIX_ESCAPE` below. Everything downstream - the record path, the
-sweep, the two index namespaces and the in-process bookkeeping - works in the
-escaped form, and `key_from_prefix()` is the single place it is undone.
+range, and the null key of an unkeyed topic has no bytes of its own at all. See
+`PREFIX_ESCAPE` and `NULL_KEY_PREFIX` below. Everything downstream - the record
+path, the sweep, the two index namespaces and the in-process bookkeeping - works
+in the escaped form, and `key_from_prefix()` is the single place it is undone.
 
 The index answers three questions that the buffer cannot answer any other way:
 
@@ -21,12 +22,15 @@ The index answers three questions that the buffer cannot answer any other way:
    within-key order intact. An in-process-only answer would be wrong after a
    restart, releasing a resolvable record ahead of its own recovered
    predecessors.
-2. *Which prefixes have something past their deadline?* Answered by a range read
-   over a deadline-ordered queue, so the cost is proportional to what is due, not
-   to how many keys are waiting.
+2. *Which prefixes have something past their deadline?* Answered by a **bounded**
+   range read over a deadline-ordered queue: the caller declares how many
+   prefixes it can settle in this pass and reads no more than that. The cost is
+   therefore proportional to the pass's own budget - not to how many keys are
+   waiting, and not to how many are overdue either. The second half is what a
+   cold start needs, where every waiting key comes due at once.
 3. *Which key object do those records get emitted under?* From the recorded key
-   kind, because a `str` key and its UTF-8 `bytes` are indistinguishable
-   afterwards.
+   kind, because a `str` key, its UTF-8 `bytes` and the null key of an unkeyed
+   topic are indistinguishable once only the prefix is left.
 
 It is durable - it lives in the same `TimestampedStore` as the records, so it
 reaches the changelog like any other state - because a restart must not make a
@@ -41,11 +45,12 @@ collide with:
   small changelog message per prefix that actually changed.
 - `__lookup_buffer_queue__` — the same prefixes keyed by their deadline,
   `int_to_bytes(earliest_receive_ms) | base64(prefix) -> [base64(prefix),
-  earliest_receive_ms]`. Scanned with `get_interval(0, cutoff + 1)`, which
-  returns exactly the prefixes that are past their deadline, oldest first. The
-  key embeds the prefix so two prefixes sharing an arrival millisecond cannot
-  overwrite each other, and the value repeats the deadline so a reader holding
-  only the scan's result can address the entry it came from.
+  earliest_receive_ms]`. Scanned with `get_interval(0, cutoff + 1, limit=n)`,
+  which returns the prefixes that are past their deadline, oldest first, and
+  stops after `n` of them. The key embeds the prefix so two prefixes sharing an
+  arrival millisecond cannot overwrite each other, and the value repeats the
+  deadline so a reader holding only the scan's result can address the entry it
+  came from.
 
 The invariant tying them together is: **every marker has exactly one queue entry,
 at the millisecond the marker records.** `flush()` is the only writer, and it
@@ -65,6 +70,7 @@ from quixstreams.state.serialization import int_to_bytes
 __all__ = (
     "INDEX_PREFIX",
     "MAX_RECEIVE_MS",
+    "NULL_KEY_PREFIX",
     "QUEUE_PREFIX",
     "PendingIndex",
     "decode_prefix",
@@ -79,10 +85,12 @@ __all__ = (
 # records must still be found rather than stranded.
 MAX_RECEIVE_MS = 2**63 - 1
 
-# How the original message key is rebuilt from the prefix bytes on the sweep
-# path, where the key object itself is not available.
+# What the original message key was, recorded so the sweep path - which has only
+# the prefix to work from - can rebuild it. `"n"` carries no prefix bytes at all:
+# it says the key was absent, which `NULL_KEY_PREFIX` cannot say by itself.
 KEY_KIND_BYTES = "b"
 KEY_KIND_STR = "s"
+KEY_KIND_NONE = "n"
 
 # The index lives in the same store as the buffered records, under prefixes that
 # a message key must never collide with.
@@ -111,6 +119,23 @@ QUEUE_PREFIX = b"__lookup_buffer_queue__"
 PREFIX_ESCAPE = b"\x7f"
 _ESCAPED_SEPARATOR = PREFIX_ESCAPE + b"\x01"
 _ESCAPED_ESCAPE = PREFIX_ESCAPE + b"\x02"
+
+# The prefix a record with **no** message key is stored under. A null key is
+# what the default key deserializer produces for an unkeyed topic, so without
+# this the first record on such a topic would raise in `prefix_for_key()` -
+# before the lookup runs, before the offset is committed, on every redelivery.
+#
+# It cannot collide with a real key's prefix, and the proof is one line of the
+# escaping above: every 0x7F in an escaped prefix is the first byte of an escape
+# sequence, and every sequence's second byte is 0x01 or 0x02. So no message key
+# escapes to something beginning `7f 00`, whatever bytes it contains - including
+# `b"\x7f\x00"` itself, which escapes to `7f 02 00`. It cannot collide with the
+# two reserved namespaces either: those start with `_` (0x5F).
+#
+# `key_from_prefix()` still dispatches on the recorded key kind rather than on
+# these bytes, because the sentinel is the prefix of a real stored record and
+# the kind is the only thing that says the key was `None` and not `b"\x7f\x00"`.
+NULL_KEY_PREFIX = PREFIX_ESCAPE + b"\x00"
 
 
 def _escape_prefix(prefix: bytes) -> bytes:
@@ -160,11 +185,42 @@ def prefix_for_key(key: Any) -> bytes:
     key that contains neither `|` nor 0x7F, so the common case stores the key's
     own bytes verbatim. `key_from_prefix()` inverts it.
 
+    A `None` key - what an unkeyed topic deserializes to - maps to the reserved
+    `NULL_KEY_PREFIX`, which no real key can produce. Note what that means
+    operationally: every null-keyed record on a partition shares one prefix, so
+    the buffer's per-key unit becomes the whole partition and
+    `max_buffered_per_key` bounds the partition rather than a key.
+
+    It does not mean one unresolvable record holds the partition up. Each record
+    is joined under its own lookup key on arrival and re-joined under it on
+    release, and a release frees exactly the records whose own lookup key
+    resolves (`buffer_release.py`), so a later record that has a configuration
+    goes downstream immediately and leaves the others waiting. What the shared
+    prefix costs is the read: every release for the partition deserializes every
+    record still withheld on it. An unkeyed topic with an `on=` that reads the
+    lookup key out of the value is the shape this matters for.
+
+    The *empty* message key is legal and maps to the empty prefix, which is safe
+    only because this buffer's store is a `TimestampedStore`: its
+    `_serialize_key()` (`state/rocksdb/timestamped.py`) appends the SEPARATOR
+    unconditionally, as does `append_integer()`, which builds the range-scan
+    bounds. So the empty prefix's store keys and both bounds of every scan for it
+    start with the SEPARATOR byte 0x7C, strictly above every key in the two
+    reserved namespaces declared above - those start with `_`, 0x5F - and even a
+    scan bounded at `MAX_RECEIVE_MS` cannot read the index back as though it were
+    records. The *base* `PartitionTransaction._serialize_key()` drops the
+    SEPARATOR for an empty prefix instead, so the guarantee rests on that
+    override and not on the store interface. Pinned by
+    `TestEmptyPrefixScansStayOutOfTheIndexNamespaces` in
+    `tests/.../test_joins/test_lookup_buffer_findings.py`.
+
     :param key: The message key.
     :return: The prefix to store this key's withheld records under.
-    :raises ValueError: If the key is not `bytes` or `str`, or collides with one
-        of the buffer's own reserved prefixes.
+    :raises ValueError: If the key is not `bytes`, `str` or `None`, or collides
+        with one of the buffer's own reserved prefixes.
     """
+    if key is None:
+        return NULL_KEY_PREFIX
     if isinstance(key, bytes):
         prefix = key
     elif isinstance(key, str):
@@ -173,8 +229,8 @@ def prefix_for_key(key: Any) -> bytes:
         raise ValueError(
             f"Cannot buffer a record with a message key of type "
             f"{type(key).__name__!r}: `join_lookup(..., buffer=...)` stores "
-            f"withheld records under the message key, which must be `bytes` or "
-            f"`str`."
+            f"withheld records under the message key, which must be `bytes`, "
+            f"`str` or `None`."
         )
     prefix = _escape_prefix(prefix)
     if prefix in (INDEX_PREFIX, QUEUE_PREFIX):
@@ -188,15 +244,17 @@ def prefix_for_key(key: Any) -> bytes:
 
 def key_kind(key: Any) -> str:
     """
-    Return the tag recording whether a message key was `bytes` or `str`.
+    Return the tag recording what type a message key was.
 
     :param key: The message key, already accepted by `prefix_for_key()`.
-    :return: `"b"` for `bytes`, `"s"` for `str`.
+    :return: `"b"` for `bytes`, `"s"` for `str`, `"n"` for `None`.
     """
+    if key is None:
+        return KEY_KIND_NONE
     return KEY_KIND_BYTES if isinstance(key, bytes) else KEY_KIND_STR
 
 
-def key_from_prefix(prefix: bytes, kind: str) -> Union[bytes, str]:
+def key_from_prefix(prefix: bytes, kind: str) -> Optional[Union[bytes, str]]:
     """
     Rebuild the original message key from a prefix and its recorded kind.
 
@@ -204,12 +262,16 @@ def key_from_prefix(prefix: bytes, kind: str) -> Union[bytes, str]:
     only the prefix to work from. This is the one place a prefix travels back
     out of the store's namespace, so it is the one place `prefix_for_key()`'s
     escaping is undone. The kind is stored rather than guessed, because a `str`
-    key and its UTF-8 `bytes` are indistinguishable afterwards.
+    key, its UTF-8 `bytes` and a null key are indistinguishable afterwards -
+    `NULL_KEY_PREFIX` is a perfectly good `bytes` key as far as the prefix alone
+    is concerned, which is why the kind is checked before the bytes.
 
     :param prefix: The store prefix, as produced by `prefix_for_key()`.
     :param kind: The tag produced by `key_kind()`.
     :return: The message key to emit under.
     """
+    if kind == KEY_KIND_NONE:
+        return None
     key = _unescape_prefix(prefix)
     return key.decode() if kind == KEY_KIND_STR else key
 
@@ -318,32 +380,63 @@ class PendingIndex:
             self._queued[encoded] = marker[0] if marker else None
         return self._markers[encoded]
 
-    def due(self, cutoff: int) -> list[list]:
+    def due(self, cutoff: int, limit: int) -> list[list]:
         """
-        Return the prefixes whose earliest withheld record is past its deadline.
+        Return the oldest prefixes whose earliest withheld record is past its
+        deadline, at most `limit` of them.
 
-        This is the whole reason the deadline queue exists: the answer costs a
-        range read over what is actually due, instead of a scan of every waiting
-        key on the partition.
+        The deadline queue exists so that this does not cost a scan of every
+        waiting key on the partition, and `limit` is what keeps it from costing a
+        scan of every *overdue* one. Both matter, and the second is the one a
+        cold start exercises: every key on the partition can be overdue at the
+        same instant, while a single pass settles at most a handful. Reading the
+        rest only to discard it is what made the per-record cost grow with the
+        backlog - so the caller says what it can use and the store stops there.
+
+        `limit` is required, not defaulted: the read is on the record path, and
+        every caller has a budget it cannot exceed anyway.
 
         :param cutoff: Arrival times at or below this are past their deadline.
+        :param limit: The most entries this caller can act on in one pass.
         :return: `[encoded_prefix, queued_receive_ms]` pairs, oldest deadline
             first.
         """
         if cutoff < 0:
             return []
         return self._transaction.get_interval(
-            start=0, end=cutoff + 1, prefix=QUEUE_PREFIX
+            start=0, end=cutoff + 1, prefix=QUEUE_PREFIX, limit=limit
         )
+
+    def earliest(self) -> Optional[int]:
+        """
+        Return the earliest arrival time any prefix on this partition is queued
+        at, or `None` if nothing is waiting.
+
+        Used by the deadline tick to work out when it next needs to look at this
+        partition at all. The queue's store keys are big-endian deadlines, so the
+        oldest entry is the first one and `limit=1` is the whole answer: one
+        entry read and deserialized however many prefixes are waiting. It is only
+        called after a pass that actually settled something, never on an idle
+        tick.
+
+        :return: The earliest queued `receive_ms`, or `None`.
+        """
+        queued = self._transaction.get_interval(
+            start=0, end=MAX_RECEIVE_MS, prefix=QUEUE_PREFIX, limit=1
+        )
+        if not queued:
+            return None
+        return queued[0][1]
 
     def entries(self) -> dict[str, list]:
         """
         Materialise the whole index.
 
         Not on the record path - the record path only ever touches one prefix's
-        entry (`get()`) or the prefixes that are actually due (`due()`). This is
-        the introspection view, and it costs one range read plus one point read
-        per waiting prefix.
+        entry (`get()`) or the bounded slice of due prefixes its pass can settle
+        (`due()`). This is the introspection view, and it is the one read here
+        whose cost is deliberately linear in the number of waiting prefixes: one
+        range read over the whole queue plus one point read each.
 
         :return: A mapping of `base64(prefix)` to `[earliest_receive_ms,
             key_kind]`. Mutating it directly will not be persisted - use the

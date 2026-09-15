@@ -443,6 +443,15 @@ class InternalProducer:
         step keeps its legacy behavior (retry up to ``_ABORT_RETRY_ATTEMPTS``
         times, then raise ``KafkaProducerTransactionCommitFailed`` to trigger the
         Application shutdown).
+
+        An empty ``positions`` skips the send-offsets step entirely and commits a
+        producer-only transaction. That happens when a checkpoint holds only
+        clock-driven work (the lookup buffer's deadline tick): records were
+        produced and changelog deltas written, but no message was consumed, so
+        there is no offset to add to the transaction. Skipping is strictly
+        correct and avoids depending on librdkafka accepting an empty list.
+        Aborting instead would be a silent livelock -- the tick would emit
+        nothing durable and repeat forever.
         """
         deadline = _deadline_from_timeout(timeout)
 
@@ -452,15 +461,16 @@ class InternalProducer:
                 "aborting transaction and shutting down Application..."
             )
 
-        self._retry_transaction_op(
-            lambda t: self._producer.send_offsets_to_transaction(
-                positions, group_metadata, t
-            ),
-            op_name="send_offsets_to_transaction",
-            deadline=deadline,
-            max_attempts=_ABORT_RETRY_ATTEMPTS,
-            on_exhausted=_fail,
-        )
+        if positions:
+            self._retry_transaction_op(
+                lambda t: self._producer.send_offsets_to_transaction(
+                    positions, group_metadata, t
+                ),
+                op_name="send_offsets_to_transaction",
+                deadline=deadline,
+                max_attempts=_ABORT_RETRY_ATTEMPTS,
+                on_exhausted=_fail,
+            )
         self._retry_transaction_op(
             self._producer.commit_transaction,
             op_name="commit_transaction",

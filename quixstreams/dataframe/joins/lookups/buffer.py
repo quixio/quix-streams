@@ -2,9 +2,9 @@
 The public configuration surface of the non-blocking lookup buffer.
 
 `LookupBuffer` holds the knobs and the build-time checks; the record path lives
-in `buffer_operator.py`, the stored form of a withheld record in
-`buffer_envelope.py` and the index of which keys are holding one in
-`buffer_state.py`.
+in `buffer_operator.py`, the clock-driven deadline pass in `buffer_tick.py`, the
+stored form of a withheld record in `buffer_envelope.py` and the index of which
+keys are holding one in `buffer_state.py`.
 """
 
 import logging
@@ -36,6 +36,11 @@ logger = logging.getLogger(__name__)
 OnTimeout = Literal["emit", "drop"]
 OnOverflow = Literal["drop-newest", "raise"]
 
+# Below this `grace_ms`, the deadline tick's granularity is worth warning about:
+# with no traffic a deadline is observed once per `consumer_poll_timeout`, whose
+# default is 1.0s.
+SUB_SECOND_GRACE_WARN_MS = 1000
+
 # Sentinel for "this field type has no `default` attribute at all", which is how
 # a non-quix-configuration field is told apart from one whose default is unset.
 _NO_DEFAULT = object()
@@ -47,10 +52,23 @@ class LookupBuffer:
     them with defaults or dropping them immediately.
 
     A held record is released - enriched, in arrival order, with its own
-    timestamp, key and headers - by the next record for the same key, provided
-    its configuration arrived within `grace_ms`. A record that reaches
-    `grace_ms` with no configuration meets the fate chosen by `on_timeout`, and
-    is never enriched afterwards.
+    timestamp, key and headers - by the next record with the same **message
+    key**, provided its own configuration has arrived by then. The message key
+    groups the buffer, so it decides *when* a held record is looked at again;
+    whether that record leaves is decided by its own lookup key alone. With an
+    `on=` that derives the lookup key from the value, a record whose lookup
+    resolves therefore frees only the held records sharing its lookup key, and
+    every other one keeps waiting for the rest of its own `grace_ms`.
+
+    The price of that guarantee is ordering across lookup keys. Records sharing a
+    lookup key always go downstream in arrival order, but a record whose
+    configuration is already there can overtake an older record under the same
+    message key that is still waiting for a different one.
+
+    A record that reaches `grace_ms` with no configuration meets the fate chosen
+    by `on_timeout`, whether or not traffic is flowing, and is never enriched
+    afterwards: the Application's main loop settles deadlines on the clock, so a
+    partition that has gone completely silent still drains.
 
     Nothing ever sleeps: an unresolvable record is written to a durable,
     changelog-backed state store and the processing thread returns immediately,
@@ -124,7 +142,9 @@ class LookupBuffer:
             `lambda value: not value["__unresolved__"]`.
 
         :param on_timeout: What happens to a record that reaches `grace_ms` with
-            no configuration.
+            no configuration. The deadline is observed on the clock, so this
+            happens on a silent partition too - at a granularity of one
+            `Application(consumer_poll_timeout=...)`, 1.0s by default.
 
             - `"emit"` (default): it goes downstream carrying each field's
               declared `default=`, which is exactly what an unbuffered
@@ -142,6 +162,10 @@ class LookupBuffer:
             is also a latency knob, because a release deserializes a key's whole
             surviving buffer inside one callback.
 
+            "Key" here is the **message** key, including the null key of an
+            unkeyed topic: records with no key share one buffer per partition, so
+            on such a topic this bounds the partition rather than a key.
+
         :param on_overflow: What happens to a record that arrives when a key is
             already holding `max_buffered_per_key` records. `"drop-newest"`
             (default) discards it and logs; `"raise"` fails the application. An
@@ -157,6 +181,21 @@ class LookupBuffer:
                 "`grace_ms` must be > 0: a buffer with no window can never "
                 "release anything. Use `join_lookup(..., buffer=None)` for the "
                 "unbuffered behaviour."
+            )
+
+        if self._grace_ms < SUB_SECOND_GRACE_WARN_MS:
+            # A warning and not an error: the behaviour is correct, just
+            # coarser than the number suggests. `consumer_poll_timeout` lives on
+            # `ApplicationConfig`, which is not reachable from here, so the
+            # message names the default rather than the configured value.
+            logger.warning(
+                "LookupBuffer grace_ms=%sms is shorter than the default "
+                "Application(consumer_poll_timeout=1.0). With no traffic on a "
+                "partition, a record's deadline is observed at most once per "
+                "poll timeout, so its actual resolution latency can be up to "
+                "grace_ms + consumer_poll_timeout. Lower consumer_poll_timeout "
+                "if sub-second accuracy matters.",
+                self._grace_ms,
             )
 
         if not callable(is_resolved):

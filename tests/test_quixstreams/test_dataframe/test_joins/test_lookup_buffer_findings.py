@@ -25,10 +25,14 @@ Traces to `dev-planning/lookup-late-config-buffering/spec.md` (revision 8):
   number of keys.
 - Lower priority (`TestChangelogNotOptionalClaimIsNotEnforced`,
   `TestBookkeepingLogsGrowUnbounded`): §5 durability and §10 observability.
+
+One later section traces elsewhere: `TestEmptyPrefixScansStayOutOfTheIndexNamespaces`
+and `TestEmptyMessageKeyIsBufferedAndSettledLikeAnyOther` attempt the leak
+described in `dev-planning/lookup-deadline-tick/open-points.md` §1 - the empty
+message key and the two scans bounded at `MAX_RECEIVE_MS`.
 """
 
 import logging
-import time
 from contextlib import contextmanager
 from datetime import timedelta
 from typing import Any, Union
@@ -37,19 +41,29 @@ import pytest
 
 from quixstreams.dataframe.joins.lookups.base import BaseLookup
 from quixstreams.dataframe.joins.lookups.buffer_bookkeeping import BufferBookkeeping
+from quixstreams.dataframe.joins.lookups.buffer_envelope import encode_envelope
 from quixstreams.dataframe.joins.lookups.buffer_state import (
     INDEX_PREFIX,
     QUEUE_PREFIX,
     PendingIndex,
+    encode_prefix,
+    prefix_for_key,
 )
-from quixstreams.dataframe.joins.lookups.buffer_sweep import MAX_RECEIVE_MS
+from quixstreams.dataframe.joins.lookups.buffer_sweep import (
+    MAX_RECEIVE_MS,
+    SWEEP_BUDGET,
+    BufferSweeper,
+)
 from quixstreams.dataframe.utils import ensure_milliseconds
+from quixstreams.state.metadata import SEPARATOR
 from quixstreams.state.rocksdb.timestamped import (
     TimestampedPartitionTransaction,
     TimestampedStore,
 )
+from quixstreams.state.serialization import int_to_bytes
 from quixstreams.utils.json import dumps as orjson_dumps
 from tests.test_quixstreams.test_dataframe.test_joins.test_lookup_buffer import (
+    GRACE_MS,
     STORE_NAME,
     UNRESOLVED,
     ConfigField,
@@ -340,7 +354,7 @@ class TestBytesValuedFieldCrashesTheApplication:
 #
 # ArchDev's fix (architecture.md §3.3) replaced the single blob with two
 # namespaces: a per-prefix marker (point get/set/delete) and a deadline queue
-# scanned only up to what is actually overdue (`PendingIndex.due()`). Round 5
+# read only as far as one sweep pass can settle (`PendingIndex.due()`). Round 5
 # re-derived the round-4 measurement against the current code and confirmed
 # it is now MISLEADING, not merely stale: `PendingIndex.entries()` still
 # materialises the whole index and still costs ~43 bytes/key when serialized
@@ -355,22 +369,31 @@ class TestBytesValuedFieldCrashesTheApplication:
 # taken independently rather than accepted on ArchDev's description:
 #
 # 1. `PendingIndex.due()` (the sweep's range read, the only per-record query
-#    whose cost could plausibly grow with key count) timed with a fixed
-#    handful of genuinely overdue prefixes against a 500x range of coexisting
-#    *not-yet-due* prefixes on the same partition.
+#    whose cost could plausibly grow with key count), measured against the
+#    number of prefixes that are actually **overdue**.
 # 2. The size of each *individual* update-cache entry `PendingIndex.flush()`
 #    produces - i.e. exactly what `TimestampedPartitionTransaction._prepare()`
 #    (`state/base/transaction.py:657-664`) turns into one changelog message
 #    each - against a 200x range of distinct waiting keys.
 #
-# The original 43-bytes/key, ~24,385-key-crossover measurement is preserved
-# verbatim in `dev-planning/lookup-late-config-buffering/bugs-round5.md` for
-# the record; it is real and still reproducible, it is simply no longer a
-# description of anything on the record path or the changelog.
+# Round 5's version of (1) varied the *not-yet-due* population instead, and a
+# second external review was right that it proved nothing: `due()` excludes
+# those by its `end = cutoff + 1` bound, so the measurement was flat before it
+# was taken. The cost was on the other axis and it was real - 0.9 ms per record
+# at 200 overdue prefixes, 26.9 ms at 2,000, ~37 rec/s on one partition - which
+# is the shape of a cold start, the case this feature exists to serve. That
+# measurement is kept in `dev-planning/lookup-deadline-tick/bugs-round3.md`;
+# what stands here is the property that replaces it, asserted as a bound on
+# what a pass reads rather than as a wall-clock ratio.
+#
+# The original round-4 43-bytes/key, ~24,385-key-crossover measurement is
+# preserved verbatim in `dev-planning/lookup-late-config-buffering/bugs-round5.md`;
+# it is real and still reproducible, it is simply no longer a description of
+# anything on the record path or the changelog.
 
 
 class TestPendingIndexScaling:
-    ONE_MB = 1_048_576
+    BASE_MS = 1_700_000_000_000
 
     @staticmethod
     def _index_size(transaction: TimestampedPartitionTransaction, count: int) -> int:
@@ -402,54 +425,121 @@ class TestPendingIndexScaling:
             f"{ratio:.2f}x ({small} -> {large} bytes)."
         )
 
-    def test_due_lookup_cost_does_not_scale_with_not_yet_due_key_count(
-        self, transaction: Any
+    @classmethod
+    def _withhold_overdue(
+        cls, transaction: TimestampedPartitionTransaction, tag: str, count: int
+    ) -> None:
+        """
+        Withhold one record for each of `count` distinct prefixes, all arriving
+        in the same millisecond, and index them. Every one of them is overdue
+        for a sweep at `cutoff = BASE_MS`.
+        """
+        index = PendingIndex(transaction)
+        for i in range(count):
+            key = f"{tag}-{i:08d}"
+            prefix = key.encode()
+            transaction.set_for_timestamp(
+                timestamp=cls.BASE_MS,
+                value=encode_envelope(
+                    value={"v": i},
+                    timestamp=cls.BASE_MS,
+                    receive_ms=cls.BASE_MS,
+                    headers=None,
+                ),
+                prefix=prefix,
+            )
+            index.ensure(prefix, key, receive_ms=cls.BASE_MS)
+        index.flush()
+
+    @staticmethod
+    def _count_queue_reads(monkeypatch: Any) -> list[int]:
+        """
+        Record the size of every range read the buffer makes over the deadline
+        queue, whatever arguments it passes.
+        """
+        reads: list[int] = []
+        original = TimestampedPartitionTransaction.get_interval
+
+        def counting(self, start, end, prefix, *args, **kwargs):
+            result = original(self, start, end, prefix, *args, **kwargs)
+            if prefix == QUEUE_PREFIX:
+                reads.append(len(result))
+            return result
+
+        monkeypatch.setattr(TimestampedPartitionTransaction, "get_interval", counting)
+        return reads
+
+    def test_one_sweep_pass_reads_a_bounded_slice_however_many_are_overdue(
+        self, transaction: Any, monkeypatch: Any
     ) -> None:
         """
         Spec §10 "Bounds and observability": `max_buffered_per_key` bounds one
         key's queue depth, and the review's concern was that *nothing* bounded
-        the per-record cost of key cardinality. `PendingIndex.due()` is the
-        query every record's sweep step makes; it must cost what is overdue,
-        not what is merely waiting.
+        the per-record cost of key cardinality.
+
+        `PendingIndex.due()` is the query every record's sweep step makes, and
+        a pass settles at most `SWEEP_BUDGET` prefixes however many are due. So
+        the entries it reads must be bounded by that budget - not by the
+        backlog, which on a cold start is every key on the partition at once.
+
+        Asserted as a bound on what is read, not as a wall-clock ratio: the
+        cost is linear in the entries returned (each is a RocksDB iteration
+        step plus one orjson parse), and a count is not noisy.
         """
-        base_ms = 1_700_000_000_000
+        overdue = 0
         results = {}
-        for n_not_due in (100, 5_000, 50_000):
+        for added in (10, 190, 1_800):
+            with transaction() as tx:
+                self._withhold_overdue(tx, f"overdue-{added}", added)
+            overdue += added
+
+            reads = self._count_queue_reads(monkeypatch)
+            sweeper = BufferSweeper(
+                emit_on_timeout=True, bookkeeping=BufferBookkeeping()
+            )
             with transaction() as tx:
                 index = PendingIndex(tx)
-                for i in range(n_not_due):
-                    prefix = f"waiting-{i:08d}".encode()
-                    index.ensure(
-                        prefix, f"waiting-{i:08d}", receive_ms=base_ms + 10_000_000
-                    )
-                for i in range(5):
-                    prefix = f"overdue-{i:08d}".encode()
-                    index.ensure(
-                        prefix, f"overdue-{i:08d}", receive_ms=base_ms - 10_000_000
-                    )
+                result = sweeper.sweep(tx, index, 0, self.BASE_MS, skip=None)
                 index.flush()
+            monkeypatch.undo()
 
-            best = float("inf")
-            for _ in range(10):
-                with transaction() as tx:
-                    index = PendingIndex(tx)
-                    started = time.perf_counter()
-                    due = index.due(base_ms)
-                    elapsed = time.perf_counter() - started
-                best = min(best, elapsed)
-            assert len(due) == 5, "test setup assumption failed: expected 5 overdue"
-            results[n_not_due] = best
+            assert result.swept == SWEEP_BUDGET, (
+                f"test setup assumption failed: a pass over {overdue} overdue "
+                f"prefixes should settle a full budget, settled {result.swept}"
+            )
+            assert reads, "test setup assumption failed: no queue read observed"
+            results[overdue] = max(reads)
 
-        ratio = results[50_000] / results[100]
-        # A range read bounded to what is overdue should not measurably slow
-        # down as the coexisting not-due population grows 500x. This is a
-        # generous ratio precisely because wall-clock timing is noisy; the
-        # property under test is "does not scale with N", not a tight bound.
-        assert ratio < 20, (
-            f"PendingIndex.due() appears to scale with total waiting key "
-            f"count, not overdue count: {ratio:.2f}x slower at 50,000 "
-            f"not-yet-due keys than at 100 ({results[100] * 1000:.3f}ms -> "
-            f"{results[50_000] * 1000:.3f}ms)."
+        for population, entries_read in results.items():
+            assert entries_read <= SWEEP_BUDGET + 1, (
+                f"One sweep pass read {entries_read} deadline-queue entries "
+                f"with {population} prefixes overdue, but can settle at most "
+                f"{SWEEP_BUDGET} of them (+1 for the record path's own prefix, "
+                f"which it skips). The per-record cost of the sweep therefore "
+                f"grows with the backlog: {results}."
+            )
+
+    def test_earliest_reads_one_queue_entry_not_the_whole_queue(
+        self, transaction: Any, monkeypatch: Any
+    ) -> None:
+        """
+        `PendingIndex.earliest()` is the deadline tick's "when do I next need to
+        look at this partition" read (`buffer_tick.py:343`). The queue is
+        deadline-ordered, so the answer is its first entry; reading the rest is
+        pure waste, paid once per partition per settled tick.
+        """
+        with transaction() as tx:
+            self._withhold_overdue(tx, "waiting", 2_000)
+
+        reads = self._count_queue_reads(monkeypatch)
+        with transaction() as tx:
+            earliest = PendingIndex(tx).earliest()
+        monkeypatch.undo()
+
+        assert earliest == self.BASE_MS
+        assert reads == [1], (
+            f"PendingIndex.earliest() read {reads} deadline-queue entries to "
+            f"return the first one, with 2,000 prefixes waiting."
         )
 
     def test_changelog_message_size_does_not_scale_with_waiting_key_count(
@@ -601,4 +691,157 @@ class TestBookkeepingLogsGrowUnbounded:
             f"again. Nothing in BufferBookkeeping evicts a rate-limiter "
             f"entry, so this dict grows without bound for the life of the "
             f"process."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Open point 1: the empty message key and the scans bounded at MAX_RECEIVE_MS
+# ---------------------------------------------------------------------------
+#
+# `prefix_for_key("")` returns `b""`, and
+# `dev-planning/lookup-deadline-tick/open-points.md` §1 suspected that this
+# leaves every range scan for that key unqualified: the base
+# `PartitionTransaction._serialize_key` (`state/base/transaction.py:297-300`)
+# drops the SEPARATOR when the prefix is empty, so the bounds would be bare
+# big-endian timestamps. A scan bounded at `MAX_RECEIVE_MS` (`0x7f ff ...`)
+# would then sort above the `__` (`0x5f 0x5f`) of `__lookup_buffer_index__` and
+# `__lookup_buffer_queue__` and return the buffer's own index entries as though
+# they were envelopes - `BufferSweeper._reindex` would evaluate
+# `remaining[0][ENVELOPE_RECEIVED]`, a string subscript on a list.
+#
+# The buffer's store does not use that method. `TimestampedPartitionTransaction`
+# overrides it with an unconditional `prefix + SEPARATOR + key`
+# (`state/rocksdb/timestamped.py:263-264`), and the scan bounds are built by
+# `append_integer` (`state/serialization.py:82-92`), which also appends the
+# SEPARATOR unconditionally. The empty prefix's keys and both of its bounds
+# therefore start with `0x7c`, strictly above every key in the two reserved
+# namespaces, whatever the upper bound is.
+#
+# These tests are the arbiter of that reasoning rather than a decoration on it:
+# each attempts the leak for real, from disk rather than from the exact-prefix
+# update cache (see `_force_real_flush`), on each path that carries a
+# `MAX_RECEIVE_MS` bound - `BufferSweeper._reindex` and
+# `BufferOperator._release`.
+
+
+class TestEmptyPrefixScansStayOutOfTheIndexNamespaces:
+    """Open point 1, direct repro against `TimestampedPartitionTransaction`."""
+
+    def test_the_timestamped_store_qualifies_the_empty_prefix(
+        self, transaction: Any
+    ) -> None:
+        """
+        The one line the whole property rests on. The day this fails - because
+        the store's key layout changed, which is what issue #1148 proposes to do
+        - the empty message key needs a non-empty prefix of its own before the
+        buffer is safe again.
+        """
+        with transaction() as tx:
+            assert tx._serialize_key(b"x", b"") == SEPARATOR + b"x"
+
+    def test_a_max_bounded_scan_of_the_empty_prefix_returns_only_its_records(
+        self, transaction: Any
+    ) -> None:
+        """
+        Write one envelope under the empty prefix and one entry in each of the
+        buffer's own namespaces, flush to real RocksDB, then scan the empty
+        prefix from a fresh transaction with both bound shapes the buffer uses.
+        If the open point's claim reproduces, the two lists come back as
+        records.
+        """
+        with transaction() as tx:
+            tx.set_for_timestamp(timestamp=10, value={"envelope": True}, prefix=b"")
+            # The shapes `PendingIndex.flush()` writes: one marker per prefix
+            # and one deadline queue entry per prefix, both lists.
+            tx.set(b"k", [10, "s"], prefix=INDEX_PREFIX)
+            tx.set(int_to_bytes(10) + SEPARATOR, ["", 10], prefix=QUEUE_PREFIX)
+
+        with transaction() as tx:
+            everything = tx.get_interval(start=0, end=MAX_RECEIVE_MS, prefix=b"")
+            # `BufferSweeper._reindex`'s exact shape: `start=cutoff + 1`, above
+            # everything the sweep has just settled.
+            past_the_record = tx.get_interval(start=11, end=MAX_RECEIVE_MS, prefix=b"")
+
+        assert everything == [
+            {"envelope": True}
+        ], f"The empty prefix's own scan is wrong or leaks the index: {everything}"
+        assert past_the_record == [], (
+            f"A scan of the empty prefix bounded at MAX_RECEIVE_MS read the "
+            f"buffer's own index namespaces back: {past_the_record}"
+        )
+
+
+class TestEmptyMessageKeyIsBufferedAndSettledLikeAnyOther:
+    """Open point 1, the same claim through the real `BufferOperator`."""
+
+    def test_a_sweep_settles_the_empty_key_without_reading_the_index_back(
+        self,
+        clock: Any,  # noqa: F811 - re-exported fixture, see the import above
+        buffered: Any,  # noqa: F811 - re-exported fixture, see the import above
+    ) -> None:
+        """
+        `BufferSweeper._reindex` is the `MAX_RECEIVE_MS`-bounded path a sweep
+        reaches once it has emptied a prefix's timed-out range. Both keys are
+        due here and both index namespaces are on disk, so a scan the empty
+        prefix failed to qualify would hand `_reindex` an index entry as its
+        first "envelope".
+        """
+        driver = buffered(buffer=make_buffer())
+
+        assert driver.send("", timestamp=1) == []
+        assert driver.send("other", timestamp=2) == []
+        # Both envelopes and both index namespaces to real RocksDB - only an
+        # on-disk scan can exhibit a byte-range collision, see
+        # `_force_real_flush`.
+        _force_real_flush(driver)
+
+        clock.advance_ms(GRACE_MS + 1)
+        # An unrelated record drives the sweep; its own prefix is the one the
+        # record path skips, so both due prefixes are settled by the sweeper.
+        emitted = driver.send("later", timestamp=3)
+
+        keys = [key for _, key, _, _ in emitted]
+        assert sorted(keys) == ["", "other"], f"Swept under unexpected keys: {keys}"
+        value, _, timestamp, _ = emitted[keys.index("")]
+        assert timestamp == 1, "the empty key's record keeps its own event timestamp"
+        assert value["region"] == "unknown", "emitted with its declared defaults"
+        assert driver.stored("") == [], "the empty key's buffer was not drained"
+        assert driver.pending_keys() == [encode_prefix(prefix_for_key("later"))], (
+            "after the sweep only the record that has just been withheld should "
+            "still be indexed"
+        )
+
+    def test_a_release_for_the_empty_key_does_not_destroy_the_index(
+        self,
+        clock: Any,  # noqa: F811 - re-exported fixture, see the import above
+        buffered: Any,  # noqa: F811 - re-exported fixture, see the import above
+    ) -> None:
+        """
+        `BufferOperator._release` carries the other `MAX_RECEIVE_MS` bound, and
+        it is the destructive one: it deletes everything it read. An unqualified
+        scan would emit the index entries as records and then delete both
+        namespaces, taking every other waiting key's marker with them.
+        """
+        driver = buffered(buffer=make_buffer())
+
+        assert driver.send("", timestamp=1) == []
+        assert driver.send("other", timestamp=2) == []
+        _force_real_flush(driver)
+
+        # Configure only the empty key, then release it well inside its grace
+        # window so the survivor read is the one doing the work.
+        driver.lookup.configs[""] = {"threshold": 42, "region": "eu"}
+        clock.advance_ms(10)
+        emitted = driver.send("", timestamp=3)
+
+        keys = [key for _, key, _, _ in emitted]
+        assert keys == ["", ""], f"Released under unexpected keys: {keys}"
+        thresholds = [value["threshold"] for value, _, _, _ in emitted]
+        assert thresholds == [42, 42], "both records are enriched by the release"
+        assert (
+            driver.stored("other") != []
+        ), "the empty key's release deleted 'other's still-buffered record"
+        assert driver.pending_keys() == [encode_prefix(prefix_for_key("other"))], (
+            "the empty key's release destroyed another key's index entry, so "
+            "'other' would never be swept again"
         )

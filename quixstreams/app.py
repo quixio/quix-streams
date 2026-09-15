@@ -1001,6 +1001,7 @@ class Application:
         processing_context = self._processing_context
         source_manager = self._source_manager
         process_message = self._process_message
+        run_periodic_tasks = self._dataframe_registry.run_periodic_tasks
         printer = self._processing_context.printer
         run_tracker = self._run_tracker
         consumer = self._consumer
@@ -1024,6 +1025,16 @@ class Application:
                 run_tracker.timeout_refresh()
             else:
                 process_message(dataframes_composed)
+                # Clock-driven operator work (currently: lookup-buffer
+                # deadlines). Runs every iteration, including the ones where
+                # the poll returned nothing, so it does not depend on traffic.
+                # Placement is load-bearing in both directions: AFTER
+                # process_message, so a rebalance callback fired inside
+                # consumer.poll() has already settled the assignment, and
+                # BEFORE commit_checkpoint, so whatever it writes and produces
+                # is in the checkpoint the very next statement may commit.
+                # Being inside this `else` also skips it during recovery.
+                run_periodic_tasks()
                 processing_context.commit_checkpoint()
                 consumer.resume_backpressured()
                 source_manager.raise_for_error()
