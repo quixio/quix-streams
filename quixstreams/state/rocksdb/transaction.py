@@ -883,32 +883,6 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         cf_name: str = "default",
         limit: Optional[int] = None,
     ) -> list[tuple[bytes, bytes]]:
-        """
-        Get all items that start between `start` and `end`
-        within the specified prefix.
-
-        This function also checks the update cache for any updates not yet
-        committed to RocksDB.
-
-        :param start: Start of the range, inclusive.
-        :param end: End of the range, exclusive.
-        :param prefix: The key prefix for filtering items.
-        :param backwards: If True, returns items in reverse order.
-        :param cf_name: The RocksDB column family name.
-        :param limit: Return at most this many items - the first `limit` of the
-            order the call would return anyway. `None` (default) returns the
-            whole range.
-
-            Reading forwards, the store iteration itself stops once that many
-            live keys have been seen, so a caller that can only act on a fixed
-            number of items per pass does not pay for the size of the range.
-            Two things are not bounded by it: reading `backwards`, where the
-            last items of the range are the answer and the whole range has to
-            be walked to find them, and the update cache, which is an unordered
-            dict and so is scanned in full either way - it holds only what this
-            transaction has written.
-        :return: A sorted list of key-value pairs.
-        """
         start = max(start, 0)
         if start > end:
             return []
@@ -929,9 +903,6 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         update_cache = cache.get_updates(cf_name=cf_name).get(prefix, {})
         delete_cache = cache.get_deletes(cf_name=cf_name)
 
-        # Iterate over stored and cached items and merge them to a single dict.
-        # The store is read first and the cache second, so a key present in both
-        # keeps its uncommitted value.
         merged_items: dict[bytes, bytes] = {}
         stop_at = None if backwards else limit
         for key, value in db_items:
@@ -939,10 +910,6 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 continue
             merged_items[key] = value
             if stop_at is not None and len(merged_items) >= stop_at:
-                # `iter_items` is a generator over a RocksDB iterator and the
-                # store is ordered, so every key past this point is above the
-                # `limit` keys already in hand and cannot belong in the answer.
-                # Breaking is what stops the caller paying for the rest.
                 break
 
         for key, value in update_cache.items():

@@ -429,30 +429,6 @@ class InternalProducer:
         group_metadata: GroupMetadata,
         timeout: Optional[float] = None,
     ):
-        """
-        Send the consumer offsets into the open transaction and commit it.
-
-        Some failure cases from sending offsets or committing a transaction are
-        retriable, which is worth re-attempting since the transaction is almost
-        complete (the changelog was flushed before attempting to commit).
-
-        ``timeout`` is the OVERALL wall-clock budget (seconds) shared by BOTH the
-        send-offsets and the commit steps, so the whole operation is bounded by
-        one budget rather than 2x it -- important on the revoke path, inside the
-        rebalance callback. ``None`` (off the revoke path) means unbounded: each
-        step keeps its legacy behavior (retry up to ``_ABORT_RETRY_ATTEMPTS``
-        times, then raise ``KafkaProducerTransactionCommitFailed`` to trigger the
-        Application shutdown).
-
-        An empty ``positions`` skips the send-offsets step entirely and commits a
-        producer-only transaction. That happens when a checkpoint holds only
-        clock-driven work (the lookup buffer's deadline tick): records were
-        produced and changelog deltas written, but no message was consumed, so
-        there is no offset to add to the transaction. Skipping is strictly
-        correct and avoids depending on librdkafka accepting an empty list.
-        Aborting instead would be a silent livelock -- the tick would emit
-        nothing durable and repeat forever.
-        """
         deadline = _deadline_from_timeout(timeout)
 
         def _fail(op_name: str) -> Exception:

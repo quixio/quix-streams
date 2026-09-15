@@ -1925,62 +1925,6 @@ class StreamingDataFrame:
         on: Optional[Union[str, Callable[[dict[str, Any], Any], str]]] = None,
         buffer: Optional[LookupBuffer] = None,
     ) -> "StreamingDataFrame":
-        """
-        Note: This is an experimental feature, and its API is likely to change in the future.
-        Enrich the records in this StreamingDataFrame by performing a lookup join using a custom lookup strategy.
-
-        This method allows you to enrich each record in the dataframe with additional data fetched from an external
-        source, using a user-defined lookup strategy (subclass of BaseLookup) and a set of fields
-        (subclasses of BaseField) that specify how to extract or map the enrichment data.
-
-        The join is performed in-place: the input value dictionary is updated with the enrichment data.
-
-        Lookup implementation part of the standard quixstreams library:
-            - `quixstreams.dataframe.joins.lookups.QuixConfigurationService`
-
-        :param lookup: An instance of a subclass of BaseLookup that implements the enrichment logic.
-        :param fields: A mapping of field names to the lookup Field objects specifying how to extract or map enrichment data.
-        :param on: Specifies how to determine the target key for the lookup:
-            - If a string, it is interpreted as the column name in the value dict to use as the lookup key.
-            - If a callable, it should accept (value, key) and return the target key as a string.
-            - If None (default), the message key is used as the lookup key.
-        :param buffer: An optional `LookupBuffer` holding records whose lookup cannot be
-            resolved yet, instead of enriching them with their defaults straight away.
-            A held record is released - enriched, with its own timestamp, key and headers -
-            by the next record with the same **message key**, if its own configuration has
-            arrived by then; otherwise it keeps waiting for the rest of its `grace_ms`.
-            The buffer groups by the message key and not by the `on` lookup key, so the
-            message key decides when a held record is looked at again while its own lookup
-            key decides whether it leaves. Records sharing a lookup key keep their arrival
-            order; a record can overtake an older one waiting on a different lookup key.
-            Enabling it makes the application stateful: the buffer is a changelog-backed
-            state store, so holding a record means serializing its value into that store.
-            A value the store cannot serialize - an arbitrary object, a dict with
-            non-`str` keys, an integer outside 64 bits - is not an error and is not held:
-            it is resolved immediately by the buffer's `on_timeout`, with a rate-limited
-            warning naming the key.
-            If None (default), every record is emitted immediately, resolved or not.
-
-        :returns: StreamingDataFrame: The same StreamingDataFrame instance with the enrichment applied in-place.
-
-        Example:
-
-        ```python
-        from quixstreams import Application
-        from quixstreams.dataframe.joins.lookups import QuixConfigurationService, QuixConfigurationServiceField as Field
-
-        app = Application()
-
-        sdf = app.dataframe(app.topic("input"))
-        lookup = QuixConfigurationService(app.topic("config"), config=app.config)
-
-        fields = {
-            "test": Field(type="test", default="test_default")
-        }
-
-        sdf = sdf.join_lookup(lookup, fields)
-        ```
-        """
         if callable(on):
 
             def _on(value: dict[str, Any], key: Any) -> str:
@@ -1995,16 +1939,6 @@ class StreamingDataFrame:
                 return key
 
         if buffer is not None:
-            # Withholding and releasing records needs a node that can emit any
-            # number of records, each with its own key, timestamp and headers -
-            # which `update()` cannot do. The Stream is modified directly, as
-            # the windowing operators do, to avoid adding a public `transform()`.
-            #
-            # `BufferTransformFunction` rather than `add_transform(expand=True)`
-            # because the operator also has to emit records that no input record
-            # triggered: a buffered record whose `grace_ms` expires on a silent
-            # partition is settled by `run_periodic_tasks()`, which needs the
-            # node's resolved child executor captured at compose time.
             buffer.validate_fields(fields)
             buffer.register_store(self)
             operator = buffer.callback(self, lookup, fields, _on)

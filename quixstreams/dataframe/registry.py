@@ -157,31 +157,9 @@ class DataFrameRegistry:
         return list(self._stream_ids_to_topics[stream_id])
 
     def register_periodic_task(self, task: Callable[[], None]) -> None:
-        """
-        Register a callable to run once per Application loop iteration.
-
-        This is for operators whose work is driven by the clock rather than by an
-        arriving record - currently only `join_lookup(..., buffer=...)`, whose
-        buffered records have to reach their `grace_ms` deadline even on a
-        partition with no traffic. The facility is deliberately generic: the
-        Application layer must not learn lookup-buffer vocabulary.
-
-        The task runs on the main processing thread, inside the current
-        checkpoint, so it may use `PartitionTransaction`s and produce records
-        like any operator. It must return quickly - it sits between polling and
-        committing, so anything it does is time the consumer is not polling.
-
-        :param task: a no-argument callable
-        """
         self._periodic_tasks.append(task)
 
     def run_periodic_tasks(self) -> None:
-        """
-        Run every registered periodic task, in registration order.
-
-        A no-op - one empty `for` - when nothing is registered, which is the
-        cost every Application that does not use a clock-driven operator pays.
-        """
         for task in self._periodic_tasks:
             task()
 

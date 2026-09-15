@@ -76,29 +76,6 @@ class Lookup(BaseLookup[BaseField]):
         fallback: Literal["error", "default"] = "error",
         unresolved_types_field: Optional[str] = None,
     ):
-        """
-        :param unresolved_types_field: Optional name of a field to write the
-            list of unresolved configuration types into on every joined record.
-
-            When set, `join()` assigns `value[unresolved_types_field]` the
-            sorted list of configuration types for which no valid version was
-            found for this record — an empty list when everything resolved.
-
-            This is what makes "was this record enriched?" answerable
-            downstream, and it is the intended source for the `is_resolved`
-            predicate of `LookupBuffer`:
-
-            ```python
-            lookup = QuixConfigurationService(topic, app_config=app.config,
-                                              unresolved_types_field="__unresolved__")
-            buffer = LookupBuffer(
-                grace_ms=30_000,
-                is_resolved=lambda value: not value["__unresolved__"],
-            )
-            ```
-
-            Default `None` disables it and nothing is written to the record.
-        """
         if QUIX_REPLICA_NAME:
             consumer_group = f"{consumer_group}-{QUIX_REPLICA_NAME.split('-')[-1]}"
 
@@ -468,9 +445,6 @@ class Lookup(BaseLookup[BaseField]):
             version = self._find_version(type_, on, timestamp)
 
             if version is None:
-                # Collected from the `version is None` test directly rather than
-                # from the joined value, so it never depends on what the fields'
-                # defaults happen to be and never goes through VersionDataLRU.
                 unresolved_types.append(type_)
             elif version.retry_at < start:
                 self._version_data_cached.remove(version, type_fields)

@@ -145,18 +145,6 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
     def get_interval(
         self, start: int, end: int, prefix: Any, limit: Optional[int] = None
     ) -> list[Any]:
-        """Get every value stored for `prefix` with a timestamp in `[start, end)`.
-
-        :param start: Start of the range, inclusive, in milliseconds.
-        :param end: End of the range, exclusive, in milliseconds.
-        :param prefix: The key prefix.
-        :param limit: Return at most this many values, the oldest first. `None`
-            (default) reads the whole range. A caller that can only act on a
-            fixed number of entries per pass should pass it: the bound reaches
-            the store iteration, so neither the read nor the deserialization
-            grows with how much is in the range.
-        :return: The deserialized values, oldest first.
-        """
         items = self._get_items(
             start=start, end=end, prefix=self._ensure_bytes(prefix), limit=limit
         )
@@ -164,32 +152,7 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def delete_interval(self, start: int, end: int, prefix: Any) -> int:
-        """Delete every value stored for `prefix` with a timestamp in `[start, end)`.
-
-        Deletes exactly the set of entries `get_interval()` would return for the
-        same arguments, so a caller can read a range, act on it, and remove it
-        without the two views disagreeing. The deletes go through the update
-        cache, which means they are recorded in the changelog topic like any
-        other write and survive a rebalance.
-
-        :param start: Start of the range, inclusive, in milliseconds.
-        :param end: End of the range, exclusive, in milliseconds.
-        :param prefix: The key prefix.
-        :return: The number of deleted entries.
-        """
         prefix = self._ensure_bytes(prefix)
-        # `_get_items()` merges the update cache with the store into a new list,
-        # so the cache is never mutated while it is being iterated. Its bounds
-        # are `<prefix> SEPARATOR <timestamp>`, which keeps a neighbouring prefix
-        # that merely shares these bytes out of the range (b"key" vs b"key2").
-        #
-        # It does NOT protect against a prefix that starts with these bytes plus
-        # a SEPARATOR (b"key" vs b"key|sub"): those keys sort *inside* b"key"'s
-        # range, so a wide enough upper bound reads and deletes them. That is a
-        # pre-existing defect of the whole timestamp-aware key layout, shared
-        # with `get_latest()`, `get_interval()` and `_expire()`, and fixing it
-        # changes the on-disk layout for `join_asof` / `join_interval` too. It is
-        # tracked in issue #1148 and deliberately not fixed here.
         items = self._get_items(start=start, end=end, prefix=prefix)
         for key, _ in items:
             self._update_cache.delete(key, prefix)
@@ -257,9 +220,6 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
             # Scope the lower bound to this prefix's namespace by appending the
             # SEPARATOR. Without it, the bare prefix lets the range spill into
             # other prefixes that share these bytes (e.g. b"key" vs b"key2"),
-            # deleting entries that belong to unrelated keys. It does not cover
-            # b"key" vs b"key|sub", whose keys sort inside b"key"'s namespace
-            # whatever the bounds are - see `delete_interval()` and issue #1148.
             lower_bound = self._serialize_key(b"", prefix)
             stored = self._partition.iter_items(
                 lower_bound=lower_bound, upper_bound=key

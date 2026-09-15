@@ -104,26 +104,6 @@ class BaseCheckpoint:
         )
 
     def empty(self) -> bool:
-        """
-        Returns `True` if the checkpoint has nothing to commit: no stored offsets
-        AND no pending state changes.
-
-        The second clause exists for operators that do clock-driven work between
-        messages (currently the lookup buffer's deadline tick): such a pass
-        consumes no message, so it stores no offset, yet its store transaction
-        holds the deletes that record what it just emitted. Reporting that
-        checkpoint empty would route it to `close()`, discard the transaction and
-        re-emit the same records on the next pass, forever.
-
-        It is behaviour-preserving for everything else. A store transaction is
-        only ever created from the record path, and `store_offset` runs
-        unconditionally after the executor for every polled message
-        (`app.py`, `_process_message`), so without a tick `not self._tp_offsets`
-        already implies an empty `self._store_transactions`. A checkpoint with
-        neither offsets nor state changes is still empty and still skipped.
-
-        :return: bool
-        """
         return not self._tp_offsets and not any(
             transaction.changed for transaction in self._store_transactions.values()
         )
@@ -399,12 +379,6 @@ class Checkpoint(BaseCheckpoint):
                 )
 
         # Step 4. Commit offsets to Kafka
-        # `offsets` is empty when the checkpoint holds only clock-driven work
-        # (the lookup buffer's deadline tick): no message was consumed, so there
-        # is nothing to advance. The changelog produced in step 2 and the store
-        # flush in step 5 still have to happen, so this step degrades to a no-op
-        # for at-least-once and to a plain transaction commit for exactly-once
-        # rather than short-circuiting the whole method.
         offsets = [
             TopicPartition(topic=topic, partition=partition, offset=offset + 1)
             for (topic, partition), offset in self._tp_offsets.items()

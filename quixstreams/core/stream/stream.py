@@ -281,18 +281,6 @@ class Stream:
         return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
 
     def add_function(self, func: StreamFunction) -> "Stream":
-        """
-        Append a pre-built `StreamFunction` node to the Stream.
-
-        For library internals that need a `StreamFunction` subclass of their own -
-        e.g. one that captures its child executor at compose time so it can emit
-        without an input record. Everything else should use `add_apply`,
-        `add_filter`, `add_update` or `add_transform`, which build the node for
-        you.
-
-        :param func: an instance of a `StreamFunction` subclass
-        :return: a new Stream derived from the current one
-        """
         return self._add(func)
 
     def merge(self, other: "Stream") -> "Stream":
