@@ -31,13 +31,20 @@ its builtin base. Recording the exact class would mean importing and constructin
 it at restore time, on the record path, from data that has been through a
 changelog.
 
-What is still not survivable, because no encoding here can make it so: a value
-holding an arbitrary object (a `datetime`, a `Decimal`, a custom class), a dict
-with non-`str` keys, an integer outside 64 bits, or a reference cycle. Each of
-those raises inside `orjson.dumps` exactly as a `bytes` leaf used to, and each is
-a property of every orjson-backed store in the SDK rather than of this buffer.
-Filed as `dev-planning/lookup-deadline-tick/open-points.md` §4, because what a
-buffer should *do* with a record it cannot store is a spec question.
+What no encoding here can reach: a value holding an arbitrary object (a
+`datetime`, a `Decimal`, a custom class), a dict with non-`str` keys, an integer
+outside 64 bits, or a reference cycle. Each of those raises inside `orjson.dumps`
+exactly as a `bytes` leaf used to, and each is a property of every orjson-backed
+store in the SDK rather than of this buffer.
+
+None of them crashes the record path any more. `BufferOperator._buffer()` offers
+the finished envelope to the store's **own** serializer before the write, and a
+record that serializer refuses is not buffered at all - it is settled there and
+then by `on_timeout`, exactly as a record that ran out of grace is, with a
+rate-limited warning naming the key and the offending path.
+`describe_unstorable()` below produces that path, and it produces it by
+re-offering subtrees to the same serializer rather than by second-guessing its
+rules, so the diagnosis cannot disagree with the write that was refused.
 
 Both lifts address their targets **by path** rather than with an in-band marker,
 so no shape a user can put in a record value can be mistaken for one.
@@ -48,11 +55,14 @@ envelope lives in `buffer_operator.py`.
 """
 
 import base64
-from typing import Any, Mapping, NamedTuple, Optional, Union
+from typing import Any, Callable, Iterable, Mapping, NamedTuple, Optional, Union
+
+from quixstreams.state.exceptions import StateSerializationError
 
 __all__ = (
     "ENVELOPE_BYTES",
     "ENVELOPE_CONTAINERS",
+    "ENVELOPE_HEADERS",
     "ENVELOPE_OFFSET",
     "ENVELOPE_RECEIVED",
     "ENVELOPE_TIMESTAMP",
@@ -61,6 +71,7 @@ __all__ = (
     "NO_OFFSET",
     "Emission",
     "decode_headers",
+    "describe_unstorable",
     "emit_tuple",
     "encode_envelope",
     "envelope_value",
@@ -105,6 +116,23 @@ _BINARY = (bytes, bytearray, memoryview)
 
 # One step of a path into the record value: a dict key or a sequence index.
 _Step = Union[str, int]
+
+# How deep `describe_unstorable()` walks before it reports where it got to.
+# Anything nested deeper is pathological in its own right, and this is the
+# diagnosis of a record that has already been given up on, not a validator.
+_DESCRIBE_MAX_DEPTH = 20
+
+# How many offending dict keys one warning names.
+_DESCRIBE_MAX_KEYS = 3
+
+# The envelope fields a user's own content can reach, under names that mean
+# something in a log line. Everything else is named by its raw envelope key.
+_DESCRIBE_FIELDS = {ENVELOPE_VALUE: "value", ENVELOPE_HEADERS: "headers"}
+
+# orjson takes any integer that fits a signed or unsigned 64-bit word and
+# refuses the rest - the one refusal a bare type name explains badly.
+_INT_MIN = -(2**63)
+_INT_MAX = 2**64 - 1
 
 
 class Emission(NamedTuple):
@@ -236,6 +264,115 @@ def decode_headers(envelope: Mapping[str, Any]) -> Any:
     if envelope[ENVELOPE_HEADERS_MAPPING]:
         return dict(items)
     return items
+
+
+def describe_unstorable(
+    envelope: Mapping[str, Any],
+    probe: Callable[[Any], Any],
+) -> str:
+    """
+    Locate the part of an envelope the store's serializer will not take.
+
+    `probe` is that serializer itself, so the walk asks exactly the question the
+    refused write asked and cannot disagree with it. It descends into the first
+    child that is refused on its own; when a node is refused but none of its
+    children is, the node itself is the culprit - which is the shape a dict with
+    non-`str` keys has, since every one of its *values* encodes perfectly well.
+
+    The walk re-serializes subtrees, so it costs a pass over the value per level
+    of depth. It runs only for a record that is already being given up on, and
+    only when `BufferBookkeeping.log_unstorable()`'s rate limiter is about to
+    report, never per refused record.
+
+    :param envelope: An envelope produced by `encode_envelope()`, or - when the
+        encoding itself could not finish - a `{ENVELOPE_VALUE: value,
+        ENVELOPE_HEADERS: headers}` stand-in, so the rendered path reads the
+        same either way.
+    :param probe: A callable raising `StateSerializationError` for a value the
+        store cannot serialize.
+    :return: A one-line description naming the path and what was found there.
+    """
+    path: list[_Step] = []
+    node: Any = envelope
+    seen: set[int] = set()
+    for _ in range(_DESCRIBE_MAX_DEPTH):
+        if id(node) in seen:
+            return f"{_render_path(path)}: a reference cycle"
+        # Every node on the path stays referenced by `envelope`, so no `id()`
+        # recorded here can be reused by a later one.
+        seen.add(id(node))
+        refused = _refused_child(node, probe)
+        if refused is None:
+            break
+        path.append(refused[0])
+        node = refused[1]
+    return f"{_render_path(path)}: {_refusal_reason(node)}"
+
+
+def _refused_child(
+    node: Any,
+    probe: Callable[[Any], Any],
+) -> Optional[tuple[_Step, Any]]:
+    """
+    Return the first child of a node that the serializer refuses on its own.
+
+    :param node: The node the walk has reached.
+    :param probe: The store's value serializer.
+    :return: A `(step, child)` pair, or `None` when nothing below this node is
+        refused - which includes every node that is not a container.
+    """
+    items: Iterable[tuple[Any, Any]]
+    if isinstance(node, dict):
+        items = node.items()
+    elif isinstance(node, list):
+        items = enumerate(node)
+    else:
+        return None
+
+    for step, child in items:
+        try:
+            probe(child)
+        except StateSerializationError:
+            return step, child
+    return None
+
+
+def _refusal_reason(node: Any) -> str:
+    """
+    Say what is wrong with the node the walk stopped on.
+
+    :param node: The deepest refused node.
+    :return: A short phrase naming the shape, not the serializer's rule.
+    """
+    if isinstance(node, dict):
+        keys = [key for key in node if not isinstance(key, str)]
+        if keys:
+            named = ", ".join(
+                f"{key!r} ({type(key).__name__})" for key in keys[:_DESCRIBE_MAX_KEYS]
+            )
+            return f"a dict whose keys are not strings: {named}"
+    if (
+        isinstance(node, int)
+        and not isinstance(node, bool)
+        and not _INT_MIN <= node <= _INT_MAX
+    ):
+        return "an integer outside the 64-bit range"
+    return f"a value of type {type(node).__name__}"
+
+
+def _render_path(path: list[_Step]) -> str:
+    """
+    Render a walked path as something a user can find in their own code.
+
+    :param path: The dict keys and sequence indices walked into the envelope.
+    :return: A readable path, rooted at the envelope field it entered through.
+    """
+    if not path:
+        return "the envelope itself"
+    head, rest = path[0], path[1:]
+    name = _DESCRIBE_FIELDS.get(head, "") if isinstance(head, str) else ""
+    rendered = name or f"envelope[{head!r}]"
+    return rendered + "".join(f"[{step!r}]" for step in rest)
 
 
 def _encode_headers(headers: Any) -> tuple[Optional[list[list[Any]]], bool]:

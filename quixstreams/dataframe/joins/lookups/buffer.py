@@ -74,6 +74,16 @@ class LookupBuffer:
     changelog-backed state store and the processing thread returns immediately,
     so other keys and other partitions are unaffected.
 
+    Holding a record means serializing its value into that store, which is JSON
+    by default. `bytes`, `tuple`, `set` and `frozenset` survive the round trip
+    intact; a shape JSON cannot express at all - an arbitrary object such as a
+    `datetime` or a `Decimal`, a dict with non-`str` keys, an integer outside 64
+    bits, a reference cycle - cannot be held. Such a record is **not** an error:
+    it is resolved immediately by `on_timeout`, exactly as if its `grace_ms` had
+    already run out, and a rate-limited warning names the key and the offending
+    path. It therefore never waits for its configuration, and it can leave ahead
+    of records that are still waiting.
+
     Pass an instance to `StreamingDataFrame.join_lookup(..., buffer=...)`.
     Leaving `buffer` unset keeps today's behaviour exactly, with no store and no
     cost.
@@ -155,6 +165,10 @@ class LookupBuffer:
 
             Neither mode re-runs the lookup, so a configuration arriving after a
             record's deadline never enriches it.
+
+            This is also what happens, immediately and with its own warning, to
+            a record whose value the state store cannot serialize - see the
+            class docstring.
 
         :param max_buffered_per_key: Safety valve against a pathological rate of
             unresolvable records for one key. The primary bound is `grace_ms`:

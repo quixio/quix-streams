@@ -307,6 +307,12 @@ class ReleasePlan:
         itself, so the stored envelope is the one the record arrived with - the
         same thing the timeout path would have emitted a moment earlier.
 
+        This write needs no serializability guard, unlike `_buffer()`'s. The
+        snapshot came out of the store, so it is JSON the store's `loads`
+        produced and its `dumps` accepted once already; `snapshot_for_rewrite()`
+        takes it before `envelope_value()` restores the binary leaves that would
+        ruin it.
+
         :param transaction: The live store transaction.
         :param prefix: The releasing key's store prefix.
         """

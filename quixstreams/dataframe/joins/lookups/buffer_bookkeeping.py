@@ -16,14 +16,14 @@ from turning into an O(N^2) read-per-write.
 import logging
 import time
 from collections import OrderedDict
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 __all__ = ("BufferBookkeeping",)
 
 logger = logging.getLogger(__name__)
 
-# Rate limit, in seconds, for the per-key "records were dropped" and "buffer
-# overflowed" warnings.
+# Rate limit, in seconds, for the per-key "records were dropped", "buffer
+# overflowed" and "value cannot be stored" warnings.
 LOG_INTERVAL = 60.0
 
 # How many distinct keys each rate limiter tracks at once. A limiter entry is
@@ -48,6 +48,7 @@ class BufferBookkeeping:
         # least-recently-used first, capped at `MAX_RATE_LIMITED_KEYS`.
         self._drop_log: OrderedDict[bytes, list] = OrderedDict()
         self._overflow_log: OrderedDict[bytes, list] = OrderedDict()
+        self._unstorable_log: OrderedDict[bytes, list] = OrderedDict()
 
     def count(self, partition: int, prefix: bytes) -> int:
         """
@@ -128,6 +129,43 @@ class BufferBookkeeping:
                 key,
                 count,
                 total,
+            )
+
+    def log_unstorable(
+        self,
+        prefix: bytes,
+        key: Any,
+        describe: Callable[[], str],
+    ) -> None:
+        """
+        Warn, at most once per key per `LOG_INTERVAL`, that a record's value
+        cannot be written to the state store and was settled by `on_timeout`
+        instead of being buffered.
+
+        This is silent data degradation otherwise: the record went downstream
+        with its declared defaults, or vanished, while its configuration may
+        have been one message away. The value's shape is a property of the
+        pipeline and not of the traffic, so the user has to be told the shape,
+        not just the count.
+
+        `describe` is a callable and not a string because producing the
+        description re-serializes the value: it must not be paid on the records
+        this limiter suppresses.
+
+        :param prefix: The store prefix.
+        :param key: The original message key.
+        :param describe: Produces the description of what could not be stored.
+        """
+        total = self._rate_limited(self._unstorable_log, prefix, 1)
+        if total is not None:
+            logger.warning(
+                "Lookup buffer could not store %s records for key %r: the state "
+                "store's serializer refused %s. Such a record is settled by "
+                "`on_timeout` immediately instead of waiting for its "
+                "configuration. Reshape the record value if it must be buffered.",
+                total,
+                key,
+                describe(),
             )
 
     @staticmethod

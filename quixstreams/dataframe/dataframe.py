@@ -1954,7 +1954,11 @@ class StreamingDataFrame:
             key decides whether it leaves. Records sharing a lookup key keep their arrival
             order; a record can overtake an older one waiting on a different lookup key.
             Enabling it makes the application stateful: the buffer is a changelog-backed
-            state store.
+            state store, so holding a record means serializing its value into that store.
+            A value the store cannot serialize - an arbitrary object, a dict with
+            non-`str` keys, an integer outside 64 bits - is not an error and is not held:
+            it is resolved immediately by the buffer's `on_timeout`, with a rate-limited
+            warning naming the key.
             If None (default), every record is emitted immediately, resolved or not.
 
         :returns: StreamingDataFrame: The same StreamingDataFrame instance with the enrichment applied in-place.

@@ -24,10 +24,12 @@ Per record it does three things, in this order:
    it.
 3. **Buffer, release, or pass through.** A record whose key has nothing withheld
    and whose lookup resolved goes straight out. A record whose lookup failed is
-   written to the store and nothing is emitted for it. A record whose key *does*
-   have withheld records first settles everything past its deadline, then - if
-   it resolved - releases the survivors whose *own* lookup key resolves too and
-   goes out behind them, or joins the queue if it did not.
+   written to the store and nothing is emitted for it - unless the store cannot
+   serialize its value, the one case where nothing is withheld at all (below).
+   A record whose key *does* have withheld records first settles everything past
+   its deadline, then - if it resolved - releases the survivors whose *own*
+   lookup key resolves too and goes out behind them, or joins the queue if it
+   did not.
 
 A release is therefore per record and not per message key. The buffer is grouped
 by the message key while resolvability is decided by the lookup key, so one
@@ -36,6 +38,16 @@ still not arrived stays buffered for the rest of its `grace_ms` instead of
 leaving with a sibling that resolved something else. `buffer_release.py` carries
 that decision into the store, and its module docstring is where the reasoning
 lives.
+
+A record can also fail to be withheld at all. `_buffer()` offers the finished
+envelope to the store's own serializer *before* the write, and a value that
+serializer refuses - an arbitrary object, a dict with non-`str` keys, an integer
+outside 64 bits, a cycle - is settled by `on_timeout` there and then instead of
+being buffered. Catching the failure afterwards is not an option:
+`PartitionTransaction.set()` marks the transaction FAILED before it re-raises,
+so the checkpoint fails, the offset is never committed, and redelivery
+reproduces the crash on the same record forever - on precisely the path the
+buffer exists to serve.
 
 The single most important line in the file is the `start=cutoff + 1` lower bound
 on the survivor read in `_release()`. `get_interval()` does not consult the
@@ -49,18 +61,22 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Optional, cas
 
 from quixstreams.context import message_context
 from quixstreams.core.stream import VoidExecutor
+from quixstreams.state.exceptions import StateSerializationError
 from quixstreams.state.rocksdb.timestamped import TimestampedPartitionTransaction
 
 from .base import BaseField, BaseLookup
 from .buffer_bookkeeping import BufferBookkeeping
 from .buffer_envelope import (
+    ENVELOPE_HEADERS,
     ENVELOPE_OFFSET,
     ENVELOPE_RECEIVED,
     ENVELOPE_TIMESTAMP,
     ENVELOPE_TOPIC,
+    ENVELOPE_VALUE,
     NO_OFFSET,
     Emission,
     decode_headers,
+    describe_unstorable,
     emit_tuple,
     encode_envelope,
     envelope_value,
@@ -201,18 +217,20 @@ class BufferOperator:
                     )
                 )
             else:
-                self._buffer(
-                    transaction=transaction,
-                    index=index,
-                    partition=partition,
-                    prefix=prefix,
-                    key=key,
-                    receive_ms=now_ms,
-                    value=value,
-                    timestamp=timestamp,
-                    headers=headers,
-                    topic=context.topic,
-                    offset=context.offset,
+                out.extend(
+                    self._buffer(
+                        transaction=transaction,
+                        index=index,
+                        partition=partition,
+                        prefix=prefix,
+                        key=key,
+                        receive_ms=now_ms,
+                        value=value,
+                        timestamp=timestamp,
+                        headers=headers,
+                        topic=context.topic,
+                        offset=context.offset,
+                    )
                 )
             index.flush()
             return out
@@ -235,20 +253,25 @@ class BufferOperator:
         if not resolved:
             # Nothing to release: queue behind whatever is left. Everything at
             # or below `cutoff` has just been settled, so `cutoff + 1` is a
-            # valid lower bound on what remains.
+            # valid lower bound on what remains - and it stays one even if
+            # `_buffer()` then declines to store this record, in which case the
+            # marker is merely stale-low and the next sweep of the prefix
+            # recomputes or drops it.
             index.set_earliest(prefix, cutoff + 1)
-            self._buffer(
-                transaction=transaction,
-                index=index,
-                partition=partition,
-                prefix=prefix,
-                key=key,
-                receive_ms=now_ms,
-                value=value,
-                timestamp=timestamp,
-                headers=headers,
-                topic=context.topic,
-                offset=context.offset,
+            out.extend(
+                self._buffer(
+                    transaction=transaction,
+                    index=index,
+                    partition=partition,
+                    prefix=prefix,
+                    key=key,
+                    receive_ms=now_ms,
+                    value=value,
+                    timestamp=timestamp,
+                    headers=headers,
+                    topic=context.topic,
+                    offset=context.offset,
+                )
             )
             index.flush()
             return out
@@ -444,9 +467,23 @@ class BufferOperator:
         headers: Any,
         topic: Optional[str],
         offset: int,
-    ) -> None:
+    ) -> list[Emission]:
         """
         Withhold a record: write it to the store and emit nothing for it.
+
+        A value the store cannot serialize is the one case where nothing is
+        withheld. The check has to come *before* the write and not around it:
+        `PartitionTransaction.set()` catches the serialization error, marks the
+        transaction FAILED and re-raises, so by the time an exception is visible
+        here the checkpoint is already lost and the offset will never be
+        committed - an unattended crash-loop on the exact record the buffer was
+        asked to look after. So the envelope is built and then offered to the
+        transaction's own value serializer first, and only a value that survives
+        both steps is stored.
+
+        The price is one extra serialization per withheld record, on the
+        degraded path only: a record whose configuration arrived is never
+        buffered and never pays it.
 
         :param transaction: The live store transaction.
         :param index: The partition's pending index.
@@ -459,6 +496,9 @@ class BufferOperator:
         :param headers: The record headers.
         :param topic: The name of the topic the record arrived on.
         :param offset: The record's offset on that topic-partition.
+        :return: What to emit for this record - empty when it was withheld or
+            overflowed, and the record itself when it could not be stored and
+            `on_timeout="emit"`.
         :raises LookupBufferOverflowError: On overflow with
             `on_overflow="raise"`.
         """
@@ -471,7 +511,52 @@ class BufferOperator:
                     f'`grace_ms`, or use `on_overflow="drop-newest"`.'
                 )
             self._bookkeeping.log_overflow(prefix, key, count)
-            return
+            return []
+
+        # `_serialize_value` is the very method `set()` calls on the way to
+        # RocksDB, so this check cannot disagree with the write it guards - not
+        # even for a store configured with its own `dumps`. It is also the only
+        # serialization `set_for_timestamp()` performs that can fail: the store
+        # key is `encode_integer_pair()` bytes, the prefix is already bytes, and
+        # the expiry floor is written with `set_bytes()`.
+        serialize_value = transaction._serialize_value  # noqa: SLF001
+        envelope: Optional[dict[str, Any]] = None
+        try:
+            envelope = encode_envelope(
+                value=value,
+                timestamp=timestamp,
+                receive_ms=receive_ms,
+                headers=headers,
+                topic=topic,
+                offset=offset,
+            )
+            serialize_value(envelope)
+        except (RecursionError, StateSerializationError):
+            # Two ways to be unstorable, one answer. The serializer refuses
+            # most shapes itself; a reference cycle never reaches it, because
+            # `encode_envelope()` walks the value without cycle detection and
+            # exhausts the stack first. Both crash-loop the same partition on
+            # the same record, so both are settled the same way. Adding cycle
+            # tracking to the encode walk instead would cost every withheld
+            # record a set, to catch a shape nobody stores on purpose.
+            refused: Mapping[str, Any] = (
+                envelope
+                if envelope is not None
+                else {ENVELOPE_VALUE: value, ENVELOPE_HEADERS: headers}
+            )
+            self._bookkeeping.log_unstorable(
+                prefix,
+                key,
+                lambda: describe_unstorable(refused, serialize_value),
+            )
+            return self._settle_unstorable(
+                value=value,
+                key=key,
+                timestamp=timestamp,
+                headers=headers,
+                topic=topic,
+                offset=offset,
+            )
 
         # This is the only call that raises the store's own expiry floor for the
         # prefix, to `receive_ms - grace_ms` - exactly the cutoff the caller has
@@ -480,14 +565,7 @@ class BufferOperator:
         # record the operator has not already emitted or dropped.
         transaction.set_for_timestamp(
             timestamp=receive_ms,
-            value=encode_envelope(
-                value=value,
-                timestamp=timestamp,
-                receive_ms=receive_ms,
-                headers=headers,
-                topic=topic,
-                offset=offset,
-            ),
+            value=envelope,
             prefix=prefix,
         )
         self._bookkeeping.set_count(partition, prefix, count + 1)
@@ -498,6 +576,45 @@ class BufferOperator:
         # RocksDB, and it only ever lowers the cache - which is the direction
         # that stays a valid lower bound.
         self._ticker.note_deadline(partition, receive_ms + self._grace_ms)
+        return []
+
+    def _settle_unstorable(
+        self,
+        *,
+        value: dict[str, Any],
+        key: Any,
+        timestamp: int,
+        headers: Any,
+        topic: Optional[str],
+        offset: int,
+    ) -> list[Emission]:
+        """
+        Resolve a record the store cannot hold, exactly as its deadline would.
+
+        There is one answer to "this record is not getting its configuration",
+        and `on_timeout` is it. Under `"emit"` the value goes downstream as it
+        stands, which is already every field's `missing()` - `lookup.join()` ran
+        on it before it reached `_buffer()`, so this is the same value
+        `_take_timed_out()` would have emitted `grace_ms` later. Under `"drop"`
+        it is discarded, as a timed-out record is.
+
+        What is lost is the wait, and with it ordering: the record leaves now
+        rather than at its deadline, so it can overtake records of its own
+        lookup key that are still buffered. That is the trade for not
+        crash-looping the partition, and `log_unstorable()` is what keeps it
+        from being silent.
+
+        :param value: The record value, already joined.
+        :param key: The original message key.
+        :param timestamp: The event timestamp, in milliseconds.
+        :param headers: The record headers.
+        :param topic: The name of the topic the record arrived on.
+        :param offset: The record's offset on that topic-partition.
+        :return: The record, or nothing under `on_timeout="drop"`.
+        """
+        if not self._emit_on_timeout:
+            return []
+        return [Emission(value, key, timestamp, headers, topic, offset)]
 
     def _get_transaction(self, partition: int) -> TimestampedPartitionTransaction:
         """
