@@ -8,14 +8,14 @@ its Quix Streams state store.
 """
 
 import logging
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+import ssl
+import time
+from enum import Enum
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
-from .snapshot import (
-    discover_primary_key,
-    estimate_row_count,
-    iter_snapshot_batches,
-    serialize_value,
-)
+from .config import MySqlCdcError, TlsConfig
+from .snapshot import discover_primary_key, estimate_row_count, iter_snapshot_batches
+from .values import fetch_column_types, serialize_binlog_values
 
 try:
     import pymysql
@@ -27,6 +27,7 @@ try:
         ProgrammingError,
     )
     from pymysqlreplication import BinLogStreamReader
+    from pymysqlreplication.constants import FIELD_TYPE
     from pymysqlreplication.row_event import (
         DeleteRowsEvent,
         UpdateRowsEvent,
@@ -39,7 +40,13 @@ except ImportError as exc:
     ) from exc
 
 
-__all__ = ("MySqlCdcError", "MySqlHelper", "is_connection_error")
+__all__ = (
+    "BinlogErrorKind",
+    "MySqlCdcError",
+    "MySqlHelper",
+    "classify_error",
+    "is_connection_error",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,21 +63,30 @@ _ACCESS_DENIED_ERROR_CODE = 1227
 
 # MySQL errors that arrive as `OperationalError` - the same class a dropped socket
 # raises - but that no reconnect can clear, so retrying them only delays the failure
-# and hides its cause. All three are credential or privilege failures: the reconnect
-# presents exactly the same rejected identity, forever.
+# and hides its cause.
 #   1044 ER_DBACCESS_DENIED_ERROR        - the grant on the database was revoked.
 #   1045 ER_ACCESS_DENIED_ERROR          - wrong password, or the account was dropped.
 #   1227 ER_SPECIFIC_ACCESS_DENIED_ERROR - the account lacks REPLICATION SLAVE/CLIENT.
-#
-# 1236 ER_MASTER_FATAL_ERROR_READING_BINLOG is deliberately NOT here. MySQL reuses it
-# for two opposite situations: "Could not find first log file name in binary log index
-# file", which is permanent, and "A replica with the same server_uuid/server_id as this
-# replica has connected to the source", which is transient and is exactly what a
-# redeploying source hits while the server still holds its previous connection. Marking
-# 1236 fatal would kill a source that only needed to reconnect. The permanent case is
-# still bounded and loud: it exhausts the five reconnect attempts and re-raises with
-# MySQL's own message.
-_FATAL_MYSQL_ERROR_CODES = frozenset({1044, 1045, _ACCESS_DENIED_ERROR_CODE})
+#   2026 CR_SSL_CONNECTION_ERROR         - "SSL is required but the server doesn't
+#        support it" (`pymysql/connections.py:925-929`). A server without TLS does not
+#        grow it between two reconnects; either configure TLS there, or set
+#        tls_enabled=False deliberately.
+_FATAL_MYSQL_ERROR_CODES = frozenset({1044, 1045, _ACCESS_DENIED_ERROR_CODE, 2026})
+
+# 1236 ER_MASTER_FATAL_ERROR_READING_BINLOG is NOT in that set, because MySQL reuses the
+# one code for three situations that need three different answers. The code cannot tell
+# them apart; the message can, and `classify_error()` reads it:
+#   "...same server_uuid/server_id..."  another client announced our id -> COLLISION
+#   "Could not find first log file..."  the committed position is purged -> PURGED
+#   anything else                       a genuine read failure           -> RETRYABLE
+# Both the 5.7 ("slave"/"master") and the 8.x ("replica"/"source") wordings contain the
+# server_uuid/server_id substring, so one marker covers every version in scope.
+_BINLOG_READ_ERROR_CODE = 1236
+_COLLISION_MARKER = "same server_uuid/server_id"
+_PURGED_MARKER = "could not find first log file"
+
+# Every connection the connector opens runs this first. See `connect_mysql()`.
+_SESSION_TIME_ZONE = "SET time_zone = '+00:00'"
 
 _NO_PRIMARY_KEY_ERROR = (
     "Table {table_name} has no PRIMARY KEY. The initial snapshot requires one for "
@@ -79,35 +95,85 @@ _NO_PRIMARY_KEY_ERROR = (
 )
 
 
-class MySqlCdcError(Exception):
-    """Raised for MySQL configuration/validation problems the user must fix."""
+class BinlogErrorKind(str, Enum):
+    """What the source should do about a failure raised while streaming."""
+
+    RETRYABLE = "retryable"
+    COLLISION = "collision"
+    PURGED = "purged"
+    FATAL = "fatal"
+
+
+def classify_error(exc: BaseException) -> BinlogErrorKind:
+    """
+    Decide how a streaming failure has to be handled.
+
+    The exception class alone cannot decide this: pymysql raises `OperationalError` for
+    a dropped connection, for access-denied and for every flavour of 1236 alike. So the
+    MySQL error number is checked, and for 1236 the message too - a collision needs a
+    bounded number of reconnects before it is called what it is, while a purged position
+    must not be retried at all.
+
+    `ssl.SSLCertVerificationError` is fatal for the same reason a bad password is: the
+    next connection presents the same rejected certificate. Other `ssl.SSLError`
+    subclasses stay retryable, because a TLS link that dropped is still a link that
+    dropped.
+    """
+    if isinstance(exc, ssl.SSLCertVerificationError):
+        return BinlogErrorKind.FATAL
+    if isinstance(exc, (BrokenPipeError, ConnectionResetError, ssl.SSLError)):
+        return BinlogErrorKind.RETRYABLE
+    if not isinstance(exc, (OperationalError, InterfaceError)):
+        return BinlogErrorKind.FATAL
+
+    code = _mysql_error_code(exc)
+    if code in _FATAL_MYSQL_ERROR_CODES:
+        return BinlogErrorKind.FATAL
+    if code == _BINLOG_READ_ERROR_CODE:
+        message = str(exc).lower()
+        if _COLLISION_MARKER in message:
+            return BinlogErrorKind.COLLISION
+        if _PURGED_MARKER in message:
+            return BinlogErrorKind.PURGED
+    return BinlogErrorKind.RETRYABLE
 
 
 def is_connection_error(exc: BaseException) -> bool:
-    """
-    True for failures a reconnect can plausibly clear.
-
-    Used by the source to decide whether to rebuild the binlog stream or to let the
-    error kill the process. A broken socket is retryable; anything else is fatal on
-    purpose, because retrying it would hide it behind a reconnect loop.
-
-    The exception class alone cannot decide this. pymysql raises `OperationalError`
-    both for a dropped connection and for access-denied errors, so the MySQL error code
-    is checked too: the codes in `_FATAL_MYSQL_ERROR_CODES` - a revoked grant, a bad
-    password, a missing REPLICATION privilege - are reported as *not* retryable and
-    propagate to kill the process.
-    """
-    if isinstance(exc, (BrokenPipeError, ConnectionResetError)):
-        return True
-    if not isinstance(exc, (OperationalError, InterfaceError)):
-        return False
-    return _mysql_error_code(exc) not in _FATAL_MYSQL_ERROR_CODES
+    """True for failures a reconnect can plausibly clear: retryable ones and collisions."""
+    return classify_error(exc) in (
+        BinlogErrorKind.RETRYABLE,
+        BinlogErrorKind.COLLISION,
+    )
 
 
 def _mysql_error_code(exc: BaseException) -> Optional[int]:
     """Return the MySQL error number a pymysql exception carries, or None."""
     code = exc.args[0] if exc.args else None
     return code if isinstance(code, int) else None
+
+
+def _typed_columns(event: Any) -> Tuple[Set[str], Set[str]]:
+    """
+    Return the event's (JSON column names, FLOAT column names).
+
+    Two of the value contract's rules cannot be applied from the Python value alone. A
+    JSON column holding a top-level string arrives as plain `bytes`, identical to a
+    VARBINARY, and would be base64-encoded instead of quoted as JSON. A FLOAT arrives as
+    a Python float, identical to a DOUBLE, and has to be rounded to the six significant
+    digits MySQL's text protocol shows the snapshot path. Both are read from the
+    table-map event, which under `binlog_row_metadata=FULL` carries every column.
+    """
+    json_columns: Set[str] = set()
+    float_columns: Set[str] = set()
+    for column in event.columns:
+        name = column.name
+        if not name:
+            continue
+        if column.type == FIELD_TYPE.JSON:
+            json_columns.add(name)
+        elif column.type == FIELD_TYPE.FLOAT:
+            float_columns.add(name)
+    return json_columns, float_columns
 
 
 def _first_present(row: Dict[str, Any], *names: str) -> Any:
@@ -138,6 +204,8 @@ class MySqlHelper:
         database: str,
         table: str,
         snapshot_host: str,
+        tls: TlsConfig,
+        allow_minimal_row_metadata: bool = False,
     ):
         self._host = host
         self._port = port
@@ -147,9 +215,19 @@ class MySqlHelper:
         self._table = table
         self._table_name = f"{database}.{table}"
         self._snapshot_host = snapshot_host
+        self._tls = tls
+        self._allow_minimal_row_metadata = allow_minimal_row_metadata
 
     def connect_mysql(self, override_host: Optional[str] = None) -> Any:
-        """Open a new connection to `host`, or to `override_host` when given."""
+        """
+        Open a new connection to `host`, or to `override_host` when given.
+
+        The session time zone is pinned to UTC on every connection the connector opens.
+        That is not a preference: the binlog decoder renders TIMESTAMP with
+        `datetime.utcfromtimestamp` and cannot be told otherwise, so the snapshot path -
+        which renders in the session zone - is the only side that can be moved, and both
+        paths have to agree for `values.py`'s contract to hold.
+        """
         return pymysql.connect(
             host=override_host or self._host,
             port=self._port,
@@ -157,17 +235,21 @@ class MySqlHelper:
             password=self._password,
             database=self._database,
             charset="utf8mb4",
+            init_command=_SESSION_TIME_ZONE,
+            **self._tls.connect_kwargs(),
         )
 
     # ------------------------------------------------------------------ validation
 
-    def validate_server_config(self, require_primary_key: bool) -> None:
+    def validate_server_config(self, require_primary_key: bool, server_id: int) -> None:
         """
         Check everything that must hold before streaming, failing loudly if it does not.
 
         :param require_primary_key: when True (the initial snapshot is enabled), also
             require the table to have a PRIMARY KEY to paginate on. Streaming-only
             mode does not need one.
+        :param server_id: the replication client id this source will announce, checked
+            against the server's own id.
         """
         conn = self.connect_mysql()
         try:
@@ -175,7 +257,8 @@ class MySqlHelper:
                 self._require_binlog_enabled(cursor)
                 self._require_row_format(cursor)
                 self._warn_on_row_image(cursor)
-                self._warn_on_row_metadata(cursor)
+                self._require_row_metadata(cursor)
+                self._require_distinct_server_id(cursor, server_id)
                 self._require_table(cursor)
                 if require_primary_key:
                     self.require_primary_key(cursor)
@@ -187,6 +270,22 @@ class MySqlHelper:
             # the snapshot actually opens this connection.
             self.connect_mysql(override_host=self._snapshot_host).close()
             logger.info("Snapshot host %s is reachable", self._snapshot_host)
+
+    def require_row_metadata(self) -> None:
+        """
+        Re-check `binlog_row_metadata` on its own connection.
+
+        Called before every explicit stream rebuild. `binlog_row_metadata` is a dynamic
+        global, so a server can be downgraded to MINIMAL under a running source; the
+        window between this check and the next one is documented rather than closed,
+        because the only way to close it would be a `SHOW VARIABLES` per poll.
+        """
+        conn = self.connect_mysql()
+        try:
+            with conn.cursor() as cursor:
+                self._require_row_metadata(cursor)
+        finally:
+            conn.close()
 
     def _require_binlog_enabled(self, cursor: Any) -> None:
         if self._show_variable(cursor, "log_bin") != "ON":
@@ -209,8 +308,10 @@ class MySqlHelper:
     def _warn_on_row_image(self, cursor: Any) -> None:
         row_image = self._show_variable(cursor, "binlog_row_image")
         if row_image is not None and row_image != "FULL":
-            # Not fatal: MINIMAL still carries the primary key in the "before" image,
-            # so change events remain usable, just with partial column sets.
+            # A warning rather than a refusal, unlike binlog_row_metadata below, and the
+            # difference is the point: MINIMAL here yields events that are *partial but
+            # honest* - the primary key is still in the before-image and every column
+            # that is present is correct. MINIMAL metadata yields events that are wrong.
             logger.warning(
                 "binlog_row_image is %r on %s; 'FULL' is recommended so update and "
                 "delete events carry every column instead of only the primary key",
@@ -218,29 +319,109 @@ class MySqlHelper:
                 self._host,
             )
 
-    def _warn_on_row_metadata(self, cursor: Any) -> None:
+    def _require_row_metadata(self, cursor: Any) -> None:
+        """
+        FULL is the only setting under which the binlog carries usable column metadata.
+
+        `pymysqlreplication` does not degrade gradually: unless the variable reads
+        exactly FULL it discards *all* optional table metadata
+        (`binlogstream.py:576-596`, `row_event.py:995-1019`), so change events lose
+        column names, ENUM and SET dictionaries, column character sets and integer
+        signedness together. The consequences are not cosmetic - ENUM and SET values
+        arrive as null, UNSIGNED integers decode as signed, and a column whose bytes are
+        not UTF-8 raises `UnicodeDecodeError` inside the decoder on every replay of that
+        row. Only the column names have a client-side recovery; the rest have none,
+        which is why this is a refusal while `_warn_on_row_image` above is only a
+        warning.
+
+        `allow_minimal_row_metadata=True` turns the refusal into a warning. It exists
+        for one case that is otherwise unserviceable - a MySQL 5.7 server, which has no
+        such variable at all - and for a stock 8.x server whose table happens to contain
+        none of the four column shapes that break. The warning names the parameter, so a
+        log line can always be traced back to the deployment that asked for it.
+        """
         row_metadata = self._show_variable(cursor, "binlog_row_metadata")
-        if row_metadata is None:
-            # MySQL 5.7 has no such variable: its binlog never carries column names, and
-            # nothing can be configured to make it. That is not a misconfiguration to
-            # report, so say nothing - the INFORMATION_SCHEMA fallback enabled in
-            # `create_binlog_stream` is exactly what covers that server.
+        if row_metadata == "FULL":
             return
-        if row_metadata != "FULL":
-            # Not fatal, and deliberately so: MINIMAL is the MySQL 8.x *default*, so
-            # failing here would reject most correctly-configured servers. The column
-            # names are recovered from INFORMATION_SCHEMA instead - but that recovery
-            # is cached for the lifetime of the process, which FULL never needs.
-            logger.warning(
-                "binlog_row_metadata is %r on %s; 'FULL' is recommended so the binlog "
-                "carries column names. Without it they are resolved from "
-                "INFORMATION_SCHEMA and cached, so a column renamed while this source "
-                "is running keeps its old name in change events until it restarts, and "
-                "a user whose SELECT grant does not cover all of %s gets "
-                "'UNKNOWN_COL0', 'UNKNOWN_COL1', ... instead of column names",
-                row_metadata,
-                self._host,
-                self._table_name,
+        if self._allow_minimal_row_metadata:
+            self._warn_minimal_row_metadata(row_metadata)
+            return
+        if row_metadata is None:
+            raise MySqlCdcError(
+                f"{self._host} has no binlog_row_metadata variable, so its binlog "
+                "cannot carry the column metadata this source needs (column names, "
+                "ENUM/SET values, character sets, integer signedness). That variable "
+                "was added in MySQL 8.0.1 and does not exist in MySQL 5.7 or MariaDB. "
+                "Either use MySQL 8.0.1+ with binlog_row_metadata=FULL, or set "
+                "allow_minimal_row_metadata=True if this table has no ENUM, SET, "
+                "UNSIGNED or non-UTF-8 columns - see the connector docs for exactly "
+                "what degrades."
+            )
+        raise MySqlCdcError(
+            f"binlog_row_metadata is {row_metadata!r} on {self._host}, but this "
+            "source requires 'FULL'. Without it the binlog carries no column names, "
+            "no ENUM/SET values, no column character sets and no integer "
+            "signedness, so change events would ship nulls for ENUM and SET "
+            "columns, decode UNSIGNED integers as negative numbers, and crash on "
+            "columns whose bytes are not UTF-8. MINIMAL is the MySQL default, so this "
+            "is a configuration step rather than a version problem. Fix it with:\n"
+            "  SET GLOBAL binlog_row_metadata = FULL;   -- takes effect immediately, "
+            "no restart\n"
+            "  FLUSH BINARY LOGS;                       -- leave the MINIMAL-era "
+            "events behind\n"
+            "and add 'binlog_row_metadata = FULL' to my.cnf so it survives a restart. "
+            "If this table has no ENUM, SET, UNSIGNED or non-UTF-8 columns you can set "
+            "allow_minimal_row_metadata=True instead."
+        )
+
+    def _warn_minimal_row_metadata(self, row_metadata: Optional[str]) -> None:
+        """
+        Say exactly what the opt-out costs, in values rather than adjectives.
+
+        Logged on every start and on every reconnect, at WARNING, naming the parameter
+        that enabled it. "Not recommended" would be useless here: the failures are
+        specific, silent in three cases out of four, and the operator can only judge the
+        risk against their own table.
+        """
+        logger.warning(
+            "allow_minimal_row_metadata=True: streaming %s from %s with "
+            "binlog_row_metadata=%s instead of FULL. The binlog carries no column "
+            "metadata, so on THIS TABLE the following change events will be WRONG, "
+            "silently, with no further warning: (1) every ENUM and every SET column "
+            "arrives as null; (2) every UNSIGNED integer decodes as signed, so "
+            "INT UNSIGNED 4294967295 arrives as -1 and BIGINT UNSIGNED above 2^63 "
+            "arrives negative; (3) any column whose bytes are not valid UTF-8 - a "
+            "BINARY/VARBINARY/BLOB, or a latin1 text column holding a byte above 0x7F - "
+            "raises UnicodeDecodeError inside the decoder and stops the source, which "
+            "then replays the same row and stops again on every restart. Snapshot rows "
+            "are unaffected, so one topic carries two different answers for the same "
+            "column. Set binlog_row_metadata=FULL on the server and remove this "
+            "parameter unless the table is text-only and has no unsigned columns.",
+            self._table_name,
+            self._host,
+            row_metadata,
+        )
+
+    def _require_distinct_server_id(self, cursor: Any, server_id: int) -> None:
+        """
+        Refuse to announce the server's own replication id.
+
+        A client that registers with the server's `server_id` is always wrong, and it is
+        the one collision that can be caught before streaming rather than as a 1236
+        eviction minutes later. Other clients cannot be pre-checked: a
+        `pymysqlreplication` stream never sends COM_REGISTER_SLAVE, so it never appears
+        in `SHOW REPLICAS` and there is nothing to compare against.
+        """
+        cursor.execute("SELECT @@server_id")
+        row = cursor.fetchone()
+        own_id = int(row[0]) if row and row[0] is not None else None
+        if own_id is not None and own_id == server_id:
+            raise MySqlCdcError(
+                f"This source would announce server_id={server_id}, which is "
+                f"{self._host}'s own server-id. MySQL requires every replication client "
+                "to use an id distinct from the server's and from every other client's. "
+                "Set an explicit server_id on the source, or change the server's "
+                "server-id."
             )
 
     def _require_table(self, cursor: Any) -> None:
@@ -388,30 +569,36 @@ class MySqlHelper:
         `log_pos` (which is the end position of the last processed event), so resuming
         does not duplicate the event at the boundary.
 
-        `use_column_name_cache=True` is what keeps real column names in change events.
-        Column names reach the binlog only when `binlog_row_metadata=FULL`, which is
-        *not* the default - MySQL 8.x ships MINIMAL and 5.7 has no such variable at all.
-        With the flag off, `pymysqlreplication` names every column `UNKNOWN_COL0..n`,
-        which would give one topic two incompatible schemas (snapshot rows take their
-        names from `cursor.description`, so only the change events degrade) and make the
-        primary-key deduplication `MySqlCdcSource` asks consumers to do impossible. With
-        it on, the library resolves the names once per table from INFORMATION_SCHEMA,
-        using the same credentials as this stream.
+        `use_column_name_cache=True` is a safety net for one window, not the mechanism
+        that supplies column names. `validate_server_config()` requires
+        `binlog_row_metadata=FULL`, under which every table-map event carries current
+        names. But binlog files written *before* the setting was changed still parse as
+        MINIMAL, and for those `pymysqlreplication` takes its INFORMATION_SCHEMA
+        fallback (`row_event.py:1008-1019`) - this flag is what makes that fallback
+        produce real names instead of `UNKNOWN_COL0..n`. It caches per `schema.table`
+        for the lifetime of the process, which is harmless here because the events it
+        covers are historical by definition.
 
-        That fallback caches per `schema.table` for the lifetime of the process and is
-        never invalidated, so a column renamed under a running source keeps its old name
-        in change events until the source restarts. It is not worked around here: the
-        cache lives in `pymysqlreplication`, the window is a live `ALTER TABLE`, and
-        `binlog_row_metadata=FULL` - which `validate_server_config` recommends - removes
-        the fallback entirely, because then every table-map event carries current names.
+        `ignore_decode_errors` is deliberately NOT passed: it turns the decoder's
+        `decode()` into `errors="ignore"` (`row_event.py:403`), which silently drops
+        undecodable bytes. `read_changes()` raises an actionable error instead.
+
+        The connection settings dict is rebuilt on every call because
+        `BinLogStreamReader` mutates the one it is given (`binlogstream.py:241`) and
+        copies it into the control connection's settings (`:313-318`) - so this one dict
+        is also what carries TLS and the UTC session zone to the control connection that
+        reads INFORMATION_SCHEMA.
         """
+        connection_settings: Dict[str, Any] = {
+            "host": self._host,
+            "port": self._port,
+            "user": self._user,
+            "password": self._password,
+            "init_command": _SESSION_TIME_ZONE,
+        }
+        connection_settings.update(self._tls.connect_kwargs())
         return BinLogStreamReader(
-            connection_settings={
-                "host": self._host,
-                "port": self._port,
-                "user": self._user,
-                "passwd": self._password,
-            },
+            connection_settings=connection_settings,
             server_id=server_id,
             only_events=[DeleteRowsEvent, WriteRowsEvent, UpdateRowsEvent],
             only_schemas=[self._database],
@@ -424,31 +611,80 @@ class MySqlHelper:
         )
 
     def read_changes(
-        self, stream: BinLogStreamReader, max_rows: int
+        self,
+        stream: BinLogStreamReader,
+        max_rows: int,
+        max_seconds: float,
+        should_continue: Callable[[], bool],
     ) -> Tuple[List[Dict[str, Any]], Optional[Tuple[str, int]]]:
         """
-        Read up to `max_rows` row-changes and return them with the position they cover.
+        Read row-changes until any of three bounds is reached, with their position.
 
-        The stream is non-blocking, so this returns as soon as the server has nothing
-        more queued. The position is read once, after the loop: `BinLogStreamReader`
-        advances `log_pos`/`log_file` for every packet it decodes, including events its
-        own `only_events`/`only_tables` filters discard, so committing that position
-        skips past uninteresting events instead of re-reading them after a restart.
+        The three bounds are `max_rows` changes collected, `max_seconds` elapsed, and
+        `should_continue()` going false. All three are needed. `max_rows` alone does not
+        bound anything: events for *other* tables never increment the change count, so a
+        busy neighbouring table can hold this loop for as long as it keeps committing.
+        And a source that cannot notice `stop()` mid-catch-up blows its
+        `shutdown_timeout`, gets SIGKILLed before any commit, and repeats the same
+        catch-up on the next start - a failure shaped like data loss.
+
+        Breaking mid-iteration is safe: the position is read once after the loop and
+        `BinLogStreamReader` advances `log_file`/`log_pos` per decoded packet, including
+        packets its `only_events`/`only_tables` filters discard, so committing it skips
+        past uninteresting events rather than re-reading them. The same stream object
+        continues on the next call.
 
         The returned position can be non-None alongside an empty change list - the
         normal case for a quiet table in a busy database - and committing it is safe
         precisely because those events were read and deliberately not emitted.
+
+        :param stream: the open reader.
+        :param max_rows: stop once this many changes have been collected.
+        :param max_seconds: stop after this long, so one read cannot outlast the commit
+            cadence.
+        :param should_continue: polled once per decoded event; False means stop now.
         """
         changes: List[Dict[str, Any]] = []
-        for event in stream:
-            # `only_schemas` and `only_tables` are matched independently by the library,
-            # never as a pair, so the combination is re-checked here. Both names come
-            # from the table-map event body, which every binlog carries whatever
-            # `binlog_row_metadata` is set to - unlike the column names.
-            if event.schema == self._database and event.table == self._table:
-                changes.extend(self._event_to_changes(event))
-            if len(changes) >= max_rows:
-                break
+        deadline = time.monotonic() + max_seconds
+        try:
+            for event in stream:
+                # `only_schemas` and `only_tables` are matched independently by the
+                # library, never as a pair, so the combination is re-checked here. Both
+                # names come from the table-map event body, which every binlog carries
+                # whatever `binlog_row_metadata` is set to - unlike the column names.
+                if event.schema == self._database and event.table == self._table:
+                    changes.extend(self._event_to_changes(event))
+                if (
+                    len(changes) >= max_rows
+                    or time.monotonic() >= deadline
+                    or not should_continue()
+                ):
+                    break
+        except (UnicodeDecodeError, LookupError) as exc:
+            raise MySqlCdcError(
+                f"Could not decode a binlog event for {self._table_name} at "
+                f"{stream.log_file}:{stream.log_pos}. The event carries no column "
+                "character sets, so the decoder read every string column as UTF-8 and a "
+                "column whose bytes are not UTF-8 - a BINARY/VARBINARY/BLOB, or a "
+                "latin1 text column holding a byte above 0x7F - failed. "
+                + (
+                    "This source is running with allow_minimal_row_metadata=True, so "
+                    "this is the documented consequence of that opt-out on a table that "
+                    "turned out not to be text-only: set binlog_row_metadata=FULL on "
+                    "the server (MySQL 8.0.1+) and remove the parameter."
+                    if self._allow_minimal_row_metadata
+                    else "The server passes this source's start-up check, so "
+                    "binlog_row_metadata is FULL now and only events written before it "
+                    "was changed are affected."
+                )
+                + " Two ways out, both of which leave the MINIMAL-era events behind: run "
+                "SET GLOBAL binlog_row_metadata = FULL; followed by FLUSH BINARY LOGS on "
+                "the server and let the source resume into the new file, or restart the "
+                "source with initial_snapshot=True and force_snapshot=True to "
+                "re-snapshot the table and re-anchor the position. The row is not "
+                "skipped, and ignore_decode_errors is not used, because both would be "
+                "silent data loss."
+            ) from exc
 
         log_file, log_pos = stream.log_file, stream.log_pos
         position = (log_file, log_pos) if log_file and log_pos else None
@@ -456,6 +692,13 @@ class MySqlHelper:
 
     def _event_to_changes(self, event: Any) -> List[Dict[str, Any]]:
         """Convert one row event into the connector's change dicts, one per row."""
+        json_columns, float_columns = _typed_columns(event)
+
+        def encode(values: Dict[str, Any], none_sources: Any) -> List[Any]:
+            return serialize_binlog_values(
+                values, none_sources, json_columns, float_columns
+            )
+
         if isinstance(event, WriteRowsEvent):
             return [
                 {
@@ -463,9 +706,7 @@ class MySqlHelper:
                     "schema": event.schema,
                     "table": event.table,
                     "columnnames": list(row["values"].keys()),
-                    "columnvalues": [
-                        serialize_value(value) for value in row["values"].values()
-                    ],
+                    "columnvalues": encode(row["values"], row.get("none_sources")),
                     "oldkeys": {},
                 }
                 for row in event.rows
@@ -478,15 +719,14 @@ class MySqlHelper:
                     "schema": event.schema,
                     "table": event.table,
                     "columnnames": list(row["after_values"].keys()),
-                    "columnvalues": [
-                        serialize_value(value) for value in row["after_values"].values()
-                    ],
+                    "columnvalues": encode(
+                        row["after_values"], row.get("after_none_sources")
+                    ),
                     "oldkeys": {
                         "keynames": list(row["before_values"].keys()),
-                        "keyvalues": [
-                            serialize_value(value)
-                            for value in row["before_values"].values()
-                        ],
+                        "keyvalues": encode(
+                            row["before_values"], row.get("before_none_sources")
+                        ),
                     },
                 }
                 for row in event.rows
@@ -502,9 +742,7 @@ class MySqlHelper:
                     "columnvalues": [],
                     "oldkeys": {
                         "keynames": list(row["values"].keys()),
-                        "keyvalues": [
-                            serialize_value(value) for value in row["values"].values()
-                        ],
+                        "keyvalues": encode(row["values"], row.get("none_sources")),
                     },
                 }
                 for row in event.rows
@@ -535,6 +773,7 @@ class MySqlHelper:
         try:
             with conn.cursor() as cursor:
                 pk_columns = self.require_primary_key(cursor)
+                column_types = fetch_column_types(cursor, self._database, self._table)
                 estimated_rows = estimate_row_count(cursor, self._database, self._table)
                 logger.info(
                     "Starting initial snapshot of %s from %s: ~%s rows (estimate), "
@@ -550,6 +789,7 @@ class MySqlHelper:
                     table=self._table,
                     pk_columns=pk_columns,
                     batch_size=batch_size,
+                    column_types=column_types,
                     start_after=start_after,
                 )
         finally:

@@ -1,17 +1,19 @@
 """
 Initial-snapshot support for the MySQL CDC source.
 
-This module holds the parts of the connector that are pure functions of their
-inputs: MySQL value encoding, identifier quoting, primary-key discovery, the
-keyset-pagination SQL and the generator that walks a table with it.
+This module holds the SQL half of the snapshot: identifier quoting, primary-key
+discovery, the keyset-pagination query and the generator that walks a table with it.
+Value encoding lives in `values.py`, because the binlog path needs the same contract
+and neither path owns it.
 
-It deliberately imports nothing else from the package, so the SQL builders can be
-unit-tested without a MySQL server and without importing the source itself.
+Apart from `values`, it imports nothing else from the package, so the SQL builders can
+be unit-tested without a MySQL server and without importing the source itself.
 """
 
-import base64
 import logging
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
+
+from .values import ColumnType, serialize_row
 
 __all__ = (
     "build_snapshot_query",
@@ -20,7 +22,6 @@ __all__ = (
     "is_checkpointable_key",
     "iter_snapshot_batches",
     "quote_identifier",
-    "serialize_value",
 )
 
 logger = logging.getLogger(__name__)
@@ -37,25 +38,6 @@ def quote_identifier(name: str) -> str:
     generated SQL; every *value* is a bound parameter instead.
     """
     return "`" + name.replace("`", "``") + "`"
-
-
-def serialize_value(value: Any) -> Any:
-    """
-    Encode a MySQL column value as something the topic's JSON serializer accepts.
-
-    `bytes` become base64, anything with `isoformat()` (dates, times, datetimes)
-    becomes ISO-8601, JSON-native scalars pass through, and everything else
-    (`Decimal`, `set`, geometry, ...) falls back to `str()`.
-    """
-    if value is None:
-        return None
-    if isinstance(value, (bytes, bytearray)):
-        return base64.b64encode(value).decode("utf-8")
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
-    if isinstance(value, (int, float, str, bool)):
-        return value
-    return str(value)
 
 
 def is_checkpointable_key(values: Sequence[Any]) -> bool:
@@ -153,6 +135,7 @@ def iter_snapshot_batches(
     table: str,
     pk_columns: List[str],
     batch_size: int,
+    column_types: Mapping[str, ColumnType],
     start_after: Optional[Sequence[Any]] = None,
 ) -> Iterator[Tuple[List[Dict[str, Any]], List[Any]]]:
     """
@@ -171,6 +154,9 @@ def iter_snapshot_batches(
     :param table: table name.
     :param pk_columns: primary-key column names in index order.
     :param batch_size: maximum rows per page.
+    :param column_types: declared MySQL type per column, from
+        `values.fetch_column_types`. SET, JSON and BIT columns cannot be encoded to the
+        cross-path contract from the Python value alone.
     :param start_after: primary-key values of the last row of a previous run;
         when given, the walk resumes strictly after that row.
     """
@@ -203,7 +189,7 @@ def iter_snapshot_batches(
                 "schema": database,
                 "table": table,
                 "columnnames": column_names,
-                "columnvalues": [serialize_value(value) for value in row],
+                "columnvalues": serialize_row(row, column_names, column_types),
                 "oldkeys": {},
             }
             for row in rows
