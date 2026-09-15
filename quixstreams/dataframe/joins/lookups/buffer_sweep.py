@@ -9,9 +9,16 @@ partitions opt out of the background TTL sweep. Without this module a silent
 key's withheld records would sit in RocksDB and in the changelog forever - and
 under `on_timeout="emit"` would never be delivered at all.
 
-So every record processed by the operator, whatever its key, advances a
-round-robin cursor over its partition's pending index and settles a bounded
-slice of it. Healthy keys' traffic is what pays for the unconfigured ones.
+So every record processed by the operator, whatever its key, settles a bounded
+slice of its partition's overdue prefixes. Healthy keys' traffic is what pays
+for the unconfigured ones.
+
+The slice is taken off the pending index's deadline queue
+(`PendingIndex.due()`), which returns the overdue prefixes oldest deadline
+first. That ordering is also the fairness guarantee: a swept prefix leaves the
+queue, so the next record's slice starts with whatever is now oldest and nothing
+can be starved by a busier neighbour. No cursor is needed, and a key that is
+waiting but not yet overdue costs nothing at all.
 
 Emitting another key's records from this record's callback is safe precisely
 because the operator is an expanded transform: each emitted tuple carries its
@@ -26,11 +33,11 @@ from typing import Any
 from quixstreams.state.rocksdb.timestamped import TimestampedPartitionTransaction
 
 from .buffer_bookkeeping import BufferBookkeeping
+from .buffer_envelope import ENVELOPE_RECEIVED, emit_tuple
 from .buffer_state import (
-    ENVELOPE_RECEIVED,
+    MAX_RECEIVE_MS,
     PendingIndex,
     decode_prefix,
-    emit_tuple,
     key_from_prefix,
 )
 
@@ -38,7 +45,7 @@ __all__ = ("MAX_RECEIVE_MS", "SWEEP_BUDGET", "SWEEP_EMIT_BUDGET", "BufferSweeper
 
 logger = logging.getLogger(__name__)
 
-# How many pending prefixes one record may settle. Keeps the per-record cost of
+# How many overdue prefixes one record may settle. Keeps the per-record cost of
 # other keys' expiry bounded and predictable.
 SWEEP_BUDGET = 4
 
@@ -46,18 +53,14 @@ SWEEP_BUDGET = 4
 # rest wait for the next record's slice.
 SWEEP_EMIT_BUDGET = 256
 
-# Upper bound for "everything that has not timed out yet". Deliberately not
-# `now`: a clock step backwards can leave stored arrival times in the future,
-# and those records must still be found rather than stranded.
-MAX_RECEIVE_MS = 2**63 - 1
-
 
 class BufferSweeper:
     """
-    The round-robin settler of other keys' expired records, for one operator.
+    The settler of other keys' expired records, for one operator.
 
-    It owns one cursor per partition, which is fairness state only: losing it on
-    a restart costs nothing.
+    It carries no state: which prefixes are overdue, and in what order, is
+    entirely a property of the durable pending index, so nothing here has to
+    survive a restart or be reconciled after a rebalance.
     """
 
     def __init__(
@@ -68,8 +71,6 @@ class BufferSweeper:
     ) -> None:
         self._emit_on_timeout = emit_on_timeout
         self._bookkeeping = bookkeeping
-        # {partition: index position the next sweep starts from}
-        self._cursors: dict[int, int] = {}
 
     def sweep(
         self,
@@ -90,24 +91,28 @@ class BufferSweeper:
             itself in the same callback.
         :return: The records to emit, always empty under `on_timeout="drop"`.
         """
-        entries = index.entries()
-        if not entries:
+        overdue = index.due(cutoff)
+        if not overdue:
             return []
 
-        encoded_prefixes = list(entries)
-        total = len(encoded_prefixes)
-        cursor = self._cursors.get(partition, 0) % total
         emit_budget = SWEEP_EMIT_BUDGET
         out: list[tuple[Any, Any, int, Any]] = []
-        checked = 0
         swept = 0
 
-        while checked < total and swept < SWEEP_BUDGET:
-            encoded = encoded_prefixes[(cursor + checked) % total]
-            checked += 1
-            entry = entries.get(encoded)
-            # A prefix with nothing to settle costs one integer comparison.
+        for encoded, queued_ms in overdue:
+            if swept >= SWEEP_BUDGET:
+                break
+
+            entry = index.entry(encoded)
+            # The marker is read anyway - the emitted key is rebuilt from its
+            # kind - so checking it costs nothing, and it is the guard against a
+            # queue entry that outlived its marker. `PendingIndex.flush()` writes
+            # the two together, but a checkpoint whose changelog messages were
+            # only partly produced before the process died replays as a partial
+            # index. Such an entry is repaired rather than skipped, or every
+            # later record would read it again.
             if entry is None or entry[0] > cutoff:
+                index.unqueue(encoded, queued_ms)
                 continue
 
             prefix = decode_prefix(encoded)
@@ -115,8 +120,8 @@ class BufferSweeper:
                 continue
 
             if self._emit_on_timeout and emit_budget <= 0:
-                # Out of room this cycle. Rewind so the next record starts here.
-                checked -= 1
+                # Out of room this cycle; the rest stay queued for the next
+                # record, still oldest first.
                 break
 
             swept += 1
@@ -131,12 +136,11 @@ class BufferSweeper:
                 out=out,
             )
 
-        self._cursors[partition] = (cursor + checked) % total
         if swept:
             logger.debug(
-                "Lookup buffer swept %s of %s pending keys, emitting %s records",
+                "Lookup buffer swept %s of %s overdue keys, emitting %s records",
                 swept,
-                total,
+                len(overdue),
                 len(out),
             )
         return out

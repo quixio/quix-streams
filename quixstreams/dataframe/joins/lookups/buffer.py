@@ -2,9 +2,12 @@
 The public configuration surface of the non-blocking lookup buffer.
 
 `LookupBuffer` holds the knobs and the build-time checks; the record path lives
-in `buffer_operator.py` and the storage layout in `buffer_state.py`.
+in `buffer_operator.py`, the stored form of a withheld record in
+`buffer_envelope.py` and the index of which keys are holding one in
+`buffer_state.py`.
 """
 
+import logging
 from datetime import timedelta
 from typing import (
     TYPE_CHECKING,
@@ -27,6 +30,8 @@ if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 __all__ = ("LookupBuffer", "LookupBufferOverflowError", "OnOverflow", "OnTimeout")
+
+logger = logging.getLogger(__name__)
 
 OnTimeout = Literal["emit", "drop"]
 OnOverflow = Literal["drop-newest", "raise"]
@@ -222,15 +227,35 @@ class LookupBuffer:
         """
         Register the timestamped store that holds the withheld records.
 
-        The store is changelog-backed, which is not optional: a record's offset
-        is committed because it was *consumed*, not because it was emitted, and
-        there is no API to withhold an offset for a record still in flight. An
-        in-memory buffer would therefore lose every held record on a rebalance,
-        silently.
+        The buffer's durability rests on that store being changelog-backed: a
+        record's offset is committed because it was *consumed*, not because it
+        was emitted, and there is no API to withhold an offset for a record still
+        in flight. A held record that is not in a changelog is therefore gone for
+        good the moment its partition moves to another consumer.
+
+        Whether a changelog exists is not this buffer's decision to make -
+        `StateStoreManager` produces one only when the application was built with
+        a recovery manager, which is what `Application(use_changelog_topics=True)`
+        (the default) does, and that setting governs every store in the
+        application. So this is a warning and not an error: turning it into one
+        would fail an application whose other stores are perfectly happy without
+        changelogs. It is logged once per registration, at `WARNING`, naming the
+        exact consequence.
 
         :param dataframe: The dataframe the operator is being added to.
         """
-        dataframe.processing_context.state_manager.register_timestamped_store(
+        state_manager = dataframe.processing_context.state_manager
+        if not state_manager.using_changelogs:
+            logger.warning(
+                "The lookup buffer store %r is being registered without changelog "
+                "topics (`Application(use_changelog_topics=False)`). Records held "
+                "by `join_lookup(..., buffer=...)` will be lost, with their "
+                "offsets already committed, if this partition is reassigned or "
+                "the state directory is lost. Enable changelog topics to make the "
+                "buffer durable.",
+                self._store_name,
+            )
+        state_manager.register_timestamped_store(
             stream_id=dataframe.stream_id,
             store_name=self._store_name,
             grace_ms=self._grace_ms,

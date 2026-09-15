@@ -15,6 +15,7 @@ from turning into an O(N^2) read-per-write.
 
 import logging
 import time
+from collections import OrderedDict
 from typing import Any, Optional
 
 __all__ = ("BufferBookkeeping",)
@@ -25,6 +26,15 @@ logger = logging.getLogger(__name__)
 # overflowed" warnings.
 LOG_INTERVAL = 60.0
 
+# How many distinct keys each rate limiter tracks at once. A limiter entry is
+# never "finished" - a one-off key that drops a record once and is never seen
+# again would otherwise keep its entry for the life of the process, so a
+# deployment cycling through per-device keys grows the dicts without bound.
+# Evicting the least recently used entry costs only that key's next event
+# reporting immediately instead of being folded into a window, which is the same
+# thing that happens the first time any key is seen.
+MAX_RATE_LIMITED_KEYS = 1024
+
 
 class BufferBookkeeping:
     """
@@ -34,9 +44,10 @@ class BufferBookkeeping:
     def __init__(self) -> None:
         # {partition: {prefix: number of records currently withheld}}
         self._counts: dict[int, dict[bytes, int]] = {}
-        # {prefix: [window start (monotonic), events since the window started]}
-        self._drop_log: dict[bytes, list] = {}
-        self._overflow_log: dict[bytes, list] = {}
+        # {prefix: [window start (monotonic), events since the window started]},
+        # least-recently-used first, capped at `MAX_RATE_LIMITED_KEYS`.
+        self._drop_log: OrderedDict[bytes, list] = OrderedDict()
+        self._overflow_log: OrderedDict[bytes, list] = OrderedDict()
 
     def count(self, partition: int, prefix: bytes) -> int:
         """
@@ -121,7 +132,7 @@ class BufferBookkeeping:
 
     @staticmethod
     def _rate_limited(
-        state: dict[bytes, list],
+        state: OrderedDict[bytes, list],
         prefix: bytes,
         events: int,
     ) -> Optional[int]:
@@ -130,6 +141,10 @@ class BufferBookkeeping:
 
         The first event for a prefix reports immediately, so a problem is
         visible without waiting out a window.
+
+        The state is an LRU bounded at `MAX_RATE_LIMITED_KEYS`: a key evicted
+        after going quiet simply reports immediately the next time it is seen,
+        which is what a never-before-seen key does anyway.
 
         :param state: The rate limiter's per-prefix state.
         :param prefix: The store prefix.
@@ -141,7 +156,11 @@ class BufferBookkeeping:
         window = state.get(prefix)
         if window is None:
             state[prefix] = [now, 0]
+            while len(state) > MAX_RATE_LIMITED_KEYS:
+                state.popitem(last=False)
             return events
+
+        state.move_to_end(prefix)
         window[1] += events
         if now - window[0] < LOG_INTERVAL:
             return None

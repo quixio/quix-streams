@@ -40,16 +40,15 @@ from quixstreams.state.rocksdb.timestamped import TimestampedPartitionTransactio
 
 from .base import BaseField, BaseLookup
 from .buffer_bookkeeping import BufferBookkeeping
-from .buffer_state import (
+from .buffer_envelope import (
     ENVELOPE_TIMESTAMP,
-    ENVELOPE_VALUE,
-    PendingIndex,
     decode_headers,
     emit_tuple,
     encode_envelope,
-    prefix_for_key,
+    envelope_value,
 )
-from .buffer_sweep import MAX_RECEIVE_MS, BufferSweeper
+from .buffer_state import MAX_RECEIVE_MS, PendingIndex, prefix_for_key
+from .buffer_sweep import BufferSweeper
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
@@ -264,7 +263,7 @@ class BufferOperator:
 
         out: list[tuple[Any, Any, int, Any]] = []
         for envelope in survivors:
-            value = envelope[ENVELOPE_VALUE]
+            value = envelope_value(envelope)
             timestamp = envelope[ENVELOPE_TIMESTAMP]
             headers = decode_headers(envelope)
             self._lookup.join(
@@ -369,7 +368,6 @@ class BufferOperator:
         :param headers: The record headers.
         :raises LookupBufferOverflowError: On overflow with
             `on_overflow="raise"`.
-        :raises TypeError: If the value cannot be stored.
         """
         count = self._bookkeeping.count(partition, prefix)
         if count >= self._max_buffered_per_key:
@@ -381,15 +379,6 @@ class BufferOperator:
                 )
             self._bookkeeping.log_overflow(prefix, key, count)
             return
-
-        if isinstance(value, bytes):
-            # The store serializes with orjson, which has no bytes support. Fail
-            # here, naming the key, rather than cryptically at checkpoint flush.
-            raise TypeError(
-                f"Cannot buffer a `bytes` value for key {key!r}: "
-                f"`join_lookup(..., buffer=...)` stores withheld records as "
-                f"JSON. Deserialize the value before the lookup join."
-            )
 
         # This is the only call that raises the store's own expiry floor for the
         # prefix, to `receive_ms - grace_ms` - exactly the cutoff the caller has

@@ -163,10 +163,17 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
         """
         prefix = self._ensure_bytes(prefix)
         # `_get_items()` merges the update cache with the store into a new list,
-        # so the cache is never mutated while it is being iterated. It also
-        # scopes the range to this prefix's namespace by appending the SEPARATOR,
-        # which stops the range from spilling into a neighbouring prefix that
-        # shares these bytes (e.g. b"key" vs b"key2").
+        # so the cache is never mutated while it is being iterated. Its bounds
+        # are `<prefix> SEPARATOR <timestamp>`, which keeps a neighbouring prefix
+        # that merely shares these bytes out of the range (b"key" vs b"key2").
+        #
+        # It does NOT protect against a prefix that starts with these bytes plus
+        # a SEPARATOR (b"key" vs b"key|sub"): those keys sort *inside* b"key"'s
+        # range, so a wide enough upper bound reads and deletes them. That is a
+        # pre-existing defect of the whole timestamp-aware key layout, shared
+        # with `get_latest()`, `get_interval()` and `_expire()`, and fixing it
+        # changes the on-disk layout for `join_asof` / `join_interval` too. It is
+        # tracked in issue #1148 and deliberately not fixed here.
         items = self._get_items(start=start, end=end, prefix=prefix)
         for key, _ in items:
             self._update_cache.delete(key, prefix)
@@ -234,7 +241,9 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
             # Scope the lower bound to this prefix's namespace by appending the
             # SEPARATOR. Without it, the bare prefix lets the range spill into
             # other prefixes that share these bytes (e.g. b"key" vs b"key2"),
-            # deleting entries that belong to unrelated keys.
+            # deleting entries that belong to unrelated keys. It does not cover
+            # b"key" vs b"key|sub", whose keys sort inside b"key"'s namespace
+            # whatever the bounds are - see `delete_interval()` and issue #1148.
             lower_bound = self._serialize_key(b"", prefix)
             stored = self._partition.iter_items(
                 lower_bound=lower_bound, upper_bound=key
