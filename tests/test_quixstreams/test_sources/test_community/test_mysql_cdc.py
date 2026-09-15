@@ -10,6 +10,7 @@ pytest.importorskip("pymysqlreplication")
 from pymysql.err import InterfaceError, OperationalError
 
 from quixstreams.models.messages import KafkaMessage
+from quixstreams.sources.community.mysql_cdc import mysql_helper
 from quixstreams.sources.community.mysql_cdc.mysql_cdc import (
     MySqlCdcError,
     MySqlCdcSource,
@@ -194,6 +195,40 @@ def test_is_checkpointable_key(values, expected):
 )
 def test_is_connection_error(exc, expected):
     assert is_connection_error(exc) is expected
+
+
+def test_create_binlog_stream_enables_column_name_cache(monkeypatch):
+    """
+    The stream must ask for the INFORMATION_SCHEMA column-name fallback.
+
+    Without it, `pymysqlreplication` names every column `UNKNOWN_COL0..n` on any server
+    that does not set `binlog_row_metadata=FULL` - which is the default on MySQL 8.x and
+    unavailable on 5.7. This asserts the call shape only; that the names actually come
+    back real is proved against a live MINIMAL-metadata server, not here.
+    """
+    captured = {}
+
+    def fake_reader(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(mysql_helper, "BinLogStreamReader", fake_reader)
+    helper = mysql_helper.MySqlHelper(
+        host="localhost",
+        port=3306,
+        user="cdc_user",
+        password="cdc_password",
+        database="db",
+        table="tbl",
+        snapshot_host="localhost",
+    )
+
+    helper.create_binlog_stream(server_id=1234, log_file="mysql-bin.000001", log_pos=4)
+
+    assert captured["use_column_name_cache"] is True
+    assert captured["server_id"] == 1234
+    assert captured["log_file"] == "mysql-bin.000001"
+    assert captured["log_pos"] == 4
 
 
 def test_commit_batch_order():

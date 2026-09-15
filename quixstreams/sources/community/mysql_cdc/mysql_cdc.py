@@ -115,8 +115,10 @@ class MySqlCdcSource(StatefulSource):
     ):
         """
         :param host: MySQL server hostname to replicate from.
-        :param user: MySQL username. Needs REPLICATION SLAVE and REPLICATION CLIENT,
-            plus SELECT on the table when the initial snapshot is enabled.
+        :param user: MySQL username. Needs REPLICATION SLAVE, REPLICATION CLIENT and
+            SELECT on the table - SELECT is required whether or not the initial
+            snapshot is enabled, because MySQL refuses the connection to `database`
+            without it.
         :param password: MySQL password.
         :param database: database (schema) containing the table.
         :param table: table to stream changes from.

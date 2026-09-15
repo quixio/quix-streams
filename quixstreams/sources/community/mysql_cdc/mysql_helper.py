@@ -175,6 +175,7 @@ class MySqlHelper:
                 self._require_binlog_enabled(cursor)
                 self._require_row_format(cursor)
                 self._warn_on_row_image(cursor)
+                self._warn_on_row_metadata(cursor)
                 self._require_table(cursor)
                 if require_primary_key:
                     self.require_primary_key(cursor)
@@ -215,6 +216,31 @@ class MySqlHelper:
                 "delete events carry every column instead of only the primary key",
                 row_image,
                 self._host,
+            )
+
+    def _warn_on_row_metadata(self, cursor: Any) -> None:
+        row_metadata = self._show_variable(cursor, "binlog_row_metadata")
+        if row_metadata is None:
+            # MySQL 5.7 has no such variable: its binlog never carries column names, and
+            # nothing can be configured to make it. That is not a misconfiguration to
+            # report, so say nothing - the INFORMATION_SCHEMA fallback enabled in
+            # `create_binlog_stream` is exactly what covers that server.
+            return
+        if row_metadata != "FULL":
+            # Not fatal, and deliberately so: MINIMAL is the MySQL 8.x *default*, so
+            # failing here would reject most correctly-configured servers. The column
+            # names are recovered from INFORMATION_SCHEMA instead - but that recovery
+            # is cached for the lifetime of the process, which FULL never needs.
+            logger.warning(
+                "binlog_row_metadata is %r on %s; 'FULL' is recommended so the binlog "
+                "carries column names. Without it they are resolved from "
+                "INFORMATION_SCHEMA and cached, so a column renamed while this source "
+                "is running keeps its old name in change events until it restarts, and "
+                "a user whose SELECT grant does not cover all of %s gets "
+                "'UNKNOWN_COL0', 'UNKNOWN_COL1', ... instead of column names",
+                row_metadata,
+                self._host,
+                self._table_name,
             )
 
     def _require_table(self, cursor: Any) -> None:
@@ -361,6 +387,23 @@ class MySqlHelper:
         `resume_stream=True` makes the server continue with the event *after*
         `log_pos` (which is the end position of the last processed event), so resuming
         does not duplicate the event at the boundary.
+
+        `use_column_name_cache=True` is what keeps real column names in change events.
+        Column names reach the binlog only when `binlog_row_metadata=FULL`, which is
+        *not* the default - MySQL 8.x ships MINIMAL and 5.7 has no such variable at all.
+        With the flag off, `pymysqlreplication` names every column `UNKNOWN_COL0..n`,
+        which would give one topic two incompatible schemas (snapshot rows take their
+        names from `cursor.description`, so only the change events degrade) and make the
+        primary-key deduplication `MySqlCdcSource` asks consumers to do impossible. With
+        it on, the library resolves the names once per table from INFORMATION_SCHEMA,
+        using the same credentials as this stream.
+
+        That fallback caches per `schema.table` for the lifetime of the process and is
+        never invalidated, so a column renamed under a running source keeps its old name
+        in change events until the source restarts. It is not worked around here: the
+        cache lives in `pymysqlreplication`, the window is a live `ALTER TABLE`, and
+        `binlog_row_metadata=FULL` - which `validate_server_config` recommends - removes
+        the fallback entirely, because then every table-map event carries current names.
         """
         return BinLogStreamReader(
             connection_settings={
@@ -377,6 +420,7 @@ class MySqlHelper:
             blocking=False,
             log_file=log_file,
             log_pos=log_pos,
+            use_column_name_cache=True,
         )
 
     def read_changes(
@@ -397,8 +441,10 @@ class MySqlHelper:
         """
         changes: List[Dict[str, Any]] = []
         for event in stream:
-            # The library-side only_schemas/only_tables filter depends on
-            # binlog_row_metadata being populated, so re-check here.
+            # `only_schemas` and `only_tables` are matched independently by the library,
+            # never as a pair, so the combination is re-checked here. Both names come
+            # from the table-map event body, which every binlog carries whatever
+            # `binlog_row_metadata` is set to - unlike the column names.
             if event.schema == self._database and event.table == self._table:
                 changes.extend(self._event_to_changes(event))
             if len(changes) >= max_rows:

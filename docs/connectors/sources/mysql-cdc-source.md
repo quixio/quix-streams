@@ -86,8 +86,8 @@ Here are the important configurations to be aware of (see
 ### Required:
 
 - `host`: the MySQL server to replicate from.
-- `user`: MySQL username, with `REPLICATION SLAVE` and `REPLICATION CLIENT` privileges
-    (plus `SELECT` on the table when the initial snapshot is enabled).
+- `user`: MySQL username, with `REPLICATION SLAVE`, `REPLICATION CLIENT` and `SELECT` on
+    the table; see [MySQL Prerequisites](#mysql-prerequisites).
 - `password`: MySQL password.
 - `database`: the database (schema) containing the table.
 - `table`: the table to stream changes from.
@@ -161,12 +161,20 @@ Supported server versions: MySQL 5.7 through 8.4.
     - `binlog_row_image = FULL` is **recommended**. With `MINIMAL` the source logs a
       warning and keeps running: update and delete events then carry only the primary
       key rather than every column.
+    - `binlog_row_metadata = FULL` is **recommended**, and is *not* the server default —
+      MySQL 8.x ships `MINIMAL` and MySQL 5.7 has no such variable at all. Only `FULL`
+      puts column names into the binlog itself. Without it the source falls back to
+      reading them from `INFORMATION_SCHEMA` — which needs the `SELECT` grant below on
+      the whole table — and caches them for as long as it runs, so a column renamed
+      under a running source keeps its old name in change events until the source is
+      restarted. The source logs a warning and keeps running. If neither source of names
+      is available, change events name their columns `UNKNOWN_COL0`, `UNKNOWN_COL1`, ….
     - `binlog_expire_logs_seconds` must exceed the longest downtime you expect. If the
       binlog file holding the committed position has been purged, the stream fails fast
       with MySQL's "Could not find first log file name in binary log index".
 
-2. **MySQL user permissions**: the user needs `REPLICATION SLAVE` and
-   `REPLICATION CLIENT`:
+2. **MySQL user permissions**: the user needs `REPLICATION SLAVE`, `REPLICATION CLIENT`
+   and `SELECT` on the table:
 
     ```sql
     -- Create replication user
@@ -175,11 +183,20 @@ Supported server versions: MySQL 5.7 through 8.4.
     -- Grant replication privileges for CDC
     GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'cdc_user'@'%';
 
-    -- Grant select for initial snapshot (if using snapshot feature)
+    -- Required for every deployment, snapshot or not (see below)
     GRANT SELECT ON your_database.your_table TO 'cdc_user'@'%';
 
     FLUSH PRIVILEGES;
     ```
+
+    `SELECT` is **not** snapshot-only. The source connects to `database` to validate the
+    server and to read the table's metadata, and MySQL refuses the connection outright
+    (`ERROR 1044: Access denied for user ... to database ...`) to an account holding only
+    the two replication privileges. It is also what lets the source read column names
+    from `INFORMATION_SCHEMA` when `binlog_row_metadata` is not `FULL`. Grant it on the
+    whole table: a column-level grant makes the table visible but returns a partial
+    column list, which the source cannot use and which degrades change events to
+    `UNKNOWN_COL0`, `UNKNOWN_COL1`, ….
 
 
 ## Initial Snapshot
@@ -404,7 +421,13 @@ this container's host, credentials, database and table.
 - **"binlog_format is 'STATEMENT' ... but CDC requires 'ROW'"** — set
   `binlog_format=ROW`. Row events do not exist in any other format.
 - **"Access denied" / "Could not read the binary log position"** — grant
-  `REPLICATION SLAVE, REPLICATION CLIENT ON *.*` to the configured user.
+  `REPLICATION SLAVE, REPLICATION CLIENT ON *.*` to the configured user. `Access denied
+  for user ... to database ...` (error 1044) is the other half: the user also needs
+  `SELECT` on the table, whether or not the initial snapshot is enabled.
+- **Change events name their columns `UNKNOWN_COL0`, `UNKNOWN_COL1`, …** — the binlog
+  carried no column names and they could not be read from `INFORMATION_SCHEMA` either.
+  Grant `SELECT` on the whole table (not on individual columns), and set
+  `binlog_row_metadata=FULL` so the names come from the binlog in the first place.
 - **"A slave with the same server_id is already connected"** — another replica or CDC
   client is using the same id. Set a distinct `server_id`, or give the two sources
   different `name`/`database`/`table` values so their derived ids differ.
