@@ -1925,6 +1925,50 @@ class StreamingDataFrame:
         on: Optional[Union[str, Callable[[dict[str, Any], Any], str]]] = None,
         buffer: Optional[LookupBuffer] = None,
     ) -> "StreamingDataFrame":
+        """
+        Note: This is an experimental feature, and its API is likely to change in the future.
+        Enrich the records in this StreamingDataFrame by performing a lookup join using a custom lookup strategy.
+
+        This method allows you to enrich each record in the dataframe with additional data fetched from an external
+        source, using a user-defined lookup strategy (subclass of BaseLookup) and a set of fields
+        (subclasses of BaseField) that specify how to extract or map the enrichment data.
+
+        Each record's value dictionary is updated in place with the enrichment data.
+
+        Lookup implementation part of the standard quixstreams library:
+            - `quixstreams.dataframe.joins.lookups.QuixConfigurationService`
+
+        :param lookup: An instance of a subclass of BaseLookup that implements the enrichment logic.
+        :param fields: A mapping of field names to the lookup Field objects specifying how to extract or map enrichment data.
+        :param on: Specifies how to determine the target key for the lookup:
+            - If a string, it is interpreted as the column name in the value dict to use as the lookup key.
+            - If a callable, it should accept (value, key) and return the target key as a string.
+            - If None (default), the message key is used as the lookup key.
+        :param buffer: A `LookupBuffer` holding records whose lookup does not resolve
+            yet, instead of enriching them with field defaults. Requires a state store
+            and a periodic task, both registered here. If None (default), an unresolved
+            record goes downstream immediately with its fields' defaults.
+
+        :returns: StreamingDataFrame: A StreamingDataFrame with the lookup join applied.
+
+        Example:
+
+        ```python
+        from quixstreams import Application
+        from quixstreams.dataframe.joins.lookups import QuixConfigurationService, QuixConfigurationServiceField as Field
+
+        app = Application()
+
+        sdf = app.dataframe(app.topic("input"))
+        lookup = QuixConfigurationService(app.topic("config"), config=app.config)
+
+        fields = {
+            "test": Field(type="test", default="test_default")
+        }
+
+        sdf = sdf.join_lookup(lookup, fields)
+        ```
+        """
         if callable(on):
 
             def _on(value: dict[str, Any], key: Any) -> str:
@@ -1940,6 +1984,7 @@ class StreamingDataFrame:
 
         if buffer is not None:
             buffer.validate_fields(fields)
+            buffer.validate_key_deserializers(self._topics)
             buffer.register_store(self)
             operator = buffer.callback(self, lookup, fields, _on)
             self._registry.register_periodic_task(operator.tick)

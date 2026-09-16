@@ -1,3 +1,13 @@
+"""
+The settlement pass shared by the record path and the deadline tick: find the
+keys whose earliest withheld record has run out of grace, and settle them per
+`on_timeout`.
+
+The record path runs it with tight budgets on every record; the tick runs it in
+a loop with wider ones. Neither re-runs the lookup - a record that reaches its
+deadline is settled, not retried.
+"""
+
 import logging
 from typing import NamedTuple, Optional
 
@@ -22,17 +32,24 @@ __all__ = (
 
 logger = logging.getLogger(__name__)
 
+# Keys settled per record. The record path pays this on every record, so it is
+# small; whatever is left over is picked up by the next record or by the tick.
 SWEEP_BUDGET = 4
 
+# Records emitted per sweep, rounded up to the end of a millisecond.
 SWEEP_EMIT_BUDGET = 256
 
 
 class SweepResult(NamedTuple):
+    """What one sweep emitted, and how many keys it got through."""
+
     emissions: list[Emission]
     swept: int
 
 
 class BufferSweeper:
+    """Settles keys whose withheld records have run out of grace."""
+
     def __init__(
         self,
         *,
@@ -51,6 +68,17 @@ class BufferSweeper:
         skip: Optional[bytes],
         prefix_budget: int = SWEEP_BUDGET,
     ) -> SweepResult:
+        """
+        Settle the keys that are due, up to the budgets.
+
+        :param transaction: The store transaction of the partition being swept.
+        :param index: The pending index, on that same transaction.
+        :param partition: The partition being swept.
+        :param cutoff: Arrival time at or below which a record has timed out.
+        :param skip: A prefix the caller settles itself, or `None`.
+        :param prefix_budget: Cap on keys settled in this call.
+        :return: The emissions and the number of keys settled.
+        """
         overdue = index.due(cutoff, limit=prefix_budget + 1)
         if not overdue:
             return SweepResult([], 0)
@@ -65,6 +93,8 @@ class BufferSweeper:
 
             entry = index.entry(encoded)
             if entry is None or entry[0] > cutoff:
+                # A queue entry the marker no longer claims: the key was settled
+                # or moved on through the record path since it was queued.
                 index.unqueue(encoded, queued_ms)
                 continue
 
@@ -125,6 +155,9 @@ class BufferSweeper:
             self._reindex(transaction, index, partition, prefix, cutoff)
             return 0
 
+        # The delete below addresses milliseconds, so the cut grows to the end of
+        # the one it lands in rather than splitting it: a split would delete
+        # records this sweep never emitted.
         cut = len(envelopes)
         if cut > emit_budget:
             cut = emit_budget
@@ -159,6 +192,9 @@ class BufferSweeper:
         prefix: bytes,
         cutoff: int,
     ) -> None:
+        # Rebuild the marker and the count from the store itself. This is the
+        # repair path for a marker that claims an arrival no record is at, so it
+        # reads the key's whole surviving buffer.
         remaining = transaction.get_interval(
             start=cutoff + 1,
             end=MAX_RECEIVE_MS,

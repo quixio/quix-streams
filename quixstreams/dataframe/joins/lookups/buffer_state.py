@@ -1,3 +1,17 @@
+"""
+The durable index of which message-key prefixes currently hold withheld records.
+
+Two namespaces inside the buffer's store, both written only by
+`PendingIndex.flush()`:
+
+- `INDEX_PREFIX`: one marker per prefix, `[earliest_receive_ms, key_kind]`.
+- `QUEUE_PREFIX`: the same prefixes keyed by that arrival time, so the sweep
+  finds what is due with a range read instead of a scan.
+
+The recorded arrival time is a lower bound. Too low costs a wasted range read;
+too high would hide withheld records from the sweep for good.
+"""
+
 import base64
 from typing import Any, Optional, Union
 
@@ -27,10 +41,19 @@ KEY_KIND_NONE = "n"
 INDEX_PREFIX = b"__lookup_buffer_index__"
 QUEUE_PREFIX = b"__lookup_buffer_queue__"
 
+# A store key is `<prefix> SEPARATOR <encoded timestamp>`, so a prefix holding a
+# SEPARATOR byte sorts inside the range a scan for a shorter prefix walks
+# (`b"tenant|device"` inside `b"tenant"`'s). The store does not defend against
+# this for any of its users - issue #1148 - so prefixes are escaped before they
+# reach it. The escape byte is escaped first, which makes the encoding
+# injective, and is 0x7f so the encoding is the identity for a prefix holding
+# neither byte.
 PREFIX_ESCAPE = b"\x7f"
 _ESCAPED_SEPARATOR = PREFIX_ESCAPE + b"\x01"
 _ESCAPED_ESCAPE = PREFIX_ESCAPE + b"\x02"
 
+# Free as a sentinel: no escaped prefix can begin `7f 00`, because every 0x7f in
+# one starts a sequence whose second byte is 0x01 or 0x02.
 NULL_KEY_PREFIX = PREFIX_ESCAPE + b"\x00"
 
 
@@ -51,6 +74,17 @@ def _unescape_prefix(prefix: bytes) -> bytes:
 
 
 def prefix_for_key(key: Any) -> bytes:
+    """
+    Map a message key to the store prefix its records are held under.
+
+    `LookupBuffer.validate_key_deserializers()` turns the `ValueError` below into
+    a build-time failure for the topic-wide case.
+
+    :param key: The message key.
+    :return: The escaped store prefix.
+    :raises ValueError: if the key is not `bytes`, `str` or `None`, or if it
+        encodes to one of the index's own namespaces.
+    """
     if key is None:
         return NULL_KEY_PREFIX
     if isinstance(key, bytes):
@@ -88,6 +122,8 @@ def key_from_prefix(prefix: bytes, kind: str) -> Optional[Union[bytes, str]]:
 
 
 def encode_prefix(prefix: bytes) -> str:
+    # base64 because the prefix travels inside index values, which go through
+    # the store's serializer, and orjson takes `str` but not `bytes`.
     return base64.b64encode(prefix).decode()
 
 
@@ -96,14 +132,22 @@ def decode_prefix(encoded: str) -> bytes:
 
 
 def _marker_key(encoded: str) -> bytes:
+    # The `k` tag keeps an empty message key's marker off the store key
+    # `INDEX_PREFIX + SEPARATOR`, which sorts below the zero timestamp
+    # `TimestampedPartitionTransaction._expire()` uses as its lower bound, and
+    # clear of the store's own `__min_eligible_timestamps__` key.
     return b"k" + encoded.encode()
 
 
 def _queue_key(receive_ms: int, encoded: str) -> bytes:
+    # `int_to_bytes` is big-endian, so entries sort by deadline; the encoded
+    # prefix keeps two prefixes arriving in the same millisecond apart.
     return int_to_bytes(receive_ms) + SEPARATOR + encoded.encode()
 
 
 class PendingIndex:
+    """One store transaction's view of the pending index."""
+
     def __init__(self, transaction: TimestampedPartitionTransaction) -> None:
         self._transaction = transaction
         self._markers: dict[str, Optional[list]] = {}
@@ -112,9 +156,15 @@ class PendingIndex:
         self._stale: list[tuple[str, int]] = []
 
     def get(self, prefix: bytes) -> Optional[list]:
+        """
+        :param prefix: The store prefix.
+        :return: `[earliest_receive_ms, key_kind]`, or `None` if the prefix
+            holds nothing.
+        """
         return self.entry(encode_prefix(prefix))
 
     def entry(self, encoded: str) -> Optional[list]:
+        """`get()` for a prefix already in its base64 form."""
         if encoded not in self._markers:
             marker = self._transaction.get(_marker_key(encoded), prefix=INDEX_PREFIX)
             self._markers[encoded] = marker
@@ -122,6 +172,11 @@ class PendingIndex:
         return self._markers[encoded]
 
     def due(self, cutoff: int, limit: int) -> list[list]:
+        """
+        :param cutoff: Arrival time at or below which a prefix is due.
+        :param limit: Cap on entries read.
+        :return: `[encoded_prefix, queued_receive_ms]` pairs, earliest first.
+        """
         if cutoff < 0:
             return []
         return self._transaction.get_interval(
@@ -129,6 +184,7 @@ class PendingIndex:
         )
 
     def earliest(self) -> Optional[int]:
+        """:return: The earliest queued arrival time in the partition, if any."""
         queued = self._transaction.get_interval(
             start=0, end=MAX_RECEIVE_MS, prefix=QUEUE_PREFIX, limit=1
         )
@@ -154,6 +210,12 @@ class PendingIndex:
             self._changed.add(encoded)
 
     def set_earliest(self, prefix: bytes, receive_ms: int) -> None:
+        """
+        Move an existing marker to a new arrival time. No-op if there is none.
+
+        :param prefix: The store prefix.
+        :param receive_ms: The prefix's earliest surviving arrival time.
+        """
         encoded = encode_prefix(prefix)
         marker = self.entry(encoded)
         if marker is not None and marker[0] != receive_ms:
@@ -167,9 +229,24 @@ class PendingIndex:
             self._changed.add(encoded)
 
     def unqueue(self, encoded: str, receive_ms: int) -> None:
+        """
+        Schedule the removal of a queue entry whose marker no longer claims it.
+
+        :param encoded: The prefix in its base64 form.
+        :param receive_ms: The arrival time the entry is queued at.
+        """
         self._stale.append((encoded, receive_ms))
 
     def flush(self) -> None:
+        """
+        Write back every entry this instance changed.
+
+        The only writer of either namespace: the previously persisted queue
+        entry is deleted before the new one is written, so a prefix is never
+        queued twice or queued at a deadline its marker no longer claims.
+        Entries handed to `unqueue()` go first, so a prefix repaired and
+        rewritten in the same callback keeps its new entry.
+        """
         for stale_encoded, stale_ms in self._stale:
             self._transaction.delete(
                 _queue_key(stale_ms, stale_encoded), prefix=QUEUE_PREFIX

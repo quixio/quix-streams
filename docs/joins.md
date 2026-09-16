@@ -329,6 +329,10 @@ With `unresolved_types_field` set, a timed-out emitted record still carries a no
 
 `join_lookup` raises `ValueError` at build time, naming the field, if any field used with a buffer has no `default=`. A field without one raises `KeyError` the moment a configuration is missing — which happens *before* anything is buffered — so it does not merely break `on_timeout="emit"`, it breaks buffering entirely.
 
+#### The message key must be `bytes`, `str` or `None`
+
+The buffer groups withheld records by the **message key**, which becomes a state-store prefix. `join_lookup` raises `ValueError` at build time if the input topic declares `key_deserializer` as `"int"`, `"integer"`, `"double"`, `"json"` or `"quix"`. Use `"bytes"` or `"str"`; a custom `Deserializer` must produce `bytes`, `str` or `None`.
+
 #### `on_timeout` is not `fallback`
 
 They govern different failures and neither implies the other:
@@ -336,9 +340,11 @@ They govern different failures and neither implies the other:
 | Failure | Governed by |
 |---|---|
 | No configuration for the key at all — the case the buffer is about | the per-field `default=` (what the record carries) and `on_timeout` (its fate after `grace_ms`) |
-| A configuration exists, but fetching its content over HTTP failed | `fallback` on `QuixConfigurationService` |
+| A configuration exists, but fetching its content over HTTP failed | `fallback` on `QuixConfigurationService`, and the type is reported unresolved |
 
 `fallback="default"` does **not** rescue a record whose configuration is simply absent.
+
+A content fetch that fails is transient, and the service retries it with a backoff. While a version's content cannot be fetched, its type stays in `unresolved_types_field`, so `is_resolved` is False and the buffer holds the record instead of emitting it with every field at its default. Under `fallback="error"` the exception propagates as before.
 
 #### `grace_ms` is wall-clock time
 
@@ -366,13 +372,13 @@ This is fine for stateless transforms, per-key stateful aggregation, `group_by`,
 
 The release trigger is the next record for the same key. A key that stops producing has nothing to trigger it, so the buffer settles its records itself: every record processed on a partition, whatever its key, settles a bounded slice of the other keys whose records have run out of grace. Under `on_timeout="emit"` those records are emitted at most `grace_ms` plus one settlement cycle after they arrived; under `"drop"` they are dropped.
 
-The one case with no delivery is a partition that goes **completely** silent — no records for any key — because nothing drives the settlement. That partition is also not growing, and the records emit when traffic resumes.
+A partition that goes **completely** silent — no records for any key — settles too: the application's run loop runs the buffer's deadline tick on every iteration, whether or not a message was processed. With no traffic a deadline is observed once per `Application(consumer_poll_timeout=...)` (1.0 s by default), so a record's real latency is up to `grace_ms` plus that poll timeout. Lower `consumer_poll_timeout` if you need sub-second accuracy on an idle partition.
 
 #### Sizing
 
 The time bound is the one to tune. A key's steady-state buffer is roughly `rate x grace_ms` records, and the same volume is written to the changelog topic. At 100 msg/s, `grace_ms = 30_000` and 1 KB values, one unresolvable key holds ~3000 entries (~3 MB) in RocksDB and in the changelog.
 
-`max_buffered_per_key` is a safety valve, not the primary bound — and it is a **latency** knob as much as a memory one: a release deserializes a key's entire surviving buffer inside a single callback, so 10 000 records is a real pause on the processing thread. A warning is logged when one release exceeds 1000 records.
+`max_buffered_per_key` is a safety valve, not the primary bound — and it is a **latency** knob as much as a memory one: a release deserializes and re-joins a key's entire surviving buffer inside a single callback, so 10 000 records is a real pause on the processing thread. A warning is logged when one release examines more than 1000 records.
 
 An overflow drop is **not** governed by `on_timeout`: the record never entered the buffer, so it has no deadline to expire.
 

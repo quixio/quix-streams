@@ -444,12 +444,17 @@ class Lookup(BaseLookup[BaseField]):
         for type_, type_fields in fields_by_type.items():
             version = self._find_version(type_, on, timestamp)
 
-            if version is None:
-                unresolved_types.append(type_)
-            elif version.retry_at < start:
+            if version is not None and version.retry_at < start:
                 self._version_data_cached.remove(version, type_fields)
 
             value.update(self._version_data_cached(version, type_fields))
+
+            # `ConfigurationVersion.failed()` raises `retry_count`, and
+            # `_fetch_version_content` calls it on every content-fetch failure,
+            # so a non-zero count means the fields above came from
+            # `field.missing()` and not from the version's content.
+            if version is None or version.retry_count:
+                unresolved_types.append(type_)
 
         if self._unresolved_types_field is not None:
             value[self._unresolved_types_field] = sorted(unresolved_types)

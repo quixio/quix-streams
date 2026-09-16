@@ -1,3 +1,13 @@
+"""
+Per-key counts and rate-limited warnings for the lookup buffer.
+
+The counts are in-memory and per partition: they keep the
+`max_buffered_per_key` check off the store, and a stale one self-corrects the
+next time the key is swept, through `BufferSweeper._reindex`. They are dropped
+on revoke by `BufferTicker._resync`, so a re-assigned partition does not judge
+overflow against what it held under a previous assignment.
+"""
+
 import logging
 import time
 from collections import OrderedDict
@@ -7,12 +17,16 @@ __all__ = ("BufferBookkeeping",)
 
 logger = logging.getLogger(__name__)
 
+# Per key and per warning kind, not global.
 LOG_INTERVAL = 60.0
 
+# Cap on the rate limiter's own memory, evicting the least recently warned key.
 MAX_RATE_LIMITED_KEYS = 1024
 
 
 class BufferBookkeeping:
+    """Counts what each key holds and rate-limits what the buffer logs."""
+
     def __init__(self) -> None:
         self._counts: dict[int, dict[bytes, int]] = {}
         self._drop_log: OrderedDict[bytes, list] = OrderedDict()
@@ -20,16 +34,24 @@ class BufferBookkeeping:
         self._unstorable_log: OrderedDict[bytes, list] = OrderedDict()
 
     def count(self, partition: int, prefix: bytes) -> int:
-        return self._counts.setdefault(partition, {}).get(prefix, 0)
+        """:return: Records held for a key. Reading never creates state."""
+        return self._counts.get(partition, {}).get(prefix, 0)
+
+    def forget(self, partition: int) -> None:
+        """Drop every count for a partition, on revoke."""
+        self._counts.pop(partition, None)
 
     def set_count(self, partition: int, prefix: bytes, count: int) -> None:
-        counts = self._counts.setdefault(partition, {})
-        if count:
-            counts[prefix] = count
-        else:
-            counts.pop(prefix, None)
+        """:param count: Records now held for the key. Zero removes the entry."""
+        if not count:
+            counts = self._counts.get(partition)
+            if counts is not None:
+                counts.pop(prefix, None)
+            return
+        self._counts.setdefault(partition, {})[prefix] = count
 
     def decrement(self, partition: int, prefix: bytes, removed: int) -> None:
+        """:param removed: Records that left the store. Clamped at zero."""
         if not removed:
             return
         current = self.count(partition, prefix)
@@ -64,6 +86,10 @@ class BufferBookkeeping:
         key: Any,
         describe: Callable[[], str],
     ) -> None:
+        """
+        :param describe: Produces the path the serializer refused. Called only
+            when the warning is not rate-limited away.
+        """
         total = self._rate_limited(self._unstorable_log, prefix, 1)
         if total is not None:
             logger.warning(

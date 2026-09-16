@@ -1,3 +1,31 @@
+"""
+The stored representation of one withheld record.
+
+`get_interval()` returns values without their store keys, so everything needed
+to emit a record later - arrival time, event timestamp, origin topic and offset
+- travels inside the value.
+
+Envelopes go through the store's own serializer, orjson by default, which
+rejects shapes a record value may legitimately hold. The envelope lifts those
+out on the way in and puts them back on the way out, addressing them **by path**
+so that no shape a user can put in a value is mistaken for a marker:
+
+- `bytes`, `bytearray` and `memoryview` are base64-encoded, recorded in
+  `ENVELOPE_BYTES`. Header values are base64-encoded in place instead.
+- `tuple`, `set` and `frozenset` become JSON arrays with their kind recorded in
+  `ENVELOPE_CONTAINERS`. orjson encodes a tuple as an array by itself, and would
+  return it as a `list`.
+
+Accepted losses: `bytearray` and `memoryview` come back as `bytes`, and a
+subclass (a `NamedTuple`, an `OrderedDict`) comes back as its builtin base.
+
+Out of reach of any encoding here: arbitrary objects, non-`str` dict keys,
+integers outside 64 bits, reference cycles. `BufferOperator._buffer()` offers
+the finished envelope to the store's serializer before writing, and
+`describe_unstorable()` names the path of whatever it refused by re-offering
+subtrees to that same serializer.
+"""
+
 import base64
 from typing import Any, Callable, Iterable, Mapping, NamedTuple, Optional, Union
 
@@ -21,6 +49,8 @@ __all__ = (
     "envelope_value",
 )
 
+# Envelope field names are one byte each: every withheld record pays for them,
+# in the store and in the changelog.
 ENVELOPE_VALUE = "v"
 ENVELOPE_TIMESTAMP = "t"
 ENVELOPE_RECEIVED = "r"
@@ -56,6 +86,8 @@ _INT_MAX = 2**64 - 1
 
 
 class Emission(NamedTuple):
+    """One record on its way downstream, with the origin to emit it under."""
+
     value: Any
     key: Any
     timestamp: int
@@ -72,6 +104,17 @@ def encode_envelope(
     topic: Optional[str] = None,
     offset: int = NO_OFFSET,
 ) -> dict[str, Any]:
+    """
+    Build the stored form of one record.
+
+    :param value: The record value, after `lookup.join()` has run on it.
+    :param timestamp: The record's event timestamp.
+    :param receive_ms: Arrival time, the store key this is written under.
+    :param headers: The record headers, mapping or pairs.
+    :param topic: The topic the record came from.
+    :param offset: The record's offset.
+    :return: The envelope, not yet offered to the store's serializer.
+    """
     encoded_headers, is_mapping = _encode_headers(headers)
     stored_value, byte_paths, container_paths = _lift_value(value)
     return {
@@ -88,11 +131,20 @@ def encode_envelope(
 
 
 def envelope_value(envelope: Mapping[str, Any]) -> Any:
+    """
+    :param envelope: A stored envelope.
+    :return: The record value with its lifted shapes restored.
+    """
     value = _restore_bytes(envelope[ENVELOPE_VALUE], envelope.get(ENVELOPE_BYTES))
     return _restore_containers(value, envelope.get(ENVELOPE_CONTAINERS))
 
 
 def emit_tuple(envelope: Mapping[str, Any], key: Any) -> Emission:
+    """
+    :param envelope: A stored envelope.
+    :param key: The message key its prefix decodes to.
+    :return: The emission to hand downstream, carrying its own origin.
+    """
     return Emission(
         envelope_value(envelope),
         key,
@@ -104,6 +156,10 @@ def emit_tuple(envelope: Mapping[str, Any], key: Any) -> Emission:
 
 
 def decode_headers(envelope: Mapping[str, Any]) -> Any:
+    """
+    :param envelope: A stored envelope.
+    :return: The headers in the shape they were received in, mapping or pairs.
+    """
     encoded = envelope[ENVELOPE_HEADERS]
     if encoded is None:
         return None
@@ -126,6 +182,14 @@ def describe_unstorable(
     envelope: Mapping[str, Any],
     probe: Callable[[Any], Any],
 ) -> str:
+    """
+    Locate the part of an envelope the store's serializer refused.
+
+    :param envelope: The envelope the write failed on.
+    :param probe: The store's own `_serialize_value`, re-offered per subtree so
+        the diagnosis cannot disagree with the refused write.
+    :return: A human-readable path and reason.
+    """
     path: list[_Step] = []
     node: Any = envelope
     seen: set[int] = set()
@@ -294,6 +358,8 @@ def _restore_containers(value: Any, paths: Optional[list[list[Any]]]) -> Any:
     if not paths:
         return value
 
+    # Deepest paths first: rebuilding an outer tuple would freeze the inner
+    # lists before they could be rebuilt in place.
     for path, kind in sorted(paths, key=lambda entry: len(entry[0]), reverse=True):
         if not path:
             return _rebuild_container(value, kind)

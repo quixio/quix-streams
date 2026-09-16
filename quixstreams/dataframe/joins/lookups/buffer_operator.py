@@ -1,3 +1,11 @@
+"""
+The record path of the lookup buffer: everything that happens while a record is
+passing through `join_lookup(..., buffer=...)`.
+
+The same work driven by the clock instead of by a record lives in
+`buffer_tick.py`, and the part both share in `buffer_sweep.py`.
+"""
+
 import time
 from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Optional, cast
 
@@ -41,10 +49,12 @@ __all__ = ("BufferOperator", "LookupBufferOverflowError")
 
 
 class LookupBufferOverflowError(Exception):
-    pass
+    """Raised when a key is full and the buffer's `on_overflow` is `"raise"`."""
 
 
 class BufferOperator:
+    """The callable `join_lookup()` installs on the record path."""
+
     def __init__(
         self,
         *,
@@ -80,12 +90,19 @@ class BufferOperator:
             store_name=store_name,
             grace_ms=grace_ms,
             sweeper=self._sweeper,
+            bookkeeping=self._bookkeeping,
         )
 
     def bind_downstream(self, downstream: VoidExecutor) -> None:
+        """
+        Give the deadline tick the executor to emit through.
+
+        :param downstream: The composed executor of everything after this node.
+        """
         self._ticker.bind_downstream(downstream)
 
     def tick(self) -> None:
+        """Settle whatever is due on the clock. Registered as a periodic task."""
         self._ticker.tick()
 
     def __call__(
@@ -95,6 +112,19 @@ class BufferOperator:
         timestamp: int,
         headers: Any,
     ) -> list[Emission]:
+        """
+        Run one record through the buffer.
+
+        :param value: The record value, enriched in place by `lookup.join()`.
+        :param key: The message key, which groups the buffer.
+        :param timestamp: The record's event timestamp.
+        :param headers: The record headers.
+        :return: What to send downstream: other keys' settled records first,
+            then this key's released ones in arrival order, then this record
+            itself if it is leaving now.
+        :raises LookupBufferOverflowError: if the key is full and `on_overflow`
+            is `"raise"`.
+        """
         now_ms = int(time.time() * 1000)
         cutoff = now_ms - self._grace_ms
         context = message_context()
@@ -116,7 +146,8 @@ class BufferOperator:
         settled = self._sweeper.sweep(transaction, index, partition, cutoff, prefix)
         out = settled.emissions
 
-        if index.get(prefix) is None:
+        marker = index.get(prefix)
+        if marker is None:
             if resolved:
                 out.append(
                     Emission(
@@ -153,7 +184,10 @@ class BufferOperator:
         )
 
         if not resolved:
-            index.set_earliest(prefix, cutoff + 1)
+            # `_take_timed_out` has drained everything at or below `cutoff`, so
+            # nothing survives below `cutoff + 1`. The marker only moves forward:
+            # lowering it re-queues the key as due earlier than it is.
+            index.set_earliest(prefix, max(marker[0], cutoff + 1))
             out.extend(
                 self._buffer(
                     transaction=transaction,
@@ -199,6 +233,9 @@ class BufferOperator:
         cutoff: int,
     ) -> list[Emission]:
         started = time.monotonic()
+        # `ReleasePlan` deletes whole milliseconds, so this read has to cover
+        # every survivor: `max_buffered_per_key` is its only bound, and
+        # `log_release` warns past RELEASE_WARN_RECORDS.
         survivors = transaction.get_interval(
             start=cutoff + 1,
             end=MAX_RECEIVE_MS,
@@ -307,6 +344,9 @@ class BufferOperator:
             self._bookkeeping.log_overflow(prefix, key, count)
             return []
 
+        # The store's own serializer, offered the envelope before the write: a
+        # value it refuses must be settled here, not left to raise in `flush()`
+        # after the operator has already reported the record as withheld.
         serialize_value = transaction._serialize_value  # noqa: SLF001
         envelope: Optional[dict[str, Any]] = None
         try:

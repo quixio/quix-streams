@@ -1,3 +1,12 @@
+"""
+The clock-driven half of the buffer: settles deadlines on a partition with no
+traffic, so `on_timeout` holds with zero input records.
+
+`DataFrameRegistry.run_periodic_tasks()` calls `BufferTicker.tick()` on every
+iteration of the Application's run loop, which is also its granularity - a
+deadline is observed at most once per `consumer_poll_timeout`.
+"""
+
 import logging
 import time
 from typing import TYPE_CHECKING, Optional, cast
@@ -8,6 +17,7 @@ from quixstreams.models.messagecontext import MessageContext
 from quixstreams.state.base import Store, StorePartition
 from quixstreams.state.rocksdb.timestamped import TimestampedPartitionTransaction
 
+from .buffer_bookkeeping import BufferBookkeeping
 from .buffer_state import MAX_RECEIVE_MS, PendingIndex
 from .buffer_sweep import BufferSweeper
 
@@ -18,14 +28,21 @@ __all__ = ("NO_DEADLINE", "TICK_SWEEP_BUDGET", "TICK_TIME_BUDGET_S", "BufferTick
 
 logger = logging.getLogger(__name__)
 
+# Wall-clock time one tick may spend across all partitions. The run loop cannot
+# poll while it runs, so this is a fraction of `max.poll.interval.ms`, not of
+# the poll timeout.
 TICK_TIME_BUDGET_S = 0.2
 
+# Keys settled per sweep inside the tick, which loops until the time budget runs
+# out or nothing is due.
 TICK_SWEEP_BUDGET = 64
 
 NO_DEADLINE = MAX_RECEIVE_MS
 
 
 class BufferTicker:
+    """Settles buffer deadlines from the Application's run loop."""
+
     def __init__(
         self,
         *,
@@ -33,11 +50,13 @@ class BufferTicker:
         store_name: str,
         grace_ms: int,
         sweeper: BufferSweeper,
+        bookkeeping: BufferBookkeeping,
     ) -> None:
         self._dataframe = dataframe
         self._store_name = store_name
         self._grace_ms = grace_ms
         self._sweeper = sweeper
+        self._bookkeeping = bookkeeping
 
         self._downstream: Optional[VoidExecutor] = None
         self._store: Optional[Store] = None
@@ -48,17 +67,36 @@ class BufferTicker:
         self._earliest: int = NO_DEADLINE
 
     def bind_downstream(self, downstream: VoidExecutor) -> None:
+        """
+        :param downstream: The composed executor emissions are sent through.
+            Bound once at compose time, so it survives across ticks.
+        """
         self._downstream = downstream
 
     def note_deadline(self, partition: int, deadline_ms: int) -> None:
+        """
+        Lower a partition's next deadline. The only caller is `_buffer()`, so a
+        deadline can otherwise only move later, as records leave.
+
+        :param partition: The partition the record was withheld on.
+        :param deadline_ms: Its arrival time plus `grace_ms`.
+        """
         if deadline_ms < self._deadline.get(partition, NO_DEADLINE):
             self._deadline[partition] = deadline_ms
         if deadline_ms < self._earliest:
             self._earliest = deadline_ms
 
     def tick(self) -> None:
+        """Settle every partition whose earliest deadline has passed."""
         downstream = self._downstream
         if downstream is None:
+            return
+
+        # A partition is in `store.partitions` before its changelog is recovered
+        # into it. Seeding deadlines from it then would cache NO_DEADLINE over a
+        # backlog that is not in the store yet, and `_resync`'s identity check
+        # cannot see the contents of an unchanged `StorePartition` object change.
+        if self._dataframe.processing_context.state_manager.recovery_required:
             return
 
         partitions = self._get_store().partitions
@@ -72,12 +110,17 @@ class BufferTicker:
         copy_context().run(self._settle, now_ms, downstream)
 
     def _resync(self, partitions: dict[int, StorePartition]) -> None:
+        # A deadline of 0 means "sweep this partition on the next tick", which is
+        # how a newly assigned partition's backlog is discovered. The in-memory
+        # per-key counts go with it: they describe the previous assignment.
         for partition in list(self._deadline):
             if partition not in partitions:
                 del self._deadline[partition]
+                self._bookkeeping.forget(partition)
         for partition, store_partition in partitions.items():
             if self._known.get(partition) is not store_partition:
                 self._deadline[partition] = 0
+                self._bookkeeping.forget(partition)
         self._known = dict(partitions)
         self._earliest = min(self._deadline.values(), default=NO_DEADLINE)
 
@@ -128,6 +171,8 @@ class BufferTicker:
             )
             index.flush()
 
+            # No input record is in hand here, so each emission's context is
+            # rebuilt from the origin stored in its envelope.
             for emission in result.emissions:
                 set_message_context(
                     MessageContext(
