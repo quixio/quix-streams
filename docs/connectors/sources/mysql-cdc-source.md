@@ -133,8 +133,10 @@ Here are the important configurations to be aware of (see
     extra latency on the first event after a quiet period.
     **Default**: `0.1`
 - `retry_backoff_secs`: maximum backoff (seconds) between attempts to rebuild the binlog
-    stream after a connection failure. After 5 consecutive failures, or 20 reconnects
-    within 10 minutes, the source stops and lets the platform restart it.
+    stream after a connection failure. A rebuild that fails — usually because the server
+    is still down — counts as one of those attempts and the loop tries again. After 5
+    consecutive failures, or 20 reconnects inside a sliding 10-minute window, the source
+    stops and lets the platform restart it from its last committed position.
     **Default**: `5.0`
 
     `commit_interval`, `poll_interval`, `retry_backoff_secs` and `shutdown_timeout` must
@@ -144,23 +146,9 @@ Here are the important configurations to be aware of (see
 - `tls_enabled`: require an encrypted connection to MySQL. See
     [Transport Security](#transport-security).
     **Default**: `True`
-- `tls_ca`: path to a PEM CA bundle. Providing one turns server-certificate verification
-    on.
+- `tls_ca`: path to a PEM CA bundle. Providing one turns verification on — the server's
+    certificate chain **and** its hostname are then checked.
     **Default**: `None`
-- `tls_cert` / `tls_key`: paths to a PEM client certificate and its private key, for
-    mutual TLS. `tls_key` without `tls_cert` is rejected.
-    **Default**: `None`
-- `tls_verify_cert`: verify the server certificate. `None` means "verify if `tls_ca` was
-    given"; `True` without `tls_ca` is rejected.
-    **Default**: `None`
-- `tls_verify_identity`: also check that the certificate matches `host`. Requires
-    verification to be on.
-    **Default**: `False`
-- `allow_minimal_row_metadata`: start even when the server cannot provide
-    `binlog_row_metadata = FULL`. Read [Running Without FULL Row
-    Metadata](#running-without-full-row-metadata) before setting it — it is only safe for
-    a text-only table with no unsigned columns.
-    **Default**: `False`
 - `name`: the source's unique name, which determines the default topic name, the state
     store name and the derived `server_id`. Renaming a source resets its position.
     **Default**: `mysql_cdc_<database>_<table>`
@@ -173,20 +161,15 @@ Here are the important configurations to be aware of (see
 
 ## MySQL Prerequisites
 
-Supported server versions: **MySQL 5.7 – 8.4, with `binlog_row_metadata = FULL`
-required on 8.0.1+ unless `allow_minimal_row_metadata` is set.**
+Supported server versions: **MySQL 8.0, 8.4 and 9.x.** MySQL 5.7 and MariaDB are not
+supported: neither has `binlog_row_metadata`, and without it the binlog carries no column
+names, no `ENUM`/`SET` values, no character sets and no integer signedness — none of which
+the client can reconstruct.
 
-That variable was added in MySQL 8.0.1 and its default is `MINIMAL`, so on a supported
-8.x server this is a configuration step, not a version check — see the
-`binlog_row_metadata` bullet below for what it does and how to set it.
-
-**MySQL 5.7 cannot provide it at all**, so 5.7 requires
-`allow_minimal_row_metadata=True`, and on that path the source is only safe for a table
-with **no `ENUM`, no `SET`, no `UNSIGNED` integer and no column whose bytes are not
-UTF-8** (`BINARY`/`VARBINARY`/`BLOB`, or a `latin1`/`latin2`/… text column holding a byte
-above `0x7F`). See [Running Without FULL Row
-Metadata](#running-without-full-row-metadata). MariaDB is in the same position as 5.7 and
-is untested.
+Two of the settings below are configured **for** you. `binlog_row_metadata` and
+`binlog_row_image` both ship lower than `FULL`, both are global and dynamic, and the
+source sets them itself at start-up, logging one line when it does. `log_bin` and
+`binlog_format` need a server restart, so those the source can only refuse.
 
 1. **MySQL configuration**: binary logging must be enabled, in `ROW` format:
 
@@ -210,47 +193,47 @@ is untested.
       automatically when their `name`, `database` or `table` differ.
     - `binlog-format = ROW` is **required**. The source fails at start-up with any other
       value, because a statement-based binlog carries no row images for it to read.
-    - `binlog_row_image = FULL` is **recommended**. With `MINIMAL` the source logs a
-      warning and keeps running: update and delete events then carry only the primary
-      key rather than every column. That is a *partial but correct* event, which is why
-      this setting is a warning while `binlog_row_metadata` below is a hard requirement —
-      the latter produces events that are wrong rather than incomplete.
-    - `binlog_row_metadata = FULL` is **required**, and is *not* the server default —
-      MySQL ships `MINIMAL`. The source refuses to start without it. Fix it with:
+    - `binlog_row_metadata = FULL` and `binlog_row_image = FULL` are **required, and
+      the source sets them for you**. Both ship lower, so at start-up the source runs
 
         ```sql
         SET GLOBAL binlog_row_metadata = FULL;   -- global and dynamic: no restart
-        FLUSH BINARY LOGS;                       -- leave MINIMAL-era events behind
+        SET GLOBAL binlog_row_image = FULL;
+        FLUSH BINARY LOGS;                       -- leave the older events behind
         ```
 
-        and add `binlog_row_metadata = FULL` to `my.cnf` so it survives a restart.
+        for whichever of the two is not already `FULL`, and logs one `INFO` line saying
+        so. Put them in `my.cnf` as well so the server keeps them across its own
+        restarts; the source then finds them set and changes nothing.
 
-        What `MINIMAL` actually costs is not just column names. `pymysqlreplication`
-        discards **all** optional table metadata unless the variable reads exactly
-        `FULL`, so change events lose four things together:
+        Setting a global needs `SYSTEM_VARIABLES_ADMIN` (see the grants below). Without
+        it the source stops at start-up with a message naming that one `GRANT`, because
+        neither loss can be repaired on the client:
 
-        - column names (`UNKNOWN_COL0`, `UNKNOWN_COL1`, …),
-        - `ENUM` and `SET` values — they arrive as `null`, on every event,
-        - column character sets — a `BINARY`/`VARBINARY`/`BLOB` column containing any
-          byte above `0x7F` then fails to decode and kills the source, which replays the
-          same row and fails again on every restart,
-        - integer signedness — `INT UNSIGNED 4294967295` arrives as `-1`.
+        - `binlog_row_metadata = MINIMAL` discards **all** optional table metadata, not
+          some of it: column names become `UNKNOWN_COL0…n`, every `ENUM` arrives as
+          `null` and every `SET` as `""`, `INT UNSIGNED 4294967295` decodes as `-1`, and
+          a `BINARY`/`VARBINARY`/`BLOB` or non-UTF-8 text column fails to decode.
+        - `binlog_row_image = MINIMAL` leaves every column a statement did not touch out
+          of the event entirely, so `UPDATE t SET a=1` carries `a` and nothing else.
 
-        Only the column names have a client-side recovery, which is why the source
-        refuses rather than warning. `FLUSH BINARY LOGS` matters because binlog files
-        written *before* the change still parse as `MINIMAL`: a source resuming into one
-        of them hits the same problems on a server that passes the start-up check, and
-        reports it with a message naming both ways out.
+        Rotating the log (`FLUSH BINARY LOGS`) needs `RELOAD`. Without it the source logs
+        that it skipped the rotation and carries on: events written from that moment are
+        correct either way, and only a source resuming into a position written *before*
+        the change reads the older ones.
 
-        If your server cannot be given `FULL` — MySQL 5.7, or a managed instance you do
-        not control — see [Running Without FULL Row
-        Metadata](#running-without-full-row-metadata).
+        One caveat that no client can work around: `binlog_row_image` is also a **session**
+        variable, and a session takes its copy when it connects. An application connection
+        that was already open when the source raised the global keeps writing the old row
+        image until it reconnects. Putting both settings in `my.cnf` avoids this entirely,
+        which is why they are in the block above.
     - `binlog_expire_logs_seconds` must exceed the longest downtime you expect. If the
       binlog file holding the committed position has been purged, the stream fails fast
       with MySQL's "Could not find first log file name in binary log index".
 
 2. **MySQL user permissions**: the user needs `REPLICATION SLAVE`, `REPLICATION CLIENT`
-   and `SELECT` on the table:
+   and `SELECT` on the table, plus `SYSTEM_VARIABLES_ADMIN` unless the two row-image
+   settings above are already `FULL`:
 
     ```sql
     -- Create replication user
@@ -261,6 +244,10 @@ is untested.
 
     -- Required for every deployment, snapshot or not (see below)
     GRANT SELECT ON your_database.your_table TO 'cdc_user'@'%';
+
+    -- Lets the source set binlog_row_metadata/binlog_row_image itself.
+    -- Not needed if my.cnf already gives both FULL.
+    GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO 'cdc_user'@'%';
 
     FLUSH PRIVILEGES;
     ```
@@ -273,78 +260,32 @@ is untested.
     use.
 
 
-## Running Without FULL Row Metadata
-
-`allow_minimal_row_metadata=True` lets the source start against a server whose
-`binlog_row_metadata` is not `FULL` — a MySQL 5.7 server, which has no such variable, or
-a stock 8.x server you cannot reconfigure. It exists because such a server is perfectly
-usable for *some* tables, and refusing outright would leave those deployments with no
-option at all.
-
-**It is not a "degraded mode" in the usual sense: three of the four failures are silent
-and produce wrong values rather than missing ones.** `pymysqlreplication` discards all
-optional table metadata unless the variable reads exactly `FULL`, so on change events
-(snapshot rows are unaffected, which is what makes it worse — one topic then carries two
-different answers for the same column):
-
-| column in your table | what a change event carries |
-|---|---|
-| `ENUM` | `null`, always |
-| `SET` | the **empty string**, always — the decoder cannot tell an empty set from a missing dictionary |
-| `INT UNSIGNED`, `BIGINT UNSIGNED`, … | decoded as **signed**: `4294967295` arrives as `-1`, `18446744073709551615` as `-1`, and `BIGINT UNSIGNED` above 2<sup>63</sup> arrives negative |
-| `BINARY`, `VARBINARY`, `BLOB` whose bytes all happen to be valid UTF-8 | the **decoded text**, not base64 — so `0x00 'a' 'b' 'c'` arrives as `"\x00abc"` where the snapshot says `"AGFiYw=="` |
-| `BINARY`, `VARBINARY`, `BLOB`, **or a non-UTF-8 text column** (`latin1`, …) holding a byte above `0x7F` | the decoder raises `UnicodeDecodeError`; the source stops with an error naming this parameter, and stops again on the same row after every restart. A `latin1` column counts: `0xFF` is a legal `latin1` character and invalid UTF-8 |
-| everything else — signed integers, `DECIMAL`, UTF-8 text, `DATE`/`DATETIME`/`TIMESTAMP`, `JSON`, `BIT`, `FLOAT`/`DOUBLE` | correct, and identical to the snapshot representation |
-
-That last row is measured, not assumed: the connector's rig runs the same
-column-by-column comparison against a `FULL` server and against a `MINIMAL` server with
-this flag on, and the rows above are exactly the differences it finds — the assertion is
-set equality, so a column type that starts degrading without being listed here fails the
-test rather than reaching a user.
-
-So use it only when **all** of these hold:
-
-- the table has no `ENUM` and no `SET` column,
-- the table has no `UNSIGNED` integer column,
-- every text column is UTF-8 (`utf8mb4`/`utf8mb3`/`ascii`), and there are no
-  `BINARY`/`VARBINARY`/`BLOB` columns,
-- and you accept that adding any such column later will break the stream, loudly in the
-  fourth case and silently in the first three.
-
-The source logs a `WARNING` naming the parameter and all four consequences on every start
-and every reconnect. Prefer `SET GLOBAL binlog_row_metadata = FULL;` whenever the server
-allows it — it is dynamic and needs no restart.
-
-
 ## Transport Security
 
 The connection to MySQL is **encrypted by default** (`tls_enabled=True`), and the server
-certificate is **not verified** unless you provide one to verify against. Those are two
-separate switches on purpose:
+is **not authenticated** unless you give the source something to authenticate it with:
 
 | configuration | connection | server authenticated |
 |---|---|---|
 | defaults | encrypted, required | no |
-| `tls_ca="/path/ca.pem"` | encrypted, required | yes |
-| `tls_ca=...`, `tls_verify_identity=True` | encrypted, required | yes, and the hostname is checked |
-| `tls_cert=...`, `tls_key=...` | encrypted, required, client certificate sent | per `tls_ca` |
+| `tls_ca="/path/ca.pem"` | encrypted, required | yes — chain **and** hostname |
 | `tls_enabled=False` | plaintext | n/a |
 
-Encryption is on by default because it works out of the box: MySQL 5.7.6+ and 8.x
-auto-generate a self-signed server certificate at first start. Verification is off by
-default because it cannot work out of the box — a self-signed certificate has no CA to
-check it against — so turning it on is a deliberate step: point `tls_ca` at the PEM
-bundle containing the CA that signed your server's certificate. `tls_verify_cert=True`
-without `tls_ca`, `tls_verify_identity=True` without verification, `tls_key` without
-`tls_cert`, and any `tls_*` setting alongside `tls_enabled=False` are all rejected at
-start-up rather than silently reinterpreted.
+Encryption is on by default because it works out of the box: MySQL auto-generates a
+self-signed server certificate at first start. Verification is off by default because it
+cannot work out of the box — a self-signed certificate has no CA to check it against — so
+turning it on is one deliberate step: point `tls_ca` at the PEM bundle containing the CA
+that signed your server's certificate. There is no separate switch for hostname checking;
+a CA turns on the whole check. Client-certificate (mutual TLS) authentication is not
+supported.
 
 The source logs one `INFO` line at start-up saying which of the rows above it got, e.g.
 `TLS: required, server certificate NOT verified (no tls_ca)`.
 
 `tls_enabled=False` is a real plaintext connection, not "try TLS and fall back". Use it
 only on a trusted network — for example a MySQL that does not offer TLS at all, which
-otherwise fails with `SSL is required but the server doesn't support it`.
+otherwise fails with `SSL is required but the server doesn't support it`. Passing
+`tls_ca` alongside it is rejected at start-up rather than ignored.
 
 
 ## Initial Snapshot
@@ -404,10 +345,12 @@ Requirements:
 
 ## Message Data Format/Schema
 
-- Message `key` is `"<database>.<table>"` as a string, for every event. This keeps all
-  changes to one table on one partition and in binlog order. **It is not the row
-  identity** — deduplicate downstream using the primary-key columns inside
-  `columnvalues`/`oldkeys` together with `kind`.
+- Message `key` is `"<database>.<table>"` as a **string**, for every event: the source's
+  default topic sets a string key serializer and deserializer, so `key.split(".")` works
+  on the consuming side without decoding bytes first. This keeps all changes to one table
+  on one partition and in binlog order. **It is not the row identity** — deduplicate
+  downstream using the primary-key columns inside `columnvalues`/`oldkeys` together with
+  `kind`.
 - Message `value` is JSON, in the shapes below.
 - **A given MySQL value is encoded identically whether it arrived through the initial
   snapshot or through the binlog.** The two come from different libraries, which return
@@ -430,6 +373,12 @@ Requirements:
 | `JSON` | **canonical JSON string** | `"{\"a\":2,\"b\":\"y\"}"` |
 | `BIT(n)` | zero-padded bit string, width `n` | `"00000101"` |
 | `NULL` | `null` | `null` |
+
+  **`null` always means SQL NULL.** A column MySQL did not send — one outside the row
+  image, or a `JSON` column a partial update did not resend — is left out of
+  `columnnames` and `columnvalues` entirely, so `columnnames` is not always the full
+  column list of the table. This only arises for events written before the source set
+  `binlog_row_image = FULL`; from then on every event carries every column.
 
   Four of those need explaining:
 
@@ -599,9 +548,9 @@ sleep 30
 rm -rf $TMPDIR
 ```
 
-    The `binlog_row_metadata = FULL` line in that config is **required**, not
-    decorative: without it the source refuses to start. See
-    [MySQL Prerequisites](#mysql-prerequisites).
+    The two `binlog_row_*` lines are what the source would otherwise set itself on
+    first start (`root` can). Having them in the config means the server keeps them
+    across restarts. See [MySQL Prerequisites](#mysql-prerequisites).
 
 2. Connect using the [How To Use](#how-to-use) snippet above, which already points at
 this container's host, credentials, database and table.
@@ -617,25 +566,17 @@ this container's host, credentials, database and table.
   `REPLICATION SLAVE, REPLICATION CLIENT ON *.*` to the configured user. `Access denied
   for user ... to database ...` (error 1044) is the other half: the user also needs
   `SELECT` on the table, whether or not the initial snapshot is enabled.
-- **"binlog_row_metadata is 'MINIMAL' ... but this source requires 'FULL'"** — the
-  server is running MySQL's default. Run `SET GLOBAL binlog_row_metadata = FULL;` and
-  `FLUSH BINARY LOGS;`, and add the setting to `my.cnf`. See
-  [MySQL Prerequisites](#mysql-prerequisites) for what `MINIMAL` costs.
-- **"... has no binlog_row_metadata variable"** — the server is MySQL 5.7 or MariaDB,
-  which cannot supply the metadata this source needs. Either move to MySQL 8.0.1+ with
-  `binlog_row_metadata = FULL`, or set `allow_minimal_row_metadata=True` if the table
-  qualifies; see [Running Without FULL Row Metadata](#running-without-full-row-metadata).
-- **"Could not decode a binlog event ..."** — the event carries no column character
-  sets, so a `BINARY`/`VARBINARY`/`BLOB` column, or a non-UTF-8 text column holding a byte
-  above `0x7F`, could not be decoded. Either the source is reading binlog files written
-  *before* `binlog_row_metadata` was set to `FULL` (those still parse as `MINIMAL` even
-  though the server now reports `FULL`), or it is running with
-  `allow_minimal_row_metadata=True` against a table that is not text-only. Run
-  `SET GLOBAL binlog_row_metadata = FULL;` and `FLUSH BINARY LOGS` and let the source
-  resume into the new file, or restart it with `initial_snapshot=True` and
-  `force_snapshot=True` to re-snapshot the table and re-anchor the position past the old
-  events. The source never skips the row, and never uses `ignore_decode_errors` — both
-  would be silent data loss.
+- **"This source needs binlog_row_metadata = FULL ... may not set it"** — run the
+  `GRANT SYSTEM_VARIABLES_ADMIN` the message quotes, or set both `binlog_row_metadata`
+  and `binlog_row_image` to `FULL` in `my.cnf` yourself and restart the server.
+- **"Unknown system variable 'binlog_row_metadata'"** — the server is MySQL 5.7 or
+  MariaDB. Neither is supported; move to MySQL 8.0 or later.
+- **"Could not decode a binlog event ..."** — the source is reading events written before
+  it set `binlog_row_metadata = FULL`; those carry no column character sets, so a
+  `BINARY`/`VARBINARY`/`BLOB` or non-UTF-8 text column cannot be decoded. Let the source
+  resume past them, or restart it with `initial_snapshot=True` and `force_snapshot=True`
+  to re-snapshot the table and re-anchor the position past them. The source never skips
+  the row, and never uses `ignore_decode_errors` — both would be silent data loss.
 - **"MySQL evicted the binlog stream ... another client announced server_id=N"** — two
   replication clients share one id and are evicting each other; the source exits after
   the third eviction. `MySqlCdcSource` must run with exactly **one replica**, because the
@@ -655,6 +596,9 @@ this container's host, credentials, database and table.
 - **"SSL is required but the server doesn't support it"** (error 2026) — the server does
   not offer TLS at all. Configure TLS on the server, or set `tls_enabled=False` if the
   network is trusted.
+- **A hostname or certificate verification error after setting `tls_ca`** — a CA turns on
+  both the chain check and the hostname check, so `host` must match the server
+  certificate's subject or SAN. Point `host` at the name the certificate was issued for.
 - **"Connections using insecure transport are prohibited"** (error 3159) — the server has
   `require_secure_transport = ON` and the source was configured with `tls_enabled=False`.
   Remove that setting; TLS is the default.

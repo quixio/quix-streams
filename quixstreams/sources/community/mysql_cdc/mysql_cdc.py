@@ -2,51 +2,32 @@ import contextlib
 import logging
 import time
 import zlib
-from collections import deque
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+from quixstreams.models.topics import Topic
 from quixstreams.sources.base import (
     ClientConnectFailureCallback,
     ClientConnectSuccessCallback,
     StatefulSource,
 )
 
-from .config import MySqlCdcError, TlsConfig, require_positive
-from .mysql_helper import BinlogErrorKind, MySqlHelper, classify_error
+from .config import ConnectionTimeouts, MySqlCdcError, TlsConfig, require_positive
+from .failures import BinlogErrorKind, ReconnectPolicy, classify_error
+from .mysql_helper import MySqlHelper
 from .snapshot import is_checkpointable_key
 
 __all__ = ("MySqlCdcError", "MySqlCdcSource")
 
 logger = logging.getLogger(__name__)
 
-# Replication client ids are derived into this range. The floor of 1000 keeps derived
-# ids clear of the low, hand-written ids (`server-id = 1`) that MySQL servers and
-# tutorials use, so a connector never collides with the server it replicates from.
+# Derived ids start at 1000 to stay clear of the hand-written `server-id = 1` a MySQL
+# server and its tutorials use.
 _SERVER_ID_MIN = 1000
 _SERVER_ID_MAX = 2**31 - 1
 
 # MySQL accepts any 32-bit unsigned value as an explicit server id.
 _SERVER_ID_LIMIT = 2**32 - 1
 
-# Consecutive connection failures tolerated before the source gives up and lets the
-# platform restart it from the last committed position.
-_MAX_RECONNECT_ATTEMPTS = 5
-
-# A second, longer bound that one successful poll cannot clear. Consecutive-failure
-# counting is right for backoff and wrong for diagnosis: a source that reconnects every
-# few seconds forever looks healthy to it, because every reconnect is followed by a
-# poll that works. This one counts reconnects in a sliding window instead.
-_RECONNECT_WINDOW_SECS = 600.0
-_MAX_RECONNECTS_PER_WINDOW = 20
-
-# Collisions get their own, much tighter bound. A `server_id` collision during a rolling
-# redeploy clears within seconds, when the outgoing process exits; a collision caused by
-# a second CDC client configured with the same id never clears, and every reconnect in
-# between evicts the other client in turn.
-_MAX_COLLISIONS = 3
-
-# Ceiling for the idle backoff, so the first event after a quiet period is never delayed
-# by more than a second (or the commit cadence, if that is shorter).
 _IDLE_INTERVAL_CAP = 1.0
 
 
@@ -54,10 +35,7 @@ def _derive_server_id(name: str, database: str, table: str) -> int:
     """
     Derive a stable replication client id from the source's identity.
 
-    Deterministic on purpose: reconnecting with the same id makes MySQL evict this
-    deployment's own stale replica connection instead of accumulating ghost replicas
-    until the server times them out, and two sources with different names or tables
-    get distinct ids without anyone configuring them.
+    :return: an id in [_SERVER_ID_MIN, _SERVER_ID_MAX], a pure function of the inputs.
     """
     seed = f"{name}|{database}|{table}".encode()
     return _SERVER_ID_MIN + zlib.crc32(seed) % (_SERVER_ID_MAX - _SERVER_ID_MIN)
@@ -77,24 +55,18 @@ class MySqlCdcSource(StatefulSource):
     Downstream consumers must treat change events as idempotent and deduplicate on the
     primary-key columns inside `columnvalues`/`oldkeys` together with `kind`.
 
-    Every message is keyed `"<database>.<table>"`, so all changes to one table land on
-    one partition and stay in binlog order. The key is not the row identity.
+    Every message is keyed with the string `"<database>.<table>"`, so all changes to one
+    table land on one partition and stay in binlog order. The key is not the row
+    identity.
 
-    Run it with **exactly one replica**. The replication client id MySQL requires is
-    derived from `name`, `database` and `table`, so every replica of one deployment
-    derives the same id and MySQL evicts them in turn; the source reports that and exits
-    rather than reconnecting forever.
+    Run it with **exactly one replica**: the replication client id is derived from
+    `name`, `database` and `table`, so every replica of one deployment derives the same
+    id and MySQL evicts them in turn.
 
-    The server must have `binlog_format=ROW` and `binlog_row_metadata=FULL`. The second
-    is not the MySQL default and is checked at start-up: without it the binlog carries no
-    column names, no ENUM/SET values, no character sets and no integer signedness, which
-    cannot be recovered client-side. `allow_minimal_row_metadata=True` is the escape
-    hatch for a MySQL 5.7 server or a text-only table; read its `:param:` before using
-    it. The connection is TLS-encrypted by default; see the `tls_*` parameters.
-
-    A given MySQL value is encoded identically whether it came from the snapshot or from
-    the binlog - `values.py` holds that contract, including JSON as canonical JSON text,
-    SET as a sorted comma-joined string, BIT as a bit string and TIMESTAMP in UTC.
+    Supported servers are MySQL 8.0, 8.4 and 9.x. `log_bin` must be on and
+    `binlog_format` must be `ROW`. `binlog_row_metadata` and `binlog_row_image` are set
+    to `FULL` by the source itself at start-up if they are lower, which needs
+    SYSTEM_VARIABLES_ADMIN. The connection is TLS-encrypted by default.
 
     Example Usage:
 
@@ -145,11 +117,6 @@ class MySqlCdcSource(StatefulSource):
         retry_backoff_secs: float = 5.0,
         tls_enabled: bool = True,
         tls_ca: Optional[str] = None,
-        tls_cert: Optional[str] = None,
-        tls_key: Optional[str] = None,
-        tls_verify_cert: Optional[bool] = None,
-        tls_verify_identity: bool = False,
-        allow_minimal_row_metadata: bool = False,
         name: Optional[str] = None,
         shutdown_timeout: float = 10,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
@@ -160,7 +127,8 @@ class MySqlCdcSource(StatefulSource):
         :param user: MySQL username. Needs REPLICATION SLAVE, REPLICATION CLIENT and
             SELECT on the table - SELECT is required whether or not the initial
             snapshot is enabled, because MySQL refuses the connection to `database`
-            without it.
+            without it. It also needs SYSTEM_VARIABLES_ADMIN unless the server already
+            has `binlog_row_metadata` and `binlog_row_image` set to FULL.
         :param password: MySQL password.
         :param database: database (schema) containing the table.
         :param table: table to stream changes from.
@@ -197,10 +165,8 @@ class MySqlCdcSource(StatefulSource):
             Default - `1000`.
         :param poll_interval: how long (seconds) to idle when the binlog stream had
             nothing to read. Consecutive empty polls double this, up to one second (or
-            `commit_interval` if that is shorter), and the first change resets it; a
-            quiet table therefore costs a handful of connections per minute instead of
-            twenty per second, at the price of up to a second of extra latency on the
-            first event after a quiet period. Must be greater than 0.
+            `commit_interval` if that is shorter), and the first change resets it. Must
+            be greater than 0.
             Default - `0.1`.
         :param retry_backoff_secs: maximum backoff (seconds) between attempts to
             rebuild the binlog stream after a connection failure. Must be greater than 0.
@@ -208,29 +174,10 @@ class MySqlCdcSource(StatefulSource):
         :param tls_enabled: require an encrypted connection to MySQL. `False` connects
             in plaintext, which is only appropriate on a trusted network.
             Default - `True`.
-        :param tls_ca: path to a PEM CA bundle. Giving one turns server-certificate
-            verification on; without it the connection is encrypted but the server is
-            not authenticated.
+        :param tls_ca: path to a PEM CA bundle. Giving one turns verification on - both
+            the server's certificate chain and its hostname are then checked. Without it
+            the connection is encrypted but the server is not authenticated.
             Default - `None`.
-        :param tls_cert: path to a PEM client certificate, for mutual TLS.
-            Default - `None`.
-        :param tls_key: path to the PEM private key for `tls_cert`.
-            Default - `None`.
-        :param tls_verify_cert: verify the server certificate. `None` means "verify if
-            `tls_ca` was given"; `True` without `tls_ca` is rejected.
-            Default - `None`.
-        :param tls_verify_identity: also check that the certificate matches `host`.
-            Requires verification to be on.
-            Default - `False`.
-        :param allow_minimal_row_metadata: start even when the server cannot provide
-            `binlog_row_metadata=FULL`, which MySQL 5.7 cannot at all and stock MySQL
-            8.x does not by default. Only safe for a table with no ENUM, SET or UNSIGNED
-            columns and no column whose bytes are not UTF-8: without FULL metadata ENUM
-            and SET values arrive as `None`, UNSIGNED integers decode as signed
-            (`INT UNSIGNED 4294967295` arrives as `-1`), and a non-UTF-8 column raises
-            `UnicodeDecodeError` and stops the source. The source logs a WARNING naming
-            all three on every start.
-            Default - `False` (refuse to start).
         :param name: the source unique name. It is used to generate the default topic
             name, the state store name and the derived `server_id`; renaming a source
             therefore resets its committed position.
@@ -243,6 +190,7 @@ class MySqlCdcSource(StatefulSource):
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
+        :raises MySqlCdcError: for any invalid or contradictory configuration.
         """
         source_name = name or f"mysql_cdc_{database}_{table}"
         super().__init__(
@@ -264,9 +212,6 @@ class MySqlCdcSource(StatefulSource):
             raise MySqlCdcError(
                 f"max_buffer_size must be at least 1, got {max_buffer_size}"
             )
-        # Every one of these is a divisor or a sleep duration somewhere below;
-        # poll_interval=0 in particular turns the read loop into a hot loop, so it is
-        # rejected rather than clamped to something the user did not ask for.
         require_positive("commit_interval", commit_interval)
         require_positive("poll_interval", poll_interval)
         require_positive("retry_backoff_secs", retry_backoff_secs)
@@ -277,15 +222,7 @@ class MySqlCdcSource(StatefulSource):
                 "snapshot to force. Enable initial_snapshot, or drop force_snapshot."
             )
 
-        tls = TlsConfig(
-            enabled=tls_enabled,
-            ca=tls_ca,
-            cert=tls_cert,
-            key=tls_key,
-            verify_cert=tls_verify_cert,
-            verify_identity=tls_verify_identity,
-        )
-        tls.validate()
+        tls = TlsConfig(enabled=tls_enabled, ca=tls_ca)
 
         self._database = database
         self._table = table
@@ -305,7 +242,11 @@ class MySqlCdcSource(StatefulSource):
             table=table,
             snapshot_host=snapshot_host or host,
             tls=tls,
-            allow_minimal_row_metadata=allow_minimal_row_metadata,
+            timeouts=ConnectionTimeouts.derive(
+                commit_interval=commit_interval,
+                retry_backoff_secs=retry_backoff_secs,
+                shutdown_timeout=shutdown_timeout,
+            ),
         )
         self._tls = tls
 
@@ -315,10 +256,9 @@ class MySqlCdcSource(StatefulSource):
         self._commit_interval = commit_interval
         self._max_buffer_size = max_buffer_size
         self._poll_interval = poll_interval
-        self._retry_backoff_secs = retry_backoff_secs
 
-        # State keys stay qualified by database and table so that reusing a source name
-        # for a different table starts clean instead of resuming a foreign position.
+        # Qualified by database and table, so reusing a source name for a different
+        # table starts clean instead of resuming a foreign position.
         self._position_key = f"binlog_position_{database}_{table}"
         self._snapshot_completed_key = f"snapshot_completed_{database}_{table}"
         self._snapshot_progress_key = f"snapshot_progress_{database}_{table}"
@@ -331,16 +271,29 @@ class MySqlCdcSource(StatefulSource):
 
         self._idle_interval = poll_interval
         self._idle_interval_cap = min(_IDLE_INTERVAL_CAP, commit_interval)
-        self._reconnects: Deque[float] = deque()
-        self._collisions = 0
+        self._retries = ReconnectPolicy(
+            table_name=self._table_name,
+            server_id=self._server_id,
+            max_backoff=retry_backoff_secs,
+        )
+
+    def default_topic(self) -> Topic:
+        """
+        :return: a topic named after the source, with string keys and JSON values.
+        """
+        return Topic(
+            name=self.name,
+            key_serializer="str",
+            key_deserializer="str",
+            value_serializer="json",
+            value_deserializer="json",
+        )
 
     def setup(self) -> None:
         """
-        Validate the MySQL server and the table before the source starts.
+        Validate the MySQL server and the table, and set the row-image globals.
 
-        Failures propagate to `BaseSource._init_client`, which routes them to the
-        client-connect failure callback; there is deliberately no logging here, or
-        every failure would be reported twice.
+        :raises MySqlCdcError: for anything that must hold before streaming and does not.
         """
         self._helper.validate_server_config(
             require_primary_key=self._initial_snapshot, server_id=self._server_id
@@ -354,13 +307,7 @@ class MySqlCdcSource(StatefulSource):
         logger.info("%s", self._tls.describe())
 
     def run(self) -> None:
-        """
-        Resolve the starting position, run the snapshot if needed, then stream changes.
-
-        The order matters: the position is resolved and committed *before* any snapshot
-        row is read, so every change made while the snapshot runs is still ahead of the
-        stream. Overlap produces duplicates; a gap is impossible.
-        """
+        """Resolve the starting position, snapshot if needed, then stream changes."""
         logger.info("Starting MySQL CDC source for %s", self._table_name)
         try:
             snapshot_needed = self._is_snapshot_needed()
@@ -387,11 +334,6 @@ class MySqlCdcSource(StatefulSource):
             )
 
             self._stream_changes()
-
-            # Unconditional final drain: no interval gate, no "only if the buffer is
-            # non-empty" check. It runs only after a clean loop exit, and if it raises
-            # the error propagates - a swallowed shutdown flush is indistinguishable
-            # from losing the batch.
             self._commit_batch(timeout=self.shutdown_timeout / 4)
         finally:
             self._close_stream()
@@ -400,15 +342,11 @@ class MySqlCdcSource(StatefulSource):
         """
         Ask the run loop to finish.
 
-        This is called from the subprocess's signal handler, so it must not touch the
-        producer, the state store or the MySQL connection: `run()` may be in the middle
-        of using all three. It only flips the `running` flag; the final drain and the
-        cleanup happen at the end of `run()`.
+        Called from the subprocess's signal handler, so it touches neither the producer,
+        the state store nor the MySQL connection - `run()` may be using all three.
         """
         logger.info("Stopping MySQL CDC source for %s", self._table_name)
         super().stop()
-
-    # ------------------------------------------------------------------- start-up
 
     def _is_snapshot_needed(self) -> bool:
         if not self._initial_snapshot:
@@ -432,19 +370,9 @@ class MySqlCdcSource(StatefulSource):
 
     def _resolve_start_position(self, snapshot_needed: bool) -> Tuple[str, int]:
         """
-        Return the binlog coordinates to stream from, anchoring them on a cold start.
+        Return the binlog coordinates to stream from, committing them on a cold start.
 
-        A stored position normally wins. The exception is a forced snapshot, which
-        discards it: the whole table is about to be republished, so resuming the old
-        position would republish the table *and* keep failing on a position the server
-        may no longer hold. That combination is what made `force_snapshot=True` useless
-        as the documented recovery from a purged binlog.
-
-        Otherwise the coordinates are taken from the host the snapshot will be read from
-        (`fetch_snapshot_start_position`) and committed immediately: committing an anchor
-        before anything has been produced can only cause a replay, never a loss, and
-        without it a crash before the first event would resume from "now" and drop the
-        whole window.
+        :param snapshot_needed: read the coordinates from the snapshot host instead.
         """
         if self._force_snapshot and snapshot_needed:
             self._reset_snapshot_state()
@@ -478,15 +406,7 @@ class MySqlCdcSource(StatefulSource):
         return position
 
     def _reset_snapshot_state(self) -> None:
-        """
-        Clear all three state keys before a forced snapshot reads anything.
-
-        All three, in one place, before the new anchor is written. Deleting the two
-        snapshot keys inside `_run_initial_snapshot()` - where this used to live - would
-        run *after* the anchor had been committed, and leaving the position key alone
-        was the actual defect: the source republished the whole table on every restart
-        and then died on the same unreachable position.
-        """
+        """Clear the position and both snapshot keys, before the new anchor is written."""
         state = self.state
         state.delete(self._position_key)
         state.delete(self._snapshot_completed_key)
@@ -507,23 +427,11 @@ class MySqlCdcSource(StatefulSource):
             "committed_at": time.time(),
         }
 
-    # ------------------------------------------------------------------- snapshot
-
     def _run_initial_snapshot(self) -> None:
-        """
-        Produce the table's current contents, one keyset page at a time.
-
-        Each page is produced, flushed and only then checkpointed, so an interrupted
-        snapshot resumes at the last committed key instead of replaying the whole
-        table. Rows changed while this runs are emitted twice - once here as
-        `snapshot_insert` and again as a binlog `insert`/`update` - which is the
-        duplication the at-least-once guarantee allows.
-        """
+        """Produce the table's current contents, one keyset page at a time."""
         start_after = None
         rows_produced = 0
 
-        # No force_snapshot branch here: `_resolve_start_position()` has already cleared
-        # every state key this method could read, before the position was re-anchored.
         progress = self.state.get(self._snapshot_progress_key)
         if progress:
             start_after = list(progress["last_key"])
@@ -583,28 +491,19 @@ class MySqlCdcSource(StatefulSource):
             rows_produced,
         )
 
-    # --------------------------------------------------------------------- stream
-
     def _stream_changes(self) -> None:
         """
         Read and commit binlog changes until the source is asked to stop.
 
-        Failures are classified, not lumped together, because "retry it" is the wrong
-        answer to three of the four kinds. A purged position and a fatal error propagate
-        immediately; a `server_id` collision is retried a few times (a rolling redeploy
-        clears one within seconds) and then reported for what it is; only a genuine
-        connection failure gets the backoff loop. Everything that propagates exits the
-        process non-zero, and the platform restarts it from the last committed position.
-
-        Three bounds run at once, and they are not redundant. `failures` is consecutive
-        and drives the backoff. `_collisions` is consecutive and much tighter, because a
-        collision that repeats is a configuration error rather than a hiccup.
-        `_reconnects` is a sliding window that a successful poll cannot clear, which is
-        what catches a source reconnecting forever at a comfortable rate.
+        :raises: whatever `classify_error()` calls PURGED or FATAL, and whatever the
+            `ReconnectPolicy` raises once a bound trips.
         """
-        failures = 0
+        reconnect_needed = False
         while self.running:
             try:
+                if reconnect_needed:
+                    self._reconnect_stream()
+                    reconnect_needed = False
                 self._poll_once()
             except Exception as exc:
                 kind = classify_error(exc)
@@ -613,93 +512,13 @@ class MySqlCdcSource(StatefulSource):
                 if kind is BinlogErrorKind.FATAL:
                     raise
                 if kind is BinlogErrorKind.COLLISION:
-                    self._note_collision(exc)
-                else:
-                    self._collisions = 0
-
-                failures += 1
-                if failures >= _MAX_RECONNECT_ATTEMPTS:
-                    logger.error(
-                        "The MySQL connection for %s failed %s times in a row; giving "
-                        "up so the last committed position is replayed on restart",
-                        self._table_name,
-                        failures,
-                    )
-                    raise
-                self._note_reconnect()
-                backoff = min(self._retry_backoff_secs, 2.0 ** (failures - 1))
-                logger.warning(
-                    "Lost the MySQL connection for %s (%s); reconnecting in %.1fs "
-                    "(attempt %s/%s)",
-                    self._table_name,
-                    exc,
-                    backoff,
-                    failures,
-                    _MAX_RECONNECT_ATTEMPTS,
-                )
-                self._sleep(backoff)
-                if self.running:
-                    self._reconnect_stream()
+                    self._retries.note_collision(exc)
+                self._sleep(self._retries.note_failure(exc))
+                reconnect_needed = True
             else:
-                failures = 0
-
-    def _note_collision(self, exc: BaseException) -> None:
-        """
-        Count a `server_id` collision and give up once they stop being transient.
-
-        Logged at ERROR every time, not just at the bound: a collision means two clients
-        are evicting each other, so events are being read twice and the position of each
-        is being overwritten by the other. That is worth saying out loud on the first
-        occurrence, even if it turns out to be a redeploy that clears itself.
-        """
-        self._collisions += 1
-        logger.error(
-            "MySQL evicted the binlog stream for %s because another client announced "
-            "server_id=%s (%s). Likely causes: a second replica of this deployment "
-            "(this source supports exactly one), another CDC deployment with the same "
-            "name/database/table, or an overlapping rolling deploy. Collision %s of %s.",
-            self._table_name,
-            self._server_id,
-            exc,
-            self._collisions,
-            _MAX_COLLISIONS,
-        )
-        if self._collisions >= _MAX_COLLISIONS:
-            raise MySqlCdcError(
-                f"Giving up: server_id={self._server_id} collided {self._collisions} "
-                f"times while streaming {self._table_name}. Another replication client "
-                "is using the same id, and the two are evicting each other rather than "
-                "either making progress. Run this source with exactly one replica, and "
-                "give a second deployment against this server a distinct name or an "
-                "explicit server_id."
-            ) from exc
-
-    def _note_reconnect(self) -> None:
-        """
-        Record a reconnect and fail if they are piling up over the window.
-
-        This is the bound `failures` cannot provide: `failures` resets to 0 after every
-        successful poll, so a source that reconnects every few seconds forever never
-        reaches its limit. A deque trimmed to the window does, whatever happens in
-        between.
-        """
-        now = time.monotonic()
-        self._reconnects.append(now)
-        while self._reconnects and now - self._reconnects[0] > _RECONNECT_WINDOW_SECS:
-            self._reconnects.popleft()
-        if len(self._reconnects) > _MAX_RECONNECTS_PER_WINDOW:
-            raise MySqlCdcError(
-                f"The binlog stream for {self._table_name} has been rebuilt "
-                f"{len(self._reconnects)} times in the last "
-                f"{_RECONNECT_WINDOW_SECS:.0f}s. Individual reconnects kept succeeding, "
-                "so the per-attempt limit never tripped, but a source that reconnects "
-                "this often is not streaming - check the server's error log, the "
-                "network, and whether another client is using server_id="
-                f"{self._server_id}."
-            )
+                self._retries.note_success()
 
     def _purged_position_error(self) -> MySqlCdcError:
-        """The recovery text for a committed position the server no longer holds."""
         return MySqlCdcError(
             f"MySQL no longer holds the binlog position committed for "
             f"{self._table_name} ({self._committed_position}): the file has been purged. "
@@ -727,15 +546,9 @@ class MySqlCdcSource(StatefulSource):
         if self._should_commit():
             self._commit_batch()
         elif not changes:
-            # Idle only when the stream had nothing. Sleeping after a full batch would
-            # cap throughput at max_buffer_size / poll_interval.
-            #
-            # The interval doubles on every empty poll because a non-blocking dump ends
-            # with an EOF packet, on which `BinLogStreamReader` closes the stream *and*
-            # the control connection (`binlogstream.py:627-629`) and reopens both on the
-            # next read - so a quiet table at poll_interval=0.1 costs ~20 connections and
-            # ~20 authentications per second, each of them a TLS handshake. Any change
-            # resets it, so latency under load is unaffected.
+            # A non-blocking dump ends in an EOF packet, on which the reader closes both
+            # of its connections (`binlogstream.py:626-628`, `:302-310`) and reopens them
+            # on the next read, so empty polls are backed off rather than repeated.
             self._sleep(self._idle_interval)
             self._idle_interval = min(self._idle_interval * 2, self._idle_interval_cap)
 
@@ -748,14 +561,7 @@ class MySqlCdcSource(StatefulSource):
 
     def _commit_batch(self, timeout: Optional[float] = None) -> None:
         """
-        Produce the buffered changes, then commit the position they cover.
-
-        The two flushes are the point of this method. `StatefulSource.flush()`
-        publishes the state changelog message through the same producer as the data,
-        and librdkafka gives no cross-topic delivery-order guarantee, so a single flush
-        could land the new position while the data it covers is still queued - the
-        exact loss this connector had. Producing the position only after the data flush
-        has returned removes that window: a crash can replay a batch, never skip one.
+        Produce the buffered changes, flush, then commit the position they cover.
 
         :param timeout: producer flush timeout (seconds) passed to both flushes.
         """
@@ -772,8 +578,7 @@ class MySqlCdcSource(StatefulSource):
         self._buffer.clear()
 
         if self._pending_position is not None:
-            # `self.state` is invalidated by every flush(), so it is read again here
-            # rather than cached anywhere.
+            # `self.state` is invalidated by every flush(), so it is read again here.
             self.state.set(
                 self._position_key, self._position_value(self._pending_position)
             )
@@ -791,19 +596,12 @@ class MySqlCdcSource(StatefulSource):
 
     def _reconnect_stream(self) -> None:
         """
-        Rebuild the binlog stream at the last committed position.
+        Re-apply the server's row-image settings and rebuild the stream at the last
+        committed position, dropping everything read since that commit.
 
-        Everything read since that commit is dropped: the server will send those events
-        again from the committed position, so keeping the buffer would only duplicate
-        them, and committing `_pending_position` without producing the buffer would
-        skip them entirely.
-
-        `binlog_row_metadata` is re-checked first. It is a dynamic global, so it can be
-        lowered to MINIMAL under a running source, and this is the only path cheap enough
-        to check it on - one extra query on a path that only runs after something has
-        already gone wrong.
+        :raises MySqlCdcError: if no position has been committed yet.
         """
-        self._helper.require_row_metadata()
+        self._helper.ensure_row_settings()
         self._close_stream()
         self._buffer.clear()
         self._pending_position = None
@@ -825,16 +623,13 @@ class MySqlCdcSource(StatefulSource):
         )
 
     def _close_stream(self) -> None:
+        """Close the stream if there is one, logging rather than raising on failure."""
         if self._stream is None:
             return
         stream, self._stream = self._stream, None
         try:
             stream.close()
         except Exception:
-            # Swallowing is correct here only because this runs in `run()`'s finally
-            # block: a failure closing an already-broken socket would otherwise mask
-            # the exception that brought the source down. It is logged with its
-            # traceback, so nothing is hidden.
             logger.warning(
                 "Error while closing the binlog stream for %s",
                 self._table_name,

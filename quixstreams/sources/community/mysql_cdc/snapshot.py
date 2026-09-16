@@ -1,14 +1,4 @@
-"""
-Initial-snapshot support for the MySQL CDC source.
-
-This module holds the SQL half of the snapshot: identifier quoting, primary-key
-discovery, the keyset-pagination query and the generator that walks a table with it.
-Value encoding lives in `values.py`, because the binlog path needs the same contract
-and neither path owns it.
-
-Apart from `values`, it imports nothing else from the package, so the SQL builders can
-be unit-tested without a MySQL server and without importing the source itself.
-"""
+"""The SQL half of the initial snapshot: keyset pagination over one table."""
 
 import logging
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
@@ -26,30 +16,18 @@ __all__ = (
 
 logger = logging.getLogger(__name__)
 
-# Every page is logged at DEBUG; the running row count is logged at INFO this often.
 _PROGRESS_LOG_EVERY_BATCHES = 50
 
 
 def quote_identifier(name: str) -> str:
-    """
-    Quote a MySQL identifier, escaping any backtick it contains.
-
-    Identifiers cannot be bound as parameters, so they are interpolated into the
-    generated SQL; every *value* is a bound parameter instead.
-    """
+    """Quote a MySQL identifier, escaping any backtick it contains."""
     return "`" + name.replace("`", "``") + "`"
 
 
 def is_checkpointable_key(values: Sequence[Any]) -> bool:
     """
-    True when every primary-key value survives a JSON round-trip unchanged.
-
-    Snapshot progress is stored in the source's state store, which serializes values
-    to JSON. Only `int` (excluding `bool`) and `str` come back as the exact value SQL
-    compared against, so those are the only key types worth checkpointing; for any
-    other type the snapshot simply restarts from the beginning after an interruption.
-    Pagination itself always uses the raw Python values, so this never affects
-    in-run correctness.
+    :return: True when every primary-key value survives a JSON round-trip unchanged,
+        which is what the state store needs to checkpoint snapshot progress.
     """
     return bool(values) and all(
         isinstance(value, str)
@@ -60,11 +38,7 @@ def is_checkpointable_key(values: Sequence[Any]) -> bool:
 
 def discover_primary_key(cursor: Any, database: str, table: str) -> List[str]:
     """
-    Return the PRIMARY KEY column names of a table in index order.
-
-    Returns an empty list when the table has no primary key; the caller decides
-    whether that is fatal (it is for the initial snapshot, which needs a primary key
-    to paginate on, and harmless for binlog streaming, which does not).
+    :return: the PRIMARY KEY column names in index order, or an empty list.
     """
     cursor.execute(
         "SELECT COLUMN_NAME FROM information_schema.STATISTICS "
@@ -77,12 +51,7 @@ def discover_primary_key(cursor: Any, database: str, table: str) -> List[str]:
 
 def estimate_row_count(cursor: Any, database: str, table: str) -> Optional[int]:
     """
-    Return the storage engine's row-count estimate for a table, or None if unknown.
-
-    This is `information_schema.TABLES.TABLE_ROWS`, which InnoDB derives from index
-    statistics: it is approximate and only used to give the snapshot logs a sense of
-    scale. An exact `COUNT(*)` would mean a full table scan before the first row is
-    produced, on exactly the large tables the batched snapshot exists for.
+    :return: `information_schema.TABLES.TABLE_ROWS`, an estimate, or None if unknown.
     """
     cursor.execute(
         "SELECT TABLE_ROWS FROM information_schema.TABLES "
@@ -101,15 +70,12 @@ def build_snapshot_query(
     """
     Build one page of the keyset-paginated snapshot query.
 
-    First page:      SELECT * FROM `db`.`tbl` ORDER BY `id` LIMIT %s
-    Resume page:     SELECT * FROM `db`.`tbl` WHERE `id` > %s ORDER BY `id` LIMIT %s
-    Composite key:   SELECT * FROM `db`.`tbl` WHERE (`a`, `b`) > (%s, %s)
-                     ORDER BY `a`, `b` LIMIT %s
+    Identifiers are quoted and interpolated; the cursor values and the page size are
+    bound parameters.
 
-    The row-constructor comparison resolves against the primary-key index on MySQL
-    5.7+/8.x, and primary-key columns are NOT NULL by definition, so there is no
-    NULL-comparison trap. Identifiers are quoted and interpolated; the cursor values
-    and the page size are bound parameters.
+    :param resuming: emit the `WHERE (pk...) > (...)` clause, one placeholder per PK
+        column, ahead of the page-size placeholder.
+    :raises ValueError: if `pk_columns` is empty.
     """
     if not pk_columns:
         raise ValueError("build_snapshot_query() requires at least one PK column")
@@ -141,24 +107,16 @@ def iter_snapshot_batches(
     """
     Yield `(changes, last_key_values)` for each keyset page until the table is read.
 
-    Keyset pagination (`WHERE (pk...) > (last seen pk...)`) is used rather than a
-    skip-count page: a skip count loses a row for every row deleted behind the cursor
-    and gets slower with every page, while the seek form is index-driven and immune
-    to concurrent deletes.
-
-    `last_key_values` are the raw values returned by MySQL, so the next page's
-    comparison never depends on them being JSON-serializable.
-
     :param cursor: an open DB-API cursor on the host being snapshotted.
     :param database: database (schema) name.
     :param table: table name.
     :param pk_columns: primary-key column names in index order.
     :param batch_size: maximum rows per page.
     :param column_types: declared MySQL type per column, from
-        `values.fetch_column_types`. SET, JSON and BIT columns cannot be encoded to the
-        cross-path contract from the Python value alone.
+        `values.fetch_column_types`.
     :param start_after: primary-key values of the last row of a previous run;
         when given, the walk resumes strictly after that row.
+    :return: `last_key_values` are MySQL's raw values, not the encoded ones.
     """
     first_page_query = build_snapshot_query(database, table, pk_columns, resuming=False)
     resume_page_query = build_snapshot_query(database, table, pk_columns, resuming=True)
@@ -214,6 +172,4 @@ def iter_snapshot_batches(
         yield changes, key_values
 
         if len(rows) < batch_size:
-            # A short page means the table is exhausted. Keyset pagination cannot skip
-            # rows, so there is no need for one more round trip to confirm it.
             return

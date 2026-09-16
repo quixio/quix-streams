@@ -15,14 +15,21 @@ pytest.importorskip("pymysqlreplication")
 from pymysql.err import InterfaceError, OperationalError
 
 from quixstreams.models.messages import KafkaMessage
-from quixstreams.sources.community.mysql_cdc import mysql_helper
-from quixstreams.sources.community.mysql_cdc.config import TlsConfig
+from quixstreams.sources.community.mysql_cdc import (
+    failures,
+    mysql_helper,
+    server_config,
+)
+from quixstreams.sources.community.mysql_cdc.config import ConnectionTimeouts, TlsConfig
+from quixstreams.sources.community.mysql_cdc.failures import (
+    BinlogErrorKind,
+    classify_error,
+)
 from quixstreams.sources.community.mysql_cdc.mysql_cdc import (
     MySqlCdcError,
     MySqlCdcSource,
     _derive_server_id,
 )
-from quixstreams.sources.community.mysql_cdc.mysql_helper import is_connection_error
 from quixstreams.sources.community.mysql_cdc.snapshot import (
     build_snapshot_query,
     is_checkpointable_key,
@@ -58,32 +65,45 @@ def _helper_kwargs(**overrides):
         "table": "tbl",
         "snapshot_host": "localhost",
         "tls": TlsConfig(),
+        "timeouts": ConnectionTimeouts.derive(
+            commit_interval=5.0, retry_backoff_secs=5.0, shutdown_timeout=10.0
+        ),
     }
     kwargs.update(overrides)
     return kwargs
 
 
-class _FakeShowVariableCursor:
+class _FakeServerCursor:
     """
-    Stand-in for a DB-API cursor that only ever answers `SHOW VARIABLES LIKE %s`.
+    Stand-in for a DB-API cursor that answers `SHOW GLOBAL VARIABLES` from a dict.
 
-    Used to drive `MySqlHelper._require_row_metadata`/`_require_distinct_server_id`
-    without a MySQL server: those methods only ever `execute()` once and read
-    `fetchone()` once, so recording the last statement is enough.
+    Every other statement is recorded in `statements` and answers nothing, which is
+    enough to drive `server_config.ensure_row_settings()` without a MySQL server: the
+    variables it reads come back from `variables`, and the `SET GLOBAL`/`FLUSH` it runs
+    are what the test asserts on. `refuse` makes one statement prefix raise, standing in
+    for a server that will not run it for this account.
     """
 
-    def __init__(self, value):
-        self._value = value
-        self._last_params = None
+    def __init__(self, variables, refuse=None, refusal=None):
+        self.variables = dict(variables)
+        self.statements = []
+        self._refuse = refuse
+        self._refusal = refusal
+        self._row = None
 
-    def execute(self, _sql, params=None):
-        self._last_params = params
+    def execute(self, sql, params=None):
+        self.statements.append(sql)
+        if self._refuse is not None and sql.startswith(self._refuse):
+            raise self._refusal
+        if sql.startswith("SHOW GLOBAL VARIABLES"):
+            name = params[0]
+            value = self.variables.get(name)
+            self._row = None if value is None else (name, value)
+        else:
+            self._row = None
 
     def fetchone(self):
-        if self._value is None:
-            return None
-        name = self._last_params[0] if self._last_params else None
-        return (name, self._value)
+        return self._row
 
 
 class _FakeServerIdCursor:
@@ -100,13 +120,7 @@ class _FakeServerIdCursor:
 
 
 class _InfiniteOtherTableStream:
-    """
-    An infinite binlog stream whose events never match the table being read.
-
-    `read_changes()` must not drain this - the only things that can stop it are
-    `should_continue()` returning False or `max_seconds` elapsing, since `changes`
-    never grows for a table this stream never reports.
-    """
+    """An infinite binlog stream whose events never match the table being read."""
 
     log_file = "mysql-bin.000001"
     log_pos = 1000
@@ -146,11 +160,7 @@ class _RecordedState:
 
 
 class _RecordingSource(MySqlCdcSource):
-    """
-    `MySqlCdcSource` with `produce`, `flush` and `state` replaced by recorders.
-
-    Lets the commit ordering be asserted without a broker, a state store or MySQL.
-    """
+    """`MySqlCdcSource` with `produce`, `flush` and `state` replaced by recorders."""
 
     def __init__(self, fail_on_flush=None, **kwargs):
         super().__init__(**kwargs)
@@ -253,51 +263,56 @@ def test_is_checkpointable_key(values, expected):
     ("exc", "expected"),
     [
         # Retryable: the link broke and a new connection can plausibly replace it.
-        (OperationalError(2013, "Lost connection to MySQL server during query"), True),
-        (OperationalError(2006, "MySQL server has gone away"), True),
-        (InterfaceError("(0, '')"), True),
-        (BrokenPipeError(), True),
-        (ConnectionResetError(), True),
-        # 1236 is retryable on purpose: MySQL reuses it both for a purged position and
-        # for a transient same-server_id collision, and only a reconnect can tell them
-        # apart. The purged case still fails loudly once the attempts are exhausted.
+        (
+            OperationalError(2013, "Lost connection to MySQL server during query"),
+            BinlogErrorKind.RETRYABLE,
+        ),
+        (
+            OperationalError(2006, "MySQL server has gone away"),
+            BinlogErrorKind.RETRYABLE,
+        ),
+        (InterfaceError("(0, '')"), BinlogErrorKind.RETRYABLE),
+        (BrokenPipeError(), BinlogErrorKind.RETRYABLE),
+        (ConnectionResetError(), BinlogErrorKind.RETRYABLE),
+        # MySQL reuses 1236 for a purged position and for a same-server_id collision,
+        # and only the message tells them apart. The collision is retried a bounded
+        # number of times; the purged position must not be retried at all.
         (
             OperationalError(
                 1236, "A replica with the same server_uuid/server_id has connected"
             ),
-            True,
+            BinlogErrorKind.COLLISION,
         ),
-        # 1236 "Could not find first log file..." means the committed position was
-        # purged: D2/D5 classify this PURGED, which is fatal, not retryable, so a
-        # reconnect must not be attempted.
         (
             OperationalError(
                 1236, "Could not find first log file name in binary log index file"
             ),
-            False,
+            BinlogErrorKind.PURGED,
         ),
         # Fatal: a reconnect presents the same rejected credentials or the same missing
         # grant forever, so retrying only hides the failure.
-        (OperationalError(1045, "Access denied for user 'cdc_user'@'%'"), False),
-        (OperationalError(1044, "Access denied to database 'db'"), False),
-        (OperationalError(1227, "Access denied; you need REPLICATION SLAVE"), False),
+        (
+            OperationalError(1045, "Access denied for user 'cdc_user'@'%'"),
+            BinlogErrorKind.FATAL,
+        ),
+        (
+            OperationalError(1044, "Access denied to database 'db'"),
+            BinlogErrorKind.FATAL,
+        ),
+        (
+            OperationalError(1227, "Access denied; you need REPLICATION SLAVE"),
+            BinlogErrorKind.FATAL,
+        ),
         # Not a connection failure at all.
-        (ValueError("nope"), False),
+        (ValueError("nope"), BinlogErrorKind.FATAL),
     ],
 )
-def test_is_connection_error(exc, expected):
-    assert is_connection_error(exc) is expected
+def test_classify_error(exc, expected):
+    assert classify_error(exc) is expected
 
 
 def test_create_binlog_stream_enables_column_name_cache(monkeypatch):
-    """
-    The stream must ask for the INFORMATION_SCHEMA column-name fallback.
-
-    Without it, `pymysqlreplication` names every column `UNKNOWN_COL0..n` on any server
-    that does not set `binlog_row_metadata=FULL` - which is the default on MySQL 8.x and
-    unavailable on 5.7. This asserts the call shape only; that the names actually come
-    back real is proved against a live MINIMAL-metadata server, not here.
-    """
+    """The stream must ask for the INFORMATION_SCHEMA column-name fallback."""
     captured = {}
 
     def fake_reader(**kwargs):
@@ -305,16 +320,7 @@ def test_create_binlog_stream_enables_column_name_cache(monkeypatch):
         return object()
 
     monkeypatch.setattr(mysql_helper, "BinLogStreamReader", fake_reader)
-    helper = mysql_helper.MySqlHelper(
-        host="localhost",
-        port=3306,
-        user="cdc_user",
-        password="cdc_password",
-        database="db",
-        table="tbl",
-        snapshot_host="localhost",
-        tls=TlsConfig(),
-    )
+    helper = mysql_helper.MySqlHelper(**_helper_kwargs())
 
     helper.create_binlog_stream(server_id=1234, log_file="mysql-bin.000001", log_pos=4)
 
@@ -387,11 +393,7 @@ def test_stop_does_not_produce():
 
 
 def test_read_changes_wraps_decode_error():
-    """
-    Validates spec section 2.1 / D1: a decode failure the transition window can still
-    hit must surface as an actionable `MySqlCdcError` naming `binlog_row_metadata`,
-    never a raw `UnicodeDecodeError`.
-    """
+    """A decode failure surfaces as `MySqlCdcError`, not a `UnicodeDecodeError`."""
     helper = mysql_helper.MySqlHelper(**_helper_kwargs())
 
     with pytest.raises(MySqlCdcError, match="binlog_row_metadata"):
@@ -403,38 +405,59 @@ def test_read_changes_wraps_decode_error():
         )
 
 
-def test_validate_server_config_requires_full_row_metadata():
-    """
-    Validates spec D1/2.2: `_require_row_metadata` refuses anything but FULL, for both
-    a MySQL 5.7-style server (variable absent) and a stock 8.x server (MINIMAL).
-    """
-    helper = mysql_helper.MySqlHelper(**_helper_kwargs())
-
-    with pytest.raises(MySqlCdcError, match="'FULL'"):
-        helper._require_row_metadata(_FakeShowVariableCursor("MINIMAL"))
-
-    with pytest.raises(MySqlCdcError, match="has no binlog_row_metadata variable"):
-        helper._require_row_metadata(_FakeShowVariableCursor(None))
-
-
-def test_allow_minimal_row_metadata_refuses_by_default_and_warns_when_enabled(caplog):
-    """
-    Validates spec section 2.2 / the `allow_minimal_row_metadata` parameter: refused
-    by default, downgraded to a warning naming the parameter when opted in.
-    """
-    strict_helper = mysql_helper.MySqlHelper(**_helper_kwargs())
-    with pytest.raises(MySqlCdcError, match="allow_minimal_row_metadata"):
-        strict_helper._require_row_metadata(_FakeShowVariableCursor("MINIMAL"))
-
-    lenient_helper = mysql_helper.MySqlHelper(
-        **_helper_kwargs(allow_minimal_row_metadata=True)
+def test_ensure_row_settings_sets_both_globals_on_a_stock_server(caplog):
+    """A server on MySQL's defaults is repaired: globals set, log rotated, logged."""
+    cursor = _FakeServerCursor(
+        {"binlog_row_metadata": "MINIMAL", "binlog_row_image": "MINIMAL"}
     )
-    with caplog.at_level(logging.WARNING):
-        lenient_helper._require_row_metadata(_FakeShowVariableCursor("MINIMAL"))
 
-    assert any(
-        "allow_minimal_row_metadata=True" in record.message for record in caplog.records
+    with caplog.at_level(logging.INFO):
+        server_config.ensure_row_settings(cursor, host="localhost", user="cdc_user")
+
+    assert "SET GLOBAL binlog_row_metadata = FULL" in cursor.statements
+    assert "SET GLOBAL binlog_row_image = FULL" in cursor.statements
+    assert "FLUSH BINARY LOGS" in cursor.statements
+    assert any("= FULL on localhost" in record.message for record in caplog.records)
+
+
+def test_ensure_row_settings_is_a_no_op_on_a_configured_server():
+    """A server that already has both FULL is not written to at all."""
+    cursor = _FakeServerCursor(
+        {"binlog_row_metadata": "FULL", "binlog_row_image": "FULL"}
     )
+
+    server_config.ensure_row_settings(cursor, host="localhost", user="cdc_user")
+
+    assert [s for s in cursor.statements if not s.startswith("SHOW GLOBAL")] == []
+
+
+def test_ensure_row_settings_without_the_privilege_names_the_grant():
+    """The one case that still fails names the single GRANT that fixes it."""
+    cursor = _FakeServerCursor(
+        {"binlog_row_metadata": "MINIMAL", "binlog_row_image": "FULL"},
+        refuse="SET GLOBAL",
+        refusal=OperationalError(
+            1227, "Access denied; you need SUPER or SYSTEM_VARIABLES_ADMIN"
+        ),
+    )
+
+    with pytest.raises(MySqlCdcError, match="GRANT SYSTEM_VARIABLES_ADMIN"):
+        server_config.ensure_row_settings(cursor, host="localhost", user="cdc_user")
+
+
+def test_ensure_row_settings_survives_a_refused_flush(caplog):
+    """A refused FLUSH BINARY LOGS is reported, not fatal: it needs RELOAD."""
+    cursor = _FakeServerCursor(
+        {"binlog_row_metadata": "MINIMAL", "binlog_row_image": "MINIMAL"},
+        refuse="FLUSH",
+        refusal=OperationalError(1227, "Access denied; you need RELOAD"),
+    )
+
+    with caplog.at_level(logging.INFO):
+        server_config.ensure_row_settings(cursor, host="localhost", user="cdc_user")
+
+    assert "SET GLOBAL binlog_row_metadata = FULL" in cursor.statements
+    assert any("Did not rotate the binary logs" in r.message for r in caplog.records)
 
 
 def test_serialize_value_json_dict_with_bytes_keys():
@@ -453,11 +476,7 @@ def test_serialize_value_set_is_sorted_and_stable():
 
 
 def test_serialize_row_matches_binlog_for_json_set_bit():
-    """
-    Validates spec D4's cross-path contract: SET, JSON and BIT columns must serialize
-    identically whether the raw value came from the snapshot (`pymysql`-shaped) or the
-    binlog (`pymysqlreplication`-shaped) side.
-    """
+    """SET, JSON and BIT serialize identically on the snapshot and binlog paths."""
     column_types = {
         "tags": ColumnType(data_type="set"),
         "doc": ColumnType(data_type="json"),
@@ -469,21 +488,19 @@ def test_serialize_row_matches_binlog_for_json_set_bit():
         columns=["tags", "doc", "bits"],
         column_types=column_types,
     )
-    binlog_row = serialize_binlog_values(
+    binlog_names, binlog_row = serialize_binlog_values(
         values={"tags": {"a", "b"}, "doc": {b"a": 1, b"b": 2}, "bits": "00000101"},
         none_sources=None,
         json_columns=["doc"],
         float_columns=[],
     )
 
+    assert binlog_names == ["tags", "doc", "bits"]
     assert snapshot_row == binlog_row == ["a,b", '{"a":1,"b":2}', "00000101"]
 
 
 def test_force_snapshot_reanchors_position():
-    """
-    Validates spec D5: a forced snapshot must discard the stored binlog position and
-    re-anchor from a freshly fetched one, not resume the stale position.
-    """
+    """A forced snapshot discards the stored position and re-anchors it."""
     source = _RecordingSource(
         **_source_kwargs(initial_snapshot=True, force_snapshot=True)
     )
@@ -510,16 +527,15 @@ def test_force_snapshot_without_initial_snapshot_raises():
         MySqlCdcSource(**_source_kwargs(force_snapshot=True, initial_snapshot=False))
 
 
-def test_classify_error_purged_is_fatal():
+def test_classify_error_purged_is_not_retryable():
     """
-    Validates spec D2/D5: a purged binlog position classifies as PURGED (fatal), never
+    Validates spec D2/D5: a purged binlog position classifies as PURGED, never
     RETRYABLE - the same 1236 code that a `server_id` collision also raises.
     """
     exc = OperationalError(
         1236, "Could not find first log file name in binary log index file"
     )
-    assert mysql_helper.classify_error(exc) is mysql_helper.BinlogErrorKind.PURGED
-    assert is_connection_error(exc) is False
+    assert classify_error(exc) is BinlogErrorKind.PURGED
 
 
 def test_connect_mysql_passes_tls_context(monkeypatch):
@@ -558,28 +574,20 @@ def test_create_binlog_stream_passes_tls_context(monkeypatch):
     assert isinstance(captured["connection_settings"]["ssl"], ssl.SSLContext)
 
 
-@pytest.mark.parametrize(
-    "overrides",
-    [
-        {"tls_verify_cert": True},  # no tls_ca to verify against
-        {"tls_key": "/path/key.pem"},  # no tls_cert this key belongs to
-        {"tls_enabled": False, "tls_ca": "/path/ca.pem"},  # nothing to secure
-    ],
-)
-def test_tls_parameter_contradictions_raise(overrides):
-    """Validates spec D3: every contradictory tls_* combination is rejected loudly."""
-    with pytest.raises(MySqlCdcError):
-        MySqlCdcSource(**_source_kwargs(**overrides))
+def test_tls_disabled_with_a_ca_is_rejected():
+    """The one impossible TLS combination is rejected, not reinterpreted."""
+    with pytest.raises(MySqlCdcError, match="tls_enabled=False"):
+        MySqlCdcSource(**_source_kwargs(tls_enabled=False, tls_ca="/path/ca.pem"))
+
+
+def test_tls_ca_turns_verification_on():
+    """A CA is the switch: without one the connection is encrypted, not authenticated."""
+    assert TlsConfig().verifies is False
+    assert TlsConfig(ca="/path/ca.pem").verifies is True
 
 
 def test_repeated_collisions_exit_despite_successful_polls():
-    """
-    Validates spec D2/2.6: a `server_id` collision counter must NOT reset on a
-    successful poll - only a non-collision failure resets it (`self._collisions = 0`
-    in the RETRYABLE branch). Alternating collision/success must still trip
-    `_MAX_COLLISIONS` and raise, proving the old `failures = 0` reset alone (which this
-    test would otherwise loop against forever) is not what governs collisions anymore.
-    """
+    """A successful poll does not clear the collision count."""
     source = _RecordingSource(**_source_kwargs())
     source._running = True
     source._sleep = lambda duration: None
@@ -600,24 +608,20 @@ def test_repeated_collisions_exit_despite_successful_polls():
     with pytest.raises(MySqlCdcError, match="collided"):
         source._stream_changes()
 
-    # Collisions land on calls 1, 3, 5 (odd); a successful poll (even calls) does not
-    # reset the counter, so the 3rd collision (call 5) trips _MAX_COLLISIONS=3.
+    # Collisions land on the odd calls, so the third one is call 5.
     assert calls["n"] == 5
 
 
 def test_validate_server_config_rejects_server_own_id():
     """Validates spec D2/2.6: announcing the server's own server_id is refused."""
-    helper = mysql_helper.MySqlHelper(**_helper_kwargs())
-
     with pytest.raises(MySqlCdcError, match="server_id=1234"):
-        helper._require_distinct_server_id(_FakeServerIdCursor(1234), server_id=1234)
+        server_config.require_distinct_server_id(
+            _FakeServerIdCursor(1234), host="localhost", server_id=1234
+        )
 
 
 def test_read_changes_stops_when_asked():
-    """
-    Validates spec D6/2.7: `read_changes()` must break on `should_continue()` going
-    False, even mid-way through an effectively infinite stream for another table.
-    """
+    """`read_changes()` breaks on `should_continue()` going False."""
     helper = mysql_helper.MySqlHelper(**_helper_kwargs())
     calls = {"n": 0}
 
@@ -671,3 +675,160 @@ def test_interval_parameters_must_be_positive(field, bad_value):
     """Validates spec D6/2.9: all four interval parameters must be strictly positive."""
     with pytest.raises(MySqlCdcError):
         MySqlCdcSource(**_source_kwargs(**{field: bad_value}))
+
+
+# --------------------------------------------------------------------------------
+# Round 3 red-first tests (spec: dev-planning/mysql-cdc-round3, blockers 1-7)
+# --------------------------------------------------------------------------------
+
+
+def test_failed_reconnect_counts_as_a_failure_and_retries():
+    """Blocker 1: a rebuild that fails counts as a failure and the loop retries."""
+    source = _RecordingSource(**_source_kwargs())
+    source._running = True
+    source._sleep = lambda duration: None
+    attempts = {"poll": 0, "reconnect": 0}
+
+    def poll_once():
+        attempts["poll"] += 1
+        raise OperationalError(2013, "Lost connection to MySQL server during query")
+
+    def reconnect_stream():
+        attempts["reconnect"] += 1
+        raise OperationalError(2003, "Can't connect to MySQL server on 'localhost'")
+
+    source._poll_once = poll_once
+    source._reconnect_stream = reconnect_stream
+
+    with pytest.raises(OperationalError):
+        source._stream_changes()
+
+    # One failing poll plus four failing rebuilds is the full five-attempt budget.
+    assert attempts == {"poll": 1, "reconnect": 4}
+
+
+def test_reconnect_attempts_stop_when_the_source_is_stopped():
+    """A stop() during the backoff ends the loop instead of rebuilding the stream."""
+    source = _RecordingSource(**_source_kwargs())
+    source._running = True
+    source._sleep = lambda duration: source.stop()
+    reconnects = {"n": 0}
+
+    def poll_once():
+        raise OperationalError(2013, "Lost connection to MySQL server during query")
+
+    source._poll_once = poll_once
+    source._reconnect_stream = lambda: reconnects.__setitem__("n", reconnects["n"] + 1)
+
+    source._stream_changes()
+
+    assert reconnects["n"] == 0
+
+
+def test_binlog_values_omit_columns_absent_from_the_row_image():
+    """Blocker 2: columns MySQL did not send are dropped, so `null` means SQL NULL."""
+    names, values = serialize_binlog_values(
+        values={"id": 1, "a": 2, "b": None, "c": None, "doc": None, "tags": None},
+        none_sources={
+            "b": "null",
+            "c": "cols bitmap",
+            "doc": "same with before values",
+            "tags": "empty set",
+        },
+    )
+
+    assert names == ["id", "a", "b", "tags"]
+    assert values == [1, 2, None, ""]
+
+
+def test_default_topic_keys_are_strings():
+    """Blocker 4: the key is the string "<database>.<table>", not b"db.tbl"."""
+    topic = MySqlCdcSource(**_source_kwargs()).default_topic()
+
+    assert type(topic._key_serializer).__name__ == "StringSerializer"
+    assert type(topic._key_deserializer).__name__ == "StringDeserializer"
+    assert type(topic._value_serializer).__name__ == "JSONSerializer"
+    assert type(topic._value_deserializer).__name__ == "JSONDeserializer"
+
+
+def test_every_connection_carries_timeouts(monkeypatch):
+    """Blocker 5: plain connections and the reader's both carry socket timeouts."""
+    captured = {}
+    monkeypatch.setattr(
+        mysql_helper.pymysql, "connect", lambda **kwargs: captured.update(kwargs)
+    )
+    monkeypatch.setattr(
+        mysql_helper, "BinLogStreamReader", lambda **kwargs: captured.update(kwargs)
+    )
+    helper = mysql_helper.MySqlHelper(**_helper_kwargs())
+
+    helper.connect_mysql()
+    assert captured["connect_timeout"] > 0
+    assert captured["read_timeout"] > 0
+    assert captured["write_timeout"] > 0
+
+    captured.clear()
+    helper.create_binlog_stream(server_id=1234, log_file="mysql-bin.000001", log_pos=4)
+    settings = captured["connection_settings"]
+    assert settings["connect_timeout"] > 0
+    assert settings["read_timeout"] > 0
+    assert settings["write_timeout"] > 0
+
+
+def test_timeouts_are_derived_from_the_existing_intervals():
+    """Longer cadences widen the bounds; neither can push them below its floor."""
+    default = ConnectionTimeouts.derive(
+        commit_interval=5.0, retry_backoff_secs=5.0, shutdown_timeout=10.0
+    )
+    patient = ConnectionTimeouts.derive(
+        commit_interval=60.0, retry_backoff_secs=30.0, shutdown_timeout=120.0
+    )
+
+    assert default.read >= 30.0
+    assert default.connect >= 10.0
+    assert patient.read > default.read
+    assert patient.connect > default.connect
+
+
+def test_collisions_decay_out_of_the_window(monkeypatch):
+    """Blocker 7: collisions decay out of the window instead of accumulating forever."""
+    clock = {"t": 0.0}
+    monkeypatch.setattr(failures.time, "monotonic", lambda: clock["t"])
+    policy = failures.ReconnectPolicy("db.tbl", server_id=1234, max_backoff=5.0)
+    exc = OperationalError(
+        1236, "A replica with the same server_uuid/server_id has connected"
+    )
+
+    for month in range(4):
+        clock["t"] = month * 30 * 24 * 3600.0
+        policy.note_collision(exc)
+
+
+def test_collisions_inside_one_window_still_trip(monkeypatch):
+    """The decay must not blunt the bound: three collisions in seconds still exit."""
+    clock = {"t": 0.0}
+    monkeypatch.setattr(failures.time, "monotonic", lambda: clock["t"])
+    policy = failures.ReconnectPolicy("db.tbl", server_id=1234, max_backoff=5.0)
+    exc = OperationalError(
+        1236, "A replica with the same server_uuid/server_id has connected"
+    )
+
+    policy.note_collision(exc)
+    clock["t"] = 1.0
+    policy.note_collision(exc)
+    clock["t"] = 2.0
+    with pytest.raises(MySqlCdcError, match="collided 3 times"):
+        policy.note_collision(exc)
+
+
+def test_reconnect_window_trips_at_the_number_it_names():
+    """The 20-reconnect bound fires on the 20th, not the 21st."""
+    policy = failures.ReconnectPolicy("db.tbl", server_id=1234, max_backoff=5.0)
+    exc = OperationalError(2013, "Lost connection to MySQL server during query")
+
+    for _ in range(19):
+        policy.note_failure(exc)
+        policy.note_success()
+
+    with pytest.raises(MySqlCdcError, match="rebuilt 20 times"):
+        policy.note_failure(exc)
