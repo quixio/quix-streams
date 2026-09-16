@@ -228,14 +228,19 @@ class PendingIndex:
             self._markers[encoded] = None
             self._changed.add(encoded)
 
-    def unqueue(self, encoded: str, receive_ms: int) -> None:
+    def requeue(self, encoded: str, receive_ms: int) -> None:
         """
-        Schedule the removal of a queue entry whose marker no longer claims it.
+        Replace a queue entry whose marker no longer claims it.
+
+        The entry at `receive_ms` is removed; a surviving marker is rewritten in
+        the same flush, which queues it again at the arrival time it now claims.
 
         :param encoded: The prefix in its base64 form.
-        :param receive_ms: The arrival time the entry is queued at.
+        :param receive_ms: The arrival time the stale entry is queued at.
         """
         self._stale.append((encoded, receive_ms))
+        if self.entry(encoded) is not None:
+            self._changed.add(encoded)
 
     def flush(self) -> None:
         """
@@ -244,7 +249,7 @@ class PendingIndex:
         The only writer of either namespace: the previously persisted queue
         entry is deleted before the new one is written, so a prefix is never
         queued twice or queued at a deadline its marker no longer claims.
-        Entries handed to `unqueue()` go first, so a prefix repaired and
+        Entries handed to `requeue()` go first, so a prefix repaired and
         rewritten in the same callback keeps its new entry.
         """
         for stale_encoded, stale_ms in self._stale:

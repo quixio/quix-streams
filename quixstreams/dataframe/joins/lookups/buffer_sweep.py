@@ -95,7 +95,7 @@ class BufferSweeper:
             if entry is None or entry[0] > cutoff:
                 # A queue entry the marker no longer claims: the key was settled
                 # or moved on through the record path since it was queued.
-                index.unqueue(encoded, queued_ms)
+                index.requeue(encoded, queued_ms)
                 continue
 
             prefix = decode_prefix(encoded)

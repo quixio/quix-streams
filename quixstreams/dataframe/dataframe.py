@@ -1949,7 +1949,9 @@ class StreamingDataFrame:
             and a periodic task, both registered here. If None (default), an unresolved
             record goes downstream immediately with its fields' defaults.
 
-        :returns: StreamingDataFrame: A StreamingDataFrame with the lookup join applied.
+        :returns: The same StreamingDataFrame instance, with the lookup join
+            applied in place. Both the buffered and the unbuffered path mutate
+            this instance, so reassigning the result is optional.
 
         Example:
 
@@ -1988,9 +1990,8 @@ class StreamingDataFrame:
             buffer.register_store(self)
             operator = buffer.callback(self, lookup, fields, _on)
             self._registry.register_periodic_task(operator.tick)
-            return self.__dataframe_clone__(
-                stream=self.stream.add_function(BufferTransformFunction(operator))
-            )
+            self._stream = self._stream.add_function(BufferTransformFunction(operator))
+            return self
 
         def _join(
             value: dict[str, Any], key: Any, timestamp: int, headers: HeadersMapping
