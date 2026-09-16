@@ -115,10 +115,10 @@ Here are the important configurations to be aware of (see
 - `snapshot_batch_size`: rows per snapshot page.
     **Default**: `1000`
 - `force_snapshot`: re-run the initial snapshot even if one has already completed,
-    **and re-anchor the binlog position with it**, which makes it the supported recovery
-    from a purged binlog position. Requires `initial_snapshot=True`; setting it without
-    one is rejected at start-up. It is static configuration, so it re-snapshots on
-    **every** restart until you turn it off.
+    **and re-anchor the binlog position with it**. A forced snapshot that is interrupted
+    is continued on the next start rather than restarted. Requires
+    `initial_snapshot=True`; setting it without one is rejected at start-up. It is static
+    configuration, so it re-snapshots on **every** restart until you turn it off.
     **Default**: `False`
 - `commit_interval`: how often (seconds) to produce the buffered changes and commit the
     binlog position they cover.
@@ -168,10 +168,12 @@ supported: neither has `binlog_row_metadata`, and without it the binlog carries 
 names, no `ENUM`/`SET` values, no character sets and no integer signedness — none of which
 the client can reconstruct.
 
-Two of the settings below are configured **for** you. `binlog_row_metadata` and
-`binlog_row_image` both ship lower than `FULL`, both are global and dynamic, and the
-source sets them itself at start-up, logging one line when it does. `log_bin` and
-`binlog_format` need a server restart, so those the source can only refuse.
+One of the settings below is normally configured **for** you. `binlog_row_metadata`
+ships as `MINIMAL` on MySQL 8.0.46, and the source raises it to `FULL` itself at
+start-up, logging one line when it does. `binlog_row_image` already ships `FULL`, so the
+source raises it only where someone has lowered it. Both are global and dynamic.
+`log_bin` and `binlog_format` need a server restart, so those the source can only
+refuse.
 
 1. **MySQL configuration**: binary logging must be enabled, in `ROW` format:
 
@@ -196,11 +198,12 @@ source sets them itself at start-up, logging one line when it does. `log_bin` an
     - `binlog-format = ROW` is **required**. The source fails at start-up with any other
       value, because a statement-based binlog carries no row images for it to read.
     - `binlog_row_metadata = FULL` and `binlog_row_image = FULL` are **required, and
-      the source sets them for you**. Both ship lower, so at start-up the source runs
+      the source sets them for you**. On a stock 8.0.46 only `binlog_row_metadata` needs
+      raising — `binlog_row_image` already ships `FULL` — so at start-up the source runs
 
         ```sql
         SET GLOBAL binlog_row_metadata = FULL;   -- global and dynamic: no restart
-        SET GLOBAL binlog_row_image = FULL;
+        SET GLOBAL binlog_row_image = FULL;      -- only if it has been lowered
         FLUSH BINARY LOGS;                       -- leave the older events behind
         ```
 
@@ -209,8 +212,8 @@ source sets them itself at start-up, logging one line when it does. `log_bin` an
         restarts; the source then finds them set and changes nothing.
 
         Setting a global needs `SYSTEM_VARIABLES_ADMIN` (see the grants below). Without
-        it the source stops at start-up with a message naming that one `GRANT`, because
-        neither loss can be repaired on the client:
+        it the source stops at start-up, because neither loss can be repaired on the
+        client:
 
         - `binlog_row_metadata = MINIMAL` discards **all** optional table metadata, not
           some of it: column names become `UNKNOWN_COL0…n`, every `ENUM` arrives as
@@ -219,10 +222,19 @@ source sets them itself at start-up, logging one line when it does. `log_bin` an
         - `binlog_row_image = MINIMAL` leaves every column a statement did not touch out
           of the event entirely, so `UPDATE t SET a=1` carries `a` and nothing else.
 
+        On a **managed** MySQL — RDS, Aurora, Cloud SQL — `GRANT SYSTEM_VARIABLES_ADMIN`
+        is refused even to the master account. Set `binlog_row_metadata` to `FULL` in the
+        instance's parameter group, database flags or equivalent console setting instead,
+        and apply it; the source then finds it set. The error message says both.
+
         Rotating the log (`FLUSH BINARY LOGS`) needs `RELOAD`. Without it the source logs
         that it skipped the rotation and carries on: events written from that moment are
         correct either way, and only a source resuming into a position written *before*
-        the change reads the older ones.
+        the change reads the older ones. Such a replay is **refused, not published**: the
+        source checks each event's own table map and stops when it finds one written
+        under `MINIMAL` metadata, because an `ENUM` would arrive as `null`, a `SET` as
+        `""` and an `INT UNSIGNED 4294967295` as `-1`, none of them distinguishable from
+        the real value.
 
         One caveat that no client can work around: `binlog_row_image` is also a **session**
         variable, and a session takes its copy when it connects. An application connection
@@ -238,8 +250,8 @@ source sets them itself at start-up, logging one line when it does. `log_bin` an
       [Initial Snapshot](#initial-snapshot).
 
 2. **MySQL user permissions**: the user needs `REPLICATION SLAVE`, `REPLICATION CLIENT`
-   and `SELECT` on the table, plus `SYSTEM_VARIABLES_ADMIN` unless the two row-image
-   settings above are already `FULL`:
+   and `SELECT` on the **whole** table, plus `SYSTEM_VARIABLES_ADMIN` unless the two
+   row-image settings above are already `FULL`:
 
     ```sql
     -- Create replication user
@@ -248,11 +260,13 @@ source sets them itself at start-up, logging one line when it does. `log_bin` an
     -- Grant replication privileges for CDC
     GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'cdc_user'@'%';
 
-    -- Required for every deployment, snapshot or not (see below)
+    -- Required for every deployment, snapshot or not (see below).
+    -- On the whole table: a column-level grant is rejected at start-up.
     GRANT SELECT ON your_database.your_table TO 'cdc_user'@'%';
 
     -- Lets the source set binlog_row_metadata/binlog_row_image itself.
-    -- Not needed if my.cnf already gives both FULL.
+    -- Not needed if my.cnf already gives both FULL, and refused on RDS/Aurora/Cloud SQL
+    -- where the parameter group is the way to set them.
     GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO 'cdc_user'@'%';
 
     FLUSH PRIVILEGES;
@@ -261,9 +275,16 @@ source sets them itself at start-up, logging one line when it does. `log_bin` an
     `SELECT` is **not** snapshot-only. The source connects to `database` to validate the
     server and to read the table's metadata, and MySQL refuses the connection outright
     (`ERROR 1044: Access denied for user ... to database ...`) to an account holding only
-    the two replication privileges. Grant it on the whole table: a column-level grant
-    makes the table visible but returns a partial column list, which the source cannot
-    use.
+    the two replication privileges.
+
+    It must be granted on the **whole table**. A column-level grant such as
+    `GRANT SELECT (id, name)` makes the table visible but filters *both*
+    `information_schema.COLUMNS` and `SHOW COLUMNS` down to the granted columns, so
+    nothing in the catalogue reveals the missing ones. The source therefore runs
+    `SELECT * FROM <table> LIMIT 0` at start-up, which MySQL refuses with
+    `ERROR 1142` unless the account can read every column, and stops with a message
+    naming the `GRANT` to run. Granting each column individually passes, because the
+    column list is then complete.
 
 
 ## Transport Security
@@ -307,17 +328,19 @@ starts streaming, emitting each row as a `snapshot_insert` event.
 - **Pages are produced and flushed one at a time**, so a large table does not have to
   fit in memory.
 - **Progress is checkpointed** after each page, so an interrupted snapshot resumes at
-  the last committed key instead of replaying the whole table. Checkpointing needs the
-  primary-key values to survive a JSON round-trip, so it is only done when every primary
-  key column is an integer or a string. For any other primary-key type (binary,
-  temporal, `DECIMAL`) the source logs that progress cannot be checkpointed, and an
-  interrupted snapshot restarts from the beginning. Pagination itself is unaffected.
+  the last committed key instead of replaying the whole table. The state store holds
+  JSON, so each key value is stored with the type it came back as and rebuilt on resume:
+  `BINARY`/`VARBINARY`/`BLOB` as base64, `DECIMAL` as its exact decimal string,
+  `DATE`/`DATETIME`/`TIMESTAMP` as ISO-8601 and `TIME` as whole microseconds. A key of
+  some other type still cannot be stored; the source logs that once and an interrupted
+  snapshot then restarts from the beginning. Pagination itself is unaffected.
 - **Every column is named in the query**, read from `information_schema.COLUMNS` in
   ordinal order, rather than selected with `SELECT *`. `SELECT *` omits `INVISIBLE`
   columns while the binlog row images carry them, which includes the `my_row_id` that
-  MySQL 8.0.30+ adds to a table with no primary key when
+  MySQL adds to a table with no primary key when
   `sql_generate_invisible_primary_key = ON`. Both paths therefore emit the same
-  `columnnames` for the same table.
+  `columnnames` for the same table — provided the account can read every column, which
+  start-up checks; see [MySQL Prerequisites](#mysql-prerequisites).
 - **The binlog position is resolved and committed before the first row is read**, so
   every change made while the snapshot runs is still ahead of the stream. Rows changed
   during the snapshot are therefore emitted twice — once as `snapshot_insert` and again
@@ -335,10 +358,12 @@ starts streaming, emitting each row as a `snapshot_insert` event.
   restart with a driver error.
 - `force_snapshot=True` re-runs the snapshot even if one has already completed, and
   **discards the committed binlog position** before it starts, re-anchoring it from the
-  server. That combination is what makes it the supported recovery from a purged binlog
-  position: without the re-anchor the source would republish the table and then die on
-  the same unreachable position. It requires `initial_snapshot=True`, and it is static
-  configuration, so it re-snapshots on **every** restart until you turn it off.
+  server. Because it is static configuration it applies on **every** restart until you
+  turn it off — so if a forced snapshot is interrupted, the next start *continues* it
+  from its stored progress at the position it originally anchored, instead of
+  re-anchoring and starting again. Re-anchoring there would move the position past the
+  changes made to the pages already produced, and those changes would never be
+  published. It requires `initial_snapshot=True`.
 
 
 ## Snapshotting From a Read Replica
@@ -512,7 +537,7 @@ Three keys are used:
 |---|---|
 | `binlog_position_<database>_<table>` | `{"log_file": ..., "log_pos": ..., "committed_at": ...}` |
 | `snapshot_completed_<database>_<table>` | `{"completed_at": ..., "rows": ...}`, absent until the snapshot finishes |
-| `snapshot_progress_<database>_<table>` | `{"last_key": [...], "rows": ..., "updated_at": ...}`, present only while a snapshot is in progress |
+| `snapshot_progress_<database>_<table>` | `{"last_key": [...], "key_types": [...], "pk_columns": [...], "rows": ..., "updated_at": ...}`, present only while a snapshot is in progress |
 
 The store (and its changelog topic) is named after the source, so renaming a source —
 or pointing it at a different `database`/`table` — starts from a fresh position.
@@ -589,15 +614,29 @@ this container's host, credentials, database and table.
   and restart the server.
 - **"binlog_format is 'STATEMENT' ... but CDC requires 'ROW'"** — set
   `binlog_format=ROW`. Row events do not exist in any other format. A server that has no
-  `binlog_format` variable at all (it is deprecated since 8.0.34) can only write row
-  images, and the source logs that and carries on.
+  `binlog_format` variable at all can only write row images, and the source logs that
+  and carries on.
 - **"Access denied" / "Could not read the binary log position"** — grant
   `REPLICATION SLAVE, REPLICATION CLIENT ON *.*` to the configured user. `Access denied
   for user ... to database ...` (error 1044) is the other half: the user also needs
   `SELECT` on the table, whether or not the initial snapshot is enabled.
 - **"This source needs binlog_row_metadata = FULL ... may not set it"** — run the
-  `GRANT SYSTEM_VARIABLES_ADMIN` the message quotes, or set both `binlog_row_metadata`
-  and `binlog_row_image` to `FULL` in `my.cnf` yourself and restart the server.
+  `GRANT SYSTEM_VARIABLES_ADMIN` the message quotes, or set the named variable to `FULL`
+  in `my.cnf` yourself and restart the server. On RDS, Aurora or Cloud SQL that `GRANT`
+  is refused even to the master account: set it in the instance's parameter group or
+  database flags and apply it.
+- **"The account this source connects with may not read every column of ..."** — the
+  account holds a column-level `SELECT` grant. `information_schema.COLUMNS` is filtered
+  by the same privileges, so the snapshot would silently read only the granted columns
+  while the binlog carries all of them. Run the `GRANT SELECT ON <db>.<table>` the
+  message quotes.
+- **"MySQL wrote an event ... while binlog_row_metadata was below FULL"** — the source
+  is replaying events written before it raised `binlog_row_metadata`. Those carry no
+  `ENUM`/`SET` dictionaries and no integer signedness, none of which can be recovered on
+  the client, so the source refuses the event rather than shipping `null`, `""` and
+  negative numbers. Put `binlog_row_metadata = FULL` in `my.cnf`, then restart with
+  `initial_snapshot=True` and `force_snapshot=True` to re-read the table and re-anchor
+  past them.
 - **"Unknown system variable 'binlog_row_metadata'"** — the server is MySQL 5.7 or
   MariaDB. Neither is supported; move to MySQL 8.0 or later.
 - **"Could not decode a binlog event ..."** — the source is reading events written before
@@ -618,13 +657,15 @@ this container's host, credentials, database and table.
   whether another client is using the same `server_id`.
 - **"MySQL no longer holds the binlog position committed for ..."** — the committed
   position has been purged from the server's binlog, and there is no gap-free recovery:
-  the changes in between are gone from the server. With `initial_snapshot=True`, restart
-  with `force_snapshot=True` to republish every row and re-anchor the position, then turn
-  it off again. With `initial_snapshot=False` on a table with **no primary key** there is
-  no snapshot to take: either add a primary key and do the above, or accept the gap and
-  give the source a different `name`, which starts it from the server's current position
-  with a state store of its own. Raise `binlog_expire_logs_seconds` so it exceeds the
-  longest downtime you expect.
+  the changes in between are gone from the server. With `initial_snapshot=True` the
+  source discards its own stored position and snapshot progress before it stops, so
+  simply starting it again re-reads the table and re-anchors — no configuration change
+  and no `force_snapshot`. With `initial_snapshot=False` the position is **kept**,
+  because there is nothing to re-read and dropping it would skip the gap silently: add a
+  primary key and restart with `initial_snapshot=True` and `force_snapshot=True`, or
+  accept the gap and give the source a different `name`, which starts it from the
+  server's current position with a state store of its own. Raise
+  `binlog_expire_logs_seconds` so it exceeds the longest downtime you expect.
 - **"MySQL wrote a partial row image for ..."** — a writer that connected before the
   source raised `binlog_row_image` is still writing `MINIMAL` (or `NOBLOB`) images, whose
   events are missing columns. Set `binlog_row_image = FULL` in `my.cnf`, reconnect those

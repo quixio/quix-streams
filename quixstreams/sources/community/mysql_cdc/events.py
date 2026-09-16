@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Set, Tuple
 
+from .config import MySqlCdcError
 from .drivers import FIELD_TYPE, DeleteRowsEvent, UpdateRowsEvent, WriteRowsEvent
 from .values import serialize_binlog_values
 
@@ -14,8 +15,10 @@ def event_to_changes(event: Any) -> List[Dict[str, Any]]:
 
     :param event: a `WriteRowsEvent`, `UpdateRowsEvent` or `DeleteRowsEvent`; anything
         else yields no changes.
-    :raises MySqlCdcError: if MySQL wrote a row image this source cannot publish.
+    :raises MySqlCdcError: if MySQL wrote a row image this source cannot publish, or an
+        event this source cannot decode faithfully.
     """
+    _require_full_metadata(event)
     json_columns, float_columns = _typed_columns(event)
     table_name = f"{event.schema}.{event.table}"
     changes: List[Dict[str, Any]] = []
@@ -72,10 +75,27 @@ def event_to_changes(event: Any) -> List[Dict[str, Any]]:
     return changes
 
 
+def _require_full_metadata(event: Any) -> None:
+    """
+    :raises MySqlCdcError: if the event was written while `binlog_row_metadata` was
+        below FULL.
+    """
+    # `Table.column_name_flag` is set only on the path that read the event's own column
+    # metadata. The source's INFORMATION_SCHEMA fallback names the columns anyway, so
+    # this is the one thing that still distinguishes the two.
+    table = event.table_map.get(event.table_id)
+    if not getattr(table, "column_name_flag", True):
+        raise _stripped_metadata_error(f"{event.schema}.{event.table}")
+    for column in event.columns:
+        if (column.type == FIELD_TYPE.ENUM and column.enum_values is None) or (
+            column.type == FIELD_TYPE.SET and column.set_values is None
+        ):
+            raise _stripped_metadata_error(f"{event.schema}.{event.table}")
+
+
 def _typed_columns(event: Any) -> Tuple[Set[str], Set[str]]:
     """
-    :return: the event's (JSON column names, FLOAT column names), from the table-map
-        event, which names every column only under `binlog_row_metadata=FULL`.
+    :return: the event's (JSON column names, FLOAT column names).
     """
     json_columns: Set[str] = set()
     float_columns: Set[str] = set()
@@ -88,3 +108,16 @@ def _typed_columns(event: Any) -> Tuple[Set[str], Set[str]]:
         elif column.type == FIELD_TYPE.FLOAT:
             float_columns.add(name)
     return json_columns, float_columns
+
+
+def _stripped_metadata_error(table: str) -> MySqlCdcError:
+    return MySqlCdcError(
+        f"MySQL wrote an event for {table} while binlog_row_metadata was below FULL, "
+        "which is the MySQL 8.x default, so the event predates this source raising it. "
+        "It carries no ENUM or SET value lists and no integer signedness, so publishing "
+        "it would ship an ENUM as null, a SET as an empty string and an UNSIGNED "
+        "integer as a negative number, none of them distinguishable from the real "
+        "value. Set binlog_row_metadata = FULL in that server's my.cnf, then restart "
+        "this source with initial_snapshot=True and force_snapshot=True to re-read the "
+        "table and re-anchor past those events."
+    )

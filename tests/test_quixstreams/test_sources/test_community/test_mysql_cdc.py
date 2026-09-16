@@ -3,7 +3,7 @@ import json
 import logging
 import ssl
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -35,7 +35,8 @@ from quixstreams.sources.community.mysql_cdc.retention import SnapshotAnchor
 from quixstreams.sources.community.mysql_cdc.snapshot import (
     SnapshotPlan,
     build_snapshot_query,
-    is_checkpointable_key,
+    decode_key,
+    encode_key,
     iter_snapshot_batches,
     quote_identifier,
 )
@@ -45,6 +46,10 @@ from quixstreams.sources.community.mysql_cdc.values import (
     serialize_row,
     serialize_value,
 )
+
+_POSITION_KEY = "binlog_position_db_tbl"
+_SNAPSHOT_COMPLETED_KEY = "snapshot_completed_db_tbl"
+_SNAPSHOT_PROGRESS_KEY = "snapshot_progress_db_tbl"
 
 
 def _source_kwargs(**overrides):
@@ -123,15 +128,21 @@ class _FakeServerIdCursor:
         return (self._value,)
 
 
-class _InfiniteOtherTableStream:
-    """An infinite binlog stream whose events never match the table being read."""
+class _InfiniteEmptyEventStream:
+    """An infinite binlog stream of events that carry no rows for this source."""
 
     log_file = "mysql-bin.000001"
     log_pos = 1000
 
     def __iter__(self):
         while True:
-            yield SimpleNamespace(schema="other_db", table="other_tbl")
+            yield SimpleNamespace(
+                schema="db",
+                table="tbl",
+                table_id=1,
+                table_map={1: SimpleNamespace(column_name_flag=True)},
+                columns=[],
+            )
 
 
 class _DecodeErrorStream:
@@ -248,20 +259,32 @@ def test_serialize_value():
 
 
 @pytest.mark.parametrize(
-    ("values", "expected"),
+    "values",
     [
-        ([1], True),
-        (["a"], True),
-        ([1, "a"], True),
-        ([b"x"], False),
-        ([datetime(2024, 1, 1)], False),
-        ([Decimal("1")], False),
-        ([True], False),
-        ([], False),
+        [1],
+        ["a"],
+        [1, "a"],
+        [b"x"],
+        [datetime(2024, 1, 1)],
+        [Decimal("1")],
+        [True],
+        [timedelta(hours=26, minutes=3, seconds=4)],
+        [bytes([0, 255]), Decimal("12.30"), date(2024, 3, 1)],
     ],
 )
-def test_is_checkpointable_key(values, expected):
-    assert is_checkpointable_key(values) is expected
+def test_checkpoint_key_round_trips(values):
+    encoded, tags = encode_key(values)
+    assert json.loads(json.dumps(encoded)) == encoded
+    assert decode_key(encoded, tags) == values
+
+
+def test_an_empty_key_cannot_be_checkpointed():
+    assert encode_key([]) is None
+
+
+def test_a_key_stored_without_types_is_read_as_ints_and_strings():
+    assert decode_key([1, "a"], []) == [1, "a"]
+    assert decode_key([1.5], []) is None
 
 
 @pytest.mark.parametrize(
@@ -510,9 +533,7 @@ def test_force_snapshot_reanchors_position():
     source = _RecordingSource(
         **_source_kwargs(initial_snapshot=True, force_snapshot=True)
     )
-    source.state.set(
-        source._position_key, {"log_file": "stale-bin.000001", "log_pos": 999}
-    )
+    source.state.set(_POSITION_KEY, {"log_file": "stale-bin.000001", "log_pos": 999})
     source._helper.fetch_snapshot_start_position = lambda: ("fresh-bin.000009", 4242)
 
     snapshot_needed = source._is_snapshot_needed()
@@ -522,7 +543,7 @@ def test_force_snapshot_reanchors_position():
 
     assert position == ("fresh-bin.000009", 4242)
     assert source._committed_position == ("fresh-bin.000009", 4242)
-    stored = source.state.get(source._position_key)
+    stored = source.state.get(_POSITION_KEY)
     assert stored["log_file"] == "fresh-bin.000009"
     assert stored["log_pos"] == 4242
 
@@ -628,7 +649,7 @@ def test_validate_server_config_rejects_server_own_id():
 
 def test_read_changes_stops_when_asked():
     """`read_changes()` breaks on `should_continue()` going False."""
-    reader = BinlogReader(_InfiniteOtherTableStream(), database="db", table="tbl")
+    reader = BinlogReader(_InfiniteEmptyEventStream(), database="db", table="tbl")
     calls = {"n": 0}
 
     def should_continue():
@@ -651,7 +672,7 @@ def test_read_changes_stops_when_asked():
 
 def test_read_changes_honours_time_bound():
     """Validates spec D6/2.7: `read_changes()` must break once `max_seconds` elapses."""
-    reader = BinlogReader(_InfiniteOtherTableStream(), database="db", table="tbl")
+    reader = BinlogReader(_InfiniteEmptyEventStream(), database="db", table="tbl")
 
     started = time.monotonic()
     changes, position = reader.read_changes(
@@ -937,9 +958,9 @@ def test_purged_anchor_discards_the_state_it_points_at():
             return False
 
     source = _RecordingSource(**_source_kwargs(initial_snapshot=True))
-    source.state.set(source._position_key, {"log_file": "a", "log_pos": 1})
-    source.state.set(source._snapshot_progress_key, {"last_key": [1]})
-    source.state.set(source._snapshot_completed_key, {"rows": 1})
+    source.state.set(_POSITION_KEY, {"log_file": "a", "log_pos": 1})
+    source.state.set(_SNAPSHOT_PROGRESS_KEY, {"last_key": [1]})
+    source.state.set(_SNAPSHOT_COMPLETED_KEY, {"rows": 1})
 
     anchor = SnapshotAnchor(
         Helper(), "db.tbl", ("mysql-bin.000007", 4), anchored_at=time.time() - 600
@@ -949,9 +970,9 @@ def test_purged_anchor_discards_the_state_it_points_at():
     with pytest.raises(MySqlCdcError):
         source._check_snapshot_anchor(anchor, rows_produced=10, estimated_rows=100)
 
-    assert source.state.get(source._position_key) is None
-    assert source.state.get(source._snapshot_progress_key) is None
-    assert source.state.get(source._snapshot_completed_key) is None
+    assert source.state.get(_POSITION_KEY) is None
+    assert source.state.get(_SNAPSHOT_PROGRESS_KEY) is None
+    assert source.state.get(_SNAPSHOT_COMPLETED_KEY) is None
 
 
 def test_one_event_cannot_exceed_the_buffer_bound(monkeypatch):
@@ -1117,7 +1138,7 @@ def test_purged_position_message_has_a_branch_for_a_pk_less_table():
     """F10: the recovery offered must not be the one the no-PK check refuses."""
     source = MySqlCdcSource(**_source_kwargs(initial_snapshot=False))
 
-    message = str(source._purged_position_error())
+    message = str(source._purged_position_failure())
 
     assert "no snapshot to take" in message
     assert "PRIMARY KEY" in message
@@ -1128,10 +1149,10 @@ def test_snapshot_progress_is_discarded_when_the_primary_key_changed():
     """F11: a stored key cannot be replayed into a query built from a different PK."""
     source = _RecordingSource(**_source_kwargs(initial_snapshot=True))
     progress = {"last_key": [42], "pk_columns": ["id"], "rows": 42}
-    source.state.set(source._snapshot_progress_key, dict(progress))
+    source.state.set(_SNAPSHOT_PROGRESS_KEY, dict(progress))
 
-    assert source._resume_snapshot_progress(["tenant", "id"]) == (None, 0)
-    assert source.state.get(source._snapshot_progress_key) is None
+    assert source._progress.resume_point(["tenant", "id"]) == (None, 0)
+    assert source.state.get(_SNAPSHOT_PROGRESS_KEY) is None
 
-    source.state.set(source._snapshot_progress_key, dict(progress))
-    assert source._resume_snapshot_progress(["id"]) == ([42], 42)
+    source.state.set(_SNAPSHOT_PROGRESS_KEY, dict(progress))
+    assert source._progress.resume_point(["id"]) == ([42], 42)

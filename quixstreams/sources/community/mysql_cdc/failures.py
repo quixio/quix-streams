@@ -5,7 +5,7 @@ import ssl
 import time
 from collections import deque
 from enum import Enum
-from typing import Deque
+from typing import Deque, Optional
 
 from .config import MySqlCdcError
 from .drivers import InterfaceError, OperationalError, mysql_error_code
@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 # 1227 ER_SPECIFIC_ACCESS_DENIED_ERROR, 2026 CR_SSL_CONNECTION_ERROR.
 _FATAL_MYSQL_ERROR_CODES = frozenset({1044, 1045, 1227, 2026})
 
-# 1236 ER_MASTER_FATAL_ERROR_READING_BINLOG covers three situations that need three
-# different answers, and only its message tells them apart. Both the "replica"/"source"
-# and the older "slave"/"master" wordings contain the collision marker.
+# 1236 ER_MASTER_FATAL_ERROR_READING_BINLOG covers situations that need different
+# answers, and only its message tells them apart. Both markers below are substrings of
+# the message templates compiled into MySQL 8.0.46.
 _BINLOG_READ_ERROR_CODE = 1236
 _COLLISION_MARKER = "same server_uuid/server_id"
 _PURGED_MARKER = "could not find first log file"
@@ -40,13 +40,34 @@ class BinlogErrorKind(str, Enum):
     FATAL = "fatal"
 
 
+def _certificate_rejected(exc: BaseException) -> bool:
+    """
+    :return: whether `exc` is, or wraps, a certificate that failed verification.
+        pymysql re-raises the `SSLCertVerificationError` as `OperationalError(2003)` and
+        keeps the original on `original_exception`, so the outer exception looks like an
+        unreachable host.
+    """
+    seen = set()
+    current: Optional[BaseException] = exc
+    while current is not None and id(current) not in seen:
+        if isinstance(current, ssl.SSLCertVerificationError):
+            return True
+        seen.add(id(current))
+        current = (
+            getattr(current, "original_exception", None)
+            or current.__cause__
+            or current.__context__
+        )
+    return False
+
+
 def classify_error(exc: BaseException) -> BinlogErrorKind:
     """
     Decide how a streaming failure has to be handled.
 
     :param exc: the exception the poll or the stream rebuild raised.
     """
-    if isinstance(exc, ssl.SSLCertVerificationError):
+    if _certificate_rejected(exc):
         return BinlogErrorKind.FATAL
     if isinstance(exc, (BrokenPipeError, ConnectionResetError, ssl.SSLError)):
         return BinlogErrorKind.RETRYABLE

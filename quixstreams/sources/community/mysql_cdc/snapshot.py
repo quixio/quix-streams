@@ -1,7 +1,10 @@
 """The SQL half of the initial snapshot: keyset pagination over one table."""
 
+import base64
 import logging
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from .values import ColumnType, serialize_row
@@ -9,9 +12,10 @@ from .values import ColumnType, serialize_row
 __all__ = (
     "SnapshotPlan",
     "build_snapshot_query",
+    "decode_key",
     "discover_primary_key",
+    "encode_key",
     "estimate_row_count",
-    "is_checkpointable_key",
     "iter_snapshot_batches",
     "quote_identifier",
 )
@@ -43,16 +47,92 @@ def quote_identifier(name: str) -> str:
     return "`" + name.replace("`", "``") + "`"
 
 
-def is_checkpointable_key(values: Sequence[Any]) -> bool:
+def encode_key(values: Sequence[Any]) -> Optional[Tuple[List[Any], List[str]]]:
     """
-    :return: True when every primary-key value survives a JSON round-trip unchanged,
-        which is what the state store needs to checkpoint snapshot progress.
+    Render primary-key values as something the JSON-backed state store accepts.
+
+    :param values: the key of the last row of a snapshot page, as MySQL returned it.
+    :return: `(encoded values, type tags)` to store, or None if any value has no
+        encoding, in which case that snapshot cannot be checkpointed.
     """
-    return bool(values) and all(
-        isinstance(value, str)
-        or (isinstance(value, int) and not isinstance(value, bool))
-        for value in values
-    )
+    if not values:
+        return None
+    encoded: List[Any] = []
+    tags: List[str] = []
+    for value in values:
+        tag = _tag_of(value)
+        if tag is None:
+            return None
+        encoded.append(_ENCODERS[tag](value))
+        tags.append(tag)
+    return encoded, tags
+
+
+def decode_key(values: Sequence[Any], tags: Sequence[str]) -> Optional[List[Any]]:
+    """
+    Turn a stored key back into the values MySQL compared the last page against.
+
+    :param tags: the tags `encode_key()` returned; an empty sequence means the key was
+        stored before the tags were, when only ints and strings were ever stored.
+    :return: the decoded key, or None if it cannot be decoded as stored.
+    """
+    if not tags:
+        return list(values) if all(isinstance(v, (int, str)) for v in values) else None
+    if len(tags) != len(values):
+        return None
+    decoded: List[Any] = []
+    for value, tag in zip(values, tags):
+        decoder = _DECODERS.get(tag)
+        if decoder is None:
+            return None
+        try:
+            decoded.append(decoder(value))
+        except (ArithmeticError, TypeError, ValueError):
+            return None
+    return decoded
+
+
+def _tag_of(value: Any) -> Optional[str]:
+    # bool before int and datetime before date: each is a subclass of the next.
+    for tag, kind in (
+        ("bool", bool),
+        ("int", int),
+        ("str", str),
+        ("float", float),
+        ("bytes", (bytes, bytearray)),
+        ("decimal", Decimal),
+        ("datetime", datetime),
+        ("date", date),
+        ("timedelta", timedelta),
+    ):
+        if isinstance(value, kind):
+            return tag
+    return None
+
+
+_ENCODERS = {
+    "bool": bool,
+    "int": int,
+    "str": str,
+    "float": float,
+    "bytes": lambda value: base64.b64encode(bytes(value)).decode("ascii"),
+    "decimal": str,
+    "datetime": lambda value: value.isoformat(),
+    "date": lambda value: value.isoformat(),
+    "timedelta": lambda value: value // timedelta(microseconds=1),
+}
+
+_DECODERS = {
+    "bool": bool,
+    "int": int,
+    "str": str,
+    "float": float,
+    "bytes": base64.b64decode,
+    "decimal": Decimal,
+    "datetime": datetime.fromisoformat,
+    "date": date.fromisoformat,
+    "timedelta": lambda value: timedelta(microseconds=int(value)),
+}
 
 
 def discover_primary_key(cursor: Any, database: str, table: str) -> List[str]:
@@ -150,8 +230,7 @@ def iter_snapshot_batches(
     resume_page_query = build_snapshot_query(
         database, table, column_names, plan.pk_columns, resuming=True
     )
-    # information_schema.STATISTICS may spell a column differently from
-    # information_schema.COLUMNS; MySQL column names are case-insensitive.
+    # MySQL column names are case-insensitive.
     column_index = {name.lower(): index for index, name in enumerate(column_names)}
     pk_indexes = [column_index[name.lower()] for name in plan.pk_columns]
 

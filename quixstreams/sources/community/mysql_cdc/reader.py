@@ -17,17 +17,18 @@ class BinlogReader:
     Rows of an event that do not fit the caller's bound are held and delivered by the
     following reads, and that event's position is withheld until its last row has been
     returned.
+
+    The position reported covers everything the stream read, including the events of
+    other tables that `BinLogStreamReader` discarded before this class saw them, so it
+    keeps up with the server while this table is quiet.
     """
 
     def __init__(self, stream: BinLogStreamReader, database: str, table: str):
         """
-        :param stream: an open reader, positioned where the source wants to start.
-        :param database: the database whose events count as this source's.
-        :param table: the table whose events count as this source's.
+        :param stream: an open reader, positioned where the source wants to start, and
+            already restricted to this database and table.
         """
         self._stream = stream
-        self._database = database
-        self._table = table
         self._table_name = f"{database}.{table}"
         self._carry: List[Dict[str, Any]] = []
         self._carry_position: Optional[Tuple[str, int]] = None
@@ -47,8 +48,8 @@ class BinlogReader:
         :param max_seconds: stop after this long; checked per decoded event.
         :param should_continue: polled once per decoded event; False means stop now.
         :return: `(changes, position)`. The position covers every change this reader has
-            returned, and is None until an event has been decoded. It can be non-None
-            with no changes, for events this source read and filtered out.
+            returned, and is None until the stream has read something. It is non-None
+            with no changes whenever the stream advanced over other tables' events.
         :raises MySqlCdcError: if an event cannot be decoded, or if MySQL wrote a row
             image this source cannot publish.
         """
@@ -59,17 +60,14 @@ class BinlogReader:
         deadline = time.monotonic() + max_seconds
         try:
             for event in self._stream:
-                # `only_schemas` and `only_tables` are matched independently by the
-                # library, never as a pair.
-                if event.schema == self._database and event.table == self._table:
-                    rows = event_to_changes(event)
-                    room = max_rows - len(changes)
-                    if len(rows) > room:
-                        changes.extend(rows[:room])
-                        self._carry = rows[room:]
-                        self._carry_position = self._stream_position()
-                        break
-                    changes.extend(rows)
+                rows = event_to_changes(event)
+                room = max_rows - len(changes)
+                if len(rows) > room:
+                    changes.extend(rows[:room])
+                    self._carry = rows[room:]
+                    self._carry_position = self._stream_position()
+                    break
+                changes.extend(rows)
                 self._note_position()
                 if (
                     len(changes) >= max_rows
@@ -77,6 +75,7 @@ class BinlogReader:
                     or not should_continue()
                 ):
                     break
+            self._note_position()
         except (UnicodeDecodeError, LookupError) as exc:
             raise MySqlCdcError(
                 f"Could not decode a binlog event for {self._table_name} at "

@@ -25,13 +25,13 @@ __all__ = ("MySqlCdcError", "MySqlHelper")
 
 logger = logging.getLogger(__name__)
 
-# `SHOW MASTER STATUS` became `SHOW BINARY LOG STATUS` in 8.4; `SHOW SLAVE STATUS`
-# became `SHOW REPLICA STATUS` in 8.0.22 and the old spelling survived until 8.4.
+# No single spelling answers on both 8.0.46 and 8.4.2 - each rejects one of the pair
+# with a syntax error - so both are tried in turn.
 _BINLOG_STATUS_STATEMENTS = ("SHOW MASTER STATUS", "SHOW BINARY LOG STATUS")
 _REPLICA_STATUS_STATEMENTS = ("SHOW REPLICA STATUS", "SHOW SLAVE STATUS")
 
-# The binlog decoder renders TIMESTAMP with `datetime.utcfromtimestamp` and cannot be
-# told otherwise, so the snapshot's sessions are moved to match it.
+# `RowsEvent.__read_values` renders TIMESTAMP through `datetime.utcfromtimestamp` and
+# takes no time zone, so the snapshot's sessions are moved to match it.
 _SESSION_TIME_ZONE = "SET time_zone = '+00:00'"
 
 
@@ -116,6 +116,7 @@ class MySqlHelper:
                 server_config.require_table(
                     cursor, self._host, self._database, self._table
                 )
+                self._require_whole_table_select(cursor, self._host)
                 if require_primary_key:
                     server_config.require_primary_key(
                         cursor, self._database, self._table
@@ -124,8 +125,18 @@ class MySqlHelper:
             conn.close()
 
         if self._snapshot_host != self._host:
-            self.connect_mysql(override_host=self._snapshot_host).close()
+            conn = self.connect_mysql(override_host=self._snapshot_host)
+            try:
+                with conn.cursor() as cursor:
+                    self._require_whole_table_select(cursor, self._snapshot_host)
+            finally:
+                conn.close()
             logger.info("Snapshot host %s is reachable", self._snapshot_host)
+
+    def _require_whole_table_select(self, cursor: Any, host: str) -> None:
+        server_config.require_whole_table_select(
+            cursor, host, self._database, self._table, self._user
+        )
 
     def binlog_file_present(self, log_file: str) -> Optional[bool]:
         """
@@ -176,9 +187,6 @@ class MySqlHelper:
         """
         Return the primary coordinates a replica has already executed.
 
-        With parallel appliers `Exec_*` is a low-water mark, so the result errs towards
-        replaying changes rather than skipping them.
-
         :param host: the replica to ask.
         :raises MySqlCdcError: if it reports no executed coordinates.
         """
@@ -195,7 +203,6 @@ class MySqlHelper:
                     log_pos = _first_present(
                         row, "Exec_Source_Log_Pos", "Exec_Master_Log_Pos"
                     )
-                    # A zero Exec_* position means the applier has never run.
                     if log_file and log_pos:
                         return str(log_file), int(log_pos)
         finally:
@@ -246,8 +253,8 @@ class MySqlHelper:
 
         :param server_id: the replication client id to announce.
         """
-        # A fresh dict per call: `BinLogStreamReader` mutates the one it is handed
-        # (`binlogstream.py:240-241`).
+        # A fresh dict per call: `BinLogStreamReader.__init__` keeps the dict it is
+        # handed and setdefault()s "charset" into it.
         connection_settings: Dict[str, Any] = {
             "host": self._host,
             "port": self._port,

@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 # `pymysqlreplication/constants/NONE_SOURCE.py`: why a decoded value came back None.
 EMPTY_SET = "empty set"
 
-# `row_event.py:253-257`: the column was outside the row image MySQL wrote.
+# NONE_SOURCE.COLS_BITMAP: the column was outside the row image MySQL wrote.
 _COLS_BITMAP = "cols bitmap"
 
-# `row_event.py:363-365`: a JSON column a partial update did not resend.
+# NONE_SOURCE.JSON_PARTIAL_UPDATE: a JSON column a partial update did not resend.
 _JSON_PARTIAL_UPDATE = "same with before values"
 
 # MySQL's text protocol prints FLOAT with six significant digits.
@@ -120,8 +120,7 @@ def serialize_json(value: Any) -> str:
 
 def _jsonable(value: Any) -> Any:
     if isinstance(value, (bytes, bytearray)):
-        # Object keys (`json_binary.py:105`) and string values
-        # (`util/bytes.py:209-211`) are decoded to bytes, not str.
+        # The binlog JSON decoder returns object keys and string values as bytes.
         return bytes(value).decode("utf-8")
     if isinstance(value, dict):
         return {_jsonable(key): _jsonable(item) for key, item in value.items()}

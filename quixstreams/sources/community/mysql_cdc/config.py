@@ -51,19 +51,19 @@ class TlsConfig:
         """
         The pymysql connection arguments this configuration implies.
 
-        A fresh dict every call: `BinLogStreamReader` mutates the dict it is handed
-        (`binlogstream.py:240-241`).
+        A fresh dict every call: `BinLogStreamReader.__init__` keeps the dict it is
+        handed and setdefault()s "charset" into it.
         """
         if not self.enabled:
-            # With no ssl argument at all pymysql negotiates PREFERRED mode and falls
-            # back to plaintext (`connections.py:298-303`).
+            # Passing no ssl argument at all is not the same thing: pymysql then takes
+            # its PREFERRED branch, which tries TLS and accepts plaintext.
             return {"ssl_disabled": True}
         return {"ssl": self._context()}
 
     def _context(self) -> ssl.SSLContext:
         context = ssl.create_default_context(cafile=self.ca)
-        # Python 3.13 turns VERIFY_X509_STRICT on and MySQL's self-generated
-        # certificates fail it; pymysql clears it too (`connections.py:389-392`).
+        # Cleared because `pymysql._create_ssl_ctx` clears it on the context it builds
+        # itself, and MySQL's self-generated certificates do not pass it.
         context.verify_flags &= ~ssl.VERIFY_X509_STRICT
         # CERT_NONE cannot be assigned while check_hostname is True.
         context.check_hostname = False

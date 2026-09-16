@@ -76,8 +76,6 @@ class SnapshotAnchor:
                 self._retention_read = True
             present = self._helper.binlog_file_present(self._log_file)
         except MySQLError as exc:
-            # A snapshot that is otherwise succeeding is not failed over a failure to
-            # ask; the next minute asks again, and the stream itself fails loudly.
             logger.debug(
                 "Could not ask %s about its binary logs: %s", self._helper.host, exc
             )
