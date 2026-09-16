@@ -1,6 +1,5 @@
 import logging
 from datetime import timedelta
-from itertools import chain
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, Optional, Set, Union, cast
 
 from quixstreams.state.base.transaction import (
@@ -882,23 +881,12 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         prefix: bytes,
         backwards: bool = False,
         cf_name: str = "default",
+        limit: Optional[int] = None,
     ) -> list[tuple[bytes, bytes]]:
-        """
-        Get all items that start between `start` and `end`
-        within the specified prefix.
-
-        This function also checks the update cache for any updates not yet
-        committed to RocksDB.
-
-        :param start: Start of the range, inclusive.
-        :param end: End of the range, exclusive.
-        :param prefix: The key prefix for filtering items.
-        :param backwards: If True, returns items in reverse order.
-        :param cf_name: The RocksDB column family name.
-        :return: A sorted list of key-value pairs.
-        """
         start = max(start, 0)
         if start > end:
+            return []
+        if limit is not None and limit <= 0:
             return []
 
         seek_from_key = append_integer(base_bytes=prefix, integer=start)
@@ -915,21 +903,22 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         update_cache = cache.get_updates(cf_name=cf_name).get(prefix, {})
         delete_cache = cache.get_deletes(cf_name=cf_name)
 
-        # Get cached updates with matching keys
-        updated_items = (
-            (key, value)
-            for key, value in update_cache.items()
-            if seek_from_key < key <= seek_to_key
-        )
+        merged_items: dict[bytes, bytes] = {}
+        stop_at = None if backwards else limit
+        for key, value in db_items:
+            if key in delete_cache:
+                continue
+            merged_items[key] = value
+            if stop_at is not None and len(merged_items) >= stop_at:
+                break
 
-        # Iterate over stored and cached items and merge them to a single dict
-        merged_items = {}
-        for key, value in chain(db_items, updated_items):
-            if key not in delete_cache:
+        for key, value in update_cache.items():
+            if seek_from_key < key <= seek_to_key and key not in delete_cache:
                 merged_items[key] = value
 
         # Sort items merged from the cache and store
-        return sorted(merged_items.items(), key=lambda kv: kv[0], reverse=backwards)
+        items = sorted(merged_items.items(), key=lambda kv: kv[0], reverse=backwards)
+        return items if limit is None else items[:limit]
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def prepare(self, processed_offsets: Optional[dict[str, int]] = None) -> None:
