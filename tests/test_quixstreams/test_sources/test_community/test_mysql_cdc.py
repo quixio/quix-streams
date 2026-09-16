@@ -21,7 +21,9 @@ from quixstreams.sources.community.mysql_cdc import (
     server_config,
 )
 from quixstreams.sources.community.mysql_cdc.config import ConnectionTimeouts, TlsConfig
+from quixstreams.sources.community.mysql_cdc.events import event_to_changes
 from quixstreams.sources.community.mysql_cdc.failures import (
+    _MAX_RECONNECT_ATTEMPTS,
     BinlogErrorKind,
     classify_error,
 )
@@ -89,8 +91,10 @@ class _FakeServerCursor:
     Every other statement is recorded in `statements` and answers nothing, which is
     enough to drive `server_config.ensure_row_settings()` without a MySQL server: the
     variables it reads come back from `variables`, and the `SET GLOBAL`/`FLUSH` it runs
-    are what the test asserts on. `refuse` makes one statement prefix raise, standing in
-    for a server that will not run it for this account.
+    are what the test asserts on. A `SET GLOBAL` that is not refused changes what the
+    next `SHOW GLOBAL VARIABLES` answers, so repeated calls see the repaired server.
+    `refuse` makes one statement prefix raise, standing in for a server that will not
+    run it for this account.
     """
 
     def __init__(self, variables, refuse=None, refusal=None):
@@ -108,8 +112,11 @@ class _FakeServerCursor:
             name = params[0]
             value = self.variables.get(name)
             self._row = None if value is None else (name, value)
-        else:
-            self._row = None
+            return
+        if sql.startswith("SET GLOBAL "):
+            name, _, value = sql[len("SET GLOBAL ") :].partition(" = ")
+            self.variables[name] = value
+        self._row = None
 
     def fetchone(self):
         return self._row
@@ -145,14 +152,54 @@ class _InfiniteEmptyEventStream:
             )
 
 
-class _DecodeErrorStream:
-    """A stream that fails the way a MINIMAL-metadata binlog packet does."""
+class _RaisingStream:
+    """A stream whose `fetchone` raises, where the library's own decoding raises."""
 
     log_file = "mysql-bin.000001"
     log_pos = 555
 
+    def __init__(self, error):
+        self._error = error
+
     def __iter__(self):
-        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+        return self
+
+    def __next__(self):
+        raise self._error
+
+
+class _ForeignTrafficStream:
+    """
+    Models `BinLogStreamReader.fetchone` on a server where another table is hot.
+
+    Its loop is the library's (`binlogstream.py:598-728`): every event is discarded by
+    the `only_tables` filter and `continue`s, so the call only returns when the
+    `end_log_pos` bound the caller installed says it is past the end (`:672`, `:600`).
+    `_CEILING` stands in for the millions of events a real server has ready; reaching
+    it means nothing bounded the walk.
+    """
+
+    _CEILING = 2_000_000
+
+    def __init__(self):
+        self.log_file = "mysql-bin.000001"
+        self.log_pos = 4
+        self.end_log_pos = None
+        self.is_past_end_log_pos = False
+        self.events_walked = 0
+
+    def __iter__(self):
+        return iter(self.fetchone, None)
+
+    def fetchone(self):
+        while self.events_walked < self._CEILING:
+            if self.end_log_pos and self.is_past_end_log_pos:
+                return None
+            self.events_walked += 1
+            self.log_pos += 100
+            if self.end_log_pos and self.log_pos >= self.end_log_pos:
+                self.is_past_end_log_pos = True
+        return None
 
 
 class _RecordedState:
@@ -282,9 +329,11 @@ def test_an_empty_key_cannot_be_checkpointed():
     assert encode_key([]) is None
 
 
-def test_a_key_stored_without_types_is_read_as_ints_and_strings():
-    assert decode_key([1, "a"], []) == [1, "a"]
-    assert decode_key([1.5], []) is None
+def test_a_key_stored_without_its_types_cannot_be_decoded():
+    """Every stored key carries one tag per value; anything else is not a key."""
+    assert decode_key([1, "a"], []) is None
+    assert decode_key([1, "a"], ["int"]) is None
+    assert decode_key([1], ["nosuchtag"]) is None
 
 
 @pytest.mark.parametrize(
@@ -422,7 +471,8 @@ def test_stop_does_not_produce():
 
 def test_read_changes_wraps_decode_error():
     """A decode failure surfaces as `MySqlCdcError`, not a `UnicodeDecodeError`."""
-    reader = BinlogReader(_DecodeErrorStream(), database="db", table="tbl")
+    error = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+    reader = BinlogReader(_RaisingStream(error), database="db", table="tbl")
 
     with pytest.raises(MySqlCdcError, match="binlog_row_metadata"):
         reader.read_changes(
@@ -430,6 +480,67 @@ def test_read_changes_wraps_decode_error():
             max_seconds=5,
             should_continue=lambda: True,
         )
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        KeyError(42),
+        IndexError("list index out of range"),
+    ],
+)
+def test_read_changes_does_not_call_a_lookup_error_a_decode_failure(error):
+    """
+    Round 6 #4: `KeyError` and `IndexError` are `LookupError`s, and pymysqlreplication
+    raises them from `table_map[table_id]`, from the parallel cursors of
+    `_sync_column_info` and from `column.enum_values[...]`. Reporting those as an
+    undecodable event sends the operator to re-read the whole table for nothing.
+    """
+    reader = BinlogReader(_RaisingStream(error), database="db", table="tbl")
+
+    with pytest.raises(type(error)):
+        reader.read_changes(max_rows=10, max_seconds=5, should_continue=lambda: True)
+
+
+def test_read_changes_bounds_the_stream_walk_over_foreign_events():
+    """
+    Round 6 #3: `fetchone` skips every event of every other table without returning, so
+    both bounds have to be installed inside its loop, not only around it.
+    """
+    stream = _ForeignTrafficStream()
+    reader = BinlogReader(stream, database="db", table="tbl")
+
+    started = time.monotonic()
+    changes, position = reader.read_changes(
+        max_rows=1000, max_seconds=1000, should_continue=lambda: False
+    )
+    elapsed = time.monotonic() - started
+
+    assert changes == []
+    assert position == ("mysql-bin.000001", 104)
+    assert stream.events_walked == 1, (
+        f"the stream walked {stream.events_walked} foreign events before either bound "
+        "was evaluated"
+    )
+    assert elapsed < 2.0
+
+
+def test_read_changes_bounds_the_stream_walk_by_time():
+    """Round 6 #3: `max_seconds` has to reach inside `fetchone` for the same reason."""
+    stream = _ForeignTrafficStream()
+    reader = BinlogReader(stream, database="db", table="tbl")
+
+    started = time.monotonic()
+    reader.read_changes(max_rows=1000, max_seconds=0.05, should_continue=lambda: True)
+    elapsed = time.monotonic() - started
+
+    assert stream.events_walked < stream._CEILING
+    assert elapsed < 2.0
+
+    # A second read continues: the bound that tripped is not the end of the stream.
+    walked = stream.events_walked
+    reader.read_changes(max_rows=1000, max_seconds=0.05, should_continue=lambda: True)
+    assert stream.events_walked > walked
 
 
 def test_ensure_row_settings_sets_both_globals_on_a_stock_server(caplog):
@@ -728,8 +839,10 @@ def test_failed_reconnect_counts_as_a_failure_and_retries():
     with pytest.raises(OperationalError):
         source._stream_changes()
 
-    # One failing poll plus four failing rebuilds is the full five-attempt budget.
-    assert attempts == {"poll": 1, "reconnect": 4}
+    assert attempts == {
+        "poll": 1,
+        "reconnect": _MAX_RECONNECT_ATTEMPTS - 1,
+    }
 
 
 def test_reconnect_attempts_stop_when_the_source_is_stopped():
@@ -924,12 +1037,9 @@ def test_snapshot_anchor_fails_once_the_anchored_file_is_purged():
             self.present = present
             self.queries = 0
 
-        def binlog_retention_seconds(self):
-            return 3600
-
-        def binlog_file_present(self, log_file):
+        def binlog_status(self, log_file):
             self.queries += 1
-            return self.present
+            return self.present, 3600
 
     helper = Helper(present=False)
     anchor = SnapshotAnchor(
@@ -951,11 +1061,8 @@ def test_purged_anchor_discards_the_state_it_points_at():
     class Helper:
         host = "mysql-1"
 
-        def binlog_retention_seconds(self):
-            return 60
-
-        def binlog_file_present(self, log_file):
-            return False
+        def binlog_status(self, log_file):
+            return False, 60
 
     source = _RecordingSource(**_source_kwargs(initial_snapshot=True))
     source.state.set(_POSITION_KEY, {"log_file": "a", "log_pos": 1})
@@ -1063,27 +1170,61 @@ def test_tls_context_clears_x509_strict(monkeypatch):
     assert not context.verify_flags & ssl.VERIFY_X509_STRICT
 
 
-def test_reconnect_does_not_rewrite_the_servers_settings():
+class _ReconnectingHelper:
+    """A helper whose server settings are the `_FakeServerCursor` handed to it."""
+
+    def __init__(self, cursor):
+        self.cursor = cursor
+        self.streams = 0
+
+    def ensure_row_settings(self):
+        server_config.ensure_row_settings(
+            self.cursor, host="localhost", user="cdc_user"
+        )
+
+    def create_binlog_stream(self, server_id, log_file, log_pos):
+        self.streams += 1
+        return SimpleNamespace(close=lambda: None)
+
+
+def test_reconnect_does_not_rewrite_the_settings_of_a_server_that_has_them():
     """F7: a flapping link must not issue SET GLOBAL and rotate the binlog per retry."""
+    cursor = _FakeServerCursor(
+        {"binlog_row_metadata": "FULL", "binlog_row_image": "FULL"}
+    )
     source = _RecordingSource(**_source_kwargs())
-    calls = []
-
-    class Helper:
-        def ensure_row_settings(self):
-            calls.append("ensure_row_settings")
-
-        def create_binlog_stream(self, server_id, log_file, log_pos):
-            calls.append("create_binlog_stream")
-            return SimpleNamespace(close=lambda: None)
-
-    source._helper = Helper()
+    source._helper = _ReconnectingHelper(cursor)
     source._committed_position = ("mysql-bin.000004", 120)
 
     for _ in range(20):
         source._reconnect_stream()
 
-    assert calls.count("ensure_row_settings") == 0
-    assert calls.count("create_binlog_stream") == 20
+    assert source._helper.streams == 20
+    assert [s for s in cursor.statements if not s.startswith("SHOW GLOBAL")] == []
+    assert len(cursor.statements) == 40
+
+
+def test_reconnect_repairs_a_server_that_reverted_and_rotates_once():
+    """
+    Round 6 #1: a MySQL restart puts both settings back to my.cnf, and every writer
+    that reconnects then strips the events this source has to refuse. The rebuild is
+    where that is caught, and it costs one rotation, not one per reconnect.
+    """
+    cursor = _FakeServerCursor(
+        {"binlog_row_metadata": "MINIMAL", "binlog_row_image": "MINIMAL"}
+    )
+    source = _RecordingSource(**_source_kwargs())
+    source._helper = _ReconnectingHelper(cursor)
+    source._committed_position = ("mysql-bin.000004", 120)
+
+    for _ in range(20):
+        source._reconnect_stream()
+
+    assert cursor.variables["binlog_row_metadata"] == "FULL"
+    assert cursor.variables["binlog_row_image"] == "FULL"
+    assert cursor.statements.count("SET GLOBAL binlog_row_metadata = FULL") == 1
+    assert cursor.statements.count("SET GLOBAL binlog_row_image = FULL") == 1
+    assert cursor.statements.count("FLUSH BINARY LOGS") == 1
 
 
 def test_a_drained_poll_waits_for_the_commit_it_is_holding_data_for():
@@ -1148,7 +1289,12 @@ def test_purged_position_message_has_a_branch_for_a_pk_less_table():
 def test_snapshot_progress_is_discarded_when_the_primary_key_changed():
     """F11: a stored key cannot be replayed into a query built from a different PK."""
     source = _RecordingSource(**_source_kwargs(initial_snapshot=True))
-    progress = {"last_key": [42], "pk_columns": ["id"], "rows": 42}
+    progress = {
+        "last_key": [42],
+        "key_types": ["int"],
+        "pk_columns": ["id"],
+        "rows": 42,
+    }
     source.state.set(_SNAPSHOT_PROGRESS_KEY, dict(progress))
 
     assert source._progress.resume_point(["tenant", "id"]) == (None, 0)
@@ -1156,3 +1302,202 @@ def test_snapshot_progress_is_discarded_when_the_primary_key_changed():
 
     source.state.set(_SNAPSHOT_PROGRESS_KEY, dict(progress))
     assert source._progress.resume_point(["id"]) == ([42], 42)
+
+
+def test_snapshot_progress_survives_a_primary_key_spelt_in_another_case():
+    """
+    Round 6: MySQL column names are case-insensitive and the snapshot query lowercases
+    them, so a case difference between runs must not restart a large snapshot at row 0.
+    """
+    source = _RecordingSource(**_source_kwargs(initial_snapshot=True))
+    source.state.set(
+        _SNAPSHOT_PROGRESS_KEY,
+        {"last_key": [42], "key_types": ["int"], "pk_columns": ["Id"], "rows": 42},
+    )
+
+    assert source._progress.resume_point(["id"]) == ([42], 42)
+    assert source.state.get(_SNAPSHOT_PROGRESS_KEY) is not None
+
+
+# --------------------------------------------------------------------------------
+# Round 6 red-first tests
+# --------------------------------------------------------------------------------
+
+
+# Each pair is what the two paths really produced for one row: the 4-byte value the
+# binlog carries, and the value pymysql returns for the `SELECT` that renders it.
+# Measured on MySQL 8.0.46, 8.4.2 and 9.4.0 - all three agree.
+_MEASURED_FLOATS = [
+    (0.3333333432674408, 0.333333),
+    (0.10000000149011612, 0.1),
+    (123.45600128173828, 123.456),
+    (3.4028234663852886e38, 3.40282e38),
+    (1.1754943508222875e-38, 1.17549e-38),
+    (-7.699999809265137, -7.7),
+    (16777216.0, 16777200.0),
+    (19.989999771118164, 19.99),
+]
+
+
+@pytest.mark.parametrize(("binlog_value", "select_value"), _MEASURED_FLOATS)
+def test_a_float_column_reaches_the_topic_the_same_way_on_both_paths(
+    binlog_value, select_value
+):
+    """
+    Round 6 #2: a FLOAT column must carry one value, not one per path.
+
+    The binlog carries the 4-byte float itself; `SELECT` renders it with six
+    significant digits, which is what the snapshot path ships.
+    """
+    _, binlog_row = serialize_binlog_values(
+        values={"f": binlog_value}, table="db.tbl", float_columns=["f"]
+    )
+    snapshot_row = serialize_row(
+        values=[select_value],
+        columns=["f"],
+        column_types={"f": ColumnType(data_type="float")},
+        table="db.tbl",
+    )
+
+    assert binlog_row == snapshot_row == [select_value]
+
+
+@pytest.mark.parametrize("value", [0.3333333333333333, 1.175494351e-38, -7.7, 19.99])
+def test_a_double_column_is_shipped_unrounded_on_both_paths(value):
+    """Round 6 #2: DOUBLE renders shortest-round-trip, so no rule may touch it."""
+    _, binlog_row = serialize_binlog_values(
+        values={"d": value}, table="db.tbl", float_columns=["f"]
+    )
+    snapshot_row = serialize_row(
+        values=[value],
+        columns=["d"],
+        column_types={"d": ColumnType(data_type="double")},
+        table="db.tbl",
+    )
+
+    assert binlog_row == snapshot_row == [value]
+
+
+def test_an_event_whose_table_is_not_in_the_map_is_refused():
+    """
+    Round 6 #6: with no entry in the table map, nothing is known about the event's
+    columns, character sets or ENUM/SET values, so it cannot be published.
+    """
+    event = SimpleNamespace(
+        schema="db", table="tbl", table_id=7, table_map={}, columns=[]
+    )
+
+    with pytest.raises(MySqlCdcError, match="no table metadata"):
+        event_to_changes(event)
+
+
+def test_deciding_to_resume_a_forced_snapshot_writes_nothing():
+    """
+    Round 6 #5: the marker is dropped by the caller, once the position it applies to is
+    settled - not inside the boolean expression that decides whether to drop it.
+    """
+    source = _RecordingSource(
+        **_source_kwargs(initial_snapshot=True, force_snapshot=True)
+    )
+    source.state.set(_POSITION_KEY, {"log_file": "mysql-bin.000004", "log_pos": 120})
+    source.state.set(
+        _SNAPSHOT_PROGRESS_KEY,
+        {"last_key": [1], "key_types": ["int"], "pk_columns": ["id"], "rows": 1},
+    )
+    source.state.set(_SNAPSHOT_COMPLETED_KEY, {"rows": 1})
+    source.calls.clear()
+
+    assert source._resuming_forced_snapshot(("mysql-bin.000004", 120)) is True
+    assert source.calls == [], "deciding whether to resume wrote to the state store"
+    assert source.state.get(_SNAPSHOT_COMPLETED_KEY) is not None
+
+    assert source._resolve_start_position(snapshot_needed=True) == (
+        "mysql-bin.000004",
+        120,
+    )
+    assert source.state.get(_SNAPSHOT_COMPLETED_KEY) is None
+    assert source.state.get(_SNAPSHOT_PROGRESS_KEY) is not None
+
+
+def test_an_uncheckpointable_key_is_decided_once():
+    """
+    Round 6: a primary key with no JSON encoding does not acquire one partway through,
+    so the snapshot must not re-encode it on every page of a large table.
+    """
+    source = _RecordingSource(**_source_kwargs(initial_snapshot=True))
+    attempts = []
+
+    class Progress:
+        def resume_point(self, pk_columns):
+            return None, 0
+
+        def checkpoint(self, last_key, pk_columns, rows):
+            attempts.append(rows)
+            return False
+
+        def mark_snapshot_completed(self, rows):
+            pass
+
+    class Helper:
+        def plan_snapshot(self):
+            return SnapshotPlan(
+                pk_columns=["id"], columns=["id"], column_types={}, estimated_rows=40
+            )
+
+        def perform_initial_snapshot(self, plan, batch_size, start_after):
+            for page in range(20):
+                yield [{"kind": "snapshot_insert", "page": page}], [object()]
+
+    source._progress = Progress()
+    source._helper = Helper()
+    source._committed_position = ("mysql-bin.000001", 4)
+    source._check_snapshot_anchor = lambda *args: None
+    source._running = True
+
+    source._run_initial_snapshot()
+
+    assert attempts == [1]
+
+
+def test_the_snapshot_anchor_asks_both_questions_on_one_connection(monkeypatch):
+    """Round 6: one check a minute, one connection - not one connection per question."""
+    helper = mysql_helper.MySqlHelper(**_helper_kwargs())
+    connections = []
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def execute(self, sql, params=None):
+            if sql.startswith("SHOW BINARY LOGS"):
+                self.rows = [("mysql-bin.000007",)]
+            else:
+                self.rows = [("binlog_expire_logs_seconds", "3600")]
+
+        def fetchall(self):
+            return self.rows
+
+        def fetchone(self):
+            return self.rows[0]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    class Connection:
+        def cursor(self, *args):
+            return Cursor()
+
+        def close(self):
+            pass
+
+    def connect(override_host=None):
+        connections.append(override_host)
+        return Connection()
+
+    monkeypatch.setattr(helper, "connect_mysql", connect)
+
+    assert helper.binlog_status("mysql-bin.000007") == (True, 3600)
+    assert len(connections) == 1

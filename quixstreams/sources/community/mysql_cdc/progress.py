@@ -34,18 +34,18 @@ class SourceProgress:
         self._completed_key = f"snapshot_completed_{database}_{table}"
         self._progress_key = f"snapshot_progress_{database}_{table}"
 
-    def position(self) -> Optional[Tuple[str, int]]:
-        """:return: the committed `(log_file, log_pos)`, or None if there is none."""
+    def committed(self) -> Optional[Tuple[Tuple[str, int], float]]:
+        """
+        :return: the committed `((log_file, log_pos), committed_at)`, or None if there
+            is none. `committed_at` is a `time.time()`, and is this moment for a record
+            that carries none.
+        """
         stored = self._source.state.get(self._position_key)
         if not stored:
             return None
-        return str(stored["log_file"]), int(stored["log_pos"])
-
-    def anchored_at(self) -> float:
-        """:return: when the stored position was committed, as `time.time()`."""
-        stored = self._source.state.get(self._position_key)
-        committed_at = stored.get("committed_at") if stored else None
-        return float(committed_at) if committed_at else time.time()
+        position = str(stored["log_file"]), int(stored["log_pos"])
+        committed_at = stored.get("committed_at")
+        return position, (float(committed_at) if committed_at else time.time())
 
     def store_position(
         self, position: Tuple[str, int], timeout: Optional[float] = None
@@ -123,7 +123,11 @@ class SourceProgress:
             return None, 0
 
         stored_pk = [str(name) for name in progress.get("pk_columns") or []]
-        if stored_pk != list(pk_columns):
+        # MySQL column names are case-insensitive, and the snapshot query lowercases
+        # them to index its pages.
+        stored_names = [name.lower() for name in stored_pk]
+        table_names = [name.lower() for name in pk_columns]
+        if stored_names != table_names:
             self._discard_progress(
                 f"it paginated on ({', '.join(stored_pk) or 'an unrecorded key'}) and "
                 f"the table's primary key is now ({', '.join(pk_columns)}), so the "
@@ -132,7 +136,7 @@ class SourceProgress:
             return None, 0
 
         start_after = decode_key(
-            list(progress["last_key"]), list(progress.get("key_types") or [])
+            list(progress["last_key"]), list(progress["key_types"])
         )
         if start_after is None:
             self._discard_progress(

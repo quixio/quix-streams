@@ -172,8 +172,11 @@ One of the settings below is normally configured **for** you. `binlog_row_metada
 ships as `MINIMAL` on MySQL 8.0.46, and the source raises it to `FULL` itself at
 start-up, logging one line when it does. `binlog_row_image` already ships `FULL`, so the
 source raises it only where someone has lowered it. Both are global and dynamic.
-`log_bin` and `binlog_format` need a server restart, so those the source can only
-refuse.
+The source reads them again every time it rebuilds its binlog stream, so a server
+restart that puts `my.cnf` back in charge is repaired on the next reconnect instead of
+stopping the source; a server that still has them costs two `SHOW GLOBAL VARIABLES` and
+no rotation. `log_bin` and `binlog_format` need a server restart, so those the source
+can only refuse.
 
 1. **MySQL configuration**: binary logging must be enabled, in `ROW` format:
 
@@ -429,12 +432,22 @@ Requirements:
   columns and the variable. `columnnames` is therefore always the table's full column
   list, `INVISIBLE` columns included.
 
-  Five of those need explaining:
+  Six of those need explaining:
 
   - **`JSON` columns are emitted as JSON *strings*, not nested objects.** `columnvalues`
     is a flat array of scalars, and nesting one element would change the message schema
     for every consumer. Call `json.loads()` (or your language's equivalent) on the value.
     Keys are sorted and separators are minimal on both paths, so the string is stable.
+  - **`FLOAT` carries six significant digits**, which is what MySQL's text protocol
+    prints for a 4-byte float on 8.0, 8.4 and 9.x, and so what a `SELECT` — and with it
+    the initial snapshot — returns. The binlog carries the stored 4-byte value itself
+    (`0.3333333432674408` for a column holding a third), so it is rendered the same way
+    and the two paths ship one value. `DOUBLE` needs no rule: MySQL prints the shortest
+    representation that reads back as the same number, and so does Python. The two paths
+    can still disagree on the deprecated `FLOAT(M,D)` when the value needs more than six
+    significant digits — `12345.6789` through the snapshot against `12345.7` through the
+    binlog — because the declared scale lives in the table definition, which the binlog
+    does not carry.
   - **`SET` values are sorted**, not in the order the column was declared in: the binlog
     delivers an unordered set, and sorting is the only ordering both paths can produce.
     An empty `SET` is `""`; a `NULL` `SET` is `null`.
@@ -637,6 +650,11 @@ this container's host, credentials, database and table.
   negative numbers. Put `binlog_row_metadata = FULL` in `my.cnf`, then restart with
   `initial_snapshot=True` and `force_snapshot=True` to re-read the table and re-anchor
   past them.
+- **"The binlog stream holds no table metadata for ..."** — a row event arrived whose
+  table is not in the stream's table map, so its columns, character sets and `ENUM`/`SET`
+  values are all unknown. The source stops at its last committed position rather than
+  guess; starting it again reads the table map from the stream afresh and replays the
+  event.
 - **"Unknown system variable 'binlog_row_metadata'"** — the server is MySQL 5.7 or
   MariaDB. Neither is supported; move to MySQL 8.0 or later.
 - **"Could not decode a binlog event ..."** — the source is reading events written before

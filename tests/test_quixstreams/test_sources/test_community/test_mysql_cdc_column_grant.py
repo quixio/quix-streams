@@ -29,7 +29,7 @@ COMMAND = (
 )
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def server():
     container = MySqlContainer(
         MYSQL_IMAGE,

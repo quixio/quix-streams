@@ -29,7 +29,9 @@ _COLS_BITMAP = "cols bitmap"
 # NONE_SOURCE.JSON_PARTIAL_UPDATE: a JSON column a partial update did not resend.
 _JSON_PARTIAL_UPDATE = "same with before values"
 
-# MySQL's text protocol prints FLOAT with six significant digits.
+# The snapshot path ships what a `SELECT` renders, which for a FLOAT column is six
+# significant digits on 8.0.46, 8.4.2 and 9.4.0 - DOUBLE renders shortest-round-trip
+# and needs no rule.
 _FLOAT_SIGNIFICANT_DIGITS = 6
 
 _WARNED_TYPES: Set[Tuple[str, str, str]] = set()

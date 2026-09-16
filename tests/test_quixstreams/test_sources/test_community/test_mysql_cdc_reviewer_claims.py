@@ -50,9 +50,23 @@ class Bg:
         self._t.join(timeout=30)
 
     def until(self, pred, what, timeout=30.0):
+        """Wait for `pred`, reporting a source that died instead of satisfying it."""
         end = time.monotonic() + timeout
         while time.monotonic() < end:
-            if self.error is not None or pred():
+            if pred():
+                return
+            if self.error is not None:
+                raise AssertionError(
+                    f"the source raised while waiting for {what}: {self.error!r}"
+                )
+            time.sleep(0.05)
+        raise AssertionError(f"timed out waiting for {what}")
+
+    def until_failed(self, what, timeout=30.0):
+        """Wait for the source to raise, which is what this one test wants."""
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            if self.error is not None:
                 return
             time.sleep(0.05)
         raise AssertionError(f"timed out waiting for {what}")
@@ -133,7 +147,7 @@ def test_replay_of_pre_full_metadata_events_is_refused(mysql, mysql_server):
     # The source restarts: it sets metadata back to FULL, then replays the window.
     second = make_source(mysql_server, "replay_enum", state, commit_interval=0.3)
     with Bg(second) as bg2:
-        bg2.until(lambda: bg2.error is not None, "the source to refuse the replay")
+        bg2.until_failed("the source to refuse the replay")
 
     print(f"\nsource error: {bg2.error!r}")
     assert bg2.error is not None, (
@@ -173,6 +187,7 @@ def test_force_snapshot_discards_progress_on_every_restart(mysql, mysql_server):
     source.setup()
     state[progress_key] = {
         "last_key": [8],
+        "key_types": ["int"],
         "pk_columns": ["id"],
         "rows": 8,
         "updated_at": time.time(),

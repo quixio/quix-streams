@@ -1,11 +1,15 @@
 """
 Integration tests for the server-repair behaviour added in `ensure_row_settings`.
 
-The source now issues `SET GLOBAL binlog_row_metadata = FULL` and
-`SET GLOBAL binlog_row_image = FULL` against the server it connects to. These tests
-cover what that does to the server, and what happens to writers that were already
-connected when it happened - `binlog_row_image` is a SESSION variable seeded from the
-global at connect time, so an existing connection keeps writing partial row images.
+The source issues `SET GLOBAL binlog_row_metadata = FULL` and
+`SET GLOBAL binlog_row_image = FULL` against the server it connects to, at start-up
+and again whenever it rebuilds the stream. These tests cover what that does to the
+server, what happens to writers that were already connected when it happened -
+`binlog_row_image` is a SESSION variable seeded from the global at connect time, so an
+existing connection keeps writing partial row images - and what happens when a restart
+puts my.cnf back in charge.
+
+All of them share one container and reset its two row settings before each test.
 
 Requires Docker.
 """
@@ -42,8 +46,8 @@ DEFAULTS_COMMAND = (
 )
 
 
-@pytest.fixture()
-def stock_server():
+@pytest.fixture(scope="module")
+def stock_container():
     container = MySqlContainer(
         MYSQL_IMAGE,
         username=CDC_USER,
@@ -71,7 +75,37 @@ def stock_server():
                 cursor.execute("FLUSH PRIVILEGES")
         finally:
             root.close()
-        yield {"host": host, "port": port}
+        yield {"host": host, "port": port, "container": container}
+
+
+@pytest.fixture()
+def stock_server(stock_container):
+    """
+    The module's one container, with both row settings put back to MySQL's defaults.
+
+    Every test here needs a server the source has not repaired yet - the writers they
+    connect take their session `binlog_row_image` from the global - and each one leaves
+    it repaired, so the reset is what makes one container enough for all of them.
+    """
+    root = root_connection(stock_container)
+    try:
+        with root.cursor() as cursor:
+            cursor.execute("SET GLOBAL binlog_row_image = MINIMAL")
+            cursor.execute("SET GLOBAL binlog_row_metadata = MINIMAL")
+    finally:
+        root.close()
+    return stock_container
+
+
+def root_connection(server: Dict[str, Any]):
+    return pymysql.connect(
+        host=server["host"],
+        port=server["port"],
+        user="root",
+        password=ROOT_PASSWORD,
+        database=DATABASE,
+        autocommit=True,
+    )
 
 
 def connect(server: Dict[str, Any]):
@@ -267,3 +301,61 @@ def test_force_snapshot_does_not_recover_while_the_old_writer_holds_its_session(
         assert "partial row image" in str(running2.error), repr(running2.error)
     finally:
         writer.close()
+
+
+def binary_logs(conn: Any) -> int:
+    with conn.cursor() as cursor:
+        cursor.execute("SHOW BINARY LOGS")
+        return len(cursor.fetchall())
+
+
+def test_settings_that_reverted_are_repaired_when_the_stream_is_rebuilt(stock_server):
+    """
+    Round 6 #1: a MySQL restart puts both row settings back to my.cnf, and every writer
+    that connects after it strips the events this source cannot publish. The rebuild
+    that follows the lost connection is the source's chance to notice, so that is what
+    this drives - directly, rather than through whichever failure broke the link.
+
+    The revert is done by hand because it is what a restart does to the two globals.
+    """
+    observer = connect(stock_server)
+    writer = None
+    try:
+        execute(observer, "DROP TABLE IF EXISTS reverted")
+        execute(observer, "CREATE TABLE reverted (id INT PRIMARY KEY, a INT)")
+
+        source = build(stock_server, "reverted", {})
+        source.setup()
+        assert global_var(observer, "binlog_row_metadata") == "FULL"
+        assert global_var(observer, "binlog_row_image") == "FULL"
+
+        execute(observer, "SET GLOBAL binlog_row_metadata = MINIMAL")
+        execute(observer, "SET GLOBAL binlog_row_image = MINIMAL")
+
+        source._committed_position = source._helper.fetch_start_position()
+        source._reconnect_stream()
+
+        assert global_var(observer, "binlog_row_metadata") == "FULL"
+        assert global_var(observer, "binlog_row_image") == "FULL"
+
+        # A repaired server costs no rotation, however often the stream is rebuilt.
+        logs = binary_logs(observer)
+        for _ in range(5):
+            source._reconnect_stream()
+        assert binary_logs(observer) == logs
+
+        writer = connect(stock_server)  # a fresh session inherits the repair
+        execute(writer, "INSERT INTO reverted VALUES (1, 1)")
+        changes, _ = source._stream.read_changes(
+            max_rows=10, max_seconds=10, should_continue=lambda: True
+        )
+
+        row = dict(zip(changes[0]["columnnames"], changes[0]["columnvalues"]))
+
+        assert [change["kind"] for change in changes] == ["insert"]
+        assert row == {"id": 1, "a": 1}
+    finally:
+        source._close_stream()
+        if writer is not None:
+            writer.close()
+        observer.close()

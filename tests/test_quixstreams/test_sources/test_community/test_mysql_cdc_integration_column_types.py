@@ -2,12 +2,9 @@
 Column-type integration tests for `MySqlCdcSource` against a real MySQL server.
 
 These cover the column types whose *binlog* decoding depends on table metadata the
-server only emits when `binlog_row_metadata=FULL`. The snapshot path reads them
-through pymysql and is unaffected, so every test here compares the two paths.
-
-They are kept apart from `test_mysql_cdc_integration.py` because, unlike that file,
-they currently FAIL: each one documents a live defect. See the module-level notes on
-each test for the mechanism.
+server only emits when `binlog_row_metadata=FULL`, or on how MySQL renders the value
+to text. The snapshot path reads them through pymysql, so every test here compares the
+two paths against each other rather than against a hand-written expectation.
 
 Requires Docker.
 """
@@ -54,12 +51,11 @@ def test_enum_and_set_values_survive_the_binlog_path(mysql, mysql_server):
     ENUM and SET values must be the real strings on both paths.
 
     `pymysqlreplication` populates `Column.enum_values`/`set_values` only from the
-    optional table metadata a server emits when `binlog_row_metadata=FULL`. On the
-    MySQL 8.x default (MINIMAL) they stay `None`, and `row_event.py` reads the ENUM
-    (and SET) bytes off the wire and then returns `None` for the value. The
-    `use_column_name_cache` fallback recovers column *names* from INFORMATION_SCHEMA,
-    not the ENUM/SET value dictionaries, so the names are right and the values are
-    silently gone.
+    optional table metadata a server emits when `binlog_row_metadata=FULL`, which this
+    source raises at start-up. An event written while it was below FULL carries neither
+    dictionary, and the `use_column_name_cache` fallback recovers column *names* from
+    INFORMATION_SCHEMA, not the value lists - so such an event is refused rather than
+    published, and this test's events are all written after the repair.
     """
     execute(mysql, "DROP TABLE IF EXISTS enumset")
     execute(
@@ -102,15 +98,12 @@ def test_enum_and_set_values_survive_the_binlog_path(mysql, mysql_server):
 
 def test_binary_column_does_not_crash_the_binlog_reader(mysql, mysql_server):
     """
-    A VARBINARY/BLOB column holding non-UTF-8 bytes must not kill the source.
+    A VARBINARY/BLOB column holding non-UTF-8 bytes must reach the topic base64-encoded.
 
-    Under non-FULL row metadata `Column.character_set_name` is `None`, so
-    `RowsEvent.__read_string` falls through to `bytes.decode()` with strict errors -
-    a UTF-8 decode of raw binary. `MySqlCdcSource` never sets the library's
-    `ignore_decode_errors` flag, so the `UnicodeDecodeError` propagates out of
-    `read_changes`. It is not a connection error, so `_stream_changes` re-raises it
-    immediately and the process dies; on restart it resumes at the same committed
-    position and hits the same row again.
+    `RowsEvent.__read_string` decodes with strict errors and only knows the column's
+    character set from the metadata a FULL server emits; without it the bytes are read
+    as UTF-8 and the source dies on the row. Both paths here run against the repaired
+    server, and must agree byte for byte.
     """
     execute(mysql, "DROP TABLE IF EXISTS binary_payload")
     execute(
@@ -144,10 +137,9 @@ def test_json_column_is_parseable_on_both_paths(mysql, mysql_server):
     """
     A JSON column must reach the topic as JSON on both paths.
 
-    The snapshot emits the document text pymysql returns. The binlog decoder returns a
-    Python `dict` whose keys and string values are `bytes`, which `serialize_value`
-    cannot recognise and falls back to `str()` on - producing `"{b'a': 2, b'b': b'y'}"`,
-    a Python repr no JSON parser accepts.
+    The snapshot emits the document text pymysql returns; the binlog decoder returns a
+    Python `dict` whose keys and string values are `bytes`. Both are rendered as
+    canonical JSON text, so both must parse.
     """
     execute(mysql, "DROP TABLE IF EXISTS json_col")
     execute(mysql, "CREATE TABLE json_col (id INT PRIMARY KEY, doc JSON)")
@@ -175,3 +167,57 @@ def test_json_column_is_parseable_on_both_paths(mysql, mysql_server):
     assert document(of_kind(messages, "snapshot_insert")[0]) == {"a": 1, "b": "x"}
     assert document(of_kind(messages, "insert")[0]) == {"a": 2, "b": "y"}
     assert of_kind(messages, "insert")[0]["schema"] == DATABASE
+
+
+def test_float_and_double_columns_agree_on_both_paths(mysql, mysql_server):
+    """
+    A FLOAT and a DOUBLE must carry one value, whichever path the row arrives on.
+
+    The binlog carries the stored 4- or 8-byte value; `SELECT` renders a FLOAT with six
+    significant digits and a DOUBLE shortest-round-trip, and the snapshot path ships
+    what `SELECT` returns. This is the comparison, made by the server rather than
+    asserted from memory: the same row read both ways.
+    """
+    execute(mysql, "DROP TABLE IF EXISTS floats")
+    execute(
+        mysql,
+        "CREATE TABLE floats (id INT PRIMARY KEY, f FLOAT, d DOUBLE, n FLOAT)",
+    )
+    insert = "INSERT INTO floats VALUES (%s, %s, %s, NULL)"
+    values = [
+        ("a third", 1 / 3),
+        ("money", 19.99),
+        ("close to the float maximum", 3.402823466e38),
+        ("negative", -7.7),
+    ]
+    for row_id, (_, value) in enumerate(values, start=1):
+        execute(mysql, insert, (row_id, value, value))
+
+    source = make_source(mysql_server, "floats", {}, initial_snapshot=True)
+    with RunningSource(source) as running:
+        running.wait_for(
+            lambda m: count_kinds(m, snapshot_insert=len(values)), "the snapshot rows"
+        )
+        for row_id, (_, value) in enumerate(values, start=1):
+            execute(mysql, insert, (row_id + 100, value, value))
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=len(values)), "the live inserts"
+        )
+
+    snapshots = {
+        row_of(m)["id"]: row_of(m) for m in of_kind(messages, "snapshot_insert")
+    }
+    inserts = {row_of(m)["id"]: row_of(m) for m in of_kind(messages, "insert")}
+
+    for row_id, (label, _) in enumerate(values, start=1):
+        from_snapshot = snapshots[row_id]
+        from_binlog = inserts[row_id + 100]
+        assert from_binlog["f"] == from_snapshot["f"], (
+            f"FLOAT {label} diverged: binlog {from_binlog['f']!r} vs snapshot "
+            f"{from_snapshot['f']!r}\n{dump(messages)}"
+        )
+        assert from_binlog["d"] == from_snapshot["d"], (
+            f"DOUBLE {label} diverged: binlog {from_binlog['d']!r} vs snapshot "
+            f"{from_snapshot['d']!r}\n{dump(messages)}"
+        )
+        assert from_binlog["n"] is None and from_snapshot["n"] is None

@@ -78,13 +78,15 @@ def event_to_changes(event: Any) -> List[Dict[str, Any]]:
 def _require_full_metadata(event: Any) -> None:
     """
     :raises MySqlCdcError: if the event was written while `binlog_row_metadata` was
-        below FULL.
+        below FULL, or if the stream holds no metadata for its table at all.
     """
+    table = event.table_map.get(event.table_id)
+    if table is None:
+        raise _unknown_table_error(f"{event.schema}.{event.table}", event.table_id)
     # `Table.column_name_flag` is set only on the path that read the event's own column
     # metadata. The source's INFORMATION_SCHEMA fallback names the columns anyway, so
     # this is the one thing that still distinguishes the two.
-    table = event.table_map.get(event.table_id)
-    if not getattr(table, "column_name_flag", True):
+    if not table.column_name_flag:
         raise _stripped_metadata_error(f"{event.schema}.{event.table}")
     for column in event.columns:
         if (column.type == FIELD_TYPE.ENUM and column.enum_values is None) or (
@@ -108,6 +110,16 @@ def _typed_columns(event: Any) -> Tuple[Set[str], Set[str]]:
         elif column.type == FIELD_TYPE.FLOAT:
             float_columns.add(name)
     return json_columns, float_columns
+
+
+def _unknown_table_error(table: str, table_id: Any) -> MySqlCdcError:
+    return MySqlCdcError(
+        f"The binlog stream holds no table metadata for {table} (table id {table_id}), "
+        "so this event's columns, character sets and ENUM/SET values are all unknown "
+        "and it cannot be decoded faithfully. The source is stopping with the position "
+        "it last committed, which replays this event on the next start, where the "
+        "table map is read again from the stream."
+    )
 
 
 def _stripped_metadata_error(table: str) -> MySqlCdcError:

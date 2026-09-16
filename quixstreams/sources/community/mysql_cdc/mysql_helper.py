@@ -138,27 +138,38 @@ class MySqlHelper:
             cursor, host, self._database, self._table, self._user
         )
 
-    def binlog_file_present(self, log_file: str) -> Optional[bool]:
+    def ensure_row_settings(self) -> None:
         """
-        :param log_file: a binary log file name on `host`.
-        :return: whether the server still holds it, or None if it may not be asked.
+        Re-apply the two row settings if the server no longer has them at FULL.
+
+        Reads both before writing either, so a server that still holds them costs two
+        `SHOW GLOBAL VARIABLES` and no binary log rotation.
+
+        :raises MySqlCdcError: if they have to be set and the account may not set them.
         """
         conn = self.connect_mysql()
         try:
             with conn.cursor() as cursor:
-                return server_config.binlog_file_present(cursor, log_file)
+                server_config.ensure_row_settings(cursor, self._host, self._user)
         finally:
             conn.close()
 
-    def binlog_retention_seconds(self) -> Optional[int]:
+    def binlog_status(self, log_file: str) -> Tuple[Optional[bool], Optional[int]]:
         """
-        :return: how long `host` keeps a binary log file, or None if it keeps them
-            until something purges them by hand.
+        Ask `host` about its binary logs, both questions on one connection.
+
+        :param log_file: a binary log file name on `host`.
+        :return: `(whether the server still holds that file, how long it keeps one)`.
+            The first is None if this account may not ask; the second is None if the
+            server expires no file by itself.
         """
         conn = self.connect_mysql()
         try:
             with conn.cursor() as cursor:
-                return server_config.binlog_retention_seconds(cursor)
+                return (
+                    server_config.binlog_file_present(cursor, log_file),
+                    server_config.binlog_retention_seconds(cursor),
+                )
         finally:
             conn.close()
 

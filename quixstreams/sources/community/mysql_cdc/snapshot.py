@@ -72,12 +72,9 @@ def decode_key(values: Sequence[Any], tags: Sequence[str]) -> Optional[List[Any]
     """
     Turn a stored key back into the values MySQL compared the last page against.
 
-    :param tags: the tags `encode_key()` returned; an empty sequence means the key was
-        stored before the tags were, when only ints and strings were ever stored.
+    :param tags: the tags `encode_key()` returned, one per value.
     :return: the decoded key, or None if it cannot be decoded as stored.
     """
-    if not tags:
-        return list(values) if all(isinstance(v, (int, str)) for v in values) else None
     if len(tags) != len(values):
         return None
     decoded: List[Any] = []

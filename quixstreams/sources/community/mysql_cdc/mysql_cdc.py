@@ -65,9 +65,11 @@ class MySqlCdcSource(StatefulSource):
 
     Supported servers are MySQL 8.0, 8.4 and 9.x. `log_bin` must be on and
     `binlog_format` must be `ROW`. `binlog_row_metadata` ships as `MINIMAL` and is
-    raised to `FULL` by the source itself at start-up, which needs
-    SYSTEM_VARIABLES_ADMIN; `binlog_row_image` already ships `FULL` and is raised only
-    where it has been lowered. Writers connected before that keep writing partial row
+    raised to `FULL` by the source itself, which needs SYSTEM_VARIABLES_ADMIN;
+    `binlog_row_image` already ships `FULL` and is raised only where it has been
+    lowered. Both are read again every time the source rebuilds its stream, so a server
+    restart that puts my.cnf back in charge is repaired on the next reconnect rather
+    than killing the source. Writers connected before that keep writing partial row
     images until they reconnect, because `binlog_row_image` has session scope; the
     source stops on the first such event instead of publishing a change with columns
     missing. The account needs SELECT on the whole table, not on some of its columns.
@@ -270,6 +272,7 @@ class MySqlCdcSource(StatefulSource):
         self._buffer: List[Dict[str, Any]] = []
         self._pending_position: Optional[Tuple[str, int]] = None
         self._committed_position: Optional[Tuple[str, int]] = None
+        self._anchored_at = time.time()
         self._last_commit_at = time.monotonic()
         self._stream: Optional[BinlogReader] = None
 
@@ -378,20 +381,35 @@ class MySqlCdcSource(StatefulSource):
 
         :param snapshot_needed: read the coordinates from the snapshot host instead.
         """
-        stored = self._progress.position()
-        if self._force_snapshot and not self._resuming_forced_snapshot(stored):
+        committed = self._progress.committed()
+        stored = committed[0] if committed is not None else None
+        anchored_at = committed[1] if committed is not None else time.time()
+        resuming = self._resuming_forced_snapshot(stored)
+        if self._force_snapshot and not resuming:
             self._discard_state(
                 "force_snapshot is set; both are about to be re-anchored"
             )
             stored = None
         if stored is not None:
-            logger.info(
-                "Resuming %s from the committed binlog position %s:%s",
-                self._table_name,
-                stored[0],
-                stored[1],
-            )
             self._committed_position = stored
+            self._anchored_at = anchored_at
+            if resuming:
+                self._progress.drop_snapshot_completed()
+                logger.info(
+                    "force_snapshot is set and the previous snapshot of %s was "
+                    "interrupted, so it continues from its stored progress at the "
+                    "position it anchored (%s:%s) rather than starting again",
+                    self._table_name,
+                    stored[0],
+                    stored[1],
+                )
+            else:
+                logger.info(
+                    "Resuming %s from the committed binlog position %s:%s",
+                    self._table_name,
+                    stored[0],
+                    stored[1],
+                )
             return stored
 
         position = (
@@ -401,6 +419,7 @@ class MySqlCdcSource(StatefulSource):
         )
         self._progress.store_position(position)
         self._committed_position = position
+        self._anchored_at = time.time()
         logger.info(
             "Anchored the binlog position for %s at %s:%s",
             self._table_name,
@@ -413,31 +432,17 @@ class MySqlCdcSource(StatefulSource):
         """
         Decide whether a forced snapshot continues the one a restart interrupted.
 
-        Re-anchoring instead would move the position past the changes made to the pages
-        already produced, and those changes would never reach the topic.
-
         :param stored: the committed position, or None if there is none.
-        :return: True when the run resumes, having dropped only the completed marker.
+        :return: True when the run resumes rather than re-anchors.
         """
-        if stored is None or not self._progress.has_snapshot_progress():
-            return False
-        self._progress.drop_snapshot_completed()
-        logger.info(
-            "force_snapshot is set and the previous snapshot of %s was interrupted, so "
-            "it continues from its stored progress at the position it anchored (%s:%s) "
-            "rather than starting again",
-            self._table_name,
-            stored[0],
-            stored[1],
+        return (
+            self._force_snapshot
+            and stored is not None
+            and self._progress.has_snapshot_progress()
         )
-        return True
 
     def _discard_state(self, reason: str) -> None:
-        """
-        Clear the position and both snapshot keys, so the next start is a cold one.
-
-        :param reason: what made the stored state unusable, for the log line.
-        """
+        """Discard the stored state, and the position this run is holding with it."""
         self._progress.discard(reason)
         self._committed_position = None
 
@@ -449,7 +454,7 @@ class MySqlCdcSource(StatefulSource):
             helper=self._helper,
             table_name=self._table_name,
             position=self._committed_position,
-            anchored_at=self._progress.anchored_at(),
+            anchored_at=self._anchored_at,
         )
 
         batches = self._helper.perform_initial_snapshot(
@@ -457,7 +462,7 @@ class MySqlCdcSource(StatefulSource):
             batch_size=self._snapshot_batch_size,
             start_after=start_after,
         )
-        checkpointing_warned = False
+        checkpointing = True
         with contextlib.closing(batches) as pages:
             for changes, last_key in pages:
                 for change in changes:
@@ -466,17 +471,18 @@ class MySqlCdcSource(StatefulSource):
                 self.flush()
                 rows_produced += len(changes)
 
-                checkpointed = self._progress.checkpoint(
-                    last_key, plan.pk_columns, rows_produced
-                )
-                if not checkpointed and not checkpointing_warned:
-                    checkpointing_warned = True
-                    logger.info(
-                        "The primary key of %s holds a value this source cannot store "
-                        "as JSON, so snapshot progress is not checkpointed and an "
-                        "interrupted snapshot will restart from the beginning",
-                        self._table_name,
+                if checkpointing:
+                    checkpointing = self._progress.checkpoint(
+                        last_key, plan.pk_columns, rows_produced
                     )
+                    if not checkpointing:
+                        logger.info(
+                            "The primary key of %s holds a value this source cannot "
+                            "store as JSON, so snapshot progress is not checkpointed "
+                            "and an interrupted snapshot will restart from the "
+                            "beginning",
+                            self._table_name,
+                        )
 
                 if not self.running:
                     return
@@ -637,11 +643,15 @@ class MySqlCdcSource(StatefulSource):
     def _reconnect_stream(self) -> None:
         """
         Rebuild the stream at the last committed position, dropping everything read
-        since that commit.
+        since that commit, and re-check the two row settings first.
+
+        :raises MySqlCdcError: if the settings have reverted and the account may not
+            put them back.
         """
         self._close_stream()
         self._buffer.clear()
         self._pending_position = None
+        self._helper.ensure_row_settings()
 
         log_file, log_pos = self._committed_position
         self._stream = self._helper.create_binlog_stream(

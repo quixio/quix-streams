@@ -51,14 +51,14 @@ class SnapshotAnchor:
         self._log_file, self._log_pos = position
         self._anchored_at = anchored_at
         self._retention: Optional[int] = None
-        self._retention_read = False
         self._checked_at = time.monotonic()
         self._warned = False
 
     def check(self, rows_done: int, estimated_rows: Optional[int]) -> None:
         """
         Fail once the anchored file is gone, warn while it is still there but will not
-        last. Asks the server at most once a minute, and not at all before that.
+        last. Asks the server at most once a minute, on one connection, and not at all
+        before that.
 
         :param rows_done: rows produced so far, counting the runs before this one.
         :param estimated_rows: the table's row estimate, or None if the server has none.
@@ -71,10 +71,7 @@ class SnapshotAnchor:
 
         elapsed = max(0.0, time.time() - self._anchored_at)
         try:
-            if not self._retention_read:
-                self._retention = self._helper.binlog_retention_seconds()
-                self._retention_read = True
-            present = self._helper.binlog_file_present(self._log_file)
+            present, self._retention = self._helper.binlog_status(self._log_file)
         except MySQLError as exc:
             logger.debug(
                 "Could not ask %s about its binary logs: %s", self._helper.host, exc
