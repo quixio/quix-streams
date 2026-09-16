@@ -124,13 +124,15 @@ Here are the important configurations to be aware of (see
     binlog position they cover.
     **Default**: `5.0`
 - `max_buffer_size`: commit early once this many changes are buffered, which bounds
-    memory while catching up after downtime.
+    memory while catching up after downtime. A binlog event carrying more rows than the
+    room that is left is split across reads, so the bound holds for a bulk
+    `INSERT ... SELECT` too.
     **Default**: `1000`
 - `poll_interval`: how long (seconds) to idle when the binlog stream had nothing to
-    read. Consecutive empty polls double this, up to 1 second (or `commit_interval` if
-    that is shorter), and the first change resets it — so a quiet table costs a couple of
-    MySQL connections per second instead of twenty, at the price of up to a second of
-    extra latency on the first event after a quiet period.
+    read. Consecutive empty polls double this, up to `commit_interval`, and the first
+    change resets it. A drained poll that is holding buffered changes waits for the
+    commit those changes are due at instead. Measured against a 20 rows/s trickle, that
+    is 1.1 new MySQL connections per second rather than 29.
     **Default**: `0.1`
 - `retry_backoff_secs`: maximum backoff (seconds) between attempts to rebuild the binlog
     stream after a connection failure. A rebuild that fails — usually because the server
@@ -225,11 +227,15 @@ source sets them itself at start-up, logging one line when it does. `log_bin` an
         One caveat that no client can work around: `binlog_row_image` is also a **session**
         variable, and a session takes its copy when it connects. An application connection
         that was already open when the source raised the global keeps writing the old row
-        image until it reconnects. Putting both settings in `my.cnf` avoids this entirely,
-        which is why they are in the block above.
-    - `binlog_expire_logs_seconds` must exceed the longest downtime you expect. If the
-      binlog file holding the committed position has been purged, the stream fails fast
-      with MySQL's "Could not find first log file name in binary log index".
+        image until it reconnects — the source stops with an error on the first such
+        event rather than publishing a change with columns missing, so reconnect those
+        writers. Putting both settings in `my.cnf` avoids this entirely, which is why
+        they are in the block above.
+    - `binlog_expire_logs_seconds` must exceed the longest downtime you expect, **and
+      the time the initial snapshot takes**: the position is anchored before the first
+      row is read, so a snapshot that runs longer than the retention ends on a position
+      the server has purged. The source checks while the snapshot runs — see
+      [Initial Snapshot](#initial-snapshot).
 
 2. **MySQL user permissions**: the user needs `REPLICATION SLAVE`, `REPLICATION CLIENT`
    and `SELECT` on the table, plus `SYSTEM_VARIABLES_ADMIN` unless the two row-image
@@ -306,10 +312,27 @@ starts streaming, emitting each row as a `snapshot_insert` event.
   key column is an integer or a string. For any other primary-key type (binary,
   temporal, `DECIMAL`) the source logs that progress cannot be checkpointed, and an
   interrupted snapshot restarts from the beginning. Pagination itself is unaffected.
+- **Every column is named in the query**, read from `information_schema.COLUMNS` in
+  ordinal order, rather than selected with `SELECT *`. `SELECT *` omits `INVISIBLE`
+  columns while the binlog row images carry them, which includes the `my_row_id` that
+  MySQL 8.0.30+ adds to a table with no primary key when
+  `sql_generate_invisible_primary_key = ON`. Both paths therefore emit the same
+  `columnnames` for the same table.
 - **The binlog position is resolved and committed before the first row is read**, so
   every change made while the snapshot runs is still ahead of the stream. Rows changed
   during the snapshot are therefore emitted twice — once as `snapshot_insert` and again
   as an `insert`/`update`/`delete` — and nothing is missed.
+- **That anchored position is watched while the snapshot runs**, once a minute at most.
+  If the server keeps binary logs for less time than the snapshot needs, the anchor is
+  purged before the stream reaches it. The source warns as soon as the rows-per-second
+  it is achieving projects past `binlog_expire_logs_seconds`, and stops with an error
+  once the anchored file is actually gone — naming the elapsed time to raise the setting
+  above. It discards the stored position and progress at that point, so the next start
+  re-anchors and re-reads the table without needing `force_snapshot` or a state wipe.
+- **Progress is checkpointed with the primary-key columns it paginated on.** If the
+  table's primary key changes between runs, the stored key cannot be compared against
+  the new one, so it is discarded and the snapshot restarts instead of failing on every
+  restart with a driver error.
 - `force_snapshot=True` re-runs the snapshot even if one has already completed, and
   **discards the committed binlog position** before it starts, re-anchoring it from the
   server. That combination is what makes it the supported recovery from a purged binlog
@@ -366,7 +389,7 @@ Requirements:
 | `CHAR`, `VARCHAR`, `TEXT` | string | `"hello"` |
 | `BINARY`, `VARBINARY`, `BLOB`, `GEOMETRY` | base64 string | `"AP/+gA=="` |
 | `DATE`, `DATETIME` | ISO-8601 string | `"2024-03-01T10:20:30.123456"` |
-| `TIME` | string | `"1:02:03"` |
+| `TIME` | MySQL `TIME` string, `[-]HH:MM:SS[.ffffff]` | `"26:03:04"`, `"-838:59:59"` |
 | `TIMESTAMP` | ISO-8601 string, **in UTC** | `"2024-03-01T08:00:00"` |
 | `ENUM` | string | `"shipped"` |
 | `SET` | **sorted**, comma-joined string | `"a,b"` |
@@ -374,13 +397,14 @@ Requirements:
 | `BIT(n)` | zero-padded bit string, width `n` | `"00000101"` |
 | `NULL` | `null` | `null` |
 
-  **`null` always means SQL NULL.** A column MySQL did not send — one outside the row
-  image, or a `JSON` column a partial update did not resend — is left out of
-  `columnnames` and `columnvalues` entirely, so `columnnames` is not always the full
-  column list of the table. This only arises for events written before the source set
-  `binlog_row_image = FULL`; from then on every event carries every column.
+  **`null` always means SQL NULL.** A column MySQL did not send is not a value, and
+  the source will not guess one: an event whose row image is missing a column — because
+  the writer's session still has `binlog_row_image = MINIMAL`, or because a `JSON`
+  column arrived as a partial update — stops the source with an error naming the
+  columns and the variable. `columnnames` is therefore always the table's full column
+  list, `INVISIBLE` columns included.
 
-  Four of those need explaining:
+  Five of those need explaining:
 
   - **`JSON` columns are emitted as JSON *strings*, not nested objects.** `columnvalues`
     is a flat array of scalars, and nesting one element would change the message schema
@@ -395,9 +419,12 @@ Requirements:
   - **`TIMESTAMP` is always UTC.** The source sets every one of its MySQL sessions to
     `time_zone = '+00:00'`, because the binlog decoder renders `TIMESTAMP` in UTC and
     cannot be told otherwise. `DATETIME` is unaffected — MySQL never converts it.
+  - **`TIME` is a MySQL `TIME` string, not a duration.** MySQL's range is `-838:59:59`
+    to `838:59:59`, so the hour field counts hours and can pass 24; the value is what
+    `CAST(col AS CHAR)` prints, and fractional seconds appear only when non-zero.
 
   A column type with no rule above is emitted as its `str()` and the source logs a
-  warning naming the type, once per process.
+  warning naming the type, once per table and column.
 
 ### Snapshot Insert Event
 ```json
@@ -561,7 +588,9 @@ this container's host, credentials, database and table.
 - **"Binary logging is disabled on ..."** — enable `log_bin` in the MySQL configuration
   and restart the server.
 - **"binlog_format is 'STATEMENT' ... but CDC requires 'ROW'"** — set
-  `binlog_format=ROW`. Row events do not exist in any other format.
+  `binlog_format=ROW`. Row events do not exist in any other format. A server that has no
+  `binlog_format` variable at all (it is deprecated since 8.0.34) can only write row
+  images, and the source logs that and carries on.
 - **"Access denied" / "Could not read the binary log position"** — grant
   `REPLICATION SLAVE, REPLICATION CLIENT ON *.*` to the configured user. `Access denied
   for user ... to database ...` (error 1044) is the other half: the user also needs
@@ -576,7 +605,7 @@ this container's host, credentials, database and table.
   `BINARY`/`VARBINARY`/`BLOB` or non-UTF-8 text column cannot be decoded. Let the source
   resume past them, or restart it with `initial_snapshot=True` and `force_snapshot=True`
   to re-snapshot the table and re-anchor the position past them. The source never skips
-  the row, and never uses `ignore_decode_errors` — both would be silent data loss.
+  the row — that would be silent data loss.
 - **"MySQL evicted the binlog stream ... another client announced server_id=N"** — two
   replication clients share one id and are evicting each other; the source exits after
   the third eviction. `MySqlCdcSource` must run with exactly **one replica**, because the
@@ -589,10 +618,27 @@ this container's host, credentials, database and table.
   whether another client is using the same `server_id`.
 - **"MySQL no longer holds the binlog position committed for ..."** — the committed
   position has been purged from the server's binlog, and there is no gap-free recovery:
-  the changes in between are gone from the server. Restart with `initial_snapshot=True`
-  **and** `force_snapshot=True`, which republishes every row and re-anchors the position,
-  then turn `force_snapshot` off again. Raise `binlog_expire_logs_seconds` so it exceeds
-  the longest downtime you expect.
+  the changes in between are gone from the server. With `initial_snapshot=True`, restart
+  with `force_snapshot=True` to republish every row and re-anchor the position, then turn
+  it off again. With `initial_snapshot=False` on a table with **no primary key** there is
+  no snapshot to take: either add a primary key and do the above, or accept the gap and
+  give the source a different `name`, which starts it from the server's current position
+  with a state store of its own. Raise `binlog_expire_logs_seconds` so it exceeds the
+  longest downtime you expect.
+- **"MySQL wrote a partial row image for ..."** — a writer that connected before the
+  source raised `binlog_row_image` is still writing `MINIMAL` (or `NOBLOB`) images, whose
+  events are missing columns. Set `binlog_row_image = FULL` in `my.cnf`, reconnect those
+  writers, then restart the source with `initial_snapshot=True` and `force_snapshot=True`
+  to re-read the table and re-anchor past the truncated events.
+- **"MySQL wrote a partial JSON update for ..."** — the server has
+  `binlog_row_value_options = PARTIAL_JSON`, so a `JSON` column arrives as a diff against
+  a value the source does not hold. Set `binlog_row_value_options = ''`, reconnect the
+  writers, and re-anchor as above.
+- **"MySQL no longer holds ... the position the initial snapshot anchored"** — the
+  snapshot ran for longer than the server keeps its binary logs. Raise
+  `binlog_expire_logs_seconds` above the elapsed time the message names and start the
+  source again; it has already discarded its stored position and progress, so it
+  re-anchors and re-reads the table by itself.
 - **"SSL is required but the server doesn't support it"** (error 2026) — the server does
   not offer TLS at all. Configure TLS on the server, or set `tls_enabled=False` if the
   network is trusted.

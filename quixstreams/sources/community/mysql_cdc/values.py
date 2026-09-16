@@ -8,6 +8,8 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
+from .config import MySqlCdcError
+
 __all__ = (
     "ColumnType",
     "fetch_column_types",
@@ -21,14 +23,16 @@ logger = logging.getLogger(__name__)
 # `pymysqlreplication/constants/NONE_SOURCE.py`: why a decoded value came back None.
 EMPTY_SET = "empty set"
 
-# COLS_BITMAP (`row_event.py:253-257`) and JSON_PARTIAL_UPDATE (`row_event.py:363-365`)
-# mean MySQL sent no value for the column, which is not the same as a SQL NULL.
-_ABSENT_FROM_IMAGE = frozenset({"cols bitmap", "same with before values"})
+# `row_event.py:253-257`: the column was outside the row image MySQL wrote.
+_COLS_BITMAP = "cols bitmap"
+
+# `row_event.py:363-365`: a JSON column a partial update did not resend.
+_JSON_PARTIAL_UPDATE = "same with before values"
 
 # MySQL's text protocol prints FLOAT with six significant digits.
 _FLOAT_SIGNIFICANT_DIGITS = 6
 
-_WARNED_TYPES: Set[str] = set()
+_WARNED_TYPES: Set[Tuple[str, str, str]] = set()
 
 
 @dataclass(frozen=True)
@@ -43,26 +47,44 @@ def _canonical_json(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def _warn_once(value: Any, column: Optional[str]) -> None:
+def _warn_once(value: Any, column: Optional[str], table: Optional[str]) -> None:
     name = type(value).__name__
-    if name in _WARNED_TYPES:
+    key = (name, table or "<unknown>", column or "<unknown>")
+    if key in _WARNED_TYPES:
         return
-    _WARNED_TYPES.add(name)
+    _WARNED_TYPES.add(key)
     logger.warning(
-        "No encoding rule for MySQL values of Python type %r (column %r); falling back "
+        "No encoding rule for MySQL values of Python type %r (%s.%s); falling back "
         "to str(). The value is being shipped as its Python repr, which is unlikely to "
         "be what consumers expect - please report the column type.",
         name,
-        column or "<unknown>",
+        key[1],
+        key[2],
     )
 
 
-def serialize_value(value: Any, column: Optional[str] = None) -> Any:
+def _mysql_time(value: timedelta) -> str:
+    """Render a TIME as MySQL prints it: `[-]HH:MM:SS[.ffffff]`, hours up to 838."""
+    negative = value < timedelta(0)
+    if negative:
+        value = -value
+    hours, remainder = divmod(value.days * 86400 + value.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    text = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    if value.microseconds:
+        text = f"{text}.{value.microseconds:06d}"
+    return f"-{text}" if negative else text
+
+
+def serialize_value(
+    value: Any, column: Optional[str] = None, table: Optional[str] = None
+) -> Any:
     """
     Encode one MySQL column value as something a JSON serializer accepts.
 
     :param value: the value as pymysql or pymysqlreplication returned it.
     :param column: column name, used only to make the fallback warning locatable.
+    :param table: `"<database>.<table>"`, used for the same.
     """
     if value is None:
         return None
@@ -81,8 +103,9 @@ def serialize_value(value: Any, column: Optional[str] = None) -> Any:
         return value
     if hasattr(value, "isoformat"):
         return value.isoformat()
-    if not isinstance(value, timedelta):
-        _warn_once(value, column)
+    if isinstance(value, timedelta):
+        return _mysql_time(value)
+    _warn_once(value, column, table)
     return str(value)
 
 
@@ -111,6 +134,8 @@ def _jsonable(value: Any) -> Any:
         return value
     if hasattr(value, "isoformat"):
         return value.isoformat()
+    if isinstance(value, timedelta):
+        return _mysql_time(value)
     return str(value)
 
 
@@ -120,32 +145,60 @@ def _float(value: Any) -> Any:
     return float(f"{value:.{_FLOAT_SIGNIFICANT_DIGITS}g}")
 
 
+def _partial_image_error(table: str, columns: List[str]) -> MySqlCdcError:
+    return MySqlCdcError(
+        f"MySQL wrote a partial row image for {table}: {', '.join(columns)} carry no "
+        "value, so this change cannot be published without dropping them silently. Set "
+        "binlog_row_image = FULL in that server's my.cnf and reconnect every writer that "
+        "was already connected (each caches the value it opened with), then restart this "
+        "source with initial_snapshot=True and force_snapshot=True to re-read the table "
+        "and re-anchor past the truncated events."
+    )
+
+
+def _partial_json_error(table: str, columns: List[str]) -> MySqlCdcError:
+    return MySqlCdcError(
+        f"MySQL wrote a partial JSON value for {table}: {', '.join(columns)} carry only "
+        "the difference against a previous value this source does not hold. Set "
+        "binlog_row_value_options = '' in that server's my.cnf and reconnect its writers, "
+        "then restart this source with initial_snapshot=True and force_snapshot=True to "
+        "re-read the table and re-anchor past the partial events."
+    )
+
+
 def serialize_binlog_values(
     values: Mapping[str, Any],
+    table: str,
     none_sources: Optional[Mapping[str, str]] = None,
     json_columns: Iterable[str] = (),
     float_columns: Iterable[str] = (),
 ) -> Tuple[List[str], List[Any]]:
     """
-    Serialize one binlog row image, dropping columns MySQL did not send.
+    Serialize one binlog row image.
 
     :param values: the event's `values`/`before_values`/`after_values` mapping.
+    :param table: `"<database>.<table>"`, for the errors and the fallback warning.
     :param none_sources: the event's matching `none_sources` map.
     :param json_columns: names of the row's JSON columns.
     :param float_columns: names of the row's FLOAT (not DOUBLE) columns.
-    :return: `(column_names, column_values)`, the same length as each other and not
-        necessarily the same length as `values`.
+    :return: `(column_names, column_values)`, the same length as each other.
+    :raises MySqlCdcError: if MySQL sent no value for a column, which is not the same as
+        sending SQL NULL.
     """
     sources = none_sources or {}
     json_names = set(json_columns)
     float_names = set(float_columns)
     names: List[str] = []
     encoded: List[Any] = []
+    absent: List[str] = []
+    partial_json: List[str] = []
     for column, value in values.items():
         if value is None:
             source = sources.get(column)
-            if source in _ABSENT_FROM_IMAGE:
-                continue
+            if source == _COLS_BITMAP:
+                absent.append(column)
+            elif source == _JSON_PARTIAL_UPDATE:
+                partial_json.append(column)
             names.append(column)
             encoded.append("" if source == EMPTY_SET else None)
             continue
@@ -155,7 +208,12 @@ def serialize_binlog_values(
         elif column in float_names:
             encoded.append(_float(value))
         else:
-            encoded.append(serialize_value(value, column))
+            encoded.append(serialize_value(value, column, table))
+
+    if absent:
+        raise _partial_image_error(table, absent)
+    if partial_json:
+        raise _partial_json_error(table, partial_json)
     return names, encoded
 
 
@@ -163,13 +221,15 @@ def serialize_row(
     values: Sequence[Any],
     columns: Sequence[str],
     column_types: Mapping[str, ColumnType],
+    table: str,
 ) -> List[Any]:
     """
     Serialize one snapshot row, in column order, using the declared column types.
 
     :param values: the row as pymysql returned it.
-    :param columns: the cursor's column names, in the same order.
+    :param columns: the column names, in the same order.
     :param column_types: from `fetch_column_types()`.
+    :param table: `"<database>.<table>"`, for the fallback warning.
     """
     encoded: List[Any] = []
     for column, value in zip(columns, values):
@@ -190,19 +250,19 @@ def serialize_row(
             )
             encoded.append(format(number, f"0{width}b"))
         else:
-            encoded.append(serialize_value(value, column))
+            encoded.append(serialize_value(value, column, table))
     return encoded
 
 
 def fetch_column_types(cursor: Any, database: str, table: str) -> Dict[str, ColumnType]:
     """
-    Read the declared type of every column in `database`.`table`.
+    Read the declared type of every column in `database`.`table`, INVISIBLE ones too.
 
-    :return: column name -> `ColumnType`, for every column, not only the special ones.
+    :return: column name -> `ColumnType`, in ordinal order, for every column.
     """
     cursor.execute(
         "SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE FROM information_schema.COLUMNS "
-        "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s",
+        "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s ORDER BY ORDINAL_POSITION",
         (database, table),
     )
     types: Dict[str, ColumnType] = {}

@@ -9,6 +9,8 @@ from .snapshot import discover_primary_key
 
 __all__ = (
     "ACCESS_DENIED_ERROR_CODE",
+    "binlog_file_present",
+    "binlog_retention_seconds",
     "ensure_row_settings",
     "require_binlog_enabled",
     "require_distinct_server_id",
@@ -24,8 +26,7 @@ logger = logging.getLogger(__name__)
 # FLUSH BINARY LOGS and a refused SHOW ... STATUS alike.
 ACCESS_DENIED_ERROR_CODE = 1227
 
-# Both default lower than FULL on MySQL 8.0-9.x, both are global and dynamic, and
-# neither loss can be recovered by the client once an event has been written.
+# Both default lower than FULL on MySQL 8.0-9.x; both are global and dynamic.
 _REQUIRED_GLOBALS = {
     "binlog_row_metadata": "SET GLOBAL binlog_row_metadata = FULL",
     "binlog_row_image": "SET GLOBAL binlog_row_image = FULL",
@@ -40,11 +41,8 @@ _NO_PRIMARY_KEY_ERROR = (
 
 def show_global_variable(cursor: Any, name: str) -> Optional[str]:
     """
-    Read a variable at GLOBAL scope.
-
-    `SHOW VARIABLES` answers from the session, which for `binlog_row_image` and
-    `binlog_format` is a copy taken when the connection opened and does not follow a
-    `SET GLOBAL`.
+    Read a variable at GLOBAL scope; `SHOW VARIABLES` would answer from the session,
+    whose copy of `binlog_row_image` predates any `SET GLOBAL`.
 
     :return: the value, or None if the server has no such variable.
     """
@@ -66,23 +64,28 @@ def require_binlog_enabled(cursor: Any, host: str) -> None:
 
 def require_row_format(cursor: Any, host: str) -> None:
     """
-    :raises MySqlCdcError: if `binlog_format` is anything but ROW.
+    :raises MySqlCdcError: if `binlog_format` exists and is anything but ROW.
     """
     binlog_format = show_global_variable(cursor, "binlog_format")
+    if binlog_format is None:
+        logger.info(
+            "%s has no binlog_format variable, so it can only write row images: the "
+            "variable was deprecated in MySQL 8.0.34 and is being removed.",
+            host,
+        )
+        return
     if binlog_format != "ROW":
         raise MySqlCdcError(
-            f"binlog_format is {binlog_format!r} on {host}, but CDC requires 'ROW'. Any "
-            "other format carries statements instead of row images, so this source "
-            "would stream a binlog it cannot read. Set binlog_format=ROW in the MySQL "
-            "configuration and restart the server."
+            f"binlog_format is {binlog_format!r} on {host}, but CDC requires 'ROW': any "
+            "other format carries statements instead of row images. Set "
+            "binlog_format=ROW in the MySQL configuration and restart the server."
         )
 
 
 def ensure_row_settings(cursor: Any, host: str, user: str) -> None:
     """
-    Set `binlog_row_metadata` and `binlog_row_image` to FULL if they are not already.
-
-    Logs one INFO line naming what it changed, then rotates the binary log.
+    Set `binlog_row_metadata` and `binlog_row_image` to FULL if they are not already,
+    then rotate the binary log.
 
     :param host: named in the log line and in the error.
     :param user: named in the GRANT the error suggests.
@@ -99,10 +102,8 @@ def ensure_row_settings(cursor: Any, host: str, user: str) -> None:
         return
 
     logger.info(
-        "Set %s = FULL on %s. Both are required: without them the binlog carries no "
-        "column names, no ENUM/SET values, no character sets, no integer signedness, "
-        "and no columns beyond the ones a statement touched. Add them to that server's "
-        "my.cnf so they survive its next restart.",
+        "Set %s = FULL on %s. Add them to that server's my.cnf so they survive its next "
+        "restart, and reconnect any writer that is already connected.",
         " and ".join(changed),
         host,
     )
@@ -132,11 +133,37 @@ def _flush_binary_logs(cursor: Any, host: str) -> None:
         if mysql_error_code(exc) != ACCESS_DENIED_ERROR_CODE:
             raise
         logger.info(
-            "Did not rotate the binary logs on %s (the account has no RELOAD "
-            "privilege), so events written before now stay in the current file. They "
-            "are only read if this source resumes from a position inside them.",
+            "Did not rotate the binary logs on %s: the account has no RELOAD privilege, "
+            "so events written before now stay in the current file.",
             host,
         )
+
+
+def binlog_file_present(cursor: Any, log_file: str) -> Optional[bool]:
+    """
+    :param log_file: a binary log file name as `SHOW BINARY LOGS` spells it.
+    :return: whether the server still holds that file, or None if this account may not
+        ask.
+    """
+    try:
+        cursor.execute("SHOW BINARY LOGS")
+    except MySQLError as exc:
+        if mysql_error_code(exc) != ACCESS_DENIED_ERROR_CODE:
+            raise
+        logger.debug("SHOW BINARY LOGS is not permitted for this user: %s", exc)
+        return None
+    return any(str(row[0]) == log_file for row in cursor.fetchall())
+
+
+def binlog_retention_seconds(cursor: Any) -> Optional[int]:
+    """
+    :return: how long the server keeps a binary log file, or None if it never expires
+        one automatically or has no such variable.
+    """
+    value = show_global_variable(cursor, "binlog_expire_logs_seconds")
+    if value is None or not str(value).isdigit():
+        return None
+    return int(value) or None
 
 
 def require_distinct_server_id(cursor: Any, host: str, server_id: int) -> None:

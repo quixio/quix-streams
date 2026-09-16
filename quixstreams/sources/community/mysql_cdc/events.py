@@ -14,15 +14,17 @@ def event_to_changes(event: Any) -> List[Dict[str, Any]]:
 
     :param event: a `WriteRowsEvent`, `UpdateRowsEvent` or `DeleteRowsEvent`; anything
         else yields no changes.
+    :raises MySqlCdcError: if MySQL wrote a row image this source cannot publish.
     """
     json_columns, float_columns = _typed_columns(event)
+    table_name = f"{event.schema}.{event.table}"
     changes: List[Dict[str, Any]] = []
 
     def encode(
         values: Dict[str, Any], none_sources: Any
     ) -> Tuple[List[str], List[Any]]:
         return serialize_binlog_values(
-            values, none_sources, json_columns, float_columns
+            values, table_name, none_sources, json_columns, float_columns
         )
 
     if isinstance(event, WriteRowsEvent):
@@ -72,10 +74,8 @@ def event_to_changes(event: Any) -> List[Dict[str, Any]]:
 
 def _typed_columns(event: Any) -> Tuple[Set[str], Set[str]]:
     """
-    Return the event's (JSON column names, FLOAT column names).
-
-    Both are read from the table-map event, which carries every column only under
-    `binlog_row_metadata=FULL`.
+    :return: the event's (JSON column names, FLOAT column names), from the table-map
+        event, which names every column only under `binlog_row_metadata=FULL`.
     """
     json_columns: Set[str] = set()
     float_columns: Set[str] = set()

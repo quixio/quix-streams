@@ -1,8 +1,7 @@
 """Every MySQL connection the CDC source opens."""
 
 import logging
-import time
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from . import server_config
 from .config import ConnectionTimeouts, MySqlCdcError, TlsConfig
@@ -17,9 +16,9 @@ from .drivers import (
     mysql_error_code,
     pymysql,
 )
-from .events import event_to_changes
+from .reader import BinlogReader
 from .server_config import ACCESS_DENIED_ERROR_CODE
-from .snapshot import estimate_row_count, iter_snapshot_batches
+from .snapshot import SnapshotPlan, estimate_row_count, iter_snapshot_batches
 from .values import fetch_column_types
 
 __all__ = ("MySqlCdcError", "MySqlHelper")
@@ -76,6 +75,11 @@ class MySqlHelper:
         self._tls = tls
         self._timeouts = timeouts
 
+    @property
+    def host(self) -> str:
+        """The server the binlog stream runs against."""
+        return self._host
+
     def connect_mysql(self, override_host: Optional[str] = None) -> Any:
         """
         Open a new connection, with the UTC session pin, TLS and the socket timeouts.
@@ -123,16 +127,27 @@ class MySqlHelper:
             self.connect_mysql(override_host=self._snapshot_host).close()
             logger.info("Snapshot host %s is reachable", self._snapshot_host)
 
-    def ensure_row_settings(self) -> None:
+    def binlog_file_present(self, log_file: str) -> Optional[bool]:
         """
-        Re-apply the row-image settings on their own connection.
-
-        :raises MySqlCdcError: if the account may not set them.
+        :param log_file: a binary log file name on `host`.
+        :return: whether the server still holds it, or None if it may not be asked.
         """
         conn = self.connect_mysql()
         try:
             with conn.cursor() as cursor:
-                server_config.ensure_row_settings(cursor, self._host, self._user)
+                return server_config.binlog_file_present(cursor, log_file)
+        finally:
+            conn.close()
+
+    def binlog_retention_seconds(self) -> Optional[int]:
+        """
+        :return: how long `host` keeps a binary log file, or None if it keeps them
+            until something purges them by hand.
+        """
+        conn = self.connect_mysql()
+        try:
+            with conn.cursor() as cursor:
+                return server_config.binlog_retention_seconds(cursor)
         finally:
             conn.close()
 
@@ -225,22 +240,14 @@ class MySqlHelper:
 
     def create_binlog_stream(
         self, server_id: int, log_file: str, log_pos: int
-    ) -> BinLogStreamReader:
+    ) -> BinlogReader:
         """
-        Open a binlog stream positioned at `log_file`:`log_pos`.
-
-        `resume_stream=True` continues with the event *after* `log_pos`.
-        `use_column_name_cache=True` makes the INFORMATION_SCHEMA fallback
-        (`row_event.py:1008-1019`) return real names for events written before
-        `binlog_row_metadata` was FULL. `ignore_decode_errors` is not passed: it means
-        `decode(errors="ignore")` (`row_event.py:403`).
-
-        The settings dict is rebuilt per call because `BinLogStreamReader` mutates it
-        (`binlogstream.py:240-241`) and copies it to the control connection
-        (`binlogstream.py:313-318`).
+        Open a binlog stream positioned on the event after `log_file`:`log_pos`.
 
         :param server_id: the replication client id to announce.
         """
+        # A fresh dict per call: `BinLogStreamReader` mutates the one it is handed
+        # (`binlogstream.py:240-241`).
         connection_settings: Dict[str, Any] = {
             "host": self._host,
             "port": self._port,
@@ -250,7 +257,7 @@ class MySqlHelper:
         }
         connection_settings.update(self._timeouts.connect_kwargs())
         connection_settings.update(self._tls.connect_kwargs())
-        return BinLogStreamReader(
+        stream = BinLogStreamReader(
             connection_settings=connection_settings,
             server_id=server_id,
             only_events=[DeleteRowsEvent, WriteRowsEvent, UpdateRowsEvent],
@@ -262,67 +269,14 @@ class MySqlHelper:
             log_pos=log_pos,
             use_column_name_cache=True,
         )
+        return BinlogReader(stream, database=self._database, table=self._table)
 
-    def read_changes(
-        self,
-        stream: BinLogStreamReader,
-        max_rows: int,
-        max_seconds: float,
-        should_continue: Callable[[], bool],
-    ) -> Tuple[List[Dict[str, Any]], Optional[Tuple[str, int]]]:
+    def plan_snapshot(self) -> SnapshotPlan:
         """
-        Read row-changes until any of three bounds is reached, with their position.
+        Read the table's shape from `snapshot_host`, before any row is read.
 
-        All three bounds are evaluated per decoded event.
-
-        :param stream: the open reader.
-        :param max_rows: stop once this many changes have been collected.
-        :param max_seconds: stop after this long.
-        :param should_continue: polled once per decoded event; False means stop now.
-        :return: `(changes, position)`. The position can be non-None with no changes,
-            for events this source read and filtered out.
-        :raises MySqlCdcError: if an event cannot be decoded.
-        """
-        changes: List[Dict[str, Any]] = []
-        deadline = time.monotonic() + max_seconds
-        try:
-            for event in stream:
-                # `only_schemas` and `only_tables` are matched independently by the
-                # library, never as a pair.
-                if event.schema == self._database and event.table == self._table:
-                    changes.extend(event_to_changes(event))
-                if (
-                    len(changes) >= max_rows
-                    or time.monotonic() >= deadline
-                    or not should_continue()
-                ):
-                    break
-        except (UnicodeDecodeError, LookupError) as exc:
-            raise MySqlCdcError(
-                f"Could not decode a binlog event for {self._table_name} at "
-                f"{stream.log_file}:{stream.log_pos}: it was written before this source "
-                "set binlog_row_metadata=FULL, so it carries no column character sets. "
-                "Either let the source resume past those events, or restart it with "
-                "initial_snapshot=True and force_snapshot=True to re-snapshot the table "
-                "and re-anchor the position past them."
-            ) from exc
-
-        log_file, log_pos = stream.log_file, stream.log_pos
-        position = (log_file, log_pos) if log_file and log_pos else None
-        return changes, position
-
-    def perform_initial_snapshot(
-        self, batch_size: int, start_after: Optional[List[Any]] = None
-    ) -> Iterator[Tuple[List[Dict[str, Any]], List[Any]]]:
-        """
-        Walk the table on `snapshot_host`, yielding one keyset page at a time.
-
-        The generator owns its connection, so callers should wrap it in
-        `contextlib.closing()`.
-
-        :param batch_size: maximum rows per page.
-        :param start_after: primary-key values to resume strictly after.
-        :return: an iterator of `(changes, last_key_values)`.
+        :raises MySqlCdcError: if the table has no PRIMARY KEY, or if a PRIMARY KEY
+            column is missing from its column list.
         """
         conn = self.connect_mysql(override_host=self._snapshot_host)
         try:
@@ -332,21 +286,61 @@ class MySqlHelper:
                 )
                 column_types = fetch_column_types(cursor, self._database, self._table)
                 estimated_rows = estimate_row_count(cursor, self._database, self._table)
+        finally:
+            conn.close()
+
+        columns = list(column_types)
+        known = {name.lower() for name in columns}
+        unknown = [name for name in pk_columns if name.lower() not in known]
+        if unknown:
+            raise MySqlCdcError(
+                f"The PRIMARY KEY of {self._table_name} names {', '.join(unknown)}, "
+                f"which information_schema.COLUMNS on {self._snapshot_host} does not "
+                "list for that table, so the snapshot has no key to page on."
+            )
+        return SnapshotPlan(
+            pk_columns=pk_columns,
+            columns=columns,
+            column_types=column_types,
+            estimated_rows=estimated_rows,
+        )
+
+    def perform_initial_snapshot(
+        self,
+        plan: SnapshotPlan,
+        batch_size: int,
+        start_after: Optional[List[Any]] = None,
+    ) -> Iterator[Tuple[List[Dict[str, Any]], List[Any]]]:
+        """
+        Walk the table on `snapshot_host`, yielding one keyset page at a time.
+
+        The generator owns its connection, so callers should wrap it in
+        `contextlib.closing()`.
+
+        :param plan: from `plan_snapshot()`.
+        :param batch_size: maximum rows per page.
+        :param start_after: primary-key values to resume strictly after.
+        :return: an iterator of `(changes, last_key_values)`.
+        """
+        conn = self.connect_mysql(override_host=self._snapshot_host)
+        try:
+            with conn.cursor() as cursor:
+                estimated = plan.estimated_rows
                 logger.info(
                     "Starting initial snapshot of %s from %s: ~%s rows (estimate), "
-                    "paginating on %s",
+                    "%s columns, paginating on %s",
                     self._table_name,
                     self._snapshot_host,
-                    estimated_rows if estimated_rows is not None else "unknown",
-                    ", ".join(pk_columns),
+                    estimated if estimated is not None else "unknown",
+                    len(plan.columns),
+                    ", ".join(plan.pk_columns),
                 )
                 yield from iter_snapshot_batches(
                     cursor,
                     database=self._database,
                     table=self._table,
-                    pk_columns=pk_columns,
+                    plan=plan,
                     batch_size=batch_size,
-                    column_types=column_types,
                     start_after=start_after,
                 )
         finally:

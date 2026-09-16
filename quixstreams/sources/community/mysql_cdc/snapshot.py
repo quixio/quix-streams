@@ -1,11 +1,13 @@
 """The SQL half of the initial snapshot: keyset pagination over one table."""
 
 import logging
+from dataclasses import dataclass
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from .values import ColumnType, serialize_row
 
 __all__ = (
+    "SnapshotPlan",
     "build_snapshot_query",
     "discover_primary_key",
     "estimate_row_count",
@@ -17,6 +19,23 @@ __all__ = (
 logger = logging.getLogger(__name__)
 
 _PROGRESS_LOG_EVERY_BATCHES = 50
+
+
+@dataclass(frozen=True)
+class SnapshotPlan:
+    """
+    Everything about a table's shape that one snapshot run needs.
+
+    :param pk_columns: PRIMARY KEY columns in index order, the pagination key.
+    :param columns: every column of the table in ordinal order, INVISIBLE ones included.
+    :param column_types: declared MySQL type per column name.
+    :param estimated_rows: `information_schema`'s row estimate, or None if it has none.
+    """
+
+    pk_columns: List[str]
+    columns: List[str]
+    column_types: Mapping[str, ColumnType]
+    estimated_rows: Optional[int]
 
 
 def quote_identifier(name: str) -> str:
@@ -65,7 +84,11 @@ def estimate_row_count(cursor: Any, database: str, table: str) -> Optional[int]:
 
 
 def build_snapshot_query(
-    database: str, table: str, pk_columns: List[str], resuming: bool
+    database: str,
+    table: str,
+    columns: Sequence[str],
+    pk_columns: Sequence[str],
+    resuming: bool,
 ) -> str:
     """
     Build one page of the keyset-paginated snapshot query.
@@ -73,14 +96,18 @@ def build_snapshot_query(
     Identifiers are quoted and interpolated; the cursor values and the page size are
     bound parameters.
 
+    :param columns: the columns to read, in the order the events will carry them.
     :param resuming: emit the `WHERE (pk...) > (...)` clause, one placeholder per PK
         column, ahead of the page-size placeholder.
-    :raises ValueError: if `pk_columns` is empty.
+    :raises ValueError: if `columns` or `pk_columns` is empty.
     """
+    if not columns:
+        raise ValueError("build_snapshot_query() requires at least one column")
     if not pk_columns:
         raise ValueError("build_snapshot_query() requires at least one PK column")
 
     qualified = f"{quote_identifier(database)}.{quote_identifier(table)}"
+    select_list = ", ".join(quote_identifier(column) for column in columns)
     quoted_pk = [quote_identifier(column) for column in pk_columns]
     order_by = ", ".join(quoted_pk)
 
@@ -92,16 +119,15 @@ def build_snapshot_query(
         else:
             where = f" WHERE ({order_by}) > ({placeholders})"
 
-    return f"SELECT * FROM {qualified}{where} ORDER BY {order_by} LIMIT %s"  # noqa: S608
+    return f"SELECT {select_list} FROM {qualified}{where} ORDER BY {order_by} LIMIT %s"  # noqa: S608
 
 
 def iter_snapshot_batches(
     cursor: Any,
     database: str,
     table: str,
-    pk_columns: List[str],
+    plan: SnapshotPlan,
     batch_size: int,
-    column_types: Mapping[str, ColumnType],
     start_after: Optional[Sequence[Any]] = None,
 ) -> Iterator[Tuple[List[Dict[str, Any]], List[Any]]]:
     """
@@ -110,16 +136,24 @@ def iter_snapshot_batches(
     :param cursor: an open DB-API cursor on the host being snapshotted.
     :param database: database (schema) name.
     :param table: table name.
-    :param pk_columns: primary-key column names in index order.
+    :param plan: the table's columns, PK and row estimate.
     :param batch_size: maximum rows per page.
-    :param column_types: declared MySQL type per column, from
-        `values.fetch_column_types`.
     :param start_after: primary-key values of the last row of a previous run;
         when given, the walk resumes strictly after that row.
     :return: `last_key_values` are MySQL's raw values, not the encoded ones.
     """
-    first_page_query = build_snapshot_query(database, table, pk_columns, resuming=False)
-    resume_page_query = build_snapshot_query(database, table, pk_columns, resuming=True)
+    table_name = f"{database}.{table}"
+    column_names = list(plan.columns)
+    first_page_query = build_snapshot_query(
+        database, table, column_names, plan.pk_columns, resuming=False
+    )
+    resume_page_query = build_snapshot_query(
+        database, table, column_names, plan.pk_columns, resuming=True
+    )
+    # information_schema.STATISTICS may spell a column differently from
+    # information_schema.COLUMNS; MySQL column names are case-insensitive.
+    column_index = {name.lower(): index for index, name in enumerate(column_names)}
+    pk_indexes = [column_index[name.lower()] for name in plan.pk_columns]
 
     key_values: Optional[List[Any]] = list(start_after) if start_after else None
     batches = 0
@@ -135,19 +169,15 @@ def iter_snapshot_batches(
         if not rows:
             return
 
-        column_names = [description[0] for description in cursor.description]
-        # MySQL column names are case-insensitive, and information_schema may spell
-        # them differently from the result-set metadata.
-        column_index = {name.lower(): index for index, name in enumerate(column_names)}
-        pk_indexes = [column_index[name.lower()] for name in pk_columns]
-
         changes = [
             {
                 "kind": "snapshot_insert",
                 "schema": database,
                 "table": table,
                 "columnnames": column_names,
-                "columnvalues": serialize_row(row, column_names, column_types),
+                "columnvalues": serialize_row(
+                    row, column_names, plan.column_types, table_name
+                ),
                 "oldkeys": {},
             }
             for row in rows

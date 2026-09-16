@@ -62,6 +62,9 @@ class TlsConfig:
 
     def _context(self) -> ssl.SSLContext:
         context = ssl.create_default_context(cafile=self.ca)
+        # Python 3.13 turns VERIFY_X509_STRICT on and MySQL's self-generated
+        # certificates fail it; pymysql clears it too (`connections.py:389-392`).
+        context.verify_flags &= ~ssl.VERIFY_X509_STRICT
         # CERT_NONE cannot be assigned while check_hostname is True.
         context.check_hostname = False
         context.verify_mode = ssl.CERT_REQUIRED if self.verifies else ssl.CERT_NONE

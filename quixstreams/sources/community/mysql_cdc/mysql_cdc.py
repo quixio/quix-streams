@@ -14,6 +14,8 @@ from quixstreams.sources.base import (
 from .config import ConnectionTimeouts, MySqlCdcError, TlsConfig, require_positive
 from .failures import BinlogErrorKind, ReconnectPolicy, classify_error
 from .mysql_helper import MySqlHelper
+from .reader import BinlogReader
+from .retention import SnapshotAnchor
 from .snapshot import is_checkpointable_key
 
 __all__ = ("MySqlCdcError", "MySqlCdcSource")
@@ -27,8 +29,6 @@ _SERVER_ID_MAX = 2**31 - 1
 
 # MySQL accepts any 32-bit unsigned value as an explicit server id.
 _SERVER_ID_LIMIT = 2**32 - 1
-
-_IDLE_INTERVAL_CAP = 1.0
 
 
 def _derive_server_id(name: str, database: str, table: str) -> int:
@@ -66,7 +66,10 @@ class MySqlCdcSource(StatefulSource):
     Supported servers are MySQL 8.0, 8.4 and 9.x. `log_bin` must be on and
     `binlog_format` must be `ROW`. `binlog_row_metadata` and `binlog_row_image` are set
     to `FULL` by the source itself at start-up if they are lower, which needs
-    SYSTEM_VARIABLES_ADMIN. The connection is TLS-encrypted by default.
+    SYSTEM_VARIABLES_ADMIN. Writers connected before that keep writing partial row
+    images until they reconnect, because `binlog_row_image` has session scope; the
+    source stops on the first such event instead of publishing a change with columns
+    missing. The connection is TLS-encrypted by default.
 
     Example Usage:
 
@@ -161,12 +164,13 @@ class MySqlCdcSource(StatefulSource):
             commit the binlog position they cover.
             Default - `5.0`.
         :param max_buffer_size: commit early once this many changes are buffered, which
-            bounds memory while catching up after downtime.
+            bounds memory while catching up after downtime. A binlog event carrying more
+            rows than the remaining room is split across reads rather than buffered
+            whole.
             Default - `1000`.
         :param poll_interval: how long (seconds) to idle when the binlog stream had
-            nothing to read. Consecutive empty polls double this, up to one second (or
-            `commit_interval` if that is shorter), and the first change resets it. Must
-            be greater than 0.
+            nothing to read. Consecutive empty polls double this, up to
+            `commit_interval`, and the first change resets it. Must be greater than 0.
             Default - `0.1`.
         :param retry_backoff_secs: maximum backoff (seconds) between attempts to
             rebuild the binlog stream after a connection failure. Must be greater than 0.
@@ -267,10 +271,10 @@ class MySqlCdcSource(StatefulSource):
         self._pending_position: Optional[Tuple[str, int]] = None
         self._committed_position: Optional[Tuple[str, int]] = None
         self._last_commit_at = time.monotonic()
-        self._stream: Any = None
+        self._stream: Optional[BinlogReader] = None
 
         self._idle_interval = poll_interval
-        self._idle_interval_cap = min(_IDLE_INTERVAL_CAP, commit_interval)
+        self._idle_interval_cap = commit_interval
         self._retries = ReconnectPolicy(
             table_name=self._table_name,
             server_id=self._server_id,
@@ -374,8 +378,10 @@ class MySqlCdcSource(StatefulSource):
 
         :param snapshot_needed: read the coordinates from the snapshot host instead.
         """
-        if self._force_snapshot and snapshot_needed:
-            self._reset_snapshot_state()
+        if self._force_snapshot:
+            self._reset_snapshot_state(
+                "force_snapshot is set; both are about to be re-anchored"
+            )
         else:
             stored = self.state.get(self._position_key)
             if stored is not None:
@@ -405,8 +411,12 @@ class MySqlCdcSource(StatefulSource):
         )
         return position
 
-    def _reset_snapshot_state(self) -> None:
-        """Clear the position and both snapshot keys, before the new anchor is written."""
+    def _reset_snapshot_state(self, reason: str) -> None:
+        """
+        Clear the position and both snapshot keys, so the next start is a cold one.
+
+        :param reason: what made the stored state unusable, for the log line.
+        """
         state = self.state
         state.delete(self._position_key)
         state.delete(self._snapshot_completed_key)
@@ -414,9 +424,9 @@ class MySqlCdcSource(StatefulSource):
         self.flush()
         self._committed_position = None
         logger.info(
-            "force_snapshot is set - discarded the stored position and snapshot "
-            "progress for %s; both are about to be re-anchored",
+            "Discarded the stored binlog position and snapshot progress for %s: %s",
             self._table_name,
+            reason,
         )
 
     @staticmethod
@@ -429,23 +439,19 @@ class MySqlCdcSource(StatefulSource):
 
     def _run_initial_snapshot(self) -> None:
         """Produce the table's current contents, one keyset page at a time."""
-        start_after = None
-        rows_produced = 0
-
-        progress = self.state.get(self._snapshot_progress_key)
-        if progress:
-            start_after = list(progress["last_key"])
-            rows_produced = int(progress.get("rows", 0))
-            logger.info(
-                "Resuming the initial snapshot of %s after key %s (%s rows "
-                "already produced)",
-                self._table_name,
-                start_after,
-                rows_produced,
-            )
+        plan = self._helper.plan_snapshot()
+        start_after, rows_produced = self._resume_snapshot_progress(plan.pk_columns)
+        anchor = SnapshotAnchor(
+            helper=self._helper,
+            table_name=self._table_name,
+            position=self._committed_position,
+            anchored_at=self._anchored_at(),
+        )
 
         batches = self._helper.perform_initial_snapshot(
-            batch_size=self._snapshot_batch_size, start_after=start_after
+            plan=plan,
+            batch_size=self._snapshot_batch_size,
+            start_after=start_after,
         )
         checkpointing_warned = False
         with contextlib.closing(batches) as pages:
@@ -461,6 +467,7 @@ class MySqlCdcSource(StatefulSource):
                         self._snapshot_progress_key,
                         {
                             "last_key": list(last_key),
+                            "pk_columns": list(plan.pk_columns),
                             "rows": rows_produced,
                             "updated_at": time.time(),
                         },
@@ -478,6 +485,7 @@ class MySqlCdcSource(StatefulSource):
 
                 if not self.running:
                     return
+                self._check_snapshot_anchor(anchor, rows_produced, plan.estimated_rows)
 
         self.state.set(
             self._snapshot_completed_key,
@@ -490,6 +498,67 @@ class MySqlCdcSource(StatefulSource):
             self._table_name,
             rows_produced,
         )
+
+    def _resume_snapshot_progress(
+        self, pk_columns: List[str]
+    ) -> Tuple[Optional[List[Any]], int]:
+        """
+        Read the stored snapshot progress, if it can still be applied to this table.
+
+        :param pk_columns: the table's primary key as it is now.
+        :return: `(key to resume after, rows already produced)`, `(None, 0)` for a
+            snapshot that has to start from the beginning.
+        """
+        progress = self.state.get(self._snapshot_progress_key)
+        if not progress:
+            return None, 0
+
+        stored_pk = [str(name) for name in progress.get("pk_columns") or []]
+        if stored_pk != list(pk_columns):
+            logger.warning(
+                "Discarding the stored snapshot progress of %s: it paginated on (%s) "
+                "and the table's primary key is now (%s), so the stored key cannot be "
+                "compared against it. The snapshot restarts from the beginning.",
+                self._table_name,
+                ", ".join(stored_pk) or "an unrecorded key",
+                ", ".join(pk_columns),
+            )
+            self.state.delete(self._snapshot_progress_key)
+            self.flush()
+            return None, 0
+
+        start_after = list(progress["last_key"])
+        rows_produced = int(progress.get("rows", 0))
+        logger.info(
+            "Resuming the initial snapshot of %s after key %s (%s rows already "
+            "produced)",
+            self._table_name,
+            start_after,
+            rows_produced,
+        )
+        return start_after, rows_produced
+
+    def _anchored_at(self) -> float:
+        """:return: when the stored position was committed, as `time.time()`."""
+        stored = self.state.get(self._position_key)
+        committed_at = stored.get("committed_at") if stored else None
+        return float(committed_at) if committed_at else time.time()
+
+    def _check_snapshot_anchor(
+        self, anchor: SnapshotAnchor, rows_produced: int, estimated_rows: Optional[int]
+    ) -> None:
+        """
+        :raises MySqlCdcError: if the position the snapshot anchored has been purged,
+            having first discarded the state that points at it.
+        """
+        try:
+            anchor.check(rows_produced, estimated_rows)
+        except MySqlCdcError:
+            self._reset_snapshot_state(
+                "the binlog position the initial snapshot anchored has been purged, so "
+                "the snapshot has to be taken again"
+            )
+            raise
 
     def _stream_changes(self) -> None:
         """
@@ -519,21 +588,30 @@ class MySqlCdcSource(StatefulSource):
                 self._retries.note_success()
 
     def _purged_position_error(self) -> MySqlCdcError:
+        if self._initial_snapshot:
+            recovery = (
+                "Restart the source with force_snapshot=True to re-read the table and "
+                "re-anchor the position, then turn force_snapshot off again."
+            )
+        else:
+            recovery = (
+                "If the table has a PRIMARY KEY, restart the source with "
+                "initial_snapshot=True and force_snapshot=True to re-read it and "
+                "re-anchor the position, then turn both off again. If it has none there "
+                "is no snapshot to take: add a primary key and do the above, or accept "
+                "the gap and give the source a different `name`, which starts it from "
+                "the server's current position with a state store of its own."
+            )
         return MySqlCdcError(
             f"MySQL no longer holds the binlog position committed for "
-            f"{self._table_name} ({self._committed_position}): the file has been purged. "
-            "There is no gap-free recovery from this - the changes in between are gone "
-            "from the server. To resume with a full re-read of the table, restart the "
-            "source with initial_snapshot=True and force_snapshot=True, which "
-            "republishes every row and re-anchors the position, then turn force_snapshot "
-            "off again. To prevent a recurrence, raise binlog_expire_logs_seconds on the "
-            "server so it exceeds the longest downtime you expect."
+            f"{self._table_name} ({self._committed_position}): the file has been purged, "
+            f"and the changes it held are gone from the server. {recovery} Raise "
+            "binlog_expire_logs_seconds so it exceeds the longest downtime you expect."
         )
 
     def _poll_once(self) -> None:
-        changes, position = self._helper.read_changes(
-            self._stream,
-            max_rows=self._max_buffer_size,
+        changes, position = self._stream.read_changes(
+            max_rows=max(1, self._max_buffer_size - len(self._buffer)),
             max_seconds=self._commit_interval,
             should_continue=lambda: self.running,
         )
@@ -545,12 +623,21 @@ class MySqlCdcSource(StatefulSource):
 
         if self._should_commit():
             self._commit_batch()
-        elif not changes:
-            # A non-blocking dump ends in an EOF packet, on which the reader closes both
-            # of its connections (`binlogstream.py:626-628`, `:302-310`) and reopens them
-            # on the next read, so empty polls are backed off rather than repeated.
-            self._sleep(self._idle_interval)
-            self._idle_interval = min(self._idle_interval * 2, self._idle_interval_cap)
+            return
+
+        # A drained non-blocking dump ends in an EOF packet, on which the reader closes
+        # both of its connections (`binlogstream.py:626-628`, `:302-310`) and reopens
+        # them on the next read, so every poll past this point costs two connections.
+        if self._buffer or self._pending_position is not None:
+            self._sleep(self._commit_due_in())
+            return
+        self._sleep(self._idle_interval)
+        self._idle_interval = min(self._idle_interval * 2, self._idle_interval_cap)
+
+    def _commit_due_in(self) -> float:
+        """:return: seconds until the buffered changes are due to be committed."""
+        elapsed = time.monotonic() - self._last_commit_at
+        return max(0.0, self._commit_interval - elapsed)
 
     def _should_commit(self) -> bool:
         if not self._buffer and self._pending_position is None:
@@ -596,21 +683,13 @@ class MySqlCdcSource(StatefulSource):
 
     def _reconnect_stream(self) -> None:
         """
-        Re-apply the server's row-image settings and rebuild the stream at the last
-        committed position, dropping everything read since that commit.
-
-        :raises MySqlCdcError: if no position has been committed yet.
+        Rebuild the stream at the last committed position, dropping everything read
+        since that commit.
         """
-        self._helper.ensure_row_settings()
         self._close_stream()
         self._buffer.clear()
         self._pending_position = None
 
-        if self._committed_position is None:
-            raise MySqlCdcError(
-                "Cannot reconnect the binlog stream: no position has been committed "
-                f"for {self._table_name}"
-            )
         log_file, log_pos = self._committed_position
         self._stream = self._helper.create_binlog_stream(
             server_id=self._server_id, log_file=log_file, log_pos=log_pos
