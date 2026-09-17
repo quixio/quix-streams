@@ -15,16 +15,23 @@ so that no shape a user can put in a value is mistaken for a marker:
 - `tuple`, `set` and `frozenset` become JSON arrays with their kind recorded in
   `ENVELOPE_CONTAINERS`. orjson encodes a tuple as an array by itself, and would
   return it as a `list`.
+- `datetime`, `date` and `Decimal` become strings with their kind recorded in
+  `ENVELOPE_SCALARS`: `isoformat()` for the first two, `str()` for `Decimal`.
+  A `PostgresLookup` field writes these into the value from a `timestamptz` or
+  a `numeric` column, after the point upstream normalization can reach.
 
-Accepted losses: `bytearray` and `memoryview` come back as `bytes`, and a
-subclass (a `NamedTuple`, an `OrderedDict`) comes back as its builtin base.
+Accepted losses: `bytearray` and `memoryview` come back as `bytes`, a subclass
+(a `NamedTuple`, an `OrderedDict`) comes back as its builtin base, and a
+`datetime` in a named zone comes back on the fixed offset that zone was at.
 
 Out of reach of any encoding here: arbitrary objects, non-`str` dict keys,
 integers outside 64 bits, reference cycles.
 """
 
 import base64
-from typing import Any, Mapping, NamedTuple, Optional, Union
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any, Callable, Mapping, NamedTuple, Optional, Union
 
 __all__ = (
     "ENVELOPE_BYTES",
@@ -32,6 +39,7 @@ __all__ = (
     "ENVELOPE_HEADERS",
     "ENVELOPE_OFFSET",
     "ENVELOPE_RECEIVED",
+    "ENVELOPE_SCALARS",
     "ENVELOPE_TIMESTAMP",
     "ENVELOPE_TOPIC",
     "ENVELOPE_VALUE",
@@ -52,6 +60,7 @@ ENVELOPE_HEADERS = "h"
 ENVELOPE_HEADERS_MAPPING = "m"
 ENVELOPE_BYTES = "b"
 ENVELOPE_CONTAINERS = "c"
+ENVELOPE_SCALARS = "s"
 ENVELOPE_TOPIC = "n"
 ENVELOPE_OFFSET = "o"
 
@@ -64,6 +73,16 @@ _HEADER_NONE = "n"
 _CONTAINER_TUPLE = "t"
 _CONTAINER_SET = "s"
 _CONTAINER_FROZENSET = "f"
+
+_SCALAR_DATETIME = "dt"
+_SCALAR_DATE = "d"
+_SCALAR_DECIMAL = "n"
+
+_SCALAR_DECODERS: dict[str, Callable[[str], Any]] = {
+    _SCALAR_DATETIME: datetime.fromisoformat,
+    _SCALAR_DATE: date.fromisoformat,
+    _SCALAR_DECIMAL: Decimal,
+}
 
 _BINARY = (bytes, bytearray, memoryview)
 
@@ -101,7 +120,7 @@ def encode_envelope(
     :return: The envelope, not yet offered to the store's serializer.
     """
     encoded_headers, is_mapping = _encode_headers(headers)
-    stored_value, byte_paths, container_paths = _lift_value(value)
+    stored_value, byte_paths, container_paths, scalar_paths = _lift_value(value)
     return {
         ENVELOPE_VALUE: stored_value,
         ENVELOPE_TIMESTAMP: timestamp,
@@ -110,6 +129,7 @@ def encode_envelope(
         ENVELOPE_HEADERS_MAPPING: is_mapping,
         ENVELOPE_BYTES: byte_paths,
         ENVELOPE_CONTAINERS: container_paths,
+        ENVELOPE_SCALARS: scalar_paths,
         ENVELOPE_TOPIC: topic,
         ENVELOPE_OFFSET: offset,
     }
@@ -121,6 +141,7 @@ def envelope_value(envelope: Mapping[str, Any]) -> Any:
     :return: The record value with its lifted shapes restored.
     """
     value = _restore_bytes(envelope[ENVELOPE_VALUE], envelope.get(ENVELOPE_BYTES))
+    value = _restore_scalars(value, envelope.get(ENVELOPE_SCALARS))
     return _restore_containers(value, envelope.get(ENVELOPE_CONTAINERS))
 
 
@@ -187,20 +208,41 @@ def _encode_headers(headers: Any) -> tuple[Optional[list[list[Any]]], bool]:
     return encoded, is_mapping
 
 
+class _Lifted(NamedTuple):
+    """The paths lifted out of one value, one list per kind of lift."""
+
+    byte_paths: list[list[Any]]
+    container_paths: list[list[Any]]
+    scalar_paths: list[list[Any]]
+
+
 def _lift_value(
     value: Any,
-) -> tuple[Any, Optional[list[list[Any]]], Optional[list[list[Any]]]]:
+) -> tuple[
+    Any,
+    Optional[list[list[Any]]],
+    Optional[list[list[Any]]],
+    Optional[list[list[Any]]],
+]:
     if not _needs_lift(value):
-        return value, None, None
+        return value, None, None, None
 
-    byte_paths: list[list[Any]] = []
-    container_paths: list[list[Any]] = []
-    body = _strip(value, [], byte_paths, container_paths)
-    return body, byte_paths or None, container_paths or None
+    lifted = _Lifted([], [], [])
+    body = _strip(value, [], lifted)
+    return (
+        body,
+        lifted.byte_paths or None,
+        lifted.container_paths or None,
+        lifted.scalar_paths or None,
+    )
 
 
 def _needs_lift(value: Any) -> bool:
-    if isinstance(value, _BINARY) or _container_kind(value) is not None:
+    if (
+        isinstance(value, _BINARY)
+        or _container_kind(value) is not None
+        or _scalar_kind(value) is not None
+    ):
         return True
     if isinstance(value, dict):
         return any(_needs_lift(item) for item in value.values())
@@ -219,32 +261,49 @@ def _container_kind(value: Any) -> Optional[str]:
     return None
 
 
-def _strip(
-    value: Any,
-    path: list[_Step],
-    byte_paths: list[list[Any]],
-    container_paths: list[list[Any]],
-) -> Any:
+def _scalar_kind(value: Any) -> Optional[str]:
+    # `datetime` first: it is a subclass of `date`.
+    if isinstance(value, datetime):
+        return _SCALAR_DATETIME
+    if isinstance(value, date):
+        return _SCALAR_DATE
+    if isinstance(value, Decimal):
+        return _SCALAR_DECIMAL
+    return None
+
+
+def _encode_scalar(value: Any, kind: str) -> str:
+    if kind == _SCALAR_DECIMAL:
+        return str(value)
+    return value.isoformat()
+
+
+def _strip(value: Any, path: list[_Step], lifted: _Lifted) -> Any:
     if isinstance(value, _BINARY):
-        byte_paths.append([list(path), base64.b64encode(bytes(value)).decode()])
+        lifted.byte_paths.append([list(path), base64.b64encode(bytes(value)).decode()])
         return None
+
+    scalar = _scalar_kind(value)
+    if scalar is not None:
+        lifted.scalar_paths.append([list(path), scalar])
+        return _encode_scalar(value, scalar)
 
     if isinstance(value, dict):
         copied: dict[Any, Any] = {}
         for name, item in value.items():
             path.append(name)
-            copied[name] = _strip(item, path, byte_paths, container_paths)
+            copied[name] = _strip(item, path, lifted)
             path.pop()
         return copied
 
     kind = _container_kind(value)
     if kind is not None or isinstance(value, list):
         if kind is not None:
-            container_paths.append([list(path), kind])
+            lifted.container_paths.append([list(path), kind])
         items: list[Any] = []
         for index, item in enumerate(value):
             path.append(index)
-            items.append(_strip(item, path, byte_paths, container_paths))
+            items.append(_strip(item, path, lifted))
             path.pop()
         return items
 
@@ -263,6 +322,21 @@ def _restore_bytes(value: Any, paths: Optional[list[list[Any]]]) -> Any:
         for step in path[:-1]:
             target = target[step]
         target[path[-1]] = decoded
+    return value
+
+
+def _restore_scalars(value: Any, paths: Optional[list[list[Any]]]) -> Any:
+    if not paths:
+        return value
+
+    for path, kind in paths:
+        decode = _SCALAR_DECODERS[kind]
+        if not path:
+            return decode(value)
+        target = value
+        for step in path[:-1]:
+            target = target[step]
+        target[path[-1]] = decode(target[path[-1]])
     return value
 
 

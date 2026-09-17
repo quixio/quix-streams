@@ -506,8 +506,8 @@ class TestTheSnapshotBeatsTheReadingOfTheEnvelope:
         assert envelope_value(envelope) == {"cert": b"x"}
 
         with pytest.raises(TypeError):
-            # On the record path this is a StateSerializationError raised
-            # before the offset is committed, i.e. a crash-loop on redelivery.
+            # The mutated envelope is no longer orjson-encodable, which is
+            # why the snapshot is taken before `envelope_value()` runs.
             orjson_dumps(envelope)
         assert orjson_dumps(keepsake), "the snapshot is still what the store holds"
         assert envelope_value(keepsake) == {"cert": b"x"}

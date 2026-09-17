@@ -326,9 +326,8 @@ class TestBytesValuedFieldCrashesTheApplication:
         sdf = sdf.join_lookup(lookup, fields, buffer=buffer)
         assign_partition(sdf)
 
-        # Expected (per the review): raises before the offset would be
-        # committed, crash-looping the application on every unresolvable
-        # record that also carries a resolved bytes field.
+        # A bytes-valued field round-trips: the envelope lifts it out of
+        # band rather than handing it to orjson.
         publish(sdf, topic, {}, "D", 100, None)
 
 

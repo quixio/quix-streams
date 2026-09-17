@@ -64,15 +64,10 @@ from tests.test_quixstreams.test_dataframe.test_joins.test_lookup_buffer import 
 # Blocker B: a `bytes` inside a tuple, bytearray or memoryview crash-loops
 # ---------------------------------------------------------------------------
 #
-# The envelope's `_extract_bytes` walk recursed into `dict` and `list` only, so
-# `{"certs": (b"a", b"b")}` was handed to the store verbatim. The store's
-# `dumps` is orjson (`state/rocksdb/options.py:226` -> `utils/json.py:15`),
-# which encodes a tuple as an array but cannot encode `bytes`, `bytearray` or
-# `memoryview` at all - so `set_for_timestamp()` raised
-# `StateSerializationError` synchronously, on the record path, with the offset
-# uncommitted. Redelivery reproduces it on the same record forever, which is
-# the same crash-loop the original `bytes` defect had, reachable through the
-# public `BaseLookup` extension point.
+# The envelope lifts binary leaves out of band before the store sees them.
+# orjson encodes a tuple as an array and cannot encode `bytes`, `bytearray` or
+# `memoryview`, so each is lifted and restored by path, with a kind tag so a
+# tuple does not come back as a list.
 #
 # The fix lifts binary leaves *and* the container types orjson cannot round-trip
 # faithfully, both addressed by path (`buffer_envelope.py`). A tuple needs a tag
