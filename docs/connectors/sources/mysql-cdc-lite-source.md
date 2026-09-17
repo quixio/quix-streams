@@ -260,6 +260,11 @@ Things it does guarantee, and that were kept deliberately:
   stream opens, so a connection dropped before the first commit resumes where the source
   started rather than where the server has since got to
   (`test_a_reconnect_before_the_first_commit_skips_nothing`).
+- **A restart before the first commit does not skip changes either.** The resolved start
+  position is written to state before the stream opens, so a process that dies with
+  nothing produced still leaves its successor a position to resume from rather than an
+  empty store. Committing it that early can only replay, never drop
+  (`test_a_process_that_dies_before_its_first_commit_skips_nothing`).
 - **A stop drains the buffer.** `SIGTERM` while changes are buffered produces them
   rather than dropping them (`test_stop_drains_the_buffer`).
 - **A stop is noticed during a scan, not only between scans.** The read is bounded per

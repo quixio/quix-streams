@@ -369,6 +369,11 @@ class MySqlCdcLiteSource(StatefulSource):
     def run(self) -> None:
         """Stream changes until the source is asked to stop, or the retries run out."""
         self._position = self._committed_position() or self._start_position()
+        self.state.set(
+            self._position_key,
+            {"log_file": self._position[0], "log_pos": self._position[1]},
+        )
+        self.flush()
         self._last_commit_at = time.monotonic()
         logger.info(
             "Streaming the MySQL binlog for %s as server_id=%s from %s",

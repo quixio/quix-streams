@@ -135,6 +135,32 @@ class ReconnectingHarness(LiteHarness):
             raise ConnectionResetError("Lost connection to MySQL server during query")
 
 
+class DyingHarness(LiteHarness):
+    """
+    A source whose process ends before its first commit.
+
+    The read is held the way `ReconnectingHarness` holds it, so a change lands after the
+    start position is resolved; `run()` then leaves through a `BaseException` the retry
+    loop does not catch, which is a process being killed rather than stopped - no drain,
+    no commit, and the state store is all the successor gets.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.stream_open = threading.Event()
+        self.may_read = threading.Event()
+
+    def _open_stream(self) -> Any:
+        stream = super()._open_stream()
+        self.stream_open.set()
+        assert self.may_read.wait(timeout=30.0), "the test never released the read"
+        return stream
+
+    def _read_changes(self) -> None:
+        super()._read_changes()
+        raise SystemExit("killed before the first commit")
+
+
 class RunningSource:
     """Runs a source in a thread, stops it on exit, and surfaces what it raised."""
 
@@ -472,9 +498,10 @@ def test_a_reconnect_before_the_first_commit_skips_nothing(mysql, mysql_server):
     """
     A dropped connection before the first commit must not lose the changes since start.
 
-    Nothing is in state yet, so the only resume point is where this source started. A
-    source that asks the server again instead resumes past what it had already seen,
-    with no error and nothing on the topic to show it.
+    The only position in state is the anchor written at start-up, so the only resume
+    point is where this source started. A source that asks the server again instead
+    resumes past what it had already seen, with no error and nothing on the topic to
+    show it.
 
     `max_buffer_size=2` makes the retry commit as soon as both changes are read, rather
     than waiting out the long `commit_interval` that keeps the first commit from
@@ -497,11 +524,12 @@ def test_a_reconnect_before_the_first_commit_skips_nothing(mysql, mysql_server):
 
     with RunningSource(source) as running:
         assert source.stream_open.wait(timeout=30.0), "the stream never opened"
+        anchor = state[position_key]
         execute(mysql, f"INSERT INTO {table} VALUES (1, 'before-the-drop')")
         source.may_read.set()
 
         assert source.dropped.wait(timeout=30.0), "the stream never failed"
-        assert position_key not in state, "a position was committed before the drop"
+        assert state[position_key] == anchor, "a batch was committed before the drop"
         execute(mysql, f"INSERT INTO {table} VALUES (2, 'after-the-drop')")
 
         messages = running.wait_for(
@@ -512,6 +540,45 @@ def test_a_reconnect_before_the_first_commit_skips_nothing(mysql, mysql_server):
     assert [row_of(m) for m in of_kind(messages, "insert")] == [
         {"id": 1, "note": "before-the-drop"},
         {"id": 2, "note": "after-the-drop"},
+    ]
+
+
+def test_a_process_that_dies_before_its_first_commit_skips_nothing(mysql, mysql_server):
+    """
+    A deployment killed before its first commit must not cost its successor the window.
+
+    Nothing was produced, so the successor may replay - but it must not start later than
+    its predecessor did. `test_restart_resumes_and_delivers_the_downtime_window` is the
+    control: same code path, same downtime, and the only difference is whether a commit
+    ever landed.
+    """
+    table = "lite_early_death"
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(50))")
+
+    state: Dict[str, Any] = {}
+    first = make_source(mysql_server, table, state, harness=DyingHarness)
+    with pytest.raises(SystemExit):
+        with RunningSource(first):
+            assert first.stream_open.wait(timeout=30.0), "the stream never opened"
+            execute(mysql, f"INSERT INTO {table} VALUES (1, 'before-the-kill')")
+            first.may_read.set()
+
+    assert not first.received(), "the first source produced something before it died"
+
+    # Downtime: nothing is running, and the table keeps changing.
+    execute(mysql, f"INSERT INTO {table} VALUES (2, 'during-downtime')")
+
+    second = make_source(mysql_server, table, state)
+    with RunningSource(second) as running:
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=2),
+            "the changes since the dead process started",
+        )
+
+    assert [row_of(m) for m in of_kind(messages, "insert")] == [
+        {"id": 1, "note": "before-the-kill"},
+        {"id": 2, "note": "during-downtime"},
     ]
 
 
