@@ -285,7 +285,7 @@ class BytesFieldLookup(BaseLookup):
         value[UNRESOLVED] = ["device"]
 
 
-class TestBytesValuedFieldCrashesTheApplication:
+class TestBytesValuedFieldSurvivesBuffering:
     def test_validate_fields_does_not_reject_a_bytes_defaulted_field(self) -> None:
         """
         Sanity check for the claim: `join_lookup(..., buffer=...)` calls
@@ -302,7 +302,7 @@ class TestBytesValuedFieldCrashesTheApplication:
 
         buffer.validate_fields(fields)  # must not raise - that is the bug
 
-    def test_bytes_field_crashes_buffering_instead_of_being_rejected_at_build(
+    def test_a_bytes_valued_field_is_buffered_not_refused(
         self,
         create_sdf: Any,
         assign_partition: Any,
@@ -310,9 +310,8 @@ class TestBytesValuedFieldCrashesTheApplication:
         topic_manager_topic_factory: Any,
     ) -> None:
         """
-        `join_lookup(..., buffer=...)` accepts this field mapping (previous
-        test), so the failure - if any - must surface on the record path
-        instead, as a crash rather than a clean `ValueError` at build time.
+        The envelope lifts `bytes` out of band, so a record carrying a
+        resolved bytes field and an unresolved one is withheld like any other.
         """
         fields = {
             "cert": ConfigField(type="cert", default=b"fallback-bytes", source="cert"),
@@ -326,9 +325,9 @@ class TestBytesValuedFieldCrashesTheApplication:
         sdf = sdf.join_lookup(lookup, fields, buffer=buffer)
         assign_partition(sdf)
 
-        # A bytes-valued field round-trips: the envelope lifts it out of
-        # band rather than handing it to orjson.
-        publish(sdf, topic, {}, "D", 100, None)
+        assert (
+            publish(sdf, topic, {}, "D", 100, None) == []
+        ), "the record is unresolved, so it is withheld rather than emitted"
 
 
 # ---------------------------------------------------------------------------
