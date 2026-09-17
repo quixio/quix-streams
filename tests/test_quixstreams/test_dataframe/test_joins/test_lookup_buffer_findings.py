@@ -258,18 +258,9 @@ class TestSiblingKeyPrefixCollisionOperatorLevel:
 # rejected at build time
 # ---------------------------------------------------------------------------
 #
-# `validate_fields` (buffer.py:191-219) only rejects fields whose `default`
-# is `RAISE_ON_MISSING`; it has no notion of `BytesField`. The
-# `isinstance(value, bytes)` guard in `_buffer()` (buffer_operator.py:385-392)
-# tests the whole record *value*, which is always a `dict` by the time
-# `_buffer` sees it - `lookup.join()` already wrote into it in-place a few
-# lines earlier - so it can never fire for a `bytes`-valued *field* inside
-# that dict. `orjson` cannot serialize `bytes`
-# (`quixstreams/state/rocksdb/options.py:10`), so the first record carrying a
-# resolved `BytesField` alongside an unresolved field of another type should
-# crash `_buffer()` -> `transaction.set_for_timestamp()` -> `set()`
-# (`state/base/transaction.py:435-462`, which serializes synchronously and
-# raises immediately, before the offset is committed).
+# `validate_fields` only rejects fields whose `default` is `RAISE_ON_MISSING`;
+# it has no notion of `BytesField`. The envelope lifts `bytes` out of band, so
+# a `bytes`-valued field round-trips rather than failing the store write.
 
 
 class BytesFieldLookup(BaseLookup):

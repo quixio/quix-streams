@@ -11,7 +11,7 @@ overflow against what it held under a previous assignment.
 import logging
 import time
 from collections import OrderedDict
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 __all__ = ("BufferBookkeeping",)
 
@@ -31,7 +31,6 @@ class BufferBookkeeping:
         self._counts: dict[int, dict[bytes, int]] = {}
         self._drop_log: OrderedDict[bytes, list] = OrderedDict()
         self._overflow_log: OrderedDict[bytes, list] = OrderedDict()
-        self._unstorable_log: OrderedDict[bytes, list] = OrderedDict()
 
     def count(self, partition: int, prefix: bytes) -> int:
         """:return: Records held for a key. Reading never creates state."""
@@ -78,28 +77,6 @@ class BufferBookkeeping:
                 key,
                 count,
                 total,
-            )
-
-    def log_unstorable(
-        self,
-        prefix: bytes,
-        key: Any,
-        describe: Callable[[], str],
-    ) -> None:
-        """
-        :param describe: Produces the path the serializer refused. Called only
-            when the warning is not rate-limited away.
-        """
-        total = self._rate_limited(self._unstorable_log, prefix, 1)
-        if total is not None:
-            logger.warning(
-                "Lookup buffer could not store %s records for key %r: the state "
-                "store's serializer refused %s. Such a record is settled by "
-                "`on_timeout` immediately instead of waiting for its "
-                "configuration. Reshape the record value if it must be buffered.",
-                total,
-                key,
-                describe(),
             )
 
     @staticmethod

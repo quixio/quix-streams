@@ -71,8 +71,7 @@ class LookupBuffer:
 
     Held records live in a changelog-backed state store, so a buffered
     `join_lookup` makes the service stateful: it needs a state directory and, on
-    Quix Cloud, `state: {enabled: true}`. A value the store's serializer refuses
-    (orjson by default) is settled by `on_timeout` at once rather than held.
+    Quix Cloud, `state: {enabled: true}`.
     """
 
     def __init__(

@@ -11,22 +11,18 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Optional, cas
 
 from quixstreams.context import message_context
 from quixstreams.core.stream import VoidExecutor
-from quixstreams.state.exceptions import StateSerializationError
 from quixstreams.state.rocksdb.timestamped import TimestampedPartitionTransaction
 
 from .base import BaseField, BaseLookup
 from .buffer_bookkeeping import BufferBookkeeping
 from .buffer_envelope import (
-    ENVELOPE_HEADERS,
     ENVELOPE_OFFSET,
     ENVELOPE_RECEIVED,
     ENVELOPE_TIMESTAMP,
     ENVELOPE_TOPIC,
-    ENVELOPE_VALUE,
     NO_OFFSET,
     Emission,
     decode_headers,
-    describe_unstorable,
     emit_tuple,
     encode_envelope,
     envelope_value,
@@ -155,20 +151,18 @@ class BufferOperator:
                     )
                 )
             else:
-                out.extend(
-                    self._buffer(
-                        transaction=transaction,
-                        index=index,
-                        partition=partition,
-                        prefix=prefix,
-                        key=key,
-                        receive_ms=now_ms,
-                        value=value,
-                        timestamp=timestamp,
-                        headers=headers,
-                        topic=context.topic,
-                        offset=context.offset,
-                    )
+                self._buffer(
+                    transaction=transaction,
+                    index=index,
+                    partition=partition,
+                    prefix=prefix,
+                    key=key,
+                    receive_ms=now_ms,
+                    value=value,
+                    timestamp=timestamp,
+                    headers=headers,
+                    topic=context.topic,
+                    offset=context.offset,
                 )
             index.flush()
             return out
@@ -188,20 +182,18 @@ class BufferOperator:
             # nothing survives below `cutoff + 1`. The marker only moves forward:
             # lowering it re-queues the key as due earlier than it is.
             index.set_earliest(prefix, max(marker[0], cutoff + 1))
-            out.extend(
-                self._buffer(
-                    transaction=transaction,
-                    index=index,
-                    partition=partition,
-                    prefix=prefix,
-                    key=key,
-                    receive_ms=now_ms,
-                    value=value,
-                    timestamp=timestamp,
-                    headers=headers,
-                    topic=context.topic,
-                    offset=context.offset,
-                )
+            self._buffer(
+                transaction=transaction,
+                index=index,
+                partition=partition,
+                prefix=prefix,
+                key=key,
+                receive_ms=now_ms,
+                value=value,
+                timestamp=timestamp,
+                headers=headers,
+                topic=context.topic,
+                offset=context.offset,
             )
             index.flush()
             return out
@@ -332,7 +324,7 @@ class BufferOperator:
         headers: Any,
         topic: Optional[str],
         offset: int,
-    ) -> list[Emission]:
+    ) -> None:
         count = self._bookkeeping.count(partition, prefix)
         if count >= self._max_buffered_per_key:
             if self._raise_on_overflow:
@@ -342,43 +334,16 @@ class BufferOperator:
                     f'`grace_ms`, or use `on_overflow="drop-newest"`.'
                 )
             self._bookkeeping.log_overflow(prefix, key, count)
-            return []
+            return
 
-        # The store's own serializer, offered the envelope before the write: a
-        # value it refuses must be settled here, not left to raise in `flush()`
-        # after the operator has already reported the record as withheld.
-        serialize_value = transaction._serialize_value  # noqa: SLF001
-        envelope: Optional[dict[str, Any]] = None
-        try:
-            envelope = encode_envelope(
-                value=value,
-                timestamp=timestamp,
-                receive_ms=receive_ms,
-                headers=headers,
-                topic=topic,
-                offset=offset,
-            )
-            serialize_value(envelope)
-        except (RecursionError, StateSerializationError):
-            refused: Mapping[str, Any] = (
-                envelope
-                if envelope is not None
-                else {ENVELOPE_VALUE: value, ENVELOPE_HEADERS: headers}
-            )
-            self._bookkeeping.log_unstorable(
-                prefix,
-                key,
-                lambda: describe_unstorable(refused, serialize_value),
-            )
-            return self._settle_unstorable(
-                value=value,
-                key=key,
-                timestamp=timestamp,
-                headers=headers,
-                topic=topic,
-                offset=offset,
-            )
-
+        envelope = encode_envelope(
+            value=value,
+            timestamp=timestamp,
+            receive_ms=receive_ms,
+            headers=headers,
+            topic=topic,
+            offset=offset,
+        )
         transaction.set_for_timestamp(
             timestamp=receive_ms,
             value=envelope,
@@ -387,21 +352,6 @@ class BufferOperator:
         self._bookkeeping.set_count(partition, prefix, count + 1)
         index.ensure(prefix, key, receive_ms)
         self._ticker.note_deadline(partition, receive_ms + self._grace_ms)
-        return []
-
-    def _settle_unstorable(
-        self,
-        *,
-        value: dict[str, Any],
-        key: Any,
-        timestamp: int,
-        headers: Any,
-        topic: Optional[str],
-        offset: int,
-    ) -> list[Emission]:
-        if not self._emit_on_timeout:
-            return []
-        return [Emission(value, key, timestamp, headers, topic, offset)]
 
     def _get_transaction(self, partition: int) -> TimestampedPartitionTransaction:
         return cast(

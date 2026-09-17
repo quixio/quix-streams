@@ -20,16 +20,11 @@ Accepted losses: `bytearray` and `memoryview` come back as `bytes`, and a
 subclass (a `NamedTuple`, an `OrderedDict`) comes back as its builtin base.
 
 Out of reach of any encoding here: arbitrary objects, non-`str` dict keys,
-integers outside 64 bits, reference cycles. `BufferOperator._buffer()` offers
-the finished envelope to the store's serializer before writing, and
-`describe_unstorable()` names the path of whatever it refused by re-offering
-subtrees to that same serializer.
+integers outside 64 bits, reference cycles.
 """
 
 import base64
-from typing import Any, Callable, Iterable, Mapping, NamedTuple, Optional, Union
-
-from quixstreams.state.exceptions import StateSerializationError
+from typing import Any, Mapping, NamedTuple, Optional, Union
 
 __all__ = (
     "ENVELOPE_BYTES",
@@ -43,7 +38,6 @@ __all__ = (
     "NO_OFFSET",
     "Emission",
     "decode_headers",
-    "describe_unstorable",
     "emit_tuple",
     "encode_envelope",
     "envelope_value",
@@ -74,15 +68,6 @@ _CONTAINER_FROZENSET = "f"
 _BINARY = (bytes, bytearray, memoryview)
 
 _Step = Union[str, int]
-
-_DESCRIBE_MAX_DEPTH = 20
-
-_DESCRIBE_MAX_KEYS = 3
-
-_DESCRIBE_FIELDS = {ENVELOPE_VALUE: "value", ENVELOPE_HEADERS: "headers"}
-
-_INT_MIN = -(2**63)
-_INT_MAX = 2**64 - 1
 
 
 class Emission(NamedTuple):
@@ -176,79 +161,6 @@ def decode_headers(envelope: Mapping[str, Any]) -> Any:
     if envelope[ENVELOPE_HEADERS_MAPPING]:
         return dict(items)
     return items
-
-
-def describe_unstorable(
-    envelope: Mapping[str, Any],
-    probe: Callable[[Any], Any],
-) -> str:
-    """
-    Locate the part of an envelope the store's serializer refused.
-
-    :param envelope: The envelope the write failed on.
-    :param probe: The store's own `_serialize_value`, re-offered per subtree so
-        the diagnosis cannot disagree with the refused write.
-    :return: A human-readable path and reason.
-    """
-    path: list[_Step] = []
-    node: Any = envelope
-    seen: set[int] = set()
-    for _ in range(_DESCRIBE_MAX_DEPTH):
-        if id(node) in seen:
-            return f"{_render_path(path)}: a reference cycle"
-        seen.add(id(node))
-        refused = _refused_child(node, probe)
-        if refused is None:
-            break
-        path.append(refused[0])
-        node = refused[1]
-    return f"{_render_path(path)}: {_refusal_reason(node)}"
-
-
-def _refused_child(
-    node: Any,
-    probe: Callable[[Any], Any],
-) -> Optional[tuple[_Step, Any]]:
-    items: Iterable[tuple[Any, Any]]
-    if isinstance(node, dict):
-        items = node.items()
-    elif isinstance(node, list):
-        items = enumerate(node)
-    else:
-        return None
-
-    for step, child in items:
-        try:
-            probe(child)
-        except StateSerializationError:
-            return step, child
-    return None
-
-
-def _refusal_reason(node: Any) -> str:
-    if isinstance(node, dict):
-        keys = [key for key in node if not isinstance(key, str)]
-        if keys:
-            named = ", ".join(
-                f"{key!r} ({type(key).__name__})" for key in keys[:_DESCRIBE_MAX_KEYS]
-            )
-            return f"a dict whose keys are not strings: {named}"
-    if (
-        isinstance(node, int)
-        and not isinstance(node, bool)
-        and not _INT_MIN <= node <= _INT_MAX
-    ):
-        return "an integer outside the 64-bit range"
-    return f"a value of type {type(node).__name__}"
-
-
-def _render_path(path: list[_Step]) -> str:
-    if not path:
-        return "the envelope itself"
-    head, rest = path[0], path[1:]
-    name = _DESCRIBE_FIELDS.get(head, "") if isinstance(head, str) else ""
-    rendered = name or f"envelope[{head!r}]"
-    return rendered + "".join(f"[{step!r}]" for step in rest)
 
 
 def _encode_headers(headers: Any) -> tuple[Optional[list[list[Any]]], bool]:
