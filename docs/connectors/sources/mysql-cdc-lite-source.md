@@ -32,7 +32,9 @@ becomes one Kafka message.
 
 There is **no initial snapshot**. The topic begins at the server's binlog position at
 the moment the source first starts, and carries every change from that point on. Rows
-that were already in the table when the source started are never published.
+that were already in the table when the source started are never published. That
+position is read once, before the stream opens, so a dropped connection is rebuilt from
+where the source had got to rather than from wherever the server has moved on to.
 
 Changes are buffered, produced and flushed, and only then is the binlog position they
 cover committed to the source's state store. A restart resumes from that committed
@@ -254,6 +256,10 @@ Things it does guarantee, and that were kept deliberately:
 - **The position lives in Kafka state, not on disk.** An ephemeral container filesystem
   does not cost you the downtime window
   (`test_restart_resumes_and_delivers_the_downtime_window`).
+- **A reconnect does not skip changes.** The start position is resolved before the first
+  stream opens, so a connection dropped before the first commit resumes where the source
+  started rather than where the server has since got to
+  (`test_a_reconnect_before_the_first_commit_skips_nothing`).
 - **A stop drains the buffer.** `SIGTERM` while changes are buffered produces them
   rather than dropping them (`test_stop_drains_the_buffer`).
 - **A stop is noticed during a scan, not only between scans.** The read is bounded per
@@ -398,6 +404,6 @@ The connector's own test suite brings the same container up itself:
 python -m pytest tests/test_quixstreams/test_sources/test_community/test_mysql_cdc_lite.py
 ```
 
-Ten tests, one MySQL container, about 30 seconds. Six prove the source works; four exist
-to keep this page honest, and will fail if MySQL's behaviour stops matching what is
-written above.
+Eleven tests, one MySQL container, about 35 seconds. Seven prove the source works; four
+exist to keep this page honest, and will fail if MySQL's behaviour stops matching what
+is written above.

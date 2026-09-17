@@ -51,6 +51,10 @@ _MAX_RETRIES = 3
 _BINLOG_READ_ERROR_CODE = 1236
 _PURGED_MARKER = "could not find first log file"
 
+# ER_PARSE_ERROR, which is how a server older than 8.4 answers a statement only 8.4
+# knows.
+_PARSE_ERROR_CODE = 1064
+
 # Derived ids start at 1000 to stay clear of the `server-id = 1` a MySQL server and its
 # tutorials use.
 _SERVER_ID_MIN = 1000
@@ -310,7 +314,9 @@ class MySqlCdcLiteSource(StatefulSource):
 
         self._stream: Optional[BinLogStreamReader] = None
         self._buffer: List[Dict[str, Any]] = []
-        self._position: Optional[Tuple[str, int]] = None
+        # Resolved by run() before the first stream opens, and only moved forward by a
+        # commit after that.
+        self._position: Tuple[str, int]
         self._pending: Optional[Tuple[str, int]] = None
         self._last_commit_at = 0.0
 
@@ -362,13 +368,13 @@ class MySqlCdcLiteSource(StatefulSource):
 
     def run(self) -> None:
         """Stream changes until the source is asked to stop, or the retries run out."""
-        self._position = self._committed_position()
+        self._position = self._committed_position() or self._start_position()
         self._last_commit_at = time.monotonic()
         logger.info(
             "Streaming the MySQL binlog for %s as server_id=%s from %s",
             self._table_name,
             self._server_id,
-            self._position or "the server's current position",
+            self._position,
         )
         failures = 0
         try:
@@ -384,7 +390,7 @@ class MySqlCdcLiteSource(StatefulSource):
                     if failures > _MAX_RETRIES:
                         raise
                     logger.warning(
-                        "Lost the MySQL binlog stream for %s (%s); rebuilding it at %s "
+                        "Lost the MySQL binlog stream for %s (%s); resuming it at %s "
                         "(attempt %s/%s)",
                         self._table_name,
                         exc,
@@ -450,13 +456,41 @@ class MySqlCdcLiteSource(StatefulSource):
             return None
         return str(stored["log_file"]), int(stored["log_pos"])
 
-    def _open_stream(self) -> BinLogStreamReader:
+    def _start_position(self) -> Tuple[str, int]:
         """
-        Open a stream on the event after the committed position.
+        :return: the coordinates the server is writing at right now.
 
-        With no committed position the library asks the server for its current
-        coordinates, which is also where it raises if binary logging is off.
+        `BinLogStreamReader` resolves coordinates it was not given inside its first
+        read (`binlogstream.py:416-422`) and not in `__init__`, so they cannot be read
+        back off a stream this source has just opened.
+
+        :raises MySqlCdcLiteError: if the server reports no position at all, which is
+            what binary logging being off looks like.
         """
+        conn = self._connect()
+        try:
+            with conn.cursor() as cursor:
+                try:
+                    cursor.execute("SHOW BINARY LOG STATUS")
+                except pymysql.err.ProgrammingError as exc:
+                    if not exc.args or exc.args[0] != _PARSE_ERROR_CODE:
+                        raise
+                    cursor.execute("SHOW MASTER STATUS")
+                status = cursor.fetchone()
+        finally:
+            conn.close()
+
+        if not status:
+            raise MySqlCdcLiteError(
+                f"{self._host} reports no binary log position to start from, which is "
+                "what a server with binary logging off reports. This source reads the "
+                "binary log and has nothing else to read: set log_bin=ON in the MySQL "
+                "configuration and restart the server."
+            )
+        return str(status[0]), int(status[1])
+
+    def _open_stream(self) -> BinLogStreamReader:
+        """Open a stream on the event at `self._position`."""
         # A fresh dict per call: `BinLogStreamReader.__init__` keeps the one it is
         # handed and setdefault()s "charset" into it.
         settings: Dict[str, Any] = {
@@ -466,7 +500,7 @@ class MySqlCdcLiteSource(StatefulSource):
             "password": self._password,
         }
         settings.update(self._connect_kwargs())
-        log_file, log_pos = self._position or (None, None)
+        log_file, log_pos = self._position
         return BinLogStreamReader(
             connection_settings=settings,
             server_id=self._server_id,

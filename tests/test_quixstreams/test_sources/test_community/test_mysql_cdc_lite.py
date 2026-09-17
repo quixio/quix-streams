@@ -107,6 +107,34 @@ class LiteHarness(MySqlCdcLiteSource):
         ]
 
 
+class ReconnectingHarness(LiteHarness):
+    """
+    A source whose first read fails the way a dropped connection does.
+
+    The read is held until the test releases it, so a change can be written after the
+    source has resolved its start position and before it has read anything - and the
+    failure lands before any position has been committed.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.stream_open = threading.Event()
+        self.may_read = threading.Event()
+        self.dropped = threading.Event()
+
+    def _open_stream(self) -> Any:
+        stream = super()._open_stream()
+        self.stream_open.set()
+        assert self.may_read.wait(timeout=30.0), "the test never released the read"
+        return stream
+
+    def _read_changes(self) -> None:
+        super()._read_changes()
+        if not self.dropped.is_set():
+            self.dropped.set()
+            raise ConnectionResetError("Lost connection to MySQL server during query")
+
+
 class RunningSource:
     """Runs a source in a thread, stops it on exit, and surfaces what it raised."""
 
@@ -251,7 +279,13 @@ def root_connection(mysql_server):
         conn.close()
 
 
-def make_source(mysql_server, table: str, state: Dict[str, Any], **kwargs: Any):
+def make_source(
+    mysql_server,
+    table: str,
+    state: Dict[str, Any],
+    harness: type = LiteHarness,
+    **kwargs: Any,
+):
     params: Dict[str, Any] = {
         "host": mysql_server["host"],
         "port": mysql_server["port"],
@@ -263,7 +297,7 @@ def make_source(mysql_server, table: str, state: Dict[str, Any], **kwargs: Any):
         "shutdown_timeout": 5,
     }
     params.update(kwargs)
-    return LiteHarness(state_data=state, **params)
+    return harness(state_data=state, **params)
 
 
 def test_default_topic_round_trips_a_string_key():
@@ -432,6 +466,53 @@ def test_restart_resumes_and_delivers_the_downtime_window(mysql, mysql_server):
 
     # The restart moved the position on rather than re-reading from the old one.
     assert state[position_key] != committed
+
+
+def test_a_reconnect_before_the_first_commit_skips_nothing(mysql, mysql_server):
+    """
+    A dropped connection before the first commit must not lose the changes since start.
+
+    Nothing is in state yet, so the only resume point is where this source started. A
+    source that asks the server again instead resumes past what it had already seen,
+    with no error and nothing on the topic to show it.
+
+    `max_buffer_size=2` makes the retry commit as soon as both changes are read, rather
+    than waiting out the long `commit_interval` that keeps the first commit from
+    landing before the drop.
+    """
+    table = "lite_reconnect"
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(50))")
+
+    state: Dict[str, Any] = {}
+    position_key = f"binlog_position_{DATABASE}_{table}"
+    source = make_source(
+        mysql_server,
+        table,
+        state,
+        harness=ReconnectingHarness,
+        commit_interval=10.0,
+        max_buffer_size=2,
+    )
+
+    with RunningSource(source) as running:
+        assert source.stream_open.wait(timeout=30.0), "the stream never opened"
+        execute(mysql, f"INSERT INTO {table} VALUES (1, 'before-the-drop')")
+        source.may_read.set()
+
+        assert source.dropped.wait(timeout=30.0), "the stream never failed"
+        assert position_key not in state, "a position was committed before the drop"
+        execute(mysql, f"INSERT INTO {table} VALUES (2, 'after-the-drop')")
+
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=2),
+            "both inserts to survive the reconnect",
+        )
+
+    assert [row_of(m) for m in of_kind(messages, "insert")] == [
+        {"id": 1, "note": "before-the-drop"},
+        {"id": 2, "note": "after-the-drop"},
+    ]
 
 
 def test_stop_drains_the_buffer(mysql, mysql_server):
