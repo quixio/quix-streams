@@ -47,7 +47,9 @@ all = [
     "elasticsearch>=8.17,<9",
     "influxdb>=5.3,<6",
     "python-dateutil>=2.8.2,<3",
-    "paho-mqtt>=2.1.0,<3"
+    "paho-mqtt>=2.1.0,<3",
+    "pymysql>=1.0,<2",
+    "mysql-replication>=1.0.17,<2"
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
@@ -68,6 +70,7 @@ pandas = ["pandas>=1.0.0,<3.0"]
 elasticsearch = ["elasticsearch>=8.17,<9"]
 tdengine = ["python-dateutil>=2.8.2,<3"]
 mqtt = ["paho-mqtt>=2.1.0,<3"]
+mysql = ["pymysql>=1.0,<2", "mysql-replication>=1.0.17,<2"]
 
 # AWS dependencies are separated by service to support
 # different requirements in the future.
@@ -106,10 +109,11 @@ exclude = [
 # S105 Possible hardcoded password assigned to variable
 # S106 Possible hardcoded password assigned to argument
 # S311 Standard pseudo-random generators are not suitable for cryptographic purposes
+# S608 Possible SQL injection vector through string-based query construction
 # SLF001 Private member accessed
 "docs/*.py" = ["S311"]
 "examples/*.py" = ["S311"]
-"tests/*.py" = ["S101", "S105", "S106", "S311", "SLF001"]
+"tests/*.py" = ["S101", "S105", "S106", "S311", "S608", "SLF001"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

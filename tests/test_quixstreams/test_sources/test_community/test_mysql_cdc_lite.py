@@ -1,0 +1,963 @@
+"""
+Live-MySQL tests for `MySqlCdcLiteSource`.
+
+Kafka is stubbed - the producer is a list and the state store is a dict. MySQL is a
+real container configured the way `docs/connectors/sources/mysql-cdc-lite-source.md`
+tells an operator to configure it: `binlog_format=ROW`, `binlog_row_image=FULL`,
+`binlog_row_metadata=FULL`, and the documented grants, and nothing more.
+
+Four of these tests exist to keep that page honest and will fail if MySQL stops
+behaving the way it records.
+
+Requires Docker.
+"""
+
+import json
+import threading
+import time
+from collections import Counter
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+import pymysql
+import pytest
+from pymysqlreplication import BinLogStreamReader
+from pymysqlreplication.row_event import TableMapEvent, WriteRowsEvent
+from testcontainers.mysql import MySqlContainer
+
+from quixstreams.sources.community.mysql_cdc_lite import (
+    MySqlCdcLiteError,
+    MySqlCdcLiteSource,
+    mysql_cdc_lite,
+)
+from tests.utils import ConfluentKafkaMessageStub
+
+MYSQL_IMAGE = "mysql:8.0"
+DATABASE = "test_db"
+CDC_USER = "cdc"
+CDC_PASSWORD = "cdc_password"
+ROOT_PASSWORD = "root_password"
+
+# What the docs page tells the operator to set. Nothing here is checked by the source
+# except binlog_format.
+MYSQL_COMMAND = (
+    "--server-id=1 --log-bin=mysql-bin --binlog-format=ROW "
+    "--binlog-row-image=FULL --binlog-row-metadata=FULL"
+)
+
+# No source is connected while the raw reader below is, so any id the server itself is
+# not using will do.
+_PROBE_SERVER_ID = 990077
+
+
+class _DictState:
+    """A `State` stand-in backed by a plain dict."""
+
+    def __init__(self, data: Dict[str, Any]):
+        self._data = data
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._data.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        self._data[key] = value
+
+
+class _CapturingProducer:
+    """An `InternalProducer` stand-in that keeps the produced `(key, value)` pairs."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._messages: List[Any] = []
+
+    def produce(self, topic: str, value=None, key=None, **kwargs: Any) -> None:
+        with self._lock:
+            self._messages.append((key, value))
+
+    def flush(self, timeout: Optional[float] = None) -> int:
+        return 0
+
+    def snapshot(self) -> List[Any]:
+        with self._lock:
+            return list(self._messages)
+
+
+class LiteHarness(MySqlCdcLiteSource):
+    """`MySqlCdcLiteSource` with only the Kafka side replaced."""
+
+    def __init__(self, state_data: Dict[str, Any], **kwargs: Any):
+        super().__init__(**kwargs)
+        self._state = _DictState(state_data)
+        self._capturing_producer = _CapturingProducer()
+        self.polled = threading.Event()
+        self.buffered = threading.Event()
+        self.configure(topic=self.default_topic(), producer=self._capturing_producer)
+
+    @property
+    def state(self) -> _DictState:  # type: ignore[override]
+        return self._state
+
+    def flush(self, timeout: Optional[float] = None) -> None:
+        if self.producer.flush(timeout) > 0:
+            raise AssertionError("stub producer failed to flush")
+
+    def _read_changes(self) -> None:
+        super()._read_changes()
+        self.polled.set()
+        if self._buffer:
+            self.buffered.set()
+
+    def received(self) -> List[Dict[str, Any]]:
+        """Produced messages, decoded from the topic's JSON serializer."""
+        return [
+            dict(json.loads(value), _key=key)
+            for key, value in self._capturing_producer.snapshot()
+        ]
+
+
+class ReconnectingHarness(LiteHarness):
+    """
+    A source whose first read fails the way a dropped connection does.
+
+    The read is held until the test releases it, so a change can be written after the
+    source has resolved its start position and before it has read anything - and the
+    failure lands before any position has been committed.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.stream_open = threading.Event()
+        self.may_read = threading.Event()
+        self.dropped = threading.Event()
+
+    def _open_stream(self) -> Any:
+        stream = super()._open_stream()
+        self.stream_open.set()
+        assert self.may_read.wait(timeout=30.0), "the test never released the read"
+        return stream
+
+    def _read_changes(self) -> None:
+        super()._read_changes()
+        if not self.dropped.is_set():
+            self.dropped.set()
+            raise ConnectionResetError("Lost connection to MySQL server during query")
+
+
+class DyingHarness(LiteHarness):
+    """
+    A source whose process ends before its first commit.
+
+    The read is held the way `ReconnectingHarness` holds it, so a change lands after the
+    start position is resolved; `run()` then leaves through a `BaseException` the retry
+    loop does not catch, which is a process being killed rather than stopped - no drain,
+    no commit, and the state store is all the successor gets.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.stream_open = threading.Event()
+        self.may_read = threading.Event()
+
+    def _open_stream(self) -> Any:
+        stream = super()._open_stream()
+        self.stream_open.set()
+        assert self.may_read.wait(timeout=30.0), "the test never released the read"
+        return stream
+
+    def _read_changes(self) -> None:
+        super()._read_changes()
+        raise SystemExit("killed before the first commit")
+
+
+class OneCommitHarness(LiteHarness):
+    """
+    A source that stops itself as soon as it commits a batch that produced something.
+
+    The successor then resumes from that one position, which is what makes a commit
+    taken part-way through a statement observable.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.committed = threading.Event()
+
+    def _commit_batch(self, timeout: Optional[float] = None) -> None:
+        super()._commit_batch(timeout)
+        if self._capturing_producer.snapshot():
+            self.committed.set()
+            self.stop()
+
+
+class RunningSource:
+    """Runs a source in a thread, stops it on exit, and surfaces what it raised."""
+
+    def __init__(self, source: LiteHarness, timeout: float = 30.0):
+        self.source = source
+        self._timeout = timeout
+        self._error: Optional[BaseException] = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _run(self) -> None:
+        try:
+            self.source.start()
+        except BaseException as exc:
+            self._error = exc
+
+    def __enter__(self) -> "RunningSource":
+        self._thread.start()
+        # stop() before start() sets `running` would be swallowed, so wait for the
+        # source to be marked running before the body can ask it to stop.
+        deadline = time.monotonic() + self._timeout
+        while time.monotonic() < deadline:
+            if self.source.running or self._error is not None:
+                break
+            time.sleep(0.01)
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self.source.stop()
+        self._thread.join(timeout=self._timeout)
+        if exc_type is None and self._error is not None:
+            raise self._error
+        return False
+
+    def wait_for(
+        self,
+        predicate: Callable[[List[Dict[str, Any]]], bool],
+        description: str,
+        timeout: float = 30.0,
+    ) -> List[Dict[str, Any]]:
+        """:return: the produced messages once `predicate` accepts them."""
+        deadline = time.monotonic() + timeout
+        while True:
+            messages = self.source.received()
+            if predicate(messages):
+                return messages
+            if self._error is not None:
+                raise AssertionError(
+                    f"the source died while waiting for {description}: {self._error}"
+                )
+            if time.monotonic() >= deadline:
+                raise AssertionError(
+                    f"timed out waiting for {description}; got {messages}"
+                )
+            time.sleep(0.1)
+
+
+def execute(connection, statement: str) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(statement)
+    connection.commit()
+
+
+def of_kind(messages: List[Dict[str, Any]], kind: str) -> List[Dict[str, Any]]:
+    return [message for message in messages if message["kind"] == kind]
+
+
+def count_kinds(messages: List[Dict[str, Any]], **expected: int) -> bool:
+    counts = Counter(message["kind"] for message in messages)
+    return all(counts[kind] == count for kind, count in expected.items())
+
+
+def row_of(message: Dict[str, Any]) -> Dict[str, Any]:
+    return dict(zip(message["columnnames"], message["columnvalues"]))
+
+
+def oldkeys_of(message: Dict[str, Any]) -> Dict[str, Any]:
+    oldkeys = message["oldkeys"]
+    return dict(zip(oldkeys["keynames"], oldkeys["keyvalues"]))
+
+
+def statement_positions(
+    mysql_server, table: str, position: Tuple[str, int]
+) -> Tuple[int, List[int]]:
+    """
+    Read the raw event boundaries of the statement that follows `position`.
+
+    :return: `(table_map_end, [row_event_end, ...])`, the `log_pos` each of the
+        statement's events ends at. The last row event is the statement's end.
+    """
+    stream = BinLogStreamReader(
+        connection_settings={
+            "host": mysql_server["host"],
+            "port": mysql_server["port"],
+            "user": CDC_USER,
+            "password": CDC_PASSWORD,
+        },
+        server_id=_PROBE_SERVER_ID,
+        only_events=[TableMapEvent, WriteRowsEvent],
+        only_schemas=[DATABASE],
+        only_tables=[table],
+        resume_stream=True,
+        blocking=False,
+        log_file=position[0],
+        log_pos=position[1],
+    )
+    table_map_end: Optional[int] = None
+    row_event_ends: List[int] = []
+    try:
+        for event in stream:
+            if isinstance(event, TableMapEvent):
+                if table_map_end is None:
+                    table_map_end = stream.log_pos
+            else:
+                row_event_ends.append(stream.log_pos)
+    finally:
+        stream.close()
+    assert table_map_end is not None, "the statement wrote no table map"
+    return table_map_end, row_event_ends
+
+
+@pytest.fixture(scope="module")
+def mysql_server():
+    """A MySQL container configured exactly as the docs page requires."""
+    container = MySqlContainer(
+        MYSQL_IMAGE,
+        username=CDC_USER,
+        password=CDC_PASSWORD,
+        dbname=DATABASE,
+        root_password=ROOT_PASSWORD,
+    ).with_command(MYSQL_COMMAND)
+    with container:
+        host = container.get_container_host_ip()
+        port = int(container.get_exposed_port(3306))
+        root = pymysql.connect(
+            host=host, port=port, user="root", password=ROOT_PASSWORD, database=DATABASE
+        )
+        try:
+            with root.cursor() as cursor:
+                cursor.execute(
+                    "GRANT REPLICATION SLAVE, REPLICATION CLIENT, SELECT "
+                    f"ON *.* TO '{CDC_USER}'@'%'"
+                )
+                cursor.execute("FLUSH PRIVILEGES")
+            root.commit()
+        finally:
+            root.close()
+        yield {"host": host, "port": port}
+
+
+@pytest.fixture()
+def mysql(mysql_server):
+    connection = pymysql.connect(
+        host=mysql_server["host"],
+        port=mysql_server["port"],
+        user=CDC_USER,
+        password=CDC_PASSWORD,
+        database=DATABASE,
+        autocommit=True,
+    )
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+
+@pytest.fixture()
+def root_connection(mysql_server):
+    conn = pymysql.connect(
+        host=mysql_server["host"],
+        port=mysql_server["port"],
+        user="root",
+        password=ROOT_PASSWORD,
+        database=DATABASE,
+        autocommit=True,
+    )
+    try:
+        yield conn
+    finally:
+        with conn.cursor() as cursor:
+            cursor.execute("SET GLOBAL binlog_row_metadata = FULL")
+            cursor.execute("SET GLOBAL binlog_row_image = FULL")
+        conn.close()
+
+
+def make_source(
+    mysql_server,
+    table: str,
+    state: Dict[str, Any],
+    harness: type = LiteHarness,
+    **kwargs: Any,
+):
+    params: Dict[str, Any] = {
+        "host": mysql_server["host"],
+        "port": mysql_server["port"],
+        "user": CDC_USER,
+        "password": CDC_PASSWORD,
+        "database": DATABASE,
+        "table": table,
+        "commit_interval": 0.3,
+        "shutdown_timeout": 5,
+    }
+    params.update(kwargs)
+    return harness(state_data=state, **params)
+
+
+def test_default_topic_round_trips_a_string_key():
+    """The `"<database>.<table>"` key reaches a consumer as `str`, not `bytes`."""
+    source = MySqlCdcLiteSource(
+        host="localhost",
+        user="cdc",
+        password="pw",
+        database="mydb",
+        table="mytable",
+    )
+    topic = source.default_topic()
+    assert topic.name == "mysql_cdc_lite_mydb_mytable"
+
+    serialized = topic.serialize(key="mydb.mytable", value={"kind": "insert"})
+    assert serialized.key == b"mydb.mytable"
+
+    deserialized = topic.deserialize(
+        ConfluentKafkaMessageStub(
+            topic=topic.name, key=serialized.key, value=serialized.value
+        )
+    )
+    assert deserialized.key == "mydb.mytable"
+    assert deserialized.value == {"kind": "insert"}
+
+
+def test_insert_update_delete_stream_with_correct_values(mysql, mysql_server):
+    """The three row events arrive with real column names and real values."""
+    table = "lite_dml"
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(
+        mysql,
+        f"CREATE TABLE {table} "
+        "(id INT PRIMARY KEY, customer VARCHAR(50), amount INT)",
+    )
+    # Written before the source starts: streaming-only, so it must NOT appear.
+    execute(mysql, f"INSERT INTO {table} VALUES (99, 'pre-existing', 0)")
+
+    source = make_source(mysql_server, table, {})
+    with RunningSource(source) as running:
+        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        execute(mysql, f"INSERT INTO {table} VALUES (1, 'ada', 100)")
+        execute(mysql, f"UPDATE {table} SET amount = 250 WHERE id = 1")
+        execute(mysql, f"DELETE FROM {table} WHERE id = 1")
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=1, update=1, delete=1),
+            "one change event of each kind",
+        )
+
+    assert [m["kind"] for m in messages] == ["insert", "update", "delete"]
+
+    envelope = {"kind", "schema", "table", "columnnames", "columnvalues", "oldkeys"}
+    for message in messages:
+        assert set(message) - {"_key"} == envelope
+        assert message["schema"] == DATABASE
+        assert message["table"] == table
+        assert message["_key"] == f"{DATABASE}.{table}".encode()
+
+    inserted = of_kind(messages, "insert")[0]
+    assert row_of(inserted) == {"id": 1, "customer": "ada", "amount": 100}
+    assert inserted["oldkeys"] == {}
+
+    updated = of_kind(messages, "update")[0]
+    assert row_of(updated) == {"id": 1, "customer": "ada", "amount": 250}
+    assert oldkeys_of(updated) == {"id": 1, "customer": "ada", "amount": 100}
+
+    deleted = of_kind(messages, "delete")[0]
+    assert deleted["columnnames"] == []
+    assert deleted["columnvalues"] == []
+    assert oldkeys_of(deleted) == {"id": 1, "customer": "ada", "amount": 250}
+
+    # Nothing from before the source started, and no positional placeholder anywhere.
+    assert not [m for m in messages if 99 in m["columnvalues"]]
+    for message in messages:
+        names = message["columnnames"] + message["oldkeys"].get("keynames", [])
+        assert names and not [n for n in names if n.startswith("UNKNOWN_COL")]
+
+
+def test_every_column_type_encodes_json_safely(mysql, mysql_server):
+    """The encoder is the one thing kept from the hardened connector: prove it."""
+    table = "lite_types"
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(
+        mysql,
+        f"CREATE TABLE {table} ("
+        "id INT PRIMARY KEY, flag BOOLEAN, small_unsigned TINYINT UNSIGNED, "
+        "amount DECIMAL(10,2), payload JSON, tags SET('a','b','c'), "
+        "status ENUM('new','done'), blob_col VARBINARY(16), when_at DATETIME, "
+        "dur TIME, ratio DOUBLE, empty_tags SET('x','y'))",
+    )
+
+    payload = '{"a": [1, 2], "b": "text"}'
+    source = make_source(mysql_server, table, {})
+    with RunningSource(source) as running:
+        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        execute(
+            mysql,
+            f"INSERT INTO {table} VALUES (1, TRUE, 200, 12.34, '{payload}', "
+            "'c,a', 'done', 0x0001FF, '2024-05-06 07:08:09', '10:20:30', 1.5, '')",
+        )
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=1), "the typed insert"
+        )
+
+    row = row_of(of_kind(messages, "insert")[0])
+    assert row["id"] == 1
+    assert row["flag"] == 1
+    assert row["small_unsigned"] == 200, "UNSIGNED needs binlog_row_metadata=FULL"
+    assert row["amount"] == "12.34"
+    assert row["payload"] == {"a": [1, 2], "b": "text"}
+    assert row["tags"] == "a,c"
+    assert row["status"] == "done"
+    assert row["blob_col"] == "AAH/"
+    assert row["when_at"] == "2024-05-06T07:08:09"
+    assert row["dur"] == "10:20:30"
+    assert row["ratio"] == 1.5
+    # An empty SET decodes to None, which this source does not distinguish from NULL.
+    assert row["empty_tags"] is None
+
+    # The whole change dict really is JSON, not just JSON-ish (`_key` is the harness's
+    # own addition: the serialized Kafka key, which is bytes by then).
+    message = dict(of_kind(messages, "insert")[0])
+    message.pop("_key")
+    json.dumps(message)
+
+
+def test_restart_resumes_and_delivers_the_downtime_window(mysql, mysql_server):
+    """Changes made while the source is stopped arrive after it restarts."""
+    table = "lite_downtime"
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(50))")
+
+    state: Dict[str, Any] = {}
+    position_key = f"binlog_position_{DATABASE}_{table}"
+
+    first = make_source(mysql_server, table, state)
+    with RunningSource(first) as running:
+        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        execute(mysql, f"INSERT INTO {table} VALUES (1, 'while-running')")
+        running.wait_for(lambda m: count_kinds(m, insert=1), "the live insert")
+
+    committed = state.get(position_key)
+    assert committed is not None, "the position must survive in state, not on disk"
+
+    # Downtime: the source is stopped, the table keeps changing.
+    execute(mysql, f"INSERT INTO {table} VALUES (2, 'during-downtime')")
+    execute(mysql, f"UPDATE {table} SET note = 'edited' WHERE id = 1")
+    execute(mysql, f"DELETE FROM {table} WHERE id = 2")
+
+    second = make_source(mysql_server, table, state)
+    with RunningSource(second) as running:
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=1, update=1, delete=1),
+            "the change events made during downtime",
+        )
+
+    assert [row_of(m) for m in of_kind(messages, "insert")] == [
+        {"id": 2, "note": "during-downtime"}
+    ]
+    updated = of_kind(messages, "update")[0]
+    assert row_of(updated) == {"id": 1, "note": "edited"}
+    assert oldkeys_of(updated) == {"id": 1, "note": "while-running"}
+    assert [oldkeys_of(m) for m in of_kind(messages, "delete")] == [
+        {"id": 2, "note": "during-downtime"}
+    ]
+
+    # The restart moved the position on rather than re-reading from the old one.
+    assert state[position_key] != committed
+
+
+def test_a_reconnect_before_the_first_commit_skips_nothing(mysql, mysql_server):
+    """
+    A dropped connection before the first commit must not lose the changes since start.
+
+    The only position in state is the anchor written at start-up, so the only resume
+    point is where this source started. A source that asks the server again instead
+    resumes past what it had already seen, with no error and nothing on the topic to
+    show it.
+
+    `max_buffer_size=2` makes the retry commit as soon as both changes are read, rather
+    than waiting out the long `commit_interval` that keeps the first commit from
+    landing before the drop.
+    """
+    table = "lite_reconnect"
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(50))")
+
+    state: Dict[str, Any] = {}
+    position_key = f"binlog_position_{DATABASE}_{table}"
+    source = make_source(
+        mysql_server,
+        table,
+        state,
+        harness=ReconnectingHarness,
+        commit_interval=10.0,
+        max_buffer_size=2,
+    )
+
+    with RunningSource(source) as running:
+        assert source.stream_open.wait(timeout=30.0), "the stream never opened"
+        anchor = state[position_key]
+        execute(mysql, f"INSERT INTO {table} VALUES (1, 'before-the-drop')")
+        source.may_read.set()
+
+        assert source.dropped.wait(timeout=30.0), "the stream never failed"
+        assert state[position_key] == anchor, "a batch was committed before the drop"
+        execute(mysql, f"INSERT INTO {table} VALUES (2, 'after-the-drop')")
+
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=2),
+            "both inserts to survive the reconnect",
+        )
+
+    assert [row_of(m) for m in of_kind(messages, "insert")] == [
+        {"id": 1, "note": "before-the-drop"},
+        {"id": 2, "note": "after-the-drop"},
+    ]
+
+
+def test_a_process_that_dies_before_its_first_commit_skips_nothing(mysql, mysql_server):
+    """
+    A deployment killed before its first commit must not cost its successor the window.
+
+    Nothing was produced, so the successor may replay - but it must not start later than
+    its predecessor did. `test_restart_resumes_and_delivers_the_downtime_window` is the
+    control: same code path, same downtime, and the only difference is whether a commit
+    ever landed.
+    """
+    table = "lite_early_death"
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(50))")
+
+    state: Dict[str, Any] = {}
+    first = make_source(mysql_server, table, state, harness=DyingHarness)
+    with pytest.raises(SystemExit):
+        with RunningSource(first):
+            assert first.stream_open.wait(timeout=30.0), "the stream never opened"
+            execute(mysql, f"INSERT INTO {table} VALUES (1, 'before-the-kill')")
+            first.may_read.set()
+
+    assert not first.received(), "the first source produced something before it died"
+
+    # Downtime: nothing is running, and the table keeps changing.
+    execute(mysql, f"INSERT INTO {table} VALUES (2, 'during-downtime')")
+
+    second = make_source(mysql_server, table, state)
+    with RunningSource(second) as running:
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=2),
+            "the changes since the dead process started",
+        )
+
+    assert [row_of(m) for m in of_kind(messages, "insert")] == [
+        {"id": 1, "note": "before-the-kill"},
+        {"id": 2, "note": "during-downtime"},
+    ]
+
+
+def test_a_statement_split_across_events_survives_a_restart(mysql, mysql_server):
+    """
+    A statement whose rows MySQL splits across several events must arrive whole.
+
+    MySQL emits one TableMapEvent and then a row event per `binlog_row_event_max_size`
+    chunk, so a statement changing more rows than `max_buffer_size` is committed
+    part-way through it. A reader reopened there has no table map for the rows that
+    follow and discards them without raising, which takes them off the topic with
+    nothing in the log to say so.
+    """
+    table = "lite_bulk"
+    rows = 5000
+    sentinel = rows + 1
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(20))")
+
+    state: Dict[str, Any] = {}
+    first = make_source(mysql_server, table, state, harness=OneCommitHarness)
+    with RunningSource(first) as running:
+        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        values = ", ".join(f"({i}, 'bulk')" for i in range(1, rows + 1))
+        execute(mysql, f"INSERT INTO {table} VALUES {values}")
+        assert first.committed.wait(timeout=60.0), "the source committed no changes"
+
+    execute(mysql, f"INSERT INTO {table} VALUES ({sentinel}, 'sentinel')")
+
+    second = make_source(mysql_server, table, state)
+    with RunningSource(second) as running:
+        running.wait_for(
+            lambda m: any(row_of(x)["id"] == sentinel for x in of_kind(m, "insert")),
+            "the successor to read past the bulk statement",
+            60.0,
+        )
+
+    delivered = Counter(
+        row_of(message)["id"]
+        for message in of_kind(first.received() + second.received(), "insert")
+    )
+    missing = [i for i in range(1, rows + 1) if not delivered[i]]
+    assert not missing, (
+        f"{len(missing)} of the statement's {rows} rows never reached the topic, "
+        f"from id {missing[0]} to id {missing[-1]}"
+    )
+    assert delivered[sentinel] == 1
+    assert max(delivered.values()) == 1, "a row was delivered more than once"
+
+
+def test_a_scan_bound_landing_on_a_table_map_reads_the_statement_whole(
+    mysql, mysql_server, monkeypatch
+):
+    """
+    A scan bound that trips on a statement's TableMapEvent must not end the read there.
+
+    `fetchone` checks the bound (`binlogstream.py:672`) before it filters the event out
+    as one the caller did not ask for (`:723`), so a bound tripping on the TableMapEvent
+    ends the read with nothing delivered and the position between the table map and the
+    statement's first row event - which is where the previous fix left `STMT_END_F`
+    unable to help, because that event never reaches the loop. A reader reopened there
+    has no map for the rows that follow and discards them without raising.
+
+    The shipped bound is triggered by the wall clock, which cannot be aimed at one
+    event; the stand-in below is the shipped bound with a position for a trigger, so
+    the trip lands on the table map every run instead of once in a while.
+    """
+    table = "lite_table_map"
+    rows = 5000
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(20))")
+
+    source = make_source(mysql_server, table, {})
+    start = source._start_position()
+    values = ", ".join(f"({i}, 'bulk')" for i in range(1, rows + 1))
+    execute(mysql, f"INSERT INTO {table} VALUES {values}")
+
+    table_map_end, row_event_ends = statement_positions(mysql_server, table, start)
+    statement_end = row_event_ends[-1]
+    assert len(row_event_ends) > 1, (
+        f"{rows} rows came out as one row event: the statement must be split for this "
+        "test to have a mid-statement position to land on"
+    )
+
+    class TripOnTableMap(mysql_cdc_lite._ScanBound):
+        """The shipped bound, triggered by a position rather than by the clock."""
+
+        def __le__(self, log_pos: object) -> bool:
+            return isinstance(log_pos, int) and log_pos >= table_map_end
+
+    monkeypatch.setattr(mysql_cdc_lite, "_ScanBound", TripOnTableMap)
+    source._running = True
+    source._position = start
+    # The deadline really has passed: only *where* the reader notices is the stand-in's.
+    source._last_commit_at = time.monotonic() - source._commit_interval
+    source._stream = source._open_stream()
+    try:
+        source._read_changes()
+        pending = source._pending
+        read_first = list(source._buffer)
+    finally:
+        source._drop_stream()
+    monkeypatch.undo()
+
+    successor = make_source(mysql_server, table, {}, name=f"{table}_successor")
+    successor._running = True
+    successor._position = pending
+    successor._last_commit_at = time.monotonic() + 3600.0
+    successor._stream = successor._open_stream()
+    try:
+        successor._read_changes()
+        read_second = list(successor._buffer)
+    finally:
+        successor._drop_stream()
+
+    delivered = Counter(row_of(change)["id"] for change in read_first + read_second)
+    missing = [i for i in range(1, rows + 1) if not delivered[i]]
+    assert not missing, (
+        f"{len(missing)} of the statement's {rows} rows were never read, from id "
+        f"{missing[0]} to id {missing[-1]}: the read stopped at {pending}, and the "
+        f"statement runs from its table map at {table_map_end} to {statement_end}"
+    )
+    assert pending is not None and pending[1] >= statement_end, (
+        f"the read stopped at {pending}, inside the statement: its table map ends at "
+        f"{table_map_end} and its last row event at {statement_end}"
+    )
+    assert max(delivered.values()) == 1, "a row was read more than once"
+
+
+def test_stop_drains_the_buffer(mysql, mysql_server):
+    """A stop() with changes still buffered produces them instead of dropping them."""
+    table = "lite_drain"
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(50))")
+
+    # Long enough that a read lands in the buffer and sits there until stop().
+    source = make_source(mysql_server, table, {}, commit_interval=5.0)
+    running = RunningSource(source)
+    with running:
+        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        for i in range(3):
+            execute(mysql, f"INSERT INTO {table} VALUES ({i}, 'buffered-{i}')")
+
+        assert source.buffered.wait(timeout=30.0), "the source never buffered the rows"
+        assert not source.received(), "the rows were produced before stop() was asked"
+
+    messages = source.received()
+    assert count_kinds(messages, insert=3), messages
+    assert [row_of(m) for m in of_kind(messages, "insert")] == [
+        {"id": i, "note": f"buffered-{i}"} for i in range(3)
+    ]
+
+
+def test_minimal_row_metadata_is_silently_wrong(mysql, mysql_server, root_connection):
+    """
+    What the operator gets when the docs page's `binlog_row_metadata=FULL` is not met.
+
+    This is evidence for the docs page, not a property of the source: the source does
+    not check this setting, so the point is to record how the failure shows up.
+    """
+    table = "lite_minimal"
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(
+        mysql,
+        f"CREATE TABLE {table} (id INT PRIMARY KEY, small_unsigned TINYINT UNSIGNED, "
+        "tags SET('a','b'), status ENUM('new','done'))",
+    )
+    execute(root_connection, "SET GLOBAL binlog_row_metadata = MINIMAL")
+    execute(root_connection, "FLUSH BINARY LOGS")
+
+    source = make_source(mysql_server, table, {})
+    with RunningSource(source) as running:
+        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        execute(mysql, f"INSERT INTO {table} VALUES (1, 200, 'a,b', 'done')")
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=1), "the insert under MINIMAL metadata"
+        )
+
+    observed = dict(of_kind(messages, "insert")[0])
+    observed.pop("_key")
+    print("\nMINIMAL binlog_row_metadata produces:", json.dumps(observed, indent=2))
+    assert observed["columnnames"] == [
+        "UNKNOWN_COL0",
+        "UNKNOWN_COL1",
+        "UNKNOWN_COL2",
+        "UNKNOWN_COL3",
+    ]
+    assert observed["columnvalues"] == [1, -56, None, None]
+
+
+def test_minimal_row_image_truncates_an_update(mysql_server, root_connection):
+    """
+    What the operator gets when the docs page's `binlog_row_image=FULL` is not met.
+
+    Also evidence for the docs page. `binlog_row_image` has session scope, so the
+    writer below is opened after the global is lowered.
+    """
+    table = "lite_partial"
+    execute(root_connection, "SET GLOBAL binlog_row_image = MINIMAL")
+    writer = pymysql.connect(
+        host=mysql_server["host"],
+        port=mysql_server["port"],
+        user=CDC_USER,
+        password=CDC_PASSWORD,
+        database=DATABASE,
+        autocommit=True,
+    )
+    try:
+        execute(writer, f"DROP TABLE IF EXISTS {table}")
+        execute(
+            writer,
+            f"CREATE TABLE {table} (id INT PRIMARY KEY, kept VARCHAR(50), "
+            "changed VARCHAR(50))",
+        )
+        execute(writer, f"INSERT INTO {table} VALUES (1, 'keep-me', 'before')")
+
+        source = make_source(mysql_server, table, {})
+        with RunningSource(source) as running:
+            assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+            execute(writer, f"UPDATE {table} SET changed = 'after' WHERE id = 1")
+            messages = running.wait_for(
+                lambda m: count_kinds(m, update=1), "the update under MINIMAL row image"
+            )
+    finally:
+        writer.close()
+
+    observed = dict(of_kind(messages, "update")[0])
+    observed.pop("_key")
+    print("\nMINIMAL binlog_row_image produces:", json.dumps(observed, indent=2))
+    # The truncated row is shaped exactly like a full one: every column still named,
+    # the untouched ones null, and the primary key gone from the after-image.
+    assert observed["columnnames"] == ["id", "kept", "changed"]
+    assert observed["columnvalues"] == [None, None, "after"]
+    assert oldkeys_of(observed) == {"id": 1, "kept": None, "changed": None}
+
+
+def test_the_documented_grant_set_is_exactly_what_is_needed(
+    mysql_server, root_connection
+):
+    """
+    Evidence for the docs page's grant line.
+
+    REPLICATION SLAVE and REPLICATION CLIENT alone are refused, because `setup()`
+    connects with the database as its default and neither is a schema privilege.
+    Adding SELECT on the one table is enough - the stream itself reads no rows.
+    """
+    table = "lite_grants"
+    execute(root_connection, f"DROP TABLE IF EXISTS {table}")
+    execute(
+        root_connection,
+        f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(50))",
+    )
+    execute(root_connection, "DROP USER IF EXISTS 'cdc_min'@'%'")
+    execute(root_connection, "CREATE USER 'cdc_min'@'%' IDENTIFIED BY 'pw'")
+    execute(
+        root_connection,
+        "GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'cdc_min'@'%'",
+    )
+    execute(root_connection, "FLUSH PRIVILEGES")
+
+    without_select = make_source(mysql_server, table, {}, user="cdc_min", password="pw")
+    with pytest.raises(pymysql.err.OperationalError, match="Access denied"):
+        without_select.setup()
+
+    execute(root_connection, f"GRANT SELECT ON {DATABASE}.{table} TO 'cdc_min'@'%'")
+    execute(root_connection, "FLUSH PRIVILEGES")
+
+    source = make_source(mysql_server, table, {}, user="cdc_min", password="pw")
+    with RunningSource(source) as running:
+        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        execute(root_connection, f"INSERT INTO {table} VALUES (1, 'minimal-grants')")
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=1), "the insert under the documented grants"
+        )
+
+    assert row_of(of_kind(messages, "insert")[0]) == {"id": 1, "note": "minimal-grants"}
+
+
+def test_a_purged_position_kills_the_source(mysql, mysql_server, root_connection):
+    """
+    Evidence for the docs page: what the operator sees when retention is too short.
+
+    There is no snapshot to fall back on, so the source has nothing to do but exit
+    with the position it cannot reach, and be restarted into the same failure.
+    """
+    table = "lite_purged"
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(50))")
+
+    state: Dict[str, Any] = {}
+    first = make_source(mysql_server, table, state)
+    with RunningSource(first) as running:
+        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        execute(mysql, f"INSERT INTO {table} VALUES (1, 'before-the-purge')")
+        running.wait_for(lambda m: count_kinds(m, insert=1), "the live insert")
+
+    committed = state[f"binlog_position_{DATABASE}_{table}"]
+
+    execute(root_connection, "FLUSH BINARY LOGS")
+    with root_connection.cursor() as cursor:
+        cursor.execute("SHOW BINARY LOGS")
+        newest = str(cursor.fetchall()[-1][0])
+    execute(root_connection, f"PURGE BINARY LOGS TO '{newest}'")
+    assert newest != committed["log_file"], "the committed file was not purged"
+
+    second = make_source(mysql_server, table, state)
+    with pytest.raises(AssertionError, match="no longer holds the binlog position"):
+        with RunningSource(second) as running:
+            running.wait_for(lambda m: False, "a change event that never comes", 45.0)
+
+
+def test_a_missing_table_fails_at_setup(mysql_server):
+    """A typo'd table name is a start-up error, not silence."""
+    source = make_source(mysql_server, "no_such_table", {})
+    with pytest.raises(MySqlCdcLiteError, match="has no table no_such_table"):
+        source.setup()
