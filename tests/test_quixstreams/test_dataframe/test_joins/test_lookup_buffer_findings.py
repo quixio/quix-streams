@@ -488,7 +488,7 @@ class TestPendingIndexScaling:
             )
             with transaction() as tx:
                 index = PendingIndex(tx)
-                result = sweeper.sweep(tx, index, 0, self.BASE_MS, skip=None)
+                result = sweeper.sweep(tx, index, self.BASE_MS, skip=None)
                 index.flush()
             monkeypatch.undo()
 
@@ -649,7 +649,7 @@ class TestChangelogNotOptionalClaimIsNotEnforced:
 class TestBookkeepingLogsGrowUnbounded:
     """
     `BufferBookkeeping._drop_log` / `_overflow_log` (buffer_bookkeeping.py:
-    38-39) gain one entry per distinct prefix that has ever dropped or
+    23-24) gain one entry per distinct prefix that has ever dropped or
     overflowed. Nothing in the module ever pops an entry - not on release,
     not on sweep, not ever - so a long-running deployment that cycles through
     many distinct unconfigured keys over its lifetime (e.g. per-device IDs

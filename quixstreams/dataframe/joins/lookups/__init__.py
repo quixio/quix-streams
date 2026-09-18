@@ -1,5 +1,5 @@
 from .base import BaseField, BaseLookup
-from .buffer import LookupBuffer, LookupBufferOverflowError
+from .buffer import LookupBuffer
 from .quix_configuration_service import (
     QuixConfigurationService,
     QuixConfigurationServiceBytesField,
@@ -11,7 +11,6 @@ __all__ = [
     "BaseField",
     "BaseLookup",
     "LookupBuffer",
-    "LookupBufferOverflowError",
     "QuixConfigurationService",
     "QuixConfigurationServiceField",
     "SQLiteLookup",

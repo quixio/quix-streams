@@ -41,11 +41,7 @@ from .buffer_tick import BufferTicker
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
-__all__ = ("BufferOperator", "LookupBufferOverflowError")
-
-
-class LookupBufferOverflowError(Exception):
-    """Raised when a key is full and the buffer's `on_overflow` is `"raise"`."""
+__all__ = ("BufferOperator",)
 
 
 class BufferOperator:
@@ -63,7 +59,6 @@ class BufferOperator:
         is_resolved: Callable[[dict[str, Any]], bool],
         on_timeout: Literal["emit", "drop"],
         max_buffered_per_key: int,
-        on_overflow: Literal["drop-newest", "raise"],
     ) -> None:
         self._dataframe = dataframe
         self._lookup = lookup
@@ -74,7 +69,6 @@ class BufferOperator:
         self._is_resolved = is_resolved
         self._emit_on_timeout = on_timeout == "emit"
         self._max_buffered_per_key = max_buffered_per_key
-        self._raise_on_overflow = on_overflow == "raise"
 
         self._bookkeeping = BufferBookkeeping()
         self._sweeper = BufferSweeper(
@@ -86,7 +80,6 @@ class BufferOperator:
             store_name=store_name,
             grace_ms=grace_ms,
             sweeper=self._sweeper,
-            bookkeeping=self._bookkeeping,
         )
 
     def bind_downstream(self, downstream: VoidExecutor) -> None:
@@ -118,8 +111,6 @@ class BufferOperator:
         :return: What to send downstream: other keys' settled records first,
             then this key's released ones in arrival order, then this record
             itself if it is leaving now.
-        :raises LookupBufferOverflowError: if the key is full and `on_overflow`
-            is `"raise"`.
         """
         now_ms = int(time.time() * 1000)
         cutoff = now_ms - self._grace_ms
@@ -139,7 +130,7 @@ class BufferOperator:
         )
         resolved = bool(self._is_resolved(value))
 
-        settled = self._sweeper.sweep(transaction, index, partition, cutoff, prefix)
+        settled = self._sweeper.sweep(transaction, index, cutoff, prefix)
         out = settled.emissions
 
         marker = index.get(prefix)
@@ -170,7 +161,7 @@ class BufferOperator:
         out.extend(
             self._take_timed_out(
                 transaction=transaction,
-                partition=partition,
+                index=index,
                 prefix=prefix,
                 key=key,
                 cutoff=cutoff,
@@ -202,7 +193,6 @@ class BufferOperator:
             self._release(
                 transaction=transaction,
                 index=index,
-                partition=partition,
                 prefix=prefix,
                 key=key,
                 cutoff=cutoff,
@@ -219,7 +209,6 @@ class BufferOperator:
         *,
         transaction: TimestampedPartitionTransaction,
         index: PendingIndex,
-        partition: int,
         prefix: bytes,
         key: Any,
         cutoff: int,
@@ -273,7 +262,7 @@ class BufferOperator:
             index.drop(prefix)
         else:
             index.set_earliest(prefix, earliest)
-        self._bookkeeping.set_count(partition, prefix, plan.retained_count)
+        index.set_count(prefix, plan.retained_count)
 
         log_release(
             key=key,
@@ -287,7 +276,7 @@ class BufferOperator:
         self,
         *,
         transaction: TimestampedPartitionTransaction,
-        partition: int,
+        index: PendingIndex,
         prefix: bytes,
         key: Any,
         cutoff: int,
@@ -298,7 +287,7 @@ class BufferOperator:
                 end=cutoff + 1,
                 prefix=prefix,
             )
-            self._bookkeeping.decrement(partition, prefix, dropped)
+            index.decrement(prefix, dropped)
             self._bookkeeping.log_dropped(prefix, key, dropped)
             return []
 
@@ -307,7 +296,7 @@ class BufferOperator:
             return []
 
         deleted = transaction.delete_interval(start=0, end=cutoff + 1, prefix=prefix)
-        self._bookkeeping.decrement(partition, prefix, deleted)
+        index.decrement(prefix, deleted)
         return [emit_tuple(envelope, key) for envelope in envelopes]
 
     def _buffer(
@@ -325,14 +314,8 @@ class BufferOperator:
         topic: Optional[str],
         offset: int,
     ) -> None:
-        count = self._bookkeeping.count(partition, prefix)
+        count = index.count(prefix)
         if count >= self._max_buffered_per_key:
-            if self._raise_on_overflow:
-                raise LookupBufferOverflowError(
-                    f"Lookup buffer for key {key!r} holds {count} records, its "
-                    f"`max_buffered_per_key` limit. Raise the limit, lower "
-                    f'`grace_ms`, or use `on_overflow="drop-newest"`.'
-                )
             self._bookkeeping.log_overflow(prefix, key, count)
             return
 
@@ -349,8 +332,8 @@ class BufferOperator:
             value=envelope,
             prefix=prefix,
         )
-        self._bookkeeping.set_count(partition, prefix, count + 1)
         index.ensure(prefix, key, receive_ms)
+        index.set_count(prefix, count + 1)
         self._ticker.note_deadline(partition, receive_ms + self._grace_ms)
 
     def _get_transaction(self, partition: int) -> TimestampedPartitionTransaction:

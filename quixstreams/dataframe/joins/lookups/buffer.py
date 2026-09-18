@@ -28,18 +28,17 @@ from quixstreams.models.topics import Topic
 from quixstreams.models.topics.manager import TopicManager
 
 from .base import BaseField, BaseLookup
-from .buffer_operator import BufferOperator, LookupBufferOverflowError
+from .buffer_operator import BufferOperator
 from .quix_configuration_service.models import RAISE_ON_MISSING
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
-__all__ = ("LookupBuffer", "LookupBufferOverflowError", "OnOverflow", "OnTimeout")
+__all__ = ("LookupBuffer", "OnTimeout")
 
 logger = logging.getLogger(__name__)
 
 OnTimeout = Literal["emit", "drop"]
-OnOverflow = Literal["drop-newest", "raise"]
 
 SUB_SECOND_GRACE_WARN_MS = 1000
 
@@ -80,7 +79,6 @@ class LookupBuffer:
         is_resolved: Callable[[dict[str, Any]], bool],
         on_timeout: OnTimeout = "emit",
         max_buffered_per_key: int = 10_000,
-        on_overflow: OnOverflow = "drop-newest",
         store_name: str = "lookup-buffer",
     ) -> None:
         """
@@ -97,15 +95,13 @@ class LookupBuffer:
         :param max_buffered_per_key: Cap on records held per **message** key,
             including the null key an unkeyed topic shares per partition. Also a
             latency knob: one release re-joins a key's whole surviving buffer.
-        :param on_overflow: What a record arriving at a full key gets:
-            `"drop-newest"` discards it and logs, `"raise"` raises
-            `LookupBufferOverflowError`. Such a record never entered the buffer,
-            so `on_timeout` does not apply to it.
+            A record arriving at a full key is dropped and logged; it never
+            entered the buffer, so `on_timeout` does not apply to it.
         :param store_name: Name of the state store holding the buffer. Change it
             if two buffered `join_lookup` calls share one stream.
         :raises ValueError: on a non-positive `grace_ms`, a non-callable
-            `is_resolved`, an unknown `on_timeout` or `on_overflow`, or a
-            `max_buffered_per_key` below 1.
+            `is_resolved`, an unknown `on_timeout`, or a `max_buffered_per_key`
+            below 1.
         """
         self._grace_ms = ensure_milliseconds(grace_ms)
         if self._grace_ms <= 0:
@@ -135,19 +131,12 @@ class LookupBuffer:
                 f"Provide one of {', '.join(get_args(OnTimeout))}."
             )
 
-        if on_overflow not in get_args(OnOverflow):
-            raise ValueError(
-                f'Invalid "on_overflow" value: {on_overflow}. '
-                f"Provide one of {', '.join(get_args(OnOverflow))}."
-            )
-
         if max_buffered_per_key < 1:
             raise ValueError("`max_buffered_per_key` must be >= 1")
 
         self._is_resolved = is_resolved
         self._on_timeout: OnTimeout = on_timeout
         self._max_buffered_per_key = max_buffered_per_key
-        self._on_overflow: OnOverflow = on_overflow
         self._store_name = store_name
 
     @property
@@ -242,5 +231,4 @@ class LookupBuffer:
             is_resolved=self._is_resolved,
             on_timeout=self._on_timeout,
             max_buffered_per_key=self._max_buffered_per_key,
-            on_overflow=self._on_overflow,
         )

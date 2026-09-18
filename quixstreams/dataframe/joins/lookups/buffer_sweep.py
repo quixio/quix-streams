@@ -63,7 +63,6 @@ class BufferSweeper:
         self,
         transaction: TimestampedPartitionTransaction,
         index: PendingIndex,
-        partition: int,
         cutoff: int,
         skip: Optional[bytes],
         prefix_budget: int = SWEEP_BUDGET,
@@ -73,7 +72,6 @@ class BufferSweeper:
 
         :param transaction: The store transaction of the partition being swept.
         :param index: The pending index, on that same transaction.
-        :param partition: The partition being swept.
         :param cutoff: Arrival time at or below which a record has timed out.
         :param skip: A prefix the caller settles itself, or `None`.
         :param prefix_budget: Cap on keys settled in this call.
@@ -109,7 +107,6 @@ class BufferSweeper:
             emit_budget -= self._sweep_prefix(
                 transaction=transaction,
                 index=index,
-                partition=partition,
                 prefix=prefix,
                 kind=entry[1],
                 cutoff=cutoff,
@@ -130,7 +127,6 @@ class BufferSweeper:
         *,
         transaction: TimestampedPartitionTransaction,
         index: PendingIndex,
-        partition: int,
         prefix: bytes,
         kind: str,
         cutoff: int,
@@ -145,14 +141,13 @@ class BufferSweeper:
                 end=cutoff + 1,
                 prefix=prefix,
             )
-            self._bookkeeping.decrement(partition, prefix, dropped)
             self._bookkeeping.log_dropped(prefix, key, dropped)
-            self._reindex(transaction, index, partition, prefix, cutoff)
+            self._reindex(transaction, index, prefix, cutoff)
             return 0
 
         envelopes = transaction.get_interval(start=0, end=cutoff + 1, prefix=prefix)
         if not envelopes:
-            self._reindex(transaction, index, partition, prefix, cutoff)
+            self._reindex(transaction, index, prefix, cutoff)
             return 0
 
         # The delete below addresses milliseconds, so the cut grows to the end of
@@ -176,25 +171,24 @@ class BufferSweeper:
             end=envelopes[cut - 1][ENVELOPE_RECEIVED] + 1,
             prefix=prefix,
         )
-        self._bookkeeping.decrement(partition, prefix, deleted)
+        index.decrement(prefix, deleted)
 
         if cut < len(envelopes):
             index.set_earliest(prefix, envelopes[cut][ENVELOPE_RECEIVED])
         else:
-            self._reindex(transaction, index, partition, prefix, cutoff)
+            self._reindex(transaction, index, prefix, cutoff)
         return cut
 
     def _reindex(
         self,
         transaction: TimestampedPartitionTransaction,
         index: PendingIndex,
-        partition: int,
         prefix: bytes,
         cutoff: int,
     ) -> None:
-        # Rebuild the marker and the count from the store itself. This is the
-        # repair path for a marker that claims an arrival no record is at, so it
-        # reads the key's whole surviving buffer.
+        # Rebuild the marker from the store itself. This is the repair path for
+        # a marker that claims an arrival no record is at, so it reads the key's
+        # whole surviving buffer.
         remaining = transaction.get_interval(
             start=cutoff + 1,
             end=MAX_RECEIVE_MS,
@@ -202,7 +196,6 @@ class BufferSweeper:
         )
         if remaining:
             index.set_earliest(prefix, remaining[0][ENVELOPE_RECEIVED])
-            self._bookkeeping.set_count(partition, prefix, len(remaining))
+            index.set_count(prefix, len(remaining))
         else:
             index.drop(prefix)
-            self._bookkeeping.set_count(partition, prefix, 0)

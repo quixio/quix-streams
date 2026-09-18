@@ -1,12 +1,4 @@
-"""
-Per-key counts and rate-limited warnings for the lookup buffer.
-
-The counts are in-memory and per partition: they keep the
-`max_buffered_per_key` check off the store, and a stale one self-corrects the
-next time the key is swept, through `BufferSweeper._reindex`. They are dropped
-on revoke by `BufferTicker._resync`, so a re-assigned partition does not judge
-overflow against what it held under a previous assignment.
-"""
+"""Rate-limited warnings for the lookup buffer."""
 
 import logging
 import time
@@ -25,36 +17,11 @@ MAX_RATE_LIMITED_KEYS = 1024
 
 
 class BufferBookkeeping:
-    """Counts what each key holds and rate-limits what the buffer logs."""
+    """Rate-limits what the buffer logs."""
 
     def __init__(self) -> None:
-        self._counts: dict[int, dict[bytes, int]] = {}
         self._drop_log: OrderedDict[bytes, list] = OrderedDict()
         self._overflow_log: OrderedDict[bytes, list] = OrderedDict()
-
-    def count(self, partition: int, prefix: bytes) -> int:
-        """:return: Records held for a key. Reading never creates state."""
-        return self._counts.get(partition, {}).get(prefix, 0)
-
-    def forget(self, partition: int) -> None:
-        """Drop every count for a partition, on revoke."""
-        self._counts.pop(partition, None)
-
-    def set_count(self, partition: int, prefix: bytes, count: int) -> None:
-        """:param count: Records now held for the key. Zero removes the entry."""
-        if not count:
-            counts = self._counts.get(partition)
-            if counts is not None:
-                counts.pop(prefix, None)
-            return
-        self._counts.setdefault(partition, {})[prefix] = count
-
-    def decrement(self, partition: int, prefix: bytes, removed: int) -> None:
-        """:param removed: Records that left the store. Clamped at zero."""
-        if not removed:
-            return
-        current = self.count(partition, prefix)
-        self.set_count(partition, prefix, max(current - removed, 0))
 
     def log_dropped(self, prefix: bytes, key: Any, dropped: int) -> None:
         if not dropped:

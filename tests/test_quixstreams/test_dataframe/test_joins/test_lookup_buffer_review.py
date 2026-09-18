@@ -2,7 +2,7 @@
 Red-first reproduction tests for the external review of PR #1110.
 
 Each class names the finding it reproduces and states how it fails on the
-unfixed code. The numbering is the review's.
+unfixed code. The numbering is the review's; 8 came from its second round.
 
 1. The deadline tick cached `NO_DEADLINE` for a partition it observed *before*
    changelog recovery filled it, and `_resync`'s identity check could never see
@@ -23,6 +23,9 @@ unfixed code. The numbering is the review's.
    records tagged with one origin.
 7. `_release()` read a key's whole surviving buffer with no limit and ran
    `lookup.join` and `is_resolved` on every envelope in one callback.
+8. `max_buffered_per_key` counted in memory while the records it counted lived
+   in the checkpoint's store transaction, so a checkpoint discarded under sink
+   backpressure left the counts standing over writes that never landed.
 """
 
 from typing import Any, Optional
@@ -31,7 +34,6 @@ from unittest.mock import Mock, patch
 import httpx
 import pytest
 
-from quixstreams.dataframe.joins.lookups.buffer_bookkeeping import BufferBookkeeping
 from quixstreams.dataframe.joins.lookups.buffer_envelope import encode_envelope
 from quixstreams.dataframe.joins.lookups.buffer_state import (
     PendingIndex,
@@ -320,19 +322,18 @@ class TestFinding4EarliestMarker:
 
 class TestFinding5ReassignedPartition:
     """
-    Per-key counts belong to an assignment, not to a partition number.
+    A per-key count belongs to the records it counts, so it is read from the
+    index marker the partition's changelog carries.
 
-    Without the fix the count survives the revoke, and the first record after
-    the re-assignment is judged against a buffer that no longer exists:
-    `LookupBufferOverflowError` against an empty store.
+    Without the fix the count was in memory on the operator and survived the
+    revoke, so the first record after the re-assignment was judged against a
+    buffer that no longer exists: dropped as an overflow against an empty store.
     """
 
     def test_a_reassigned_partition_starts_from_an_empty_count(
         self, clock, tick_driver
     ):
-        driver = tick_driver(
-            buffer=make_buffer(max_buffered_per_key=2, on_overflow="raise")
-        )
+        driver = tick_driver(buffer=make_buffer(max_buffered_per_key=2))
         for timestamp in (1, 2):
             assert driver.send("D", timestamp=timestamp) == []
         assert len(driver.stored("D")) == 2
@@ -350,22 +351,6 @@ class TestFinding5ReassignedPartition:
 
         assert driver.send("D", timestamp=3) == []
         assert len(driver.stored("D")) == 1
-
-    def test_reading_a_count_does_not_remember_the_partition(self):
-        bookkeeping = BufferBookkeeping()
-
-        assert bookkeeping.count(7, b"D") == 0
-        assert bookkeeping._counts == {}
-
-    def test_forget_drops_every_key_of_a_partition(self):
-        bookkeeping = BufferBookkeeping()
-        bookkeeping.set_count(7, b"D", 3)
-        bookkeeping.set_count(8, b"D", 4)
-
-        bookkeeping.forget(7)
-
-        assert bookkeeping.count(7, b"D") == 0
-        assert bookkeeping.count(8, b"D") == 4
 
 
 class TestFinding6EmissionOrigin:
@@ -400,3 +385,39 @@ class TestFinding6EmissionOrigin:
 
         assert [record[2] for record in emitted] == [1, 2]
         assert [context.offset for context in driver.contexts] == [10, 11]
+
+
+class TestFinding8DiscardedCheckpoint:
+    """
+    A checkpoint that is discarded instead of flushed takes the withheld records
+    with it, so it has to take their count with it too.
+
+    Without the fix the count is an in-memory dict on the operator: the replay
+    of the two discarded records is counted on top of them, and the third record
+    is refused by a cap of 3 while the store holds two.
+    """
+
+    def test_a_replayed_record_is_not_counted_against_a_discarded_write(
+        self, clock, tick_driver
+    ):
+        driver = tick_driver(buffer=make_buffer(max_buffered_per_key=3))
+        for timestamp in (1, 2):
+            clock.advance_ms(1)
+            assert driver.send("D", timestamp=timestamp) == []
+        assert len(driver.stored("D")) == 2
+
+        # What sink backpressure does: `Checkpoint.commit` seeks the consumer
+        # back to the offsets this checkpoint started at and returns before the
+        # stores are flushed, and `ProcessingContext.commit_checkpoint` starts a
+        # new checkpoint over the discarded writes either way.
+        driver.sdf.processing_context.init_checkpoint()
+        assert driver.stored("D") == [], (
+            "test setup assumption failed: the discarded checkpoint must take "
+            "the withheld records with it"
+        )
+
+        for timestamp in (1, 2, 3):
+            clock.advance_ms(1)
+            assert driver.send("D", timestamp=timestamp) == []
+
+        assert [envelope["t"] for envelope in driver.stored("D")] == [1, 2, 3]

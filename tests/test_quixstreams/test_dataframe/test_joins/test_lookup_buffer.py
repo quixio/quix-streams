@@ -27,9 +27,6 @@ import pytest
 from quixstreams.dataframe.joins import lookups
 from quixstreams.dataframe.joins.lookups import LookupBuffer
 from quixstreams.dataframe.joins.lookups.base import BaseLookup
-from quixstreams.dataframe.joins.lookups.buffer_operator import (
-    LookupBufferOverflowError,
-)
 from quixstreams.dataframe.joins.lookups.buffer_state import (
     PendingIndex,
     prefix_for_key,
@@ -215,10 +212,6 @@ class TestLookupBufferConstruction:
     def test_invalid_on_timeout(self):
         with pytest.raises(ValueError, match="on_timeout"):
             make_buffer(on_timeout="explode")
-
-    def test_invalid_on_overflow(self):
-        with pytest.raises(ValueError, match="on_overflow"):
-            make_buffer(on_overflow="explode")
 
     def test_max_buffered_per_key_must_be_positive(self):
         with pytest.raises(ValueError, match="max_buffered_per_key"):
@@ -509,9 +502,7 @@ class TestSweep:
 class TestOverflow:
     def test_drop_newest_bounds_the_buffer(self, clock, buffered):
         """T11: overflowed records are dropped and never emitted."""
-        driver = buffered(
-            buffer=make_buffer(max_buffered_per_key=3, on_overflow="drop-newest")
-        )
+        driver = buffered(buffer=make_buffer(max_buffered_per_key=3))
 
         for timestamp in range(1, 7):
             clock.advance_ms(1)
@@ -524,18 +515,6 @@ class TestOverflow:
         result = driver.send("D", timestamp=7)
 
         assert [timestamp for _, _, timestamp, _ in result] == [1, 2, 3, 7]
-
-    def test_raise_fails_loudly(self, clock, buffered):
-        driver = buffered(
-            buffer=make_buffer(max_buffered_per_key=1, on_overflow="raise")
-        )
-
-        clock.advance_ms(1)
-        assert driver.send("D", timestamp=1) == []
-
-        clock.advance_ms(1)
-        with pytest.raises(LookupBufferOverflowError, match="max_buffered_per_key"):
-            driver.send("D", timestamp=2)
 
 
 class TestDurability:

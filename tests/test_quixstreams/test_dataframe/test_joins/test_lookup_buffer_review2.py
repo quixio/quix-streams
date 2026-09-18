@@ -181,7 +181,7 @@ class TestStaleQueueEntryIsRepairedNotDropped:
                 "test setup assumption failed: the sweep must find the stale "
                 "entry due"
             )
-            result = self._sweeper().sweep(tx, sweeping, 0, self.CUTOFF, skip=None)
+            result = self._sweeper().sweep(tx, sweeping, self.CUTOFF, skip=None)
             sweeping.flush()
 
         assert result.swept == 0
@@ -195,7 +195,7 @@ class TestStaleQueueEntryIsRepairedNotDropped:
                 f"key can make the sweep or the tick look at it again."
             )
             assert fresh.due(self.MARKER_MS, limit=8) == [[encoded, self.MARKER_MS]]
-            assert fresh.entry(encoded) == [self.MARKER_MS, "s"]
+            assert fresh.entry(encoded) == [self.MARKER_MS, "s", 0]
 
     def test_a_repair_does_not_resurrect_a_dropped_marker(
         self, transaction: Any
@@ -217,7 +217,7 @@ class TestStaleQueueEntryIsRepairedNotDropped:
 
         with transaction() as tx:
             sweeping = PendingIndex(tx)
-            self._sweeper().sweep(tx, sweeping, 0, self.CUTOFF, skip=None)
+            self._sweeper().sweep(tx, sweeping, self.CUTOFF, skip=None)
             sweeping.flush()
 
         with transaction() as tx:

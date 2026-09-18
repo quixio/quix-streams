@@ -17,7 +17,6 @@ from quixstreams.models.messagecontext import MessageContext
 from quixstreams.state.base import Store, StorePartition
 from quixstreams.state.rocksdb.timestamped import TimestampedPartitionTransaction
 
-from .buffer_bookkeeping import BufferBookkeeping
 from .buffer_state import MAX_RECEIVE_MS, PendingIndex
 from .buffer_sweep import BufferSweeper
 
@@ -50,13 +49,11 @@ class BufferTicker:
         store_name: str,
         grace_ms: int,
         sweeper: BufferSweeper,
-        bookkeeping: BufferBookkeeping,
     ) -> None:
         self._dataframe = dataframe
         self._store_name = store_name
         self._grace_ms = grace_ms
         self._sweeper = sweeper
-        self._bookkeeping = bookkeeping
 
         self._downstream: Optional[VoidExecutor] = None
         self._store: Optional[Store] = None
@@ -111,16 +108,13 @@ class BufferTicker:
 
     def _resync(self, partitions: dict[int, StorePartition]) -> None:
         # A deadline of 0 means "sweep this partition on the next tick", which is
-        # how a newly assigned partition's backlog is discovered. The in-memory
-        # per-key counts go with it: they describe the previous assignment.
+        # how a newly assigned partition's backlog is discovered.
         for partition in list(self._deadline):
             if partition not in partitions:
                 del self._deadline[partition]
-                self._bookkeeping.forget(partition)
         for partition, store_partition in partitions.items():
             if self._known.get(partition) is not store_partition:
                 self._deadline[partition] = 0
-                self._bookkeeping.forget(partition)
         self._known = dict(partitions)
         self._earliest = min(self._deadline.values(), default=NO_DEADLINE)
 
@@ -164,7 +158,6 @@ class BufferTicker:
             result = self._sweeper.sweep(
                 transaction,
                 index,
-                partition,
                 cutoff,
                 skip=None,
                 prefix_budget=TICK_SWEEP_BUDGET,

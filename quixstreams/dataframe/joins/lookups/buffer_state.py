@@ -4,7 +4,9 @@ The durable index of which message-key prefixes currently hold withheld records.
 Two namespaces inside the buffer's store, both written only by
 `PendingIndex.flush()`:
 
-- `INDEX_PREFIX`: one marker per prefix, `[earliest_receive_ms, key_kind]`.
+- `INDEX_PREFIX`: one marker per prefix,
+  `[earliest_receive_ms, key_kind, count]`, where `count` is the records the
+  prefix holds.
 - `QUEUE_PREFIX`: the same prefixes keyed by that arrival time, so the sweep
   finds what is due with a range read instead of a scan.
 
@@ -158,8 +160,8 @@ class PendingIndex:
     def get(self, prefix: bytes) -> Optional[list]:
         """
         :param prefix: The store prefix.
-        :return: `[earliest_receive_ms, key_kind]`, or `None` if the prefix
-            holds nothing.
+        :return: `[earliest_receive_ms, key_kind, count]`, or `None` if the
+            prefix holds nothing.
         """
         return self.entry(encode_prefix(prefix))
 
@@ -206,8 +208,31 @@ class PendingIndex:
     def ensure(self, prefix: bytes, key: Any, receive_ms: int) -> None:
         encoded = encode_prefix(prefix)
         if self.entry(encoded) is None:
-            self._markers[encoded] = [receive_ms, key_kind(key)]
+            self._markers[encoded] = [receive_ms, key_kind(key), 0]
             self._changed.add(encoded)
+
+    def count(self, prefix: bytes) -> int:
+        """:return: Records the prefix holds. Zero if there is no marker."""
+        marker = self.entry(encode_prefix(prefix))
+        return marker[2] if marker is not None else 0
+
+    def set_count(self, prefix: bytes, count: int) -> None:
+        """
+        Record how many records a prefix holds. No-op if there is no marker.
+
+        :param prefix: The store prefix.
+        :param count: Records the prefix now holds.
+        """
+        encoded = encode_prefix(prefix)
+        marker = self.entry(encoded)
+        if marker is not None and marker[2] != count:
+            marker[2] = count
+            self._changed.add(encoded)
+
+    def decrement(self, prefix: bytes, removed: int) -> None:
+        """:param removed: Records that left the store. Clamped at zero."""
+        if removed:
+            self.set_count(prefix, max(self.count(prefix) - removed, 0))
 
     def set_earliest(self, prefix: bytes, receive_ms: int) -> None:
         """

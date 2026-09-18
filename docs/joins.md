@@ -295,8 +295,7 @@ if __name__ == '__main__':
 | `grace_ms` | `int` (milliseconds) or `timedelta` | required | How long a record may wait for its configuration, in **wall-clock real time**. |
 | `is_resolved` | `Callable[[dict], bool]` | required | Predicate deciding whether a record's lookup succeeded, called with the value after the join. |
 | `on_timeout` | `"emit"` or `"drop"` | `"emit"` | What happens to a record that runs out of grace. |
-| `max_buffered_per_key` | `int` | `10_000` | Safety valve against a pathological rate of unresolvable records for one key. |
-| `on_overflow` | `"drop-newest"` or `"raise"` | `"drop-newest"` | What happens to a record that arrives when a key is already full. |
+| `max_buffered_per_key` | `int` | `10_000` | Safety valve against a pathological rate of unresolvable records for one key. A record arriving at a full key is dropped. |
 | `store_name` | `str` | `"lookup-buffer"` | Name of the state store holding the buffer. |
 
 #### It makes your application stateful
@@ -380,7 +379,7 @@ The time bound is the one to tune. A key's steady-state buffer is roughly `rate 
 
 `max_buffered_per_key` is a safety valve, not the primary bound — and it is a **latency** knob as much as a memory one: a release deserializes and re-joins a key's entire surviving buffer inside a single callback, so 10 000 records is a real pause on the processing thread. A warning is logged when one release examines more than 1000 records.
 
-An overflow drop is **not** governed by `on_timeout`: the record never entered the buffer, so it has no deadline to expire.
+A record arriving at a key already holding `max_buffered_per_key` records is dropped, and a rate-limited warning naming the key is logged. That drop is **not** governed by `on_timeout`: the record never entered the buffer, so it has no deadline to expire.
 
 ### Advanced Configuration Matching
 
