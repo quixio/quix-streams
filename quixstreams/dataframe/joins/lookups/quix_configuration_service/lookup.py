@@ -74,6 +74,7 @@ class Lookup(BaseLookup[BaseField]):
         quix_sdk_token: Optional[str] = None,
         cache_size: int = 1000,
         fallback: Literal["error", "default"] = "error",
+        unresolved_types_field: Optional[str] = None,
     ):
         if QUIX_REPLICA_NAME:
             consumer_group = f"{consumer_group}-{QUIX_REPLICA_NAME.split('-')[-1]}"
@@ -99,6 +100,7 @@ class Lookup(BaseLookup[BaseField]):
         self._topic = topic
         self._request_timeout = request_timeout
         self._fallback = fallback
+        self._unresolved_types_field = unresolved_types_field
 
         self._started = threading.Event()
 
@@ -434,17 +436,28 @@ class Lookup(BaseLookup[BaseField]):
 
         if fields_by_type is None:
             fields_by_type = {}
-            for key, field in fields.items():
-                fields_by_type.setdefault(field.type, {})[key] = field
+            for field_name, field in fields.items():
+                fields_by_type.setdefault(field.type, {})[field_name] = field
             self._fields_by_type[fields_ids] = fields_by_type
 
-        for type_, fields in fields_by_type.items():
+        unresolved_types: list[str] = []
+        for type_, type_fields in fields_by_type.items():
             version = self._find_version(type_, on, timestamp)
 
             if version is not None and version.retry_at < start:
-                self._version_data_cached.remove(version, fields)
+                self._version_data_cached.remove(version, type_fields)
 
-            value.update(self._version_data_cached(version, fields))
+            value.update(self._version_data_cached(version, type_fields))
+
+            # `ConfigurationVersion.failed()` raises `retry_count`, and
+            # `_fetch_version_content` calls it on every content-fetch failure,
+            # so a non-zero count means the fields above came from
+            # `field.missing()` and not from the version's content.
+            if version is None or version.retry_count:
+                unresolved_types.append(type_)
+
+        if self._unresolved_types_field is not None:
+            value[self._unresolved_types_field] = sorted(unresolved_types)
 
         logger.debug("Join took %.2f ms", (time.time() - start) * 1000)
 
