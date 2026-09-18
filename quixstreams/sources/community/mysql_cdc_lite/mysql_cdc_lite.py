@@ -21,6 +21,7 @@ try:
     from pymysqlreplication.constants import FIELD_TYPE
     from pymysqlreplication.row_event import (
         DeleteRowsEvent,
+        TableMapEvent,
         UpdateRowsEvent,
         WriteRowsEvent,
     )
@@ -515,7 +516,12 @@ class MySqlCdcLiteSource(StatefulSource):
         return BinLogStreamReader(
             connection_settings=settings,
             server_id=self._server_id,
-            only_events=[DeleteRowsEvent, UpdateRowsEvent, WriteRowsEvent],
+            only_events=[
+                DeleteRowsEvent,
+                TableMapEvent,
+                UpdateRowsEvent,
+                WriteRowsEvent,
+            ],
             only_schemas=[self._database],
             only_tables=[self._table],
             resume_stream=True,
@@ -555,6 +561,12 @@ class MySqlCdcLiteSource(StatefulSource):
         # own (`binlogstream.py:287`), and a bound that tripped leaves it True.
         stream.is_past_end_log_pos = False
         for event in stream:
+            # The bound is evaluated before the library filters an event out
+            # (`binlogstream.py:672`, then `:723`), so a table map the loop never
+            # receives leaves the position between it and the rows it describes.
+            if isinstance(event, TableMapEvent):
+                stream.is_past_end_log_pos = False
+                continue
             self._buffer.extend(_event_to_changes(event))
             if not event.flags & _STMT_END_F:
                 stream.is_past_end_log_pos = False

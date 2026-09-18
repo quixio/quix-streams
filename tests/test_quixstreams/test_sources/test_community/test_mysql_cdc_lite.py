@@ -16,15 +16,18 @@ import json
 import threading
 import time
 from collections import Counter
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pymysql
 import pytest
+from pymysqlreplication import BinLogStreamReader
+from pymysqlreplication.row_event import TableMapEvent, WriteRowsEvent
 from testcontainers.mysql import MySqlContainer
 
 from quixstreams.sources.community.mysql_cdc_lite import (
     MySqlCdcLiteError,
     MySqlCdcLiteSource,
+    mysql_cdc_lite,
 )
 from tests.utils import ConfluentKafkaMessageStub
 
@@ -40,6 +43,10 @@ MYSQL_COMMAND = (
     "--server-id=1 --log-bin=mysql-bin --binlog-format=ROW "
     "--binlog-row-image=FULL --binlog-row-metadata=FULL"
 )
+
+# No source is connected while the raw reader below is, so any id the server itself is
+# not using will do.
+_PROBE_SERVER_ID = 990077
 
 
 class _DictState:
@@ -258,6 +265,46 @@ def row_of(message: Dict[str, Any]) -> Dict[str, Any]:
 def oldkeys_of(message: Dict[str, Any]) -> Dict[str, Any]:
     oldkeys = message["oldkeys"]
     return dict(zip(oldkeys["keynames"], oldkeys["keyvalues"]))
+
+
+def statement_positions(
+    mysql_server, table: str, position: Tuple[str, int]
+) -> Tuple[int, List[int]]:
+    """
+    Read the raw event boundaries of the statement that follows `position`.
+
+    :return: `(table_map_end, [row_event_end, ...])`, the `log_pos` each of the
+        statement's events ends at. The last row event is the statement's end.
+    """
+    stream = BinLogStreamReader(
+        connection_settings={
+            "host": mysql_server["host"],
+            "port": mysql_server["port"],
+            "user": CDC_USER,
+            "password": CDC_PASSWORD,
+        },
+        server_id=_PROBE_SERVER_ID,
+        only_events=[TableMapEvent, WriteRowsEvent],
+        only_schemas=[DATABASE],
+        only_tables=[table],
+        resume_stream=True,
+        blocking=False,
+        log_file=position[0],
+        log_pos=position[1],
+    )
+    table_map_end: Optional[int] = None
+    row_event_ends: List[int] = []
+    try:
+        for event in stream:
+            if isinstance(event, TableMapEvent):
+                if table_map_end is None:
+                    table_map_end = stream.log_pos
+            else:
+                row_event_ends.append(stream.log_pos)
+    finally:
+        stream.close()
+    assert table_map_end is not None, "the statement wrote no table map"
+    return table_map_end, row_event_ends
 
 
 @pytest.fixture(scope="module")
@@ -646,6 +693,85 @@ def test_a_statement_split_across_events_survives_a_restart(mysql, mysql_server)
     )
     assert delivered[sentinel] == 1
     assert max(delivered.values()) == 1, "a row was delivered more than once"
+
+
+def test_a_scan_bound_landing_on_a_table_map_reads_the_statement_whole(
+    mysql, mysql_server, monkeypatch
+):
+    """
+    A scan bound that trips on a statement's TableMapEvent must not end the read there.
+
+    `fetchone` checks the bound (`binlogstream.py:672`) before it filters the event out
+    as one the caller did not ask for (`:723`), so a bound tripping on the TableMapEvent
+    ends the read with nothing delivered and the position between the table map and the
+    statement's first row event - which is where the previous fix left `STMT_END_F`
+    unable to help, because that event never reaches the loop. A reader reopened there
+    has no map for the rows that follow and discards them without raising.
+
+    The shipped bound is triggered by the wall clock, which cannot be aimed at one
+    event; the stand-in below is the shipped bound with a position for a trigger, so
+    the trip lands on the table map every run instead of once in a while.
+    """
+    table = "lite_table_map"
+    rows = 5000
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(20))")
+
+    source = make_source(mysql_server, table, {})
+    start = source._start_position()
+    values = ", ".join(f"({i}, 'bulk')" for i in range(1, rows + 1))
+    execute(mysql, f"INSERT INTO {table} VALUES {values}")
+
+    table_map_end, row_event_ends = statement_positions(mysql_server, table, start)
+    statement_end = row_event_ends[-1]
+    assert len(row_event_ends) > 1, (
+        f"{rows} rows came out as one row event: the statement must be split for this "
+        "test to have a mid-statement position to land on"
+    )
+
+    class TripOnTableMap(mysql_cdc_lite._ScanBound):
+        """The shipped bound, triggered by a position rather than by the clock."""
+
+        def __le__(self, log_pos: object) -> bool:
+            return isinstance(log_pos, int) and log_pos >= table_map_end
+
+    monkeypatch.setattr(mysql_cdc_lite, "_ScanBound", TripOnTableMap)
+    source._running = True
+    source._position = start
+    # The deadline really has passed: only *where* the reader notices is the stand-in's.
+    source._last_commit_at = time.monotonic() - source._commit_interval
+    source._stream = source._open_stream()
+    try:
+        source._read_changes()
+        pending = source._pending
+        read_first = list(source._buffer)
+    finally:
+        source._drop_stream()
+    monkeypatch.undo()
+
+    successor = make_source(mysql_server, table, {}, name=f"{table}_successor")
+    successor._running = True
+    successor._position = pending
+    successor._last_commit_at = time.monotonic() + 3600.0
+    successor._stream = successor._open_stream()
+    try:
+        successor._read_changes()
+        read_second = list(successor._buffer)
+    finally:
+        successor._drop_stream()
+
+    delivered = Counter(row_of(change)["id"] for change in read_first + read_second)
+    missing = [i for i in range(1, rows + 1) if not delivered[i]]
+    assert not missing, (
+        f"{len(missing)} of the statement's {rows} rows were never read, from id "
+        f"{missing[0]} to id {missing[-1]}: the read stopped at {pending}, and the "
+        f"statement runs from its table map at {table_map_end} to {statement_end}"
+    )
+    assert pending is not None and pending[1] >= statement_end, (
+        f"the read stopped at {pending}, inside the statement: its table map ends at "
+        f"{table_map_end} and its last row event at {statement_end}"
+    )
+    assert max(delivered.values()) == 1, "a row was read more than once"
 
 
 def test_stop_drains_the_buffer(mysql, mysql_server):

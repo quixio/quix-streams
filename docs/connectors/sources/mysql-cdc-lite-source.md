@@ -231,6 +231,22 @@ comes back naming `server_uuid/server_id`. The two evict each other in turn, so 
 makes progress; the source retries three times and exits, is restarted, and evicts the
 other one again. It looks like an unstable network.
 
+### 7. `binlog_transaction_compression` is `OFF`
+
+```sql
+SHOW GLOBAL VARIABLES LIKE 'binlog_transaction_compression';   -- must print OFF
+```
+
+`OFF` is the default (MySQL 8.0.20 added the variable), so this usually passes. When it
+is `ON`, MySQL writes each transaction as a single compressed payload event, and the
+`mysql-replication` reader this source is built on has no support for that event type:
+it is neither unpacked nor reported. Measured on 8.0.46 with the variable on, an
+`INSERT` of three rows produced **zero** messages, and the position the source kept was
+the server's own position *after* that transaction — a source restarted there delivered
+only the rows written later. Those changes are not delayed, they are gone, and there is
+nothing on the topic and nothing in the log to say so. The source does not check this
+variable.
+
 ## What this connector does not protect you from
 
 | Not done | What it means for you |
@@ -245,8 +261,9 @@ other one again. It looks like an unstable network.
 | No reconnect-churn bound | Three *consecutive* failures kill the source. One that fails, reconnects, and fails again every thirty seconds forever is not detected — it just runs slowly and nobody is told. |
 | No TLS verification | `tls_enabled=True` encrypts and does not authenticate: no CA, no hostname check. A machine-in-the-middle is not detected. Use it on a trusted network only. |
 | No `server_id` parameter | You cannot set one. If the derived id collides, the only lever is `name`, which also resets the state store — so changing it to fix a collision *also skips the downtime window*. |
+| No `binlog_transaction_compression` check | [§7](#7-binlog_transaction_compression-is-off): a compressed transaction is not unpacked, produces nothing, and the position moves past it. Silent from both ends. |
 | No parameter validation | `commit_interval=0` and friends are accepted and misbehave in their own ways. |
-| One statement is buffered whole | `max_buffer_size` is a floor, not a ceiling, and is honoured only at statement boundaries. MySQL splits one statement's rows across a row event per `binlog_row_event_max_size` (8 KB by default) — 5000 rows came out as ten events — and only the end of that group is a position the source can resume from, so a statement that changes a million rows buffers all of it. The scan bound is honoured at the same boundaries, so such a statement is also read whole: a `SIGTERM` that arrives part-way through it waits for the end of the statement and can outlast the shutdown budget into a `SIGKILL`. |
+| One statement is buffered whole | `max_buffer_size` is a floor, not a ceiling, and is honoured only at statement boundaries. MySQL splits one statement's rows across a row event per `binlog_row_event_max_size` (8 KB by default) — 5000 rows came out as ten events — and only the end of that group is a position the source can resume from, so a statement that changes a million rows buffers all of it. The scan bound is honoured at the same boundaries, so such a statement is also read whole: a `SIGTERM` that arrives anywhere inside it — on the table map that opens it as much as on any of its row events — waits for the end of the statement and can outlast the shutdown budget into a `SIGKILL`. |
 
 Things it does guarantee, and that were kept deliberately:
 
@@ -269,8 +286,12 @@ Things it does guarantee, and that were kept deliberately:
   rather than dropping them (`test_stop_drains_the_buffer`).
 - **A stop is noticed during a scan, not only between scans.** The read is bounded per
   binlog event, including the events of other tables that get skipped, so a stream of
-  ordinary statements cannot hold the source past its shutdown budget. One statement is
-  the exception, as the row above says.
+  ordinary statements cannot hold the source past its shutdown budget. Both bounds are
+  honoured only at statement boundaries: one landing on a statement's table map, or on
+  any of its row events, reads that statement whole before it stops, because no earlier
+  point in it can be resumed from
+  (`test_a_scan_bound_landing_on_a_table_map_reads_the_statement_whole`). One statement
+  is therefore the exception to the budget, as the row above says.
 - **A typo fails at start-up.** A `database` or `table` that does not exist, or that the
   user cannot see, is an error out of `setup()` naming both — not a source that runs
   quietly forever producing nothing (`test_a_missing_table_fails_at_setup`).
