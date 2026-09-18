@@ -82,6 +82,7 @@ class _FakeRowEvent:
     columns: List[Any] = []
     schema = "shop"
     table = "orders"
+    flags = 1
 
 
 class _FakeCursor:

@@ -55,6 +55,11 @@ _PURGED_MARKER = "could not find first log file"
 # knows.
 _PARSE_ERROR_CODE = 1064
 
+# STMT_END_F: MySQL splits one statement's rows across a row event per
+# `binlog_row_event_max_size`, all under a single TableMapEvent, and sets this flag on
+# the last of them only.
+_STMT_END_F = 0x0001
+
 # Derived ids start at 1000 to stay clear of the `server-id = 1` a MySQL server and its
 # tutorials use.
 _SERVER_ID_MIN = 1000
@@ -271,8 +276,9 @@ class MySqlCdcLiteSource(StatefulSource):
             cadence, so it bounds the delay between a change and its message.
             Default - `5.0`.
         :param max_buffer_size: commit early once this many changes are buffered, which
-            bounds memory while catching up after downtime. One binlog event is always
-            buffered whole, so a bulk statement can overshoot it.
+            bounds memory while catching up after downtime. It is honoured at statement
+            boundaries, because a position inside a statement cannot be resumed from,
+            so one statement is buffered whole however many rows it changes.
             Default - `1000`.
         :param tls_enabled: encrypt the connections to MySQL. The server certificate is
             not verified. `False` connects in plaintext.
@@ -550,6 +556,9 @@ class MySqlCdcLiteSource(StatefulSource):
         stream.is_past_end_log_pos = False
         for event in stream:
             self._buffer.extend(_event_to_changes(event))
+            if not event.flags & _STMT_END_F:
+                stream.is_past_end_log_pos = False
+                continue
             if len(self._buffer) >= self._max_buffer_size or bound.tripped():
                 break
         if stream.log_file and stream.log_pos:

@@ -246,7 +246,7 @@ other one again. It looks like an unstable network.
 | No TLS verification | `tls_enabled=True` encrypts and does not authenticate: no CA, no hostname check. A machine-in-the-middle is not detected. Use it on a trusted network only. |
 | No `server_id` parameter | You cannot set one. If the derived id collides, the only lever is `name`, which also resets the state store — so changing it to fix a collision *also skips the downtime window*. |
 | No parameter validation | `commit_interval=0` and friends are accepted and misbehave in their own ways. |
-| One event is buffered whole | `max_buffer_size` is a floor, not a ceiling. A single statement that changes a million rows produces one event and buffers all of it. |
+| One statement is buffered whole | `max_buffer_size` is a floor, not a ceiling, and is honoured only at statement boundaries. MySQL splits one statement's rows across a row event per `binlog_row_event_max_size` (8 KB by default) — 5000 rows came out as ten events — and only the end of that group is a position the source can resume from, so a statement that changes a million rows buffers all of it. The scan bound is honoured at the same boundaries, so such a statement is also read whole: a `SIGTERM` that arrives part-way through it waits for the end of the statement and can outlast the shutdown budget into a `SIGKILL`. |
 
 Things it does guarantee, and that were kept deliberately:
 
@@ -268,8 +268,9 @@ Things it does guarantee, and that were kept deliberately:
 - **A stop drains the buffer.** `SIGTERM` while changes are buffered produces them
   rather than dropping them (`test_stop_drains_the_buffer`).
 - **A stop is noticed during a scan, not only between scans.** The read is bounded per
-  binlog event, including the events of other tables that get skipped, so a busy server
-  cannot hold the source past its shutdown budget and into a `SIGKILL`.
+  binlog event, including the events of other tables that get skipped, so a stream of
+  ordinary statements cannot hold the source past its shutdown budget. One statement is
+  the exception, as the row above says.
 - **A typo fails at start-up.** A `database` or `table` that does not exist, or that the
   user cannot see, is an error out of `setup()` naming both — not a source that runs
   quietly forever producing nothing (`test_a_missing_table_fails_at_setup`).
@@ -301,8 +302,9 @@ Here are some important configurations to be aware of (see [MySQL CDC Lite Sourc
   delay between a change and its message.
     **Default**: `5.0`
 - `max_buffer_size`: commit early once this many changes are buffered, which bounds
-  memory while catching up after downtime. One binlog event is always buffered whole, so
-  a bulk statement can overshoot it.
+  memory while catching up after downtime. It is honoured at statement boundaries,
+  because a position inside a statement cannot be resumed from, so one statement is
+  buffered whole however many rows it changes.
     **Default**: `1000`
 - `tls_enabled`: encrypt the connections to MySQL. The server certificate is **not**
   verified. `False` connects in plaintext.

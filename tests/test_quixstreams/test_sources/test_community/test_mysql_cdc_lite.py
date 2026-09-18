@@ -161,6 +161,25 @@ class DyingHarness(LiteHarness):
         raise SystemExit("killed before the first commit")
 
 
+class OneCommitHarness(LiteHarness):
+    """
+    A source that stops itself as soon as it commits a batch that produced something.
+
+    The successor then resumes from that one position, which is what makes a commit
+    taken part-way through a statement observable.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.committed = threading.Event()
+
+    def _commit_batch(self, timeout: Optional[float] = None) -> None:
+        super()._commit_batch(timeout)
+        if self._capturing_producer.snapshot():
+            self.committed.set()
+            self.stop()
+
+
 class RunningSource:
     """Runs a source in a thread, stops it on exit, and surfaces what it raised."""
 
@@ -580,6 +599,53 @@ def test_a_process_that_dies_before_its_first_commit_skips_nothing(mysql, mysql_
         {"id": 1, "note": "before-the-kill"},
         {"id": 2, "note": "during-downtime"},
     ]
+
+
+def test_a_statement_split_across_events_survives_a_restart(mysql, mysql_server):
+    """
+    A statement whose rows MySQL splits across several events must arrive whole.
+
+    MySQL emits one TableMapEvent and then a row event per `binlog_row_event_max_size`
+    chunk, so a statement changing more rows than `max_buffer_size` is committed
+    part-way through it. A reader reopened there has no table map for the rows that
+    follow and discards them without raising, which takes them off the topic with
+    nothing in the log to say so.
+    """
+    table = "lite_bulk"
+    rows = 5000
+    sentinel = rows + 1
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(20))")
+
+    state: Dict[str, Any] = {}
+    first = make_source(mysql_server, table, state, harness=OneCommitHarness)
+    with RunningSource(first) as running:
+        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        values = ", ".join(f"({i}, 'bulk')" for i in range(1, rows + 1))
+        execute(mysql, f"INSERT INTO {table} VALUES {values}")
+        assert first.committed.wait(timeout=60.0), "the source committed no changes"
+
+    execute(mysql, f"INSERT INTO {table} VALUES ({sentinel}, 'sentinel')")
+
+    second = make_source(mysql_server, table, state)
+    with RunningSource(second) as running:
+        running.wait_for(
+            lambda m: any(row_of(x)["id"] == sentinel for x in of_kind(m, "insert")),
+            "the successor to read past the bulk statement",
+            60.0,
+        )
+
+    delivered = Counter(
+        row_of(message)["id"]
+        for message in of_kind(first.received() + second.received(), "insert")
+    )
+    missing = [i for i in range(1, rows + 1) if not delivered[i]]
+    assert not missing, (
+        f"{len(missing)} of the statement's {rows} rows never reached the topic, "
+        f"from id {missing[0]} to id {missing[-1]}"
+    )
+    assert delivered[sentinel] == 1
+    assert max(delivered.values()) == 1, "a row was delivered more than once"
 
 
 def test_stop_drains_the_buffer(mysql, mysql_server):
