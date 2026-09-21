@@ -59,6 +59,21 @@ To keep the code as consistent as possible, please familiarize yourself with the
 
 >  Consistency within a project is important. Consistency within one module or function is the most important.
 
+### Linting and type checking
+
+The linters are pinned in `.pre-commit-config.yaml` and run in CI as a required job. Run the same gate locally before opening a PR:
+
+```
+pre-commit run --all-files
+```
+
+- **ruff `v0.6.3`** does both linting and formatting, pinned through `ruff-pre-commit`. Don't substitute a locally installed ruff: other versions report different findings, so a green local run can still fail CI.
+- **mypy** checks `quixstreams/` only. The hook runs with your environment's interpreter, so the version that actually runs is the one from `requirements-mypy.txt` (`mypy==1.18.2`), which `requirements-dev.txt` installs for you.
+
+### Supported Python versions
+
+The library supports **Python 3.9 to 3.13** (`requires-python = ">=3.9, <4"`), and CI runs the test suite on both 3.9 and 3.13. Your code has to work on 3.9, so avoid syntax and standard library APIs added in later versions.
+
 ## Setting up the project locally
 
 This guide will assume you're using Visual Studio Code, but most of the guide is applicable if you're using other IDEs also.
