@@ -24,8 +24,19 @@ PRs to our library are always welcome and can be a quick way to get your fix or 
 
 - Fix/add a functionality that has been reported first through an [issue](/issues).
 - Address a single concern in the least number of changed lines as possible.
-- Add unit or integration tests for fixed or changed functionality if needed.
-- Update the [documentation](/docs) of the library if needed.
+
+### Tests
+
+- **Bug fixes must include a regression test.** Write it so that it fails while the bug still exists and passes once the fix is applied, and say in the PR description how it fails without the fix (the assertion or the error you saw). Reviewers check this by reading the diff — CI only ever sees the test and the fix together.
+- **New functionality must include tests** covering the behaviour it adds.
+- If you can reproduce a bug but cannot fix it, open a PR with the failing test marked `xfail` anyway — a demonstration of the bug is a useful contribution on its own.
+
+### Documentation
+
+- **Any user-visible change must be documented in the same PR**: a new public class or function, a new parameter on an existing one, a new default, or a change to observable behaviour.
+- For the public API, update the **docstrings**. Do not hand-edit `docs/api-reference/*.md` — those pages are regenerated from the source by `docs/build/build.py` and opened as an automated PR after merge.
+- Anything that changes how the library is used also needs the narrative docs under `docs/` updated (e.g. `docs/connectors/sinks/*.md` for a new sink option).
+- Documentation may be skipped only for changes with no user-visible effect: a bug fix that restores documented behaviour, an internal refactor, or a test-only change.
 
 For changes that address core functionality or would require breaking changes (e.g. a major release), it's best to open an [Issue](/issues) to discuss your proposal first before starting coding your solution.
 
@@ -37,7 +48,7 @@ In general, we follow the ["fork-and-pull" Git workflow](https://github.com/susa
 4. Commit changes to the branch.
 5. Following any formatting and testing guidelines specific to this repo.
 6. Push changes to your fork.
-7. Open a PR in our repository and follow the PR template so that we can efficiently review the changes.
+7. Open a PR in our repository, covering the test and documentation requirements above so that we can efficiently review the changes.
 
 ## Contributing new Connectors
 If you want to contribute a new Source or Sink, check out the [Connectors Contribution Guide](https://quix.io/docs/quix-streams/connectors/contribution-guide.html) page to get started.
