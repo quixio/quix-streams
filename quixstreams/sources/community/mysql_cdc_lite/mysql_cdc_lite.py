@@ -19,6 +19,7 @@ try:
     import pymysql
     from pymysqlreplication import BinLogStreamReader
     from pymysqlreplication.constants import FIELD_TYPE
+    from pymysqlreplication.event import XidEvent
     from pymysqlreplication.row_event import (
         DeleteRowsEvent,
         TableMapEvent,
@@ -57,8 +58,10 @@ _PURGED_MARKER = "could not find first log file"
 _PARSE_ERROR_CODE = 1064
 
 # STMT_END_F: MySQL splits one statement's rows across a row event per
-# `binlog_row_event_max_size`, all under a single TableMapEvent, and sets this flag on
-# the last of them only.
+# `binlog_row_event_max_size` and sets this flag on the last of them only. A statement
+# touching several tables writes every table's map before any table's rows, and puts
+# the flag on whichever table's rows come last - which may be a table this source
+# filters out, and whose events therefore never reach the loop below.
 _STMT_END_F = 0x0001
 
 # Derived ids start at 1000 to stay clear of the `server-id = 1` a MySQL server and its
@@ -278,9 +281,10 @@ class MySqlCdcLiteSource(StatefulSource):
             message; one read may itself run for an interval on a busy server.
             Default - `5.0`.
         :param max_buffer_size: commit early once this many changes are buffered, which
-            bounds memory while catching up after downtime. It is honoured at statement
-            boundaries, because a position inside a statement cannot be resumed from,
-            so one statement is buffered whole however many rows it changes.
+            bounds memory while catching up after downtime. It is honoured at a
+            transaction or statement boundary this source has observed, because a
+            position inside a statement cannot be resumed from, so one statement is
+            buffered whole however many rows it changes.
             Default - `1000`.
         :param tls_enabled: encrypt the connections to MySQL. The server certificate is
             not verified. `False` connects in plaintext.
@@ -326,6 +330,10 @@ class MySqlCdcLiteSource(StatefulSource):
         # commit after that.
         self._position: Tuple[str, int]
         self._pending: Optional[Tuple[str, int]] = None
+        # Whether the read is inside a statement this table's rows belong to, and the
+        # last position seen outside one. Both outlive a single read.
+        self._in_statement = False
+        self._safe_position: Optional[Tuple[str, int]] = None
         self._last_commit_at = 0.0
 
     def default_topic(self) -> Topic:
@@ -522,6 +530,7 @@ class MySqlCdcLiteSource(StatefulSource):
                 TableMapEvent,
                 UpdateRowsEvent,
                 WriteRowsEvent,
+                XidEvent,
             ],
             only_schemas=[self._database],
             only_tables=[self._table],
@@ -550,9 +559,13 @@ class MySqlCdcLiteSource(StatefulSource):
         """
         Buffer the changes the stream can deliver within one commit interval.
 
-        The position taken at the end covers everything the stream read, including the
-        events of other tables it discarded, so the source keeps up with the server
-        while this table is quiet.
+        The position kept is the last one seen outside a statement this table's rows
+        belong to. It covers the events of other tables the stream discarded, so the
+        source keeps up with the server while this table is quiet, and it is never a
+        position inside a statement, which a reopened reader cannot resume from. Both
+        bounds are honoured at those same positions, so a statement is buffered whole
+        however many rows it changes, and one a bound lands inside is read again from
+        its head on the next stream.
         """
         stream = self._stream
         bound = _ScanBound(
@@ -563,20 +576,22 @@ class MySqlCdcLiteSource(StatefulSource):
         # own (`binlogstream.py:287`), and a bound that tripped leaves it True.
         stream.is_past_end_log_pos = False
         for event in stream:
-            # The bound is evaluated before the library filters an event out
-            # (`binlogstream.py:672`, then `:723`), so a table map the loop never
-            # receives leaves the position between it and the rows it describes.
-            if isinstance(event, TableMapEvent):
+            if isinstance(event, XidEvent):
+                self._in_statement = False
+            elif isinstance(event, TableMapEvent):
+                self._in_statement = True
+            else:
+                self._buffer.extend(_event_to_changes(event))
+                self._in_statement = not event.flags & _STMT_END_F
+            if self._in_statement:
                 stream.is_past_end_log_pos = False
                 continue
-            self._buffer.extend(_event_to_changes(event))
-            if not event.flags & _STMT_END_F:
-                stream.is_past_end_log_pos = False
-                continue
+            self._safe_position = (stream.log_file, stream.log_pos)
             if len(self._buffer) >= self._max_buffer_size or bound.tripped():
                 break
-        if stream.log_file and stream.log_pos:
-            self._pending = (stream.log_file, stream.log_pos)
+        if not self._in_statement:
+            self._safe_position = (stream.log_file, stream.log_pos)
+        self._pending = self._safe_position
 
     def _commit_batch(self, timeout: Optional[float] = None) -> None:
         """
@@ -602,9 +617,15 @@ class MySqlCdcLiteSource(StatefulSource):
         self._last_commit_at = time.monotonic()
 
     def _drop_stream(self) -> None:
-        """Close the stream and discard everything read since the last commit."""
+        """
+        Close the stream and discard everything read since the last commit.
+
+        The next stream opens at the committed position, which is outside a statement.
+        """
         self._buffer.clear()
         self._pending = None
+        self._in_statement = False
+        self._safe_position = None
         stream, self._stream = self._stream, None
         if stream is None:
             return

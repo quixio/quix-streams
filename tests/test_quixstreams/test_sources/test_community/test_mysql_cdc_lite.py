@@ -16,12 +16,18 @@ import json
 import threading
 import time
 from collections import Counter
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 
 import pymysql
 import pytest
 from pymysqlreplication import BinLogStreamReader
-from pymysqlreplication.row_event import TableMapEvent, WriteRowsEvent
+from pymysqlreplication.event import XidEvent
+from pymysqlreplication.row_event import (
+    DeleteRowsEvent,
+    TableMapEvent,
+    UpdateRowsEvent,
+    WriteRowsEvent,
+)
 from testcontainers.mysql import MySqlContainer
 
 from quixstreams.sources.community.mysql_cdc_lite import (
@@ -336,6 +342,107 @@ def statement_positions(
         stream.close()
     assert table_map_end is not None, "the statement wrote no table map"
     return table_map_end, row_event_ends
+
+
+class RawEvent(NamedTuple):
+    """One binlog event as a reader that filters no table saw it."""
+
+    name: str
+    table: Optional[str]
+    end: int
+    flags: Optional[int]
+
+
+def raw_events(mysql_server, position: Tuple[str, int]) -> List[RawEvent]:
+    """
+    Read every row event, table map and commit after `position`, for every table.
+
+    :return: the events in binlog order. `table` and `flags` are `None` for an
+        `XidEvent`, which belongs to no table.
+    """
+    stream = BinLogStreamReader(
+        connection_settings={
+            "host": mysql_server["host"],
+            "port": mysql_server["port"],
+            "user": CDC_USER,
+            "password": CDC_PASSWORD,
+        },
+        server_id=_PROBE_SERVER_ID,
+        only_events=[
+            DeleteRowsEvent,
+            TableMapEvent,
+            UpdateRowsEvent,
+            WriteRowsEvent,
+            XidEvent,
+        ],
+        only_schemas=[DATABASE],
+        resume_stream=True,
+        blocking=False,
+        log_file=position[0],
+        log_pos=position[1],
+    )
+    try:
+        return [
+            RawEvent(
+                type(event).__name__,
+                getattr(event, "table", None),
+                stream.log_pos,
+                getattr(event, "flags", None),
+            )
+            for event in stream
+        ]
+    finally:
+        stream.close()
+
+
+def with_audit_trigger(connection, table: str, audit: str) -> None:
+    """
+    Create `table` and an `audit` table that an AFTER INSERT trigger also writes.
+
+    Needs the root connection: MySQL refuses CREATE TRIGGER to a user without SUPER
+    while binary logging is on (error 1419).
+    """
+    execute(connection, f"DROP TABLE IF EXISTS {table}")
+    execute(connection, f"DROP TABLE IF EXISTS {audit}")
+    execute(connection, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(20))")
+    execute(
+        connection,
+        f"CREATE TABLE {audit} (id INT PRIMARY KEY AUTO_INCREMENT, note VARCHAR(20))",
+    )
+    execute(
+        connection,
+        f"CREATE TRIGGER {table}_to_{audit} AFTER INSERT ON {table} FOR EACH ROW "
+        f"INSERT INTO {audit} (note) VALUES (NEW.note)",
+    )
+
+
+def read_once(
+    source: LiteHarness, position: Tuple[str, int]
+) -> Tuple[Optional[Tuple[str, int]], List[Dict[str, Any]]]:
+    """
+    Run one `_read_changes()` against a stream opened at `position`.
+
+    :return: `(pending position, buffered changes)`, taken before `_drop_stream()`
+        discards both.
+    """
+    source._running = True
+    source._position = position
+    source._stream = source._open_stream()
+    try:
+        source._read_changes()
+        return source._pending, list(source._buffer)
+    finally:
+        source._drop_stream()
+
+
+def trip_at(monkeypatch, log_pos: int) -> None:
+    """Replace the shipped clock bound with one that trips at a chosen event."""
+
+    class TripAt(mysql_cdc_lite._ScanBound):
+        def __le__(self, at: object) -> bool:
+            return isinstance(at, int) and at >= log_pos
+
+    monkeypatch.setattr(mysql_cdc_lite, "_ScanBound", TripAt)
 
 
 @pytest.fixture(scope="module")
@@ -803,6 +910,179 @@ def test_a_scan_bound_landing_on_a_table_map_reads_the_statement_whole(
         f"{table_map_end} and its last row event at {statement_end}"
     )
     assert max(delivered.values()) == 1, "a row was read more than once"
+
+
+def test_a_bound_on_a_trigger_written_table_map_delivers_the_row(
+    mysql, mysql_server, root_connection, monkeypatch
+):
+    """
+    A statement a trigger spreads over two tables must survive a bound on the other map.
+
+    MySQL writes both tables' maps before either table's rows, and the map this source
+    did not ask for is dropped at packet level, so the loop never sees it. A bound
+    tripping on it ends the read at a position between this table's map and this table's
+    rows; a reader reopened there has no map for the rows that follow and discards them
+    without raising.
+
+    Resuming from `None` is not a hole: it means the read observed no boundary of its
+    own, so the source keeps the position it already had - which is `start` here.
+    """
+    table = "lite_trigger_map"
+    audit = "lite_trigger_map_audit"
+    with_audit_trigger(root_connection, table, audit)
+
+    source = make_source(mysql_server, table, {})
+    start = source._start_position()
+    execute(mysql, f"INSERT INTO {table} VALUES (1, 'triggered')")
+
+    layout = raw_events(mysql_server, start)
+    maps = [(e.name, e.table) for e in layout[:2]]
+    assert maps == [("TableMapEvent", table), ("TableMapEvent", audit)], (
+        "MySQL no longer writes both table maps before either table's rows: "
+        f"{layout}"
+    )
+
+    trip_at(monkeypatch, layout[1].end)
+    pending, read_first = read_once(source, start)
+    monkeypatch.undo()
+
+    successor = make_source(mysql_server, table, {}, name=f"{table}_successor")
+    _, read_second = read_once(successor, pending or start)
+
+    delivered = Counter(row_of(change)["id"] for change in read_first + read_second)
+    assert delivered[1], (
+        f"the row was never read: the read stopped at {pending}, inside a statement "
+        f"whose events run {layout}"
+    )
+
+
+def test_a_bound_on_a_multi_table_updates_other_map_delivers_both_rows(
+    mysql, mysql_server, monkeypatch
+):
+    """
+    The same shape from an `UPDATE` touching two tables in one statement.
+
+    No trigger involved: a multi-table `UPDATE` writes both maps up front too, so the
+    same bound lands in the same place.
+    """
+    table = "lite_join"
+    other = "lite_join_other"
+    for name in (table, other):
+        execute(mysql, f"DROP TABLE IF EXISTS {name}")
+        execute(mysql, f"CREATE TABLE {name} (id INT PRIMARY KEY, note VARCHAR(20))")
+        execute(mysql, f"INSERT INTO {name} VALUES (1, 'before'), (2, 'before')")
+
+    source = make_source(mysql_server, table, {})
+    start = source._start_position()
+    execute(
+        mysql,
+        f"UPDATE {table} o JOIN {other} x ON o.id = x.id "
+        "SET o.note = 'after', x.note = 'after'",
+    )
+
+    layout = raw_events(mysql_server, start)
+    maps = [(e.name, e.table) for e in layout[:2]]
+    assert maps == [("TableMapEvent", table), ("TableMapEvent", other)], (
+        "MySQL no longer writes both table maps before either table's rows: "
+        f"{layout}"
+    )
+
+    trip_at(monkeypatch, layout[1].end)
+    pending, read_first = read_once(source, start)
+    monkeypatch.undo()
+
+    successor = make_source(mysql_server, table, {}, name=f"{table}_successor")
+    _, read_second = read_once(successor, pending or start)
+
+    delivered = {row_of(change)["id"] for change in read_first + read_second}
+    assert delivered == {1, 2}, (
+        f"the statement updated rows 1 and 2 of {table}; {sorted(delivered)} were "
+        f"read. The read stopped at {pending}, and its events run {layout}"
+    )
+
+
+def test_the_bounds_are_honoured_on_a_trigger_shaped_statement(
+    mysql, mysql_server, root_connection
+):
+    """
+    `max_buffer_size` must bound a burst whose statements a trigger spreads over two
+    tables.
+
+    MySQL sets STMT_END_F on the last row event of a statement whichever table it
+    belongs to, so here it is the audit table's rows that carry it and this source's
+    never do. A loop that looks for the flag on its own events alone finds no boundary
+    to stop at and reads the whole burst.
+    """
+    table = "lite_trigger_bounds"
+    audit = "lite_trigger_bounds_audit"
+    with_audit_trigger(root_connection, table, audit)
+
+    source = make_source(
+        mysql_server, table, {}, max_buffer_size=1, commit_interval=30.0
+    )
+    start = source._start_position()
+    for i in range(1, 6):
+        execute(mysql, f"INSERT INTO {table} VALUES ({i}, 'burst-{i}')")
+
+    layout = raw_events(mysql_server, start)
+    ours = [e for e in layout if e.name.endswith("RowsEvent") and e.table == table]
+    assert ours and not ours[0].flags, (
+        "MySQL now flags this source's own rows as the statement end, so this shape "
+        f"no longer reproduces: {layout}"
+    )
+    first_commit = next(e for e in layout if e.name == "XidEvent")
+
+    pending, buffered = read_once(source, start)
+
+    assert len(buffered) == 1, (
+        f"max_buffer_size=1, and the read buffered {len(buffered)} changes: it ran to "
+        f"the end of the stream instead of stopping at the first boundary. Its events "
+        f"run {layout}"
+    )
+    assert pending == (start[0], first_commit.end), (
+        f"the read committed {pending}, not the first transaction boundary at "
+        f"{first_commit.end}; its events run {layout}"
+    )
+
+
+def test_the_position_advances_over_another_tables_traffic(
+    mysql, mysql_server, root_connection
+):
+    """
+    A quiet table's position must keep moving while the rest of the server is busy.
+
+    The stream skips the other table's row events inside its own loop and hands none of
+    them over, so the position a read keeps has to come from the stream rather than
+    from the events it received - and a rotation is carried the same way, by a
+    `RotateEvent` this source does not ask for. Without that, a quiet table's committed
+    position would sit still in a file the server eventually purges.
+    """
+    table = "lite_quiet"
+    noisy = "lite_quiet_noisy"
+    for name in (table, noisy):
+        execute(mysql, f"DROP TABLE IF EXISTS {name}")
+        execute(mysql, f"CREATE TABLE {name} (id INT PRIMARY KEY, note VARCHAR(20))")
+
+    source = make_source(mysql_server, table, {}, commit_interval=5.0)
+    start = source._start_position()
+    for i in range(5):
+        execute(mysql, f"INSERT INTO {noisy} VALUES ({i}, 'noise-{i}')")
+
+    pending, buffered = read_once(source, start)
+
+    assert not buffered, f"the other table's rows reached this source: {buffered}"
+    assert pending is not None and pending[1] > start[1], (
+        f"the read started at {start} and kept {pending}: five statements on another "
+        "table moved the position nowhere"
+    )
+
+    execute(root_connection, "FLUSH BINARY LOGS")
+    rotated, _ = read_once(source, pending)
+
+    assert rotated is not None and rotated[0] != pending[0], (
+        f"the read started at {pending} and kept {rotated}: the source stayed in a "
+        "file the server has rotated out of"
+    )
 
 
 def test_stop_drains_the_buffer(mysql, mysql_server):

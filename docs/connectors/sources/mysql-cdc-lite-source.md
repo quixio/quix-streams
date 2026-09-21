@@ -263,7 +263,7 @@ variable.
 | No `server_id` parameter | You cannot set one. If the derived id collides, the only lever is `name`, which also resets the state store — so changing it to fix a collision *also skips the downtime window*. |
 | No `binlog_transaction_compression` check | [§7](#7-binlog_transaction_compression-is-off): a compressed transaction is not unpacked, produces nothing, and the position moves past it. Silent from both ends. |
 | No parameter validation | `commit_interval=0` and friends are accepted and misbehave in their own ways. |
-| One statement is buffered whole | `max_buffer_size` is a floor, not a ceiling, and is honoured only at statement boundaries. MySQL splits one statement's rows across a row event per `binlog_row_event_max_size` (8 KB by default) — 5000 rows came out as ten events — and only the end of that group is a position the source can resume from, so a statement that changes a million rows buffers all of it. The scan bound is honoured at the same boundaries, so such a statement is also read whole: a `SIGTERM` that arrives anywhere inside it — on the table map that opens it as much as on any of its row events — waits for the end of the statement and can outlast the shutdown budget into a `SIGKILL`. |
+| One statement is buffered whole | `max_buffer_size` is a floor, not a ceiling, and is honoured only at a transaction or statement boundary this source has observed. MySQL splits one statement's rows across a row event per `binlog_row_event_max_size` (8 KB by default) — 5000 rows came out as ten events — and only the end of that group is a position the source can resume from, so a statement that changes a million rows buffers all of it. The scan bound is honoured at the same boundaries, so such a statement is also read whole: a `SIGTERM` that arrives anywhere inside it — on the table map that opens it as much as on any of its row events — waits for the end of the statement and can outlast the shutdown budget into a `SIGKILL`. A statement that writes a second table as well — through a trigger, or a multi-table `UPDATE` — is bounded at the transaction's commit instead, because MySQL marks the end of such a statement on the other table's rows, which this source is filtered away from and never receives. |
 
 Things it does guarantee, and that were kept deliberately:
 
@@ -287,11 +287,15 @@ Things it does guarantee, and that were kept deliberately:
 - **A stop is noticed during a scan, not only between scans.** The read is bounded per
   binlog event, including the events of other tables that get skipped, so a stream of
   ordinary statements cannot hold the source past its shutdown budget. Both bounds are
-  honoured only at statement boundaries: one landing on a statement's table map, or on
-  any of its row events, reads that statement whole before it stops, because no earlier
-  point in it can be resumed from
+  honoured only at a transaction or statement boundary this source has observed: one
+  landing on a statement's table map, or on any of its row events, reads that statement
+  whole before it stops, because no earlier point in it can be resumed from
   (`test_a_scan_bound_landing_on_a_table_map_reads_the_statement_whole`). One statement
-  is therefore the exception to the budget, as the row above says.
+  is therefore the exception to the budget, as the row above says. When the boundary is
+  on events this source never receives — a statement that also writes another table —
+  the stop keeps the position from *before* that statement and the restart reads it
+  again, so landing inside one costs duplicates rather than rows
+  (`test_a_bound_on_a_trigger_written_table_map_delivers_the_row`).
 - **A typo fails at start-up.** A `database` or `table` that does not exist, or that the
   user cannot see, is an error out of `setup()` naming both — not a source that runs
   quietly forever producing nothing (`test_a_missing_table_fails_at_setup`).
@@ -324,9 +328,9 @@ Here are some important configurations to be aware of (see [MySQL CDC Lite Sourc
   itself run for an interval on a busy server.
     **Default**: `5.0`
 - `max_buffer_size`: commit early once this many changes are buffered, which bounds
-  memory while catching up after downtime. It is honoured at statement boundaries,
-  because a position inside a statement cannot be resumed from, so one statement is
-  buffered whole however many rows it changes.
+  memory while catching up after downtime. It is honoured at a transaction or statement
+  boundary this source has observed, because a position inside a statement cannot be
+  resumed from, so one statement is buffered whole however many rows it changes.
     **Default**: `1000`
 - `tls_enabled`: encrypt the connections to MySQL. The server certificate is **not**
   verified. `False` connects in plaintext.
@@ -433,6 +437,6 @@ The connector's own test suite brings the same container up itself:
 python -m pytest tests/test_quixstreams/test_sources/test_community/test_mysql_cdc_lite.py
 ```
 
-Eleven tests, one MySQL container, about 35 seconds. Seven prove the source works; four
-exist to keep this page honest, and will fail if MySQL's behaviour stops matching what
-is written above.
+Nineteen tests, one MySQL container, about 30 seconds. Fifteen prove the source works;
+four exist to keep this page honest, and will fail if MySQL's behaviour stops matching
+what is written above.
