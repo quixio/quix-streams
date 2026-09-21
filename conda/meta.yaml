@@ -12,9 +12,9 @@ build:
 
 requirements:
   host:
-    - python >=3.10,<3.13
+    - python >=3.11,<4
   run:
-    - python >=3.10,<3.13
+    - python >=3.11,<4
     - typing_extensions >=4.8
     - orjson >=3.9,<4
     - pydantic >=2.7,<2.14
