@@ -10,4 +10,6 @@ $PREFIX/bin/pip install \
 'influxdb>=5.3,<6' \
 'jsonpath_ng>=1.7.0,<2' \
 'httpx>=0.28.1' \
-'paho-mqtt>=2.1.0,<3'
+'paho-mqtt>=2.1.0,<3' \
+'pymysql>=1.0,<2' \
+'mysql-replication>=1.0.17,<1.0.18'
