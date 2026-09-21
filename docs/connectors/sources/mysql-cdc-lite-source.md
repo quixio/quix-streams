@@ -319,8 +319,9 @@ Here are some important configurations to be aware of (see [MySQL CDC Lite Sourc
 - `port`: MySQL server port.
     **Default**: `3306`
 - `commit_interval`: how often (seconds) to produce the buffered changes and commit the
-  binlog position they cover. It is also the source's read cadence, so it bounds the
-  delay between a change and its message.
+  binlog position they cover. The source reads at the start and at the end of each
+  interval, so it bounds the delay between a change and its message; one read may
+  itself run for an interval on a busy server.
     **Default**: `5.0`
 - `max_buffer_size`: commit early once this many changes are buffered, which bounds
   memory while catching up after downtime. It is honoured at statement boundaries,

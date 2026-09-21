@@ -187,6 +187,26 @@ class OneCommitHarness(LiteHarness):
             self.stop()
 
 
+class HoldingHarness(LiteHarness):
+    """
+    A source that holds itself once, right after a commit.
+
+    A change written while it is held lands at the top of the next cycle, where the
+    read that opens the cycle buffers it and the sleep that follows leaves it there.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.held = threading.Event()
+        self.may_resume = threading.Event()
+
+    def _commit_batch(self, timeout: Optional[float] = None) -> None:
+        super()._commit_batch(timeout)
+        if not self.held.is_set():
+            self.held.set()
+            assert self.may_resume.wait(timeout=30.0), "the test never resumed the read"
+
+
 class RunningSource:
     """Runs a source in a thread, stops it on exit, and surfaces what it raised."""
 
@@ -265,6 +285,17 @@ def row_of(message: Dict[str, Any]) -> Dict[str, Any]:
 def oldkeys_of(message: Dict[str, Any]) -> Dict[str, Any]:
     oldkeys = message["oldkeys"]
     return dict(zip(oldkeys["keynames"], oldkeys["keyvalues"]))
+
+
+def wait_for_insert(source: LiteHarness, row_id: int, timeout: float) -> float:
+    """:return: the monotonic time the message for `row_id` was first seen at."""
+    deadline = time.monotonic() + timeout
+    while True:
+        if any(row_of(m)["id"] == row_id for m in of_kind(source.received(), "insert")):
+            return time.monotonic()
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"timed out waiting for the message for row {row_id}")
+        time.sleep(0.01)
 
 
 def statement_positions(
@@ -781,12 +812,15 @@ def test_stop_drains_the_buffer(mysql, mysql_server):
     execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(50))")
 
     # Long enough that a read lands in the buffer and sits there until stop().
-    source = make_source(mysql_server, table, {}, commit_interval=5.0)
+    source = make_source(
+        mysql_server, table, {}, harness=HoldingHarness, commit_interval=5.0
+    )
     running = RunningSource(source)
     with running:
-        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        assert source.held.wait(timeout=30.0), "the source never committed"
         for i in range(3):
             execute(mysql, f"INSERT INTO {table} VALUES ({i}, 'buffered-{i}')")
+        source.may_resume.set()
 
         assert source.buffered.wait(timeout=30.0), "the source never buffered the rows"
         assert not source.received(), "the rows were produced before stop() was asked"
@@ -796,6 +830,41 @@ def test_stop_drains_the_buffer(mysql, mysql_server):
     assert [row_of(m) for m in of_kind(messages, "insert")] == [
         {"id": i, "note": f"buffered-{i}"} for i in range(3)
     ]
+
+
+def test_commit_interval_bounds_the_delay_before_a_message(mysql, mysql_server):
+    """
+    A change must reach the topic within one `commit_interval` of being written.
+
+    That is what the interval is documented to bound. A cycle that reads once, at its
+    start, cannot hold it: a change written just after that read waits out the rest of
+    the cycle, is read at the top of the next one, and is committed at the end of that
+    one - nearly two intervals for a change that missed a read by a millisecond.
+    """
+    table = "lite_latency"
+    interval = 2.0
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(20))")
+
+    source = make_source(mysql_server, table, {}, commit_interval=interval)
+    with RunningSource(source):
+        assert source.polled.wait(timeout=30.0), "the stream never opened"
+        # A row written before the source anchors its position is never streamed, and
+        # the commit that delivers this one starts the cycle measured against below.
+        execute(mysql, f"INSERT INTO {table} VALUES (1, 'warm-up')")
+        cycle_start = wait_for_insert(source, 1, timeout=4 * interval)
+
+        offset = 0.05 * interval
+        time.sleep(max(0.0, cycle_start + offset - time.monotonic()))
+        execute(mysql, f"INSERT INTO {table} VALUES (2, 'measured')")
+        written = time.monotonic()
+        delay = wait_for_insert(source, 2, timeout=4 * interval) - written
+
+    assert delay <= 1.3 * interval, (
+        f"a change written {offset:.2f}s into the cycle took {delay:.2f}s "
+        f"({delay / interval:.2f}x) to reach the topic, but commit_interval="
+        f"{interval} is documented as the bound on that delay"
+    )
 
 
 def test_minimal_row_metadata_is_silently_wrong(mysql, mysql_server, root_connection):

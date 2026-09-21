@@ -273,8 +273,9 @@ class MySqlCdcLiteSource(StatefulSource):
         :param port: MySQL server port.
             Default - `3306`.
         :param commit_interval: how often (seconds) to produce the buffered changes and
-            commit the binlog position they cover. It is also the source's read
-            cadence, so it bounds the delay between a change and its message.
+            commit the binlog position they cover. The source reads at the start and at
+            the end of each interval, so it bounds the delay between a change and its
+            message; one read may itself run for an interval on a busy server.
             Default - `5.0`.
         :param max_buffer_size: commit early once this many changes are buffered, which
             bounds memory while catching up after downtime. It is honoured at statement
@@ -532,7 +533,7 @@ class MySqlCdcLiteSource(StatefulSource):
 
     def _poll_once(self) -> None:
         """
-        Read up to the commit deadline, then produce and commit what was read.
+        Read, wait out the commit interval, read again, then produce and commit.
 
         A poll that sees the source stopping leaves its buffer alone: the drain at the
         end of `run()` is the one commit made after stop(), and the only one whose
@@ -541,12 +542,13 @@ class MySqlCdcLiteSource(StatefulSource):
         self._read_changes()
         if len(self._buffer) < self._max_buffer_size:
             self._sleep(self._commit_due_in())
+            self._read_changes()
         if self.running:
             self._commit_batch()
 
     def _read_changes(self) -> None:
         """
-        Buffer the changes the stream can deliver before the commit deadline.
+        Buffer the changes the stream can deliver within one commit interval.
 
         The position taken at the end covers everything the stream read, including the
         events of other tables it discarded, so the source keeps up with the server
@@ -554,7 +556,7 @@ class MySqlCdcLiteSource(StatefulSource):
         """
         stream = self._stream
         bound = _ScanBound(
-            self._last_commit_at + self._commit_interval, lambda: self.running
+            time.monotonic() + self._commit_interval, lambda: self.running
         )
         stream.end_log_pos = bound
         # A stream built without an `end_log_pos` has no `is_past_end_log_pos` of its
