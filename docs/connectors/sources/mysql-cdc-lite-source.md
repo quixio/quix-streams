@@ -437,6 +437,6 @@ The connector's own test suite brings the same container up itself:
 python -m pytest tests/test_quixstreams/test_sources/test_community/test_mysql_cdc_lite.py
 ```
 
-Twenty-three tests, one MySQL container, about 30 seconds. Twenty-one prove the source works;
+Twenty-three tests, one MySQL container, about 30 seconds. Nineteen prove the source works;
 four exist to keep this page honest, and will fail if MySQL's behaviour stops matching
 what is written above.
