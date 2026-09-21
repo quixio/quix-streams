@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from quixstreams.core.stream import Stream, VoidExecutor
 from quixstreams.models import Topic
@@ -27,6 +27,7 @@ class DataFrameRegistry:
         self._topics_to_stream_ids: dict[str, set[str]] = {}
         self._stream_ids_to_topics: dict[str, set[str]] = {}
         self._requires_time_alignment = False
+        self._periodic_tasks: list[Callable[[], None]] = []
 
     @property
     def requires_time_alignment(self) -> bool:
@@ -154,6 +155,13 @@ class DataFrameRegistry:
         :return: a list of topic names
         """
         return list(self._stream_ids_to_topics[stream_id])
+
+    def register_periodic_task(self, task: Callable[[], None]) -> None:
+        self._periodic_tasks.append(task)
+
+    def run_periodic_tasks(self) -> None:
+        for task in self._periodic_tasks:
+            task()
 
     def require_time_alignment(self):
         """

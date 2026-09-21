@@ -142,9 +142,21 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
 
         return self._deserialize_value(value) if value is not None else None
 
-    def get_interval(self, start: int, end: int, prefix: Any) -> list[Any]:
-        items = self._get_items(start=start, end=end, prefix=self._ensure_bytes(prefix))
+    def get_interval(
+        self, start: int, end: int, prefix: Any, limit: Optional[int] = None
+    ) -> list[Any]:
+        items = self._get_items(
+            start=start, end=end, prefix=self._ensure_bytes(prefix), limit=limit
+        )
         return [self._deserialize_value(value) for _, value in items]
+
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def delete_interval(self, start: int, end: int, prefix: Any) -> int:
+        prefix = self._ensure_bytes(prefix)
+        items = self._get_items(start=start, end=end, prefix=prefix)
+        for key, _ in items:
+            self._update_cache.delete(key, prefix)
+        return len(items)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def set_for_timestamp(self, timestamp: int, value: Any, prefix: Any) -> None:
@@ -208,7 +220,6 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
             # Scope the lower bound to this prefix's namespace by appending the
             # SEPARATOR. Without it, the bare prefix lets the range spill into
             # other prefixes that share these bytes (e.g. b"key" vs b"key2"),
-            # deleting entries that belong to unrelated keys.
             lower_bound = self._serialize_key(b"", prefix)
             stored = self._partition.iter_items(
                 lower_bound=lower_bound, upper_bound=key

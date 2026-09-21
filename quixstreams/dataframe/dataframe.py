@@ -60,7 +60,8 @@ from quixstreams.utils.printing import (
 from quixstreams.utils.stream_id import stream_id_from_strings
 
 from .joins import AsOfJoin, AsOfJoinHow, IntervalJoin, IntervalJoinHow, OnOverlap
-from .joins.lookups import BaseField, BaseLookup
+from .joins.lookups import BaseField, BaseLookup, LookupBuffer
+from .joins.lookups.buffer_node import BufferTransformFunction
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
@@ -1922,6 +1923,7 @@ class StreamingDataFrame:
         lookup: BaseLookup,
         fields: dict[str, BaseField],
         on: Optional[Union[str, Callable[[dict[str, Any], Any], str]]] = None,
+        buffer: Optional[LookupBuffer] = None,
     ) -> "StreamingDataFrame":
         """
         Note: This is an experimental feature, and its API is likely to change in the future.
@@ -1931,7 +1933,7 @@ class StreamingDataFrame:
         source, using a user-defined lookup strategy (subclass of BaseLookup) and a set of fields
         (subclasses of BaseField) that specify how to extract or map the enrichment data.
 
-        The join is performed in-place: the input value dictionary is updated with the enrichment data.
+        Each record's value dictionary is updated in place with the enrichment data.
 
         Lookup implementation part of the standard quixstreams library:
             - `quixstreams.dataframe.joins.lookups.QuixConfigurationService`
@@ -1942,8 +1944,14 @@ class StreamingDataFrame:
             - If a string, it is interpreted as the column name in the value dict to use as the lookup key.
             - If a callable, it should accept (value, key) and return the target key as a string.
             - If None (default), the message key is used as the lookup key.
+        :param buffer: A `LookupBuffer` holding records whose lookup does not resolve
+            yet, instead of enriching them with field defaults. Requires a state store
+            and a periodic task, both registered here. If None (default), an unresolved
+            record goes downstream immediately with its fields' defaults.
 
-        :returns: StreamingDataFrame: The same StreamingDataFrame instance with the enrichment applied in-place.
+        :returns: The same StreamingDataFrame instance, with the lookup join
+            applied in place. Both the buffered and the unbuffered path mutate
+            this instance, so reassigning the result is optional.
 
         Example:
 
@@ -1975,6 +1983,15 @@ class StreamingDataFrame:
 
             def _on(value: dict[str, Any], key: Any) -> str:
                 return key
+
+        if buffer is not None:
+            buffer.validate_fields(fields)
+            buffer.validate_key_deserializers(self._topics)
+            buffer.register_store(self)
+            operator = buffer.callback(self, lookup, fields, _on)
+            self._registry.register_periodic_task(operator.tick)
+            self._stream = self._stream.add_function(BufferTransformFunction(operator))
+            return self
 
         def _join(
             value: dict[str, Any], key: Any, timestamp: int, headers: HeadersMapping
