@@ -303,8 +303,10 @@ Things it does guarantee, and that were kept deliberately:
   saying which position is gone and what to do about it, rather than three retries and a
   bare driver exception.
 - **The values are encoded, not stringified.** `DECIMAL`, `SET`, `ENUM`, `JSON`, `TIME`,
-  `DATETIME`, binary and unsigned columns all have defined encodings
-  (`test_every_column_type_encodes_json_safely`).
+  `DATETIME`, `BIT`, binary and unsigned columns all have defined encodings, and every
+  row of the table above is compared against the server's own rendering of the same
+  value — `HEX`, `BIN`, `CAST(v AS CHAR)` — rather than against a value written down here
+  (`test_every_documented_type_matches_the_servers_own_rendering`).
 
 ## Configuration
 
@@ -331,6 +333,10 @@ Here are some important configurations to be aware of (see [MySQL CDC Lite Sourc
   memory while catching up after downtime. It is honoured at a transaction or statement
   boundary this source has observed, because a position inside a statement cannot be
   resumed from, so one statement is buffered whole however many rows it changes.
+  That same boundary rule bounds how long a shutdown takes: a `SIGTERM` arriving inside
+  a statement group is not acted on until the group closes, so a single huge statement —
+  or a run of statements MySQL never marks the end of, such as a trigger's — can hold
+  the source past `shutdown_timeout` and into a `SIGKILL`.
     **Default**: `1000`
 - `tls_enabled`: encrypt the connections to MySQL. The server certificate is **not**
   verified. `False` connects in plaintext.
@@ -375,14 +381,15 @@ Column values are encoded so the result is JSON:
 
 | MySQL type | Encoded as |
 |---|---|
-| `DECIMAL` | string, e.g. `"12.34"` |
+| `DECIMAL` | string in the plain form MySQL prints, at the column's declared scale, e.g. `"12.34"` — never exponent notation, however small the value |
 | `FLOAT`, `DOUBLE` | number at full `double` precision — `1.1` stored in a `FLOAT` ships as `1.100000023841858`, the exact value MySQL holds, not the six digits `SELECT` prints |
 | `JSON` | a nested JSON value, not a string holding JSON text |
 | `SET` | comma-joined, sorted, e.g. `"a,c"`. An **empty** `SET` arrives as `null`, indistinguishable from SQL NULL |
 | `ENUM` | its string label |
-| `BINARY`, `VARBINARY`, `BLOB` | base64 string |
+| `BINARY`, `VARBINARY`, `BLOB` | base64 string of the bytes MySQL stores. A `BINARY(N)` is re-padded to `N` bytes with `0x00` first — the row image carries it with the pad trimmed off, and the column length is what a replica re-pads from |
+| `BIT(N)` | string of `N` `"0"`/`"1"` characters, most significant first, e.g. `"10000001"` |
 | `DATE`, `DATETIME`, `TIMESTAMP` | ISO-8601 string |
-| `TIME` | `[-]HH:MM:SS[.ffffff]`, as MySQL prints it (hours up to 838) |
+| `TIME` | `[-]HH:MM:SS` with the column's `fsp` fraction digits, as MySQL prints it (hours up to 838): none at all for a `TIME(0)`, and `fsp` of them otherwise even when the fraction is zero |
 
 ## Processing/Delivery Guarantees
 

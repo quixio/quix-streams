@@ -12,10 +12,13 @@ behaving the way it records.
 Requires Docker.
 """
 
+import base64
 import json
+import struct
 import threading
 import time
 from collections import Counter
+from datetime import datetime
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 
 import pymysql
@@ -627,46 +630,181 @@ def test_insert_update_delete_stream_with_correct_values(mysql, mysql_server):
         assert names and not [n for n in names if n.startswith("UNKNOWN_COL")]
 
 
-def test_every_column_type_encodes_json_safely(mysql, mysql_server):
-    """The encoder is the one thing kept from the hardened connector: prove it."""
-    table = "lite_types"
-    execute(mysql, f"DROP TABLE IF EXISTS {table}")
-    execute(
-        mysql,
-        f"CREATE TABLE {table} ("
-        "id INT PRIMARY KEY, flag BOOLEAN, small_unsigned TINYINT UNSIGNED, "
-        "amount DECIMAL(10,2), payload JSON, tags SET('a','b','c'), "
-        "status ENUM('new','done'), blob_col VARBINARY(16), when_at DATETIME, "
-        "dur TIME, ratio DOUBLE, empty_tags SET('x','y'))",
-    )
+def b64_of_hex(rendered: str) -> str:
+    return base64.b64encode(bytes.fromhex(rendered)).decode("ascii")
 
-    payload = '{"a": [1, 2], "b": "text"}'
+
+def widened_float(rendered: str) -> float:
+    """:return: the double MySQL holds for a `FLOAT`, from the digits it prints."""
+    return struct.unpack("<f", struct.pack("<f", float(rendered)))[0]
+
+
+def iso_datetime(rendered: str) -> str:
+    return datetime.fromisoformat(rendered).isoformat()
+
+
+def sorted_set(rendered: str) -> Optional[str]:
+    return ",".join(sorted(rendered.split(","))) or None
+
+
+class TypeCase(NamedTuple):
+    """
+    One column of the docs page's encoding table, with the oracle for its value.
+
+    :param oracle: SQL rendering the documented form of the column on the server.
+    :param encoded: the value this source must emit, from that rendering.
+    """
+
+    name: str
+    ddl: str
+    literal: str
+    oracle: str
+    encoded: Callable[[str], Any]
+
+
+JSON_VALUE = {"b": "text", "a": [1, 2], "z": None, "n": 1.5, "e": {}, "u": "ünïcode"}
+
+TYPE_CASES = [
+    TypeCase("flag", "BOOLEAN", "TRUE", "CAST(flag AS CHAR)", int),
+    TypeCase("small_uns", "TINYINT UNSIGNED", "200", "CAST(small_uns AS CHAR)", int),
+    TypeCase("big_neg", "BIGINT", "-9223372036854775808", "CAST(big_neg AS CHAR)", int),
+    TypeCase(
+        "big_uns",
+        "BIGINT UNSIGNED",
+        "18446744073709551615",
+        "CAST(big_uns AS CHAR)",
+        int,
+    ),
+    TypeCase(
+        "dec_tiny", "DECIMAL(20,10)", "'0.0000000001'", "CAST(dec_tiny AS CHAR)", str
+    ),
+    TypeCase("dec_neg", "DECIMAL(10,2)", "'-12.34'", "CAST(dec_neg AS CHAR)", str),
+    TypeCase("dec_zero", "DECIMAL(10,2)", "'0'", "CAST(dec_zero AS CHAR)", str),
+    TypeCase(
+        "dec_wide",
+        "DECIMAL(30,0)",
+        "'999999999999999999999999999999'",
+        "CAST(dec_wide AS CHAR)",
+        str,
+    ),
+    TypeCase("f_one", "FLOAT", "1.1", "CAST(f_one AS CHAR)", widened_float),
+    TypeCase("f_neg", "FLOAT", "-0.5", "CAST(f_neg AS CHAR)", widened_float),
+    TypeCase("d_neg", "DOUBLE", "-0.1", "CAST(d_neg AS CHAR)", float),
+    TypeCase("d_zero", "DOUBLE", "0", "CAST(d_zero AS CHAR)", float),
+    TypeCase(
+        "payload",
+        "JSON",
+        f"'{json.dumps(JSON_VALUE)}'",
+        "CAST(payload AS CHAR)",
+        json.loads,
+    ),
+    TypeCase("tags", "SET('c','b','a')", "'a,c'", "CAST(tags AS CHAR)", sorted_set),
+    TypeCase("no_tags", "SET('x','y')", "''", "CAST(no_tags AS CHAR)", sorted_set),
+    TypeCase("status", "ENUM('new','done')", "'done'", "CAST(status AS CHAR)", str),
+    TypeCase(
+        "status_1st", "ENUM('new','done')", "'new'", "CAST(status_1st AS CHAR)", str
+    ),
+    TypeCase("bin_pad", "BINARY(4)", "0x00000000", "HEX(bin_pad)", b64_of_hex),
+    TypeCase("bin_tail", "BINARY(4)", "0x41000000", "HEX(bin_tail)", b64_of_hex),
+    TypeCase("bin_full", "BINARY(4)", "0xFFFFFFFF", "HEX(bin_full)", b64_of_hex),
+    TypeCase("vbin_zero", "VARBINARY(16)", "0x00000000", "HEX(vbin_zero)", b64_of_hex),
+    TypeCase("vbin_empty", "VARBINARY(16)", "''", "HEX(vbin_empty)", b64_of_hex),
+    TypeCase("blob_col", "BLOB", "0x0001FF00", "HEX(blob_col)", b64_of_hex),
+    TypeCase("day", "DATE", "'2024-05-06'", "CAST(day AS CHAR)", str),
+    TypeCase("day_min", "DATE", "'1000-01-01'", "CAST(day_min AS CHAR)", str),
+    TypeCase(
+        "dt0", "DATETIME", "'2024-05-06 07:08:09'", "CAST(dt0 AS CHAR)", iso_datetime
+    ),
+    TypeCase(
+        "dt3",
+        "DATETIME(3)",
+        "'2024-05-06 07:08:09.123'",
+        "CAST(dt3 AS CHAR)",
+        iso_datetime,
+    ),
+    TypeCase(
+        "dt6_zero",
+        "DATETIME(6)",
+        "'2024-05-06 07:08:09.000000'",
+        "CAST(dt6_zero AS CHAR)",
+        iso_datetime,
+    ),
+    TypeCase(
+        "ts",
+        "TIMESTAMP NULL",
+        "'2024-05-06 07:08:09'",
+        "CAST(ts AS CHAR)",
+        iso_datetime,
+    ),
+    TypeCase(
+        "ts_epoch",
+        "TIMESTAMP NULL",
+        "'1970-01-01 00:00:01'",
+        "CAST(ts_epoch AS CHAR)",
+        iso_datetime,
+    ),
+    TypeCase("t0", "TIME(0)", "'00:00:00'", "CAST(t0 AS CHAR)", str),
+    TypeCase("t0_max", "TIME(0)", "'838:59:59'", "CAST(t0_max AS CHAR)", str),
+    TypeCase("t3", "TIME(3)", "'01:02:03.456'", "CAST(t3 AS CHAR)", str),
+    TypeCase("t3_neg", "TIME(3)", "'-00:00:00.5'", "CAST(t3_neg AS CHAR)", str),
+    TypeCase("t6_zero", "TIME(6)", "'00:00:00'", "CAST(t6_zero AS CHAR)", str),
+    TypeCase("t6_neg", "TIME(6)", "'-838:59:58.999999'", "CAST(t6_neg AS CHAR)", str),
+    TypeCase("bit1", "BIT(1)", "b'1'", "LPAD(BIN(bit1), 1, '0')", str),
+    TypeCase("bit8", "BIT(8)", "b'10000001'", "LPAD(BIN(bit8), 8, '0')", str),
+    TypeCase("bit8_low", "BIT(8)", "b'1'", "LPAD(BIN(bit8_low), 8, '0')", str),
+    TypeCase("bit8_zero", "BIT(8)", "b'0'", "LPAD(BIN(bit8_zero), 8, '0')", str),
+    TypeCase("bit12", "BIT(12)", "b'100000000001'", "LPAD(BIN(bit12), 12, '0')", str),
+]
+
+
+def test_every_documented_type_matches_the_servers_own_rendering(mysql, mysql_server):
+    """
+    Every type on the docs page's encoding table, against the server's own rendering.
+
+    Each case carries the SQL that renders its documented form - `HEX` for the binary
+    types, `BIN` for `BIT`, `CAST(v AS CHAR)` for the ones the page documents as MySQL
+    prints them - and the transform from that rendering to the value this source must
+    emit. Three rows of the page are documented divergences and are canonicalised
+    rather than compared raw: a `SET` is sorted, a `JSON` object is compared parsed
+    rather than as MySQL's text, and a `FLOAT` is widened from the six digits MySQL
+    prints to the double it holds.
+
+    `TIMESTAMP` is written and read in UTC, which is the zone the decoder resolves it
+    in.
+    """
+    table = "lite_types"
+    execute(mysql, "SET time_zone = '+00:00'")
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    columns = ", ".join(f"{case.name} {case.ddl}" for case in TYPE_CASES)
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, {columns})")
+
     source = make_source(mysql_server, table, {})
     with RunningSource(source) as running:
         assert running.source.polled.wait(timeout=30.0), "the stream never opened"
-        execute(
-            mysql,
-            f"INSERT INTO {table} VALUES (1, TRUE, 200, 12.34, '{payload}', "
-            "'c,a', 'done', 0x0001FF, '2024-05-06 07:08:09', '10:20:30', 1.5, '')",
-        )
+        literals = ", ".join(case.literal for case in TYPE_CASES)
+        execute(mysql, f"INSERT INTO {table} VALUES (1, {literals})")
         messages = running.wait_for(
             lambda m: count_kinds(m, insert=1), "the typed insert"
         )
 
-    row = row_of(of_kind(messages, "insert")[0])
-    assert row["id"] == 1
-    assert row["flag"] == 1
-    assert row["small_unsigned"] == 200, "UNSIGNED needs binlog_row_metadata=FULL"
-    assert row["amount"] == "12.34"
-    assert row["payload"] == {"a": [1, 2], "b": "text"}
-    assert row["tags"] == "a,c"
-    assert row["status"] == "done"
-    assert row["blob_col"] == "AAH/"
-    assert row["when_at"] == "2024-05-06T07:08:09"
-    assert row["dur"] == "10:20:30"
-    assert row["ratio"] == 1.5
-    # An empty SET decodes to None, which this source does not distinguish from NULL.
-    assert row["empty_tags"] is None
+    oracle = ", ".join(case.oracle for case in TYPE_CASES)
+    with mysql.cursor() as cursor:
+        cursor.execute(f"SELECT {oracle} FROM {table} WHERE id = 1")
+        rendered = cursor.fetchone()
+
+    emitted = row_of(of_kind(messages, "insert")[0])
+    assert emitted["id"] == 1
+    assert emitted["small_uns"] == 200, "UNSIGNED needs binlog_row_metadata=FULL"
+    wrong = [
+        (case, case.encoded(text), emitted[case.name])
+        for case, text in zip(TYPE_CASES, rendered)
+        if emitted[case.name] != case.encoded(text)
+    ]
+    assert not wrong, "\n".join(
+        f"{case.name:>11} {case.ddl:<17} {case.literal:>34} -> MySQL renders "
+        f"{want!r}, the source emits {got!r}"
+        for case, want, got in wrong
+    )
 
     # The whole change dict really is JSON, not just JSON-ish (`_key` is the harness's
     # own addition: the serialized Kafka key, which is bytes by then).

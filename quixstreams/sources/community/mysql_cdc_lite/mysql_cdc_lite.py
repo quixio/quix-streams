@@ -96,8 +96,13 @@ def _is_purged_position(exc: BaseException) -> bool:
     return code == _BINLOG_READ_ERROR_CODE and _PURGED_MARKER in str(exc).lower()
 
 
-def _mysql_time(value: timedelta) -> str:
-    """Render a TIME as MySQL prints it: `[-]HH:MM:SS[.ffffff]`, hours up to 838."""
+def _mysql_time(value: timedelta, fsp: int) -> str:
+    """
+    Render a TIME as MySQL prints it: `[-]HH:MM:SS[.f...]`, hours up to 838.
+
+    :param fsp: the column's declared fractional-second precision, 0 to 6. MySQL prints
+        exactly that many fraction digits, including none and including zeroes.
+    """
     negative = value < timedelta(0)
     value = abs(value)
     microseconds = value.microseconds
@@ -110,21 +115,40 @@ def _mysql_time(value: timedelta) -> str:
     hours, rest = divmod(value.days * 86400 + value.seconds, 3600)
     minutes, seconds = divmod(rest, 60)
     text = f"{sign}{hours:02d}:{minutes:02d}:{seconds:02d}"
-    return f"{text}.{microseconds:06d}" if microseconds else text
+    if not fsp:
+        return text
+    return f"{text}.{microseconds // 10 ** (6 - fsp):0{fsp}d}"
 
 
-def _encode(value: Any) -> Any:
-    """Encode one decoded column value as something the JSON serializer accepts."""
-    if value is None or isinstance(value, (bool, int, float, str)):
+def _encode(value: Any, pad_to: int, fsp: int) -> Any:
+    """
+    Encode one decoded column value as something the JSON serializer accepts.
+
+    :param pad_to: the column's `max_length` for a BINARY, 0 for every other column.
+        MySQL trims the 0x00 pad off a BINARY before it writes the row image.
+    :param fsp: the column's fractional-second precision for a TIME, 0 otherwise.
+    """
+    if value is None:
+        return value
+    if pad_to:
+        # An all-pad BINARY arrives as `""`, not `b""`: a binary column keeps its
+        # bytes only through the LookupError fallback in `row_event.py:404-411`, and
+        # `b"".decode` returns early without looking a codec up.
+        return base64.b64encode(bytes(value or b"").ljust(pad_to, b"\x00")).decode(
+            "ascii"
+        )
+    if isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, (bytes, bytearray)):
         return base64.b64encode(bytes(value)).decode("ascii")
     if isinstance(value, (set, frozenset)):
         return ",".join(sorted(str(item) for item in value))
     if isinstance(value, Decimal):
-        return str(value)
+        # Plain form at the declared scale: `str()` switches to exponent notation below
+        # 1e-6, which MySQL never prints.
+        return format(value, "f")
     if isinstance(value, timedelta):
-        return _mysql_time(value)
+        return _mysql_time(value, fsp)
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
@@ -145,44 +169,65 @@ def _encode_json(value: Any) -> Any:
         return [_encode_json(item) for item in value]
     if isinstance(value, Decimal):
         return float(value)
-    return _encode(value)
+    return _encode(value, 0, 0)
 
 
 def _encode_row(
-    values: Dict[str, Any], json_columns: Set[str]
+    values: Dict[str, Any],
+    json_columns: Set[str],
+    pad_widths: Dict[str, int],
+    fsps: Dict[str, int],
 ) -> Tuple[List[str], List[Any]]:
     """:return: `(column_names, column_values)`, the same length as each other."""
     names = list(values)
     encoded = [
-        _encode_json(values[name]) if name in json_columns else _encode(values[name])
+        _encode_json(values[name])
+        if name in json_columns
+        else _encode(values[name], pad_widths.get(name, 0), fsps.get(name, 0))
         for name in names
     ]
     return names, encoded
 
 
-def _oldkeys(values: Dict[str, Any], json_columns: Set[str]) -> Dict[str, Any]:
-    names, encoded = _encode_row(values, json_columns)
+def _oldkeys(
+    values: Dict[str, Any],
+    json_columns: Set[str],
+    pad_widths: Dict[str, int],
+    fsps: Dict[str, int],
+) -> Dict[str, Any]:
+    names, encoded = _encode_row(values, json_columns, pad_widths, fsps)
     return {"keynames": names, "keyvalues": encoded}
 
 
 def _event_to_changes(event: Any) -> List[Dict[str, Any]]:
     """Convert one row event into this source's change dicts, one per row."""
-    json_columns = {
-        column.name for column in event.columns if column.type == FIELD_TYPE.JSON
-    }
+    json_columns: Set[str] = set()
+    # A BINARY is a STRING column over the binary character set; a VARBINARY is a
+    # VARCHAR and carries its own length, so only the former needs re-padding.
+    pad_widths: Dict[str, int] = {}
+    fsps: Dict[str, int] = {}
+    for column in event.columns:
+        if column.type == FIELD_TYPE.JSON:
+            json_columns.add(column.name)
+        elif column.type == FIELD_TYPE.STRING and column.character_set_name == "binary":
+            pad_widths[column.name] = column.max_length
+        elif column.type == FIELD_TYPE.TIME2:
+            fsps[column.name] = column.fsp
     changes = []
     for row in event.rows:
         if isinstance(event, UpdateRowsEvent):
             kind = "update"
-            names, values = _encode_row(row["after_values"], json_columns)
-            oldkeys = _oldkeys(row["before_values"], json_columns)
+            names, values = _encode_row(
+                row["after_values"], json_columns, pad_widths, fsps
+            )
+            oldkeys = _oldkeys(row["before_values"], json_columns, pad_widths, fsps)
         elif isinstance(event, DeleteRowsEvent):
             kind = "delete"
             names, values = [], []
-            oldkeys = _oldkeys(row["values"], json_columns)
+            oldkeys = _oldkeys(row["values"], json_columns, pad_widths, fsps)
         else:
             kind = "insert"
-            names, values = _encode_row(row["values"], json_columns)
+            names, values = _encode_row(row["values"], json_columns, pad_widths, fsps)
             oldkeys = {}
         changes.append(
             {
