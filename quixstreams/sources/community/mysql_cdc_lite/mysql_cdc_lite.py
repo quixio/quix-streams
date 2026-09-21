@@ -1,9 +1,8 @@
 """
 A minimal MySQL CDC source: binlog streaming only.
 
-Built for a server the operator has configured and an upstream that is trusted to send
-clean, normalized data. The prerequisites this module relies on and does not check are
-listed in `docs/connectors/sources/mysql-cdc-lite-source.md`.
+The server prerequisites it relies on and does not check are listed in
+`docs/connectors/sources/mysql-cdc-lite-source.md`.
 """
 
 import base64
@@ -13,7 +12,7 @@ import time
 import zlib
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 try:
     import pymysql
@@ -50,27 +49,13 @@ logger = logging.getLogger(__name__)
 
 _SOCKET_TIMEOUT = 30.0
 _MAX_RETRIES = 3
+_MAX_BUFFER_ROWS = 1000
 
-# ER_MASTER_FATAL_ERROR_READING_BINLOG covers several situations that need different
-# answers, and only its message tells them apart. The marker is a substring of the
-# template MySQL 8.x compiles in for a file it no longer holds; a server_id collision
-# carries the same code and a different message, and is left to the ordinary retry.
 _BINLOG_READ_ERROR_CODE = 1236
 _PURGED_MARKER = "could not find first log file"
-
-# ER_PARSE_ERROR, which is how a server older than 8.4 answers a statement only 8.4
-# knows.
 _PARSE_ERROR_CODE = 1064
-
-# STMT_END_F: MySQL splits one statement's rows across a row event per
-# `binlog_row_event_max_size` and sets this flag on the last of them only. A statement
-# touching several tables writes every table's map before any table's rows, and puts
-# the flag on whichever table's rows come last - which may be a table this source
-# filters out, and whose events therefore never reach the loop below.
 _STMT_END_F = 0x0001
 
-# The transaction statements MySQL writes around a group of row events, uppercased. The
-# ends close the group; the starts close whatever the previous transaction left open.
 _TRANSACTION_STATEMENTS = (
     "BEGIN",
     "COMMIT",
@@ -80,8 +65,6 @@ _TRANSACTION_STATEMENTS = (
     "XA START",
 )
 
-# Derived ids start at 1000 to stay clear of the `server-id = 1` a MySQL server and its
-# tutorials use.
 _SERVER_ID_MIN = 1000
 _SERVER_ID_MAX = 2**31 - 1
 
@@ -107,9 +90,7 @@ def _mysql_time(value: timedelta, fsp: int) -> str:
     value = abs(value)
     microseconds = value.microseconds
     if negative and microseconds:
-        # MySQL borrows a whole second into the stored fraction of a negative TIME, and
-        # `row_event.py:449-477` carries that borrow into the timedelta it returns.
-        # Holds for the mysql-replication 1.0.17 that pyproject.toml pins.
+        # row_event.py:449-477 carries MySQL's borrowed second into this timedelta.
         microseconds = 1_000_000 - microseconds
     sign = "-" if negative else ""
     hours, rest = divmod(value.days * 86400 + value.seconds, 3600)
@@ -131,9 +112,7 @@ def _encode(value: Any, pad_to: int, fsp: int) -> Any:
     if value is None:
         return value
     if pad_to:
-        # An all-pad BINARY arrives as `""`, not `b""`: a binary column keeps its
-        # bytes only through the LookupError fallback in `row_event.py:404-411`, and
-        # `b"".decode` returns early without looking a codec up.
+        # An all-pad BINARY arrives as "", not b"" (row_event.py:404-411).
         return base64.b64encode(bytes(value or b"").ljust(pad_to, b"\x00")).decode(
             "ascii"
         )
@@ -144,8 +123,6 @@ def _encode(value: Any, pad_to: int, fsp: int) -> Any:
     if isinstance(value, (set, frozenset)):
         return ",".join(sorted(str(item) for item in value))
     if isinstance(value, Decimal):
-        # Plain form at the declared scale: `str()` switches to exponent notation below
-        # 1e-6, which MySQL never prints.
         return format(value, "f")
     if isinstance(value, timedelta):
         return _mysql_time(value, fsp)
@@ -155,12 +132,7 @@ def _encode(value: Any, pad_to: int, fsp: int) -> Any:
 
 
 def _encode_json(value: Any) -> Any:
-    """
-    Encode a JSON column, whose decoder returns object keys and strings as bytes.
-
-    Bytes mean text here and binary everywhere else, which is why the caller has to
-    know which of the row's columns are JSON before it encodes them.
-    """
+    """Encode a JSON column, whose decoder returns keys and strings as bytes."""
     if isinstance(value, (bytes, bytearray)):
         return bytes(value).decode("utf-8")
     if isinstance(value, dict):
@@ -202,8 +174,6 @@ def _oldkeys(
 def _event_to_changes(event: Any) -> List[Dict[str, Any]]:
     """Convert one row event into this source's change dicts, one per row."""
     json_columns: Set[str] = set()
-    # A BINARY is a STRING column over the binary character set; a VARBINARY is a
-    # VARCHAR and carries its own length, so only the former needs re-padding.
     pad_widths: Dict[str, int] = {}
     fsps: Dict[str, int] = {}
     for column in event.columns:
@@ -246,11 +216,10 @@ class _ScanBound:
     """
     The source's deadline and stop flag, in the form the stream itself evaluates.
 
-    `BinLogStreamReader.fetchone` skips the events of other tables inside its own loop,
-    and the one bound it consults per event is `self.log_pos >= self.end_log_pos`
-    (`binlogstream.py:672`). `int.__ge__` hands an object it does not recognise to the
-    reflected `__le__` below, so assigning one of these as `end_log_pos` turns that
-    position check into this one and bounds the scan per event rather than per call.
+    `fetchone` checks `self.log_pos >= self.end_log_pos` per event
+    (`binlogstream.py:672`), and `int.__ge__` hands an object it does not recognise to
+    the reflected `__le__` below, so assigning one of these as `end_log_pos` bounds the
+    scan per event rather than per call.
     """
 
     def __init__(self, deadline: float, running: Callable[[], bool]):
@@ -260,9 +229,6 @@ class _ScanBound:
     def tripped(self) -> bool:
         """:return: whether the read is out of time or the source is stopping."""
         return time.monotonic() >= self._deadline or not self._running()
-
-    def __bool__(self) -> bool:
-        return True
 
     def __le__(self, log_pos: object) -> bool:
         return self.tripped()
@@ -327,8 +293,7 @@ class MySqlCdcLiteSource(StatefulSource):
         table: str,
         port: int = 3306,
         commit_interval: float = 5.0,
-        max_buffer_size: int = 1000,
-        tls_enabled: bool = True,
+        tls: Union[bool, str] = True,
         name: Optional[str] = None,
         shutdown_timeout: float = 10,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
@@ -348,14 +313,9 @@ class MySqlCdcLiteSource(StatefulSource):
             the end of each interval, so it bounds the delay between a change and its
             message; one read may itself run for an interval on a busy server.
             Default - `5.0`.
-        :param max_buffer_size: commit early once this many changes are buffered, which
-            bounds memory while catching up after downtime. It is honoured at a
-            transaction or statement boundary this source has observed, because a
-            position inside a statement cannot be resumed from, so one statement is
-            buffered whole however many rows it changes.
-            Default - `1000`.
-        :param tls_enabled: encrypt the connections to MySQL. The server certificate is
-            not verified. `False` connects in plaintext.
+        :param tls: how to connect to MySQL. `True` encrypts without verifying the
+            server certificate; a path to a CA file encrypts and verifies the
+            certificate and the hostname against it; `False` connects in plaintext.
             Default - `True`.
         :param name: the source unique name. It is used to generate the default topic
             name, the state store name and the derived replication client id; renaming
@@ -384,9 +344,8 @@ class MySqlCdcLiteSource(StatefulSource):
         self._database = database
         self._table = table
         self._table_name = f"{database}.{table}"
-        self._tls_enabled = tls_enabled
+        self._tls = tls
         self._commit_interval = commit_interval
-        self._max_buffer_size = max_buffer_size
         self._position_key = f"binlog_position_{database}_{table}"
         self._server_id = _SERVER_ID_MIN + zlib.crc32(
             f"{source_name}|{database}|{table}".encode()
@@ -394,12 +353,9 @@ class MySqlCdcLiteSource(StatefulSource):
 
         self._stream: Optional[BinLogStreamReader] = None
         self._buffer: List[Dict[str, Any]] = []
-        # Resolved by run() before the first stream opens, and only moved forward by a
-        # commit after that.
+        # Set by run() before the first stream opens; moved on only by a commit.
         self._position: Tuple[str, int]
         self._pending: Optional[Tuple[str, int]] = None
-        # Whether the read is inside a statement this table's rows belong to, and the
-        # last position seen outside one. Both outlive a single read.
         self._in_statement = False
         self._safe_position: Optional[Tuple[str, int]] = None
         self._last_commit_at = 0.0
@@ -527,16 +483,16 @@ class MySqlCdcLiteSource(StatefulSource):
             "read_timeout": _SOCKET_TIMEOUT,
             "write_timeout": _SOCKET_TIMEOUT,
         }
-        if not self._tls_enabled:
-            # Passing no ssl argument at all is not the same thing: pymysql then takes
-            # its PREFERRED branch, which tries TLS and accepts plaintext.
+        if isinstance(self._tls, str):
+            kwargs["ssl"] = ssl.create_default_context(cafile=self._tls)
+        elif self._tls:
+            context = ssl.create_default_context()
+            # CERT_NONE cannot be assigned while check_hostname is True.
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            kwargs["ssl"] = context
+        else:
             kwargs["ssl_disabled"] = True
-            return kwargs
-        context = ssl.create_default_context()
-        # CERT_NONE cannot be assigned while check_hostname is True.
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        kwargs["ssl"] = context
         return kwargs
 
     def _committed_position(self) -> Optional[Tuple[str, int]]:
@@ -548,10 +504,6 @@ class MySqlCdcLiteSource(StatefulSource):
     def _start_position(self) -> Tuple[str, int]:
         """
         :return: the coordinates the server is writing at right now.
-
-        `BinLogStreamReader` resolves coordinates it was not given inside its first
-        read (`binlogstream.py:416-422`) and not in `__init__`, so they cannot be read
-        back off a stream this source has just opened.
 
         :raises MySqlCdcLiteError: if the server reports no position at all, which is
             what binary logging being off looks like.
@@ -580,8 +532,7 @@ class MySqlCdcLiteSource(StatefulSource):
 
     def _open_stream(self) -> BinLogStreamReader:
         """Open a stream on the event at `self._position`."""
-        # A fresh dict per call: `BinLogStreamReader.__init__` keeps the one it is
-        # handed and setdefault()s "charset" into it.
+        # Not hoisted: BinLogStreamReader keeps and mutates the dict it is handed.
         settings: Dict[str, Any] = {
             "host": self._host,
             "port": self._port,
@@ -612,15 +563,9 @@ class MySqlCdcLiteSource(StatefulSource):
         )
 
     def _poll_once(self) -> None:
-        """
-        Read, wait out the commit interval, read again, then produce and commit.
-
-        A poll that sees the source stopping leaves its buffer alone: the drain at the
-        end of `run()` is the one commit made after stop(), and the only one whose
-        flush is bounded by the shutdown budget.
-        """
+        """Read, wait out the commit interval, read again, then produce and commit."""
         self._read_changes()
-        if len(self._buffer) < self._max_buffer_size:
+        if len(self._buffer) < _MAX_BUFFER_ROWS:
             self._sleep(self._commit_due_in())
             self._read_changes()
         if self.running:
@@ -630,21 +575,15 @@ class MySqlCdcLiteSource(StatefulSource):
         """
         Buffer the changes the stream can deliver within one commit interval.
 
-        The position kept is the last one seen outside a statement this table's rows
-        belong to. It covers the events of other tables the stream discarded, so the
-        source keeps up with the server while this table is quiet, and it is never a
-        position inside a statement, which a reopened reader cannot resume from. Both
-        bounds are honoured at those same positions, so a statement is buffered whole
-        however many rows it changes, and one a bound lands inside is read again from
-        its head on the next stream.
+        The position kept, and the point both bounds are honoured at, is the last one
+        seen outside a statement this table's rows belong to.
         """
         stream = self._stream
         bound = _ScanBound(
             time.monotonic() + self._commit_interval, lambda: self.running
         )
         stream.end_log_pos = bound
-        # A stream built without an `end_log_pos` has no `is_past_end_log_pos` of its
-        # own (`binlogstream.py:287`), and a bound that tripped leaves it True.
+        # Never initialised (binlogstream.py:287), and left True once a bound tripped.
         stream.is_past_end_log_pos = False
         for event in stream:
             if isinstance(event, TableMapEvent):
@@ -661,7 +600,7 @@ class MySqlCdcLiteSource(StatefulSource):
                 stream.is_past_end_log_pos = False
                 continue
             self._safe_position = (stream.log_file, stream.log_pos)
-            if len(self._buffer) >= self._max_buffer_size or bound.tripped():
+            if len(self._buffer) >= _MAX_BUFFER_ROWS or bound.tripped():
                 break
         if not self._in_statement:
             self._safe_position = (stream.log_file, stream.log_pos)
@@ -691,11 +630,7 @@ class MySqlCdcLiteSource(StatefulSource):
         self._last_commit_at = time.monotonic()
 
     def _drop_stream(self) -> None:
-        """
-        Close the stream and discard everything read since the last commit.
-
-        The next stream opens at the committed position, which is outside a statement.
-        """
+        """Close the stream and discard everything read since the last commit."""
         self._buffer.clear()
         self._pending = None
         self._in_statement = False

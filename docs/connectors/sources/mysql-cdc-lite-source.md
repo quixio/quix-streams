@@ -259,11 +259,11 @@ variable.
 | No retention guard | [§5](#5-binlog_expire_logs_seconds-outlasts-your-longest-downtime): a purged position is named when it happens, but nothing warns you beforehand that retention is shorter than your worst downtime. |
 | No `server_id` collision detection | [§6](#6-the-replication-client-id-is-unique): eviction ping-pong that reads as a flaky network. |
 | No reconnect-churn bound | Three *consecutive* failures are retried; the fourth kills the source. One that fails, reconnects, and fails again every thirty seconds forever is not detected — it just runs slowly and nobody is told. |
-| No TLS verification | `tls_enabled=True` encrypts and does not authenticate: no CA, no hostname check. A machine-in-the-middle is not detected. Use it on a trusted network only. |
+| No TLS verification by default | `tls=True` encrypts and does not authenticate: no CA, no hostname check. A machine-in-the-middle is not detected. Pass a CA file path as `tls` to verify the certificate and the hostname, or keep the default on a trusted network only. |
 | No `server_id` parameter | You cannot set one. If the derived id collides, the only lever is `name`, which also resets the state store — so changing it to fix a collision *also skips the downtime window*. |
 | No `binlog_transaction_compression` check | [§7](#7-binlog_transaction_compression-is-off): a compressed transaction is not unpacked, produces nothing, and the position moves past it. Silent from both ends. |
 | No parameter validation | `commit_interval=0` and friends are accepted and misbehave in their own ways. |
-| One statement is buffered whole | `max_buffer_size` is a floor, not a ceiling, and is honoured only at a transaction or statement boundary this source has observed. MySQL splits one statement's rows across a row event per `binlog_row_event_max_size` (8 KB by default) — 5000 rows came out as ten events — and only the end of that group is a position the source can resume from, so a statement that changes a million rows buffers all of it. The scan bound is honoured at the same boundaries, so such a statement is also read whole: a `SIGTERM` that arrives anywhere inside it — on the table map that opens it as much as on any of its row events — waits for the end of the statement and can outlast the shutdown budget into a `SIGKILL`. A statement that writes a second table as well — through a trigger, or a multi-table `UPDATE` — is bounded at the transaction's commit instead, because MySQL marks the end of such a statement on the other table's rows, which this source is filtered away from and never receives. |
+| One statement is buffered whole | The buffer bound (1000 changes, not configurable) is a floor, not a ceiling, and is honoured only at a transaction or statement boundary this source has observed. MySQL splits one statement's rows across a row event per `binlog_row_event_max_size` (8 KB by default) — 5000 rows came out as ten events — and only the end of that group is a position the source can resume from, so a statement that changes a million rows buffers all of it. The scan bound is honoured at the same boundaries, so such a statement is also read whole: a `SIGTERM` that arrives anywhere inside it — on the table map that opens it as much as on any of its row events — waits for the end of the statement and can outlast the shutdown budget into a `SIGKILL`. A statement that writes a second table as well — through a trigger, or a multi-table `UPDATE` — is bounded at the transaction's commit instead, because MySQL marks the end of such a statement on the other table's rows, which this source is filtered away from and never receives. |
 
 Things it does guarantee, and that were kept deliberately:
 
@@ -327,19 +327,19 @@ Here are some important configurations to be aware of (see [MySQL CDC Lite Sourc
 - `commit_interval`: how often (seconds) to produce the buffered changes and commit the
   binlog position they cover. The source reads at the start and at the end of each
   interval, so it bounds the delay between a change and its message; one read may
-  itself run for an interval on a busy server.
+  itself run for an interval on a busy server. That read bound — and the internal
+  1000-change buffer bound that commits early while catching up after downtime — is
+  honoured only at a transaction or statement boundary this source has observed,
+  because a position inside a statement cannot be resumed from, so one statement is
+  read and buffered whole however many rows it changes. That same boundary rule bounds how long a shutdown
+  takes: a `SIGTERM` arriving inside a statement group is not acted on until the group
+  closes, so a single huge statement — or a run of statements MySQL never marks the end
+  of, such as a trigger's — can hold the source past `shutdown_timeout` and into a
+  `SIGKILL`.
     **Default**: `5.0`
-- `max_buffer_size`: commit early once this many changes are buffered, which bounds
-  memory while catching up after downtime. It is honoured at a transaction or statement
-  boundary this source has observed, because a position inside a statement cannot be
-  resumed from, so one statement is buffered whole however many rows it changes.
-  That same boundary rule bounds how long a shutdown takes: a `SIGTERM` arriving inside
-  a statement group is not acted on until the group closes, so a single huge statement —
-  or a run of statements MySQL never marks the end of, such as a trigger's — can hold
-  the source past `shutdown_timeout` and into a `SIGKILL`.
-    **Default**: `1000`
-- `tls_enabled`: encrypt the connections to MySQL. The server certificate is **not**
-  verified. `False` connects in plaintext.
+- `tls`: how to connect to MySQL. `True` encrypts and does **not** verify the server
+  certificate; a path to a CA file (`tls="/etc/ssl/mysql-ca.pem"`) encrypts and verifies
+  the certificate and the hostname against it; `False` connects in plaintext.
     **Default**: `True`
 - `name`: the source unique name. It is used to generate the default topic name, the
   state store name and the derived replication client id; renaming a source therefore
@@ -434,7 +434,7 @@ Requires Docker.
         password="cdc_password",
         database="test_db",
         table="test_table",
-        tls_enabled=False,
+        tls=False,
     )
     ```
 

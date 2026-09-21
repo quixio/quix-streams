@@ -901,7 +901,9 @@ def test_restart_resumes_and_delivers_the_downtime_window(mysql, mysql_server):
     assert state[position_key] != committed
 
 
-def test_a_reconnect_before_the_first_commit_skips_nothing(mysql, mysql_server):
+def test_a_reconnect_before_the_first_commit_skips_nothing(
+    mysql, mysql_server, monkeypatch
+):
     """
     A dropped connection before the first commit must not lose the changes since start.
 
@@ -910,8 +912,8 @@ def test_a_reconnect_before_the_first_commit_skips_nothing(mysql, mysql_server):
     resumes past what it had already seen, with no error and nothing on the topic to
     show it.
 
-    `max_buffer_size=2` makes the retry commit as soon as both changes are read, rather
-    than waiting out the long `commit_interval` that keeps the first commit from
+    A buffer bound of two makes the retry commit as soon as both changes are read,
+    rather than waiting out the long `commit_interval` that keeps the first commit from
     landing before the drop.
     """
     table = "lite_reconnect"
@@ -920,13 +922,13 @@ def test_a_reconnect_before_the_first_commit_skips_nothing(mysql, mysql_server):
 
     state: Dict[str, Any] = {}
     position_key = f"binlog_position_{DATABASE}_{table}"
+    monkeypatch.setattr(mysql_cdc_lite, "_MAX_BUFFER_ROWS", 2)
     source = make_source(
         mysql_server,
         table,
         state,
         harness=ReconnectingHarness,
         commit_interval=10.0,
-        max_buffer_size=2,
     )
 
     with RunningSource(source) as running:
@@ -994,7 +996,7 @@ def test_a_statement_split_across_events_survives_a_restart(mysql, mysql_server)
     A statement whose rows MySQL splits across several events must arrive whole.
 
     MySQL emits one TableMapEvent and then a row event per `binlog_row_event_max_size`
-    chunk, so a statement changing more rows than `max_buffer_size` is committed
+    chunk, so a statement changing more rows than the buffer bound is committed
     part-way through it. A reader reopened there has no table map for the rows that
     follow and discards them without raising, which takes them off the topic with
     nothing in the log to say so.
@@ -1205,10 +1207,10 @@ def test_a_bound_on_a_multi_table_updates_other_map_delivers_both_rows(
 
 
 def test_the_bounds_are_honoured_on_a_trigger_shaped_statement(
-    mysql, mysql_server, root_connection
+    mysql, mysql_server, root_connection, monkeypatch
 ):
     """
-    `max_buffer_size` must bound a burst whose statements a trigger spreads over two
+    The buffer bound must hold a burst whose statements a trigger spreads over two
     tables.
 
     MySQL sets STMT_END_F on the last row event of a statement whichever table it
@@ -1220,9 +1222,8 @@ def test_the_bounds_are_honoured_on_a_trigger_shaped_statement(
     audit = "lite_trigger_bounds_audit"
     with_audit_trigger(root_connection, table, audit)
 
-    source = make_source(
-        mysql_server, table, {}, max_buffer_size=1, commit_interval=30.0
-    )
+    monkeypatch.setattr(mysql_cdc_lite, "_MAX_BUFFER_ROWS", 1)
+    source = make_source(mysql_server, table, {}, commit_interval=30.0)
     start = source._start_position()
     for i in range(1, 6):
         execute(mysql, f"INSERT INTO {table} VALUES ({i}, 'burst-{i}')")
@@ -1238,9 +1239,9 @@ def test_the_bounds_are_honoured_on_a_trigger_shaped_statement(
     pending, buffered = read_once(source, start)
 
     assert len(buffered) == 1, (
-        f"max_buffer_size=1, and the read buffered {len(buffered)} changes: it ran to "
-        f"the end of the stream instead of stopping at the first boundary. Its events "
-        f"run {layout}"
+        f"the buffer bound is 1, and the read buffered {len(buffered)} changes: it ran "
+        f"to the end of the stream instead of stopping at the first boundary. Its "
+        f"events run {layout}"
     )
     assert pending == (start[0], first_commit.end), (
         f"the read committed {pending}, not the first transaction boundary at "
@@ -1332,15 +1333,15 @@ def test_a_myisam_statement_advances_the_position(mysql, mysql_server, root_conn
     )
 
 
-def test_max_buffer_size_is_honoured_across_a_myisam_backlog(
-    mysql, mysql_server, root_connection
+def test_the_buffer_bound_is_honoured_across_a_myisam_backlog(
+    mysql, mysql_server, root_connection, monkeypatch
 ):
     """
-    `max_buffer_size` must bound a backlog of statements that write no `XidEvent`.
+    The buffer bound must hold a backlog of statements that write no `XidEvent`.
 
     Both bounds are checked only where the read is outside a statement group, so a
     group that never closes disables them: one read swallows the whole backlog however
-    large it is, which is the memory bound `max_buffer_size` exists to hold.
+    large it is, which is the memory the buffer bound exists to hold.
     """
     table = "lite_myisam_bounds"
     audit = "lite_myisam_bounds_audit"
@@ -1348,12 +1349,12 @@ def test_max_buffer_size_is_honoured_across_a_myisam_backlog(
 
     statements = 20
     bound = 5
+    monkeypatch.setattr(mysql_cdc_lite, "_MAX_BUFFER_ROWS", bound)
     source = make_source(
         mysql_server,
         table,
         {},
         name="lite_myisam_bounds_source",
-        max_buffer_size=bound,
         commit_interval=30.0,
     )
     start = source._start_position()
@@ -1370,7 +1371,7 @@ def test_max_buffer_size_is_honoured_across_a_myisam_backlog(
         position = pending or position
 
     assert sizes == [bound] * (statements // bound), (
-        f"max_buffer_size={bound} over a backlog of {statements} statements was read "
+        f"a buffer bound of {bound} over a backlog of {statements} statements was read "
         f"as {sizes}: a read that never leaves the statement group never reaches the "
         "bound check"
     )

@@ -1,16 +1,16 @@
 """
-Red-first reproduction: a stream failure before the first binlog position is
-committed makes the retry resume from the server's *current* coordinates, so
+The resume anchor: a stream failure before the first binlog position is
+committed must not skip the changes made since the source started.
+
+`run()` resolves the start position from the committed state or, on a fresh
+deployment, from the server, and writes it to state before the first stream
+opens. `self._position` is therefore a real pair for the life of the source,
+moved forward only by a commit, and a retry re-opens the stream on that anchor.
+The alternative these tests guard against is handing `_open_stream()`
+`(None, None)`, which `BinLogStreamReader` resolves against the server's
+current coordinates (`binlogstream.py:416-422`) - the server has moved on, so
 every change since the source started is skipped with no error and no gap
 marker on the topic.
-
-`self._position` is written in two places only - from the state store when
-`run()` starts, and after a successful position write in `_commit_batch()`. On
-a fresh deployment the store is empty, so until the first commit lands
-`_position` is `None`; `_drop_stream()` clears `_pending` as well, and the
-retry hands `_open_stream()` the same `(None, None)` the first attempt got.
-`BinLogStreamReader` reads that as "ask the server where it is now"
-(`binlogstream.py:416-422`), and the server has moved on.
 
 No MySQL here: the reader is replaced by a stand-in reproducing that one
 behaviour. The Kafka and state sides are replaced too, so the test asserts
@@ -158,7 +158,7 @@ class _Harness(MySqlCdcLiteSource):
 
     def _connect(self) -> Any:
         """A connection that answers the binary-log-status query and nothing
-        else, so a fix that resolves the start position up front can run."""
+        else, which is all `run()` needs to resolve the start position."""
         return _FakeConnection(self)
 
     def _open_stream(self) -> Any:
@@ -213,9 +213,9 @@ def test_retry_before_the_first_commit_resumes_from_a_known_position(
     source: _Harness,
 ) -> None:
     """
-    The same defect at its cause: the retry asks for `(None, None)` again,
-    which `BinLogStreamReader` resolves against the server rather than against
-    where this source was.
+    The same requirement at its cause: a retry that asks for `(None, None)`
+    has `BinLogStreamReader` resolve the resume point against the server rather
+    than against where this source was.
     """
     source.run()
 
