@@ -332,14 +332,16 @@ Here are some important configurations to be aware of (see [MySQL CDC Lite Sourc
   honoured only at a transaction or statement boundary this source has observed,
   because a position inside a statement cannot be resumed from, so one statement is
   read and buffered whole however many rows it changes. That same boundary rule bounds how long a shutdown
-  takes: a `SIGTERM` arriving inside a statement group is not acted on until the group
-  closes, so a single huge statement — or a run of statements MySQL never marks the end
-  of, such as a trigger's — can hold the source past `shutdown_timeout` and into a
-  `SIGKILL`.
+  takes: a `SIGTERM` arriving inside a statement is not acted on until that statement's
+  last row event, so a single huge statement can hold the source past `shutdown_timeout`
+  and into a `SIGKILL`.
     **Default**: `5.0`
 - `tls`: how to connect to MySQL. `True` encrypts and does **not** verify the server
   certificate; a path to a CA file (`tls="/etc/ssl/mysql-ca.pem"`) encrypts and verifies
-  the certificate and the hostname against it; `False` connects in plaintext.
+  the certificate and the hostname against it; `False` connects in plaintext. With
+  MySQL 8's default `caching_sha2_password`, the first plaintext connection after a server
+  start fails inside PyMySQL (`AttributeError: ... 'is_auth_switch_request'`) and the
+  retry succeeds, because the failed exchange leaves the password cached on the server.
     **Default**: `True`
 - `name`: the source unique name. It is used to generate the default topic name, the
   state store name and the derived replication client id; renaming a source therefore
@@ -424,7 +426,8 @@ Requires Docker.
       GRANT SELECT ON test_db.* TO 'cdc'@'%';"
     ```
 
-3. Point the source at it with TLS off:
+3. Point the source at it. The default `tls=True` encrypts without verifying the
+   certificate, which is what a local container needs:
 
     ```python
     source = MySqlCdcLiteSource(
@@ -434,7 +437,6 @@ Requires Docker.
         password="cdc_password",
         database="test_db",
         table="test_table",
-        tls=False,
     )
     ```
 
