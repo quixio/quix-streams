@@ -21,7 +21,7 @@ from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 import pymysql
 import pytest
 from pymysqlreplication import BinLogStreamReader
-from pymysqlreplication.event import XidEvent
+from pymysqlreplication.event import GtidEvent, QueryEvent, XAPrepareEvent, XidEvent
 from pymysqlreplication.row_event import (
     DeleteRowsEvent,
     TableMapEvent,
@@ -351,14 +351,34 @@ class RawEvent(NamedTuple):
     table: Optional[str]
     end: int
     flags: Optional[int]
+    query: Optional[str]
 
 
-def raw_events(mysql_server, position: Tuple[str, int]) -> List[RawEvent]:
+_ROW_LAYOUT_EVENTS = [
+    DeleteRowsEvent,
+    TableMapEvent,
+    UpdateRowsEvent,
+    WriteRowsEvent,
+    XidEvent,
+]
+# The row layout plus every event that marks the start or the end of a transaction.
+_TRANSACTION_LAYOUT_EVENTS = _ROW_LAYOUT_EVENTS + [
+    GtidEvent,
+    QueryEvent,
+    XAPrepareEvent,
+]
+
+
+def raw_events(
+    mysql_server, position: Tuple[str, int], events: Optional[List[type]] = None
+) -> List[RawEvent]:
     """
     Read every row event, table map and commit after `position`, for every table.
 
-    :return: the events in binlog order. `table` and `flags` are `None` for an
-        `XidEvent`, which belongs to no table.
+    :param events: event classes to read.
+        Default - the row layout, without the transaction statements around it.
+    :return: the events in binlog order. `table` and `flags` are `None` for an event
+        that belongs to no table.
     """
     stream = BinLogStreamReader(
         connection_settings={
@@ -368,13 +388,7 @@ def raw_events(mysql_server, position: Tuple[str, int]) -> List[RawEvent]:
             "password": CDC_PASSWORD,
         },
         server_id=_PROBE_SERVER_ID,
-        only_events=[
-            DeleteRowsEvent,
-            TableMapEvent,
-            UpdateRowsEvent,
-            WriteRowsEvent,
-            XidEvent,
-        ],
+        only_events=events or _ROW_LAYOUT_EVENTS,
         only_schemas=[DATABASE],
         resume_stream=True,
         blocking=False,
@@ -388,6 +402,7 @@ def raw_events(mysql_server, position: Tuple[str, int]) -> List[RawEvent]:
                 getattr(event, "table", None),
                 stream.log_pos,
                 getattr(event, "flags", None),
+                getattr(event, "query", None),
             )
             for event in stream
         ]
@@ -395,7 +410,9 @@ def raw_events(mysql_server, position: Tuple[str, int]) -> List[RawEvent]:
         stream.close()
 
 
-def with_audit_trigger(connection, table: str, audit: str) -> None:
+def with_audit_trigger(
+    connection, table: str, audit: str, engine: str = "InnoDB"
+) -> None:
     """
     Create `table` and an `audit` table that an AFTER INSERT trigger also writes.
 
@@ -404,10 +421,14 @@ def with_audit_trigger(connection, table: str, audit: str) -> None:
     """
     execute(connection, f"DROP TABLE IF EXISTS {table}")
     execute(connection, f"DROP TABLE IF EXISTS {audit}")
-    execute(connection, f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(20))")
     execute(
         connection,
-        f"CREATE TABLE {audit} (id INT PRIMARY KEY AUTO_INCREMENT, note VARCHAR(20))",
+        f"CREATE TABLE {table} (id INT PRIMARY KEY, note VARCHAR(20)) ENGINE={engine}",
+    )
+    execute(
+        connection,
+        f"CREATE TABLE {audit} (id INT PRIMARY KEY AUTO_INCREMENT, note VARCHAR(20)) "
+        f"ENGINE={engine}",
     )
     execute(
         connection,
@@ -652,6 +673,50 @@ def test_every_column_type_encodes_json_safely(mysql, mysql_server):
     message = dict(of_kind(messages, "insert")[0])
     message.pop("_key")
     json.dumps(message)
+
+
+def test_a_negative_time_is_rendered_the_way_mysql_prints_it(mysql, mysql_server):
+    """
+    Every `TIME` must reach the topic as `CAST(v AS CHAR)` renders it on the server.
+
+    MySQL stores a negative `TIME` with its fraction complemented, and
+    `row_event.py:449-477` builds the magnitude from the whole-second bitfield and then
+    multiplies by the sign, so the `timedelta` it hands over is a whole second away from
+    the stored value whenever the fraction is not zero. The two positive-looking rows
+    are controls: `01:02:03.456789` never took the negative path, and `-00:00:00.5` is
+    its own complement, so a compensation that also moves them is wrong.
+    """
+    table = "lite_neg_time"
+    written = [
+        "-01:02:03.456789",
+        "-00:00:01.250000",
+        "-10:20:30.000001",
+        "-838:59:58.999999",
+        "01:02:03.456789",
+        "-00:00:00.500000",
+    ]
+    execute(mysql, f"DROP TABLE IF EXISTS {table}")
+    execute(mysql, f"CREATE TABLE {table} (id INT PRIMARY KEY, dur TIME(6))")
+
+    source = make_source(mysql_server, table, {}, name="lite_neg_time_source")
+    with RunningSource(source) as running:
+        assert running.source.polled.wait(timeout=30.0), "the stream never opened"
+        values = ", ".join(f"({i}, '{v}')" for i, v in enumerate(written))
+        execute(mysql, f"INSERT INTO {table} VALUES {values}")
+        messages = running.wait_for(
+            lambda m: count_kinds(m, insert=len(written)), "every TIME value"
+        )
+
+    with mysql.cursor() as cursor:
+        cursor.execute(f"SELECT id, CAST(dur AS CHAR) FROM {table} ORDER BY id")
+        printed = {int(row[0]): str(row[1]) for row in cursor.fetchall()}
+
+    emitted = {row_of(m)["id"]: row_of(m)["dur"] for m in of_kind(messages, "insert")}
+    assert emitted == printed, "\n".join(
+        f"{written[i]:>18} MySQL prints {printed[i]:>18}, the source emits "
+        f"{emitted[i]:>18}"
+        for i in sorted(printed)
+    )
 
 
 def test_restart_resumes_and_delivers_the_downtime_window(mysql, mysql_server):
@@ -1043,6 +1108,135 @@ def test_the_bounds_are_honoured_on_a_trigger_shaped_statement(
         f"the read committed {pending}, not the first transaction boundary at "
         f"{first_commit.end}; its events run {layout}"
     )
+
+
+def test_an_xa_transaction_advances_the_position(mysql, mysql_server, root_connection):
+    """
+    An XA transaction writes no `XidEvent`, and the position must still advance past it.
+
+    MySQL ends one with `XA END`, an `XAPrepareEvent` and `XA COMMIT`. In the trigger
+    shape this source's own rows carry no `STMT_END_F` either, so a loop whose only
+    closer is `XidEvent` never leaves the statement group: it keeps no position at all,
+    the committed one stays where it was, and every restart replays from there until
+    the file ages past retention.
+    """
+    table = "lite_xa"
+    audit = "lite_xa_audit"
+    with_audit_trigger(root_connection, table, audit)
+
+    source = make_source(mysql_server, table, {}, name="lite_xa_source")
+    start = source._start_position()
+    with mysql.cursor() as cursor:
+        cursor.execute("XA START 'lite-xa'")
+        cursor.execute(f"INSERT INTO {table} VALUES (1, 'xa')")
+        cursor.execute("XA END 'lite-xa'")
+        cursor.execute("XA PREPARE 'lite-xa'")
+        cursor.execute("XA COMMIT 'lite-xa'")
+
+    layout = raw_events(mysql_server, start, _TRANSACTION_LAYOUT_EVENTS)
+    assert not [e for e in layout if e.name == "XidEvent"], (
+        "an XA transaction now writes an XidEvent, so this shape no longer "
+        f"reproduces: {layout}"
+    )
+    ours = [e for e in layout if e.name.endswith("RowsEvent") and e.table == table]
+    assert ours and not ours[0].flags, (
+        "MySQL now flags this source's own rows as the statement end, so this shape "
+        f"no longer reproduces: {layout}"
+    )
+
+    pending, buffered = read_once(source, start)
+
+    assert [row_of(change)["id"] for change in buffered] == [
+        1
+    ], f"the XA transaction's row never reached the buffer; its events run {layout}"
+    assert pending is not None and pending[1] > start[1], (
+        f"the read started at {start} and kept {pending}: nothing in an XA transaction "
+        "closed the statement group, so the position never moved. Its events run "
+        f"{layout}"
+    )
+
+
+def test_a_myisam_statement_advances_the_position(mysql, mysql_server, root_connection):
+    """
+    A non-transactional engine ends its statement with `COMMIT` and no `XidEvent`.
+
+    Same freeze as the XA shape, from an ordinary autocommit `INSERT`: the position a
+    read keeps never leaves the point it started from.
+    """
+    table = "lite_myisam"
+    audit = "lite_myisam_audit"
+    with_audit_trigger(root_connection, table, audit, engine="MyISAM")
+
+    source = make_source(mysql_server, table, {}, name="lite_myisam_source")
+    start = source._start_position()
+    execute(mysql, f"INSERT INTO {table} VALUES (1, 'myisam')")
+
+    layout = raw_events(mysql_server, start, _TRANSACTION_LAYOUT_EVENTS)
+    assert not [e for e in layout if e.name == "XidEvent"], (
+        "a MyISAM statement now writes an XidEvent, so this shape no longer "
+        f"reproduces: {layout}"
+    )
+    ours = [e for e in layout if e.name.endswith("RowsEvent") and e.table == table]
+    assert ours and not ours[0].flags, (
+        "MySQL now flags this source's own rows as the statement end, so this shape "
+        f"no longer reproduces: {layout}"
+    )
+
+    pending, buffered = read_once(source, start)
+
+    assert [row_of(change)["id"] for change in buffered] == [
+        1
+    ], f"the MyISAM statement's row never reached the buffer; its events run {layout}"
+    assert pending is not None and pending[1] > start[1], (
+        f"the read started at {start} and kept {pending}: nothing in a MyISAM "
+        "statement closed the statement group, so the position never moved. Its "
+        f"events run {layout}"
+    )
+
+
+def test_max_buffer_size_is_honoured_across_a_myisam_backlog(
+    mysql, mysql_server, root_connection
+):
+    """
+    `max_buffer_size` must bound a backlog of statements that write no `XidEvent`.
+
+    Both bounds are checked only where the read is outside a statement group, so a
+    group that never closes disables them: one read swallows the whole backlog however
+    large it is, which is the memory bound `max_buffer_size` exists to hold.
+    """
+    table = "lite_myisam_bounds"
+    audit = "lite_myisam_bounds_audit"
+    with_audit_trigger(root_connection, table, audit, engine="MyISAM")
+
+    statements = 20
+    bound = 5
+    source = make_source(
+        mysql_server,
+        table,
+        {},
+        name="lite_myisam_bounds_source",
+        max_buffer_size=bound,
+        commit_interval=30.0,
+    )
+    start = source._start_position()
+    for i in range(1, statements + 1):
+        execute(mysql, f"INSERT INTO {table} VALUES ({i}, 'burst-{i}')")
+
+    sizes: List[int] = []
+    delivered: List[int] = []
+    position = start
+    for _ in range(statements // bound):
+        pending, buffered = read_once(source, position)
+        sizes.append(len(buffered))
+        delivered.extend(row_of(change)["id"] for change in buffered)
+        position = pending or position
+
+    assert sizes == [bound] * (statements // bound), (
+        f"max_buffer_size={bound} over a backlog of {statements} statements was read "
+        f"as {sizes}: a read that never leaves the statement group never reaches the "
+        "bound check"
+    )
+    assert delivered == list(range(1, statements + 1))
 
 
 def test_the_position_advances_over_another_tables_traffic(

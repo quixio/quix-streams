@@ -255,10 +255,10 @@ variable.
 | No `binlog_row_metadata` check or repair | [§2](#2-binlog_row_metadata-is-full): wrong values, silently, with no warning on the topic or in the log. |
 | No `binlog_row_image` check | [§3](#3-binlog_row_image-is-full): truncated updates that look complete and corrupt whatever consumes them. |
 | No partial-row-image refusal | The same thing from the other side: a row with columns missing is published rather than refused. |
-| No partial-JSON refusal | With `binlog_row_value_options = PARTIAL_JSON`, MySQL sends only the diff of a JSON column. It arrives as `null`. Leave that variable empty. |
+| No partial-JSON refusal | With `binlog_row_value_options = PARTIAL_JSON`, MySQL writes such an `UPDATE` as a `PARTIAL_UPDATE_ROWS_EVENT`, which this source does not ask for and the reader therefore drops at packet level. Measured: the whole `UPDATE` produces **no message at all** — the non-JSON columns with it — and the position advances past it, so a restart does not bring it back. Leave that variable empty. |
 | No retention guard | [§5](#5-binlog_expire_logs_seconds-outlasts-your-longest-downtime): a purged position is named when it happens, but nothing warns you beforehand that retention is shorter than your worst downtime. |
 | No `server_id` collision detection | [§6](#6-the-replication-client-id-is-unique): eviction ping-pong that reads as a flaky network. |
-| No reconnect-churn bound | Three *consecutive* failures kill the source. One that fails, reconnects, and fails again every thirty seconds forever is not detected — it just runs slowly and nobody is told. |
+| No reconnect-churn bound | Three *consecutive* failures are retried; the fourth kills the source. One that fails, reconnects, and fails again every thirty seconds forever is not detected — it just runs slowly and nobody is told. |
 | No TLS verification | `tls_enabled=True` encrypts and does not authenticate: no CA, no hostname check. A machine-in-the-middle is not detected. Use it on a trusted network only. |
 | No `server_id` parameter | You cannot set one. If the derived id collides, the only lever is `name`, which also resets the state store — so changing it to fix a collision *also skips the downtime window*. |
 | No `binlog_transaction_compression` check | [§7](#7-binlog_transaction_compression-is-off): a compressed transaction is not unpacked, produces nothing, and the position moves past it. Silent from both ends. |

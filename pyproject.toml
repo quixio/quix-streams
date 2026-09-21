@@ -49,7 +49,7 @@ all = [
     "python-dateutil>=2.8.2,<3",
     "paho-mqtt>=2.1.0,<3",
     "pymysql>=1.0,<2",
-    "mysql-replication>=1.0.17,<2"
+    "mysql-replication>=1.0.17,<1.0.18"
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
@@ -70,7 +70,7 @@ pandas = ["pandas>=1.0.0,<3.0"]
 elasticsearch = ["elasticsearch>=8.17,<9"]
 tdengine = ["python-dateutil>=2.8.2,<3"]
 mqtt = ["paho-mqtt>=2.1.0,<3"]
-mysql = ["pymysql>=1.0,<2", "mysql-replication>=1.0.17,<2"]
+mysql = ["pymysql>=1.0,<2", "mysql-replication>=1.0.17,<1.0.18"]
 
 # AWS dependencies are separated by service to support
 # different requirements in the future.

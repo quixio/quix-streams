@@ -19,7 +19,12 @@ try:
     import pymysql
     from pymysqlreplication import BinLogStreamReader
     from pymysqlreplication.constants import FIELD_TYPE
-    from pymysqlreplication.event import XidEvent
+    from pymysqlreplication.event import (
+        GtidEvent,
+        QueryEvent,
+        XAPrepareEvent,
+        XidEvent,
+    )
     from pymysqlreplication.row_event import (
         DeleteRowsEvent,
         TableMapEvent,
@@ -64,6 +69,17 @@ _PARSE_ERROR_CODE = 1064
 # filters out, and whose events therefore never reach the loop below.
 _STMT_END_F = 0x0001
 
+# The transaction statements MySQL writes around a group of row events, uppercased. The
+# ends close the group; the starts close whatever the previous transaction left open.
+_TRANSACTION_STATEMENTS = (
+    "BEGIN",
+    "COMMIT",
+    "ROLLBACK",
+    "XA COMMIT",
+    "XA ROLLBACK",
+    "XA START",
+)
+
 # Derived ids start at 1000 to stay clear of the `server-id = 1` a MySQL server and its
 # tutorials use.
 _SERVER_ID_MIN = 1000
@@ -82,12 +98,19 @@ def _is_purged_position(exc: BaseException) -> bool:
 
 def _mysql_time(value: timedelta) -> str:
     """Render a TIME as MySQL prints it: `[-]HH:MM:SS[.ffffff]`, hours up to 838."""
-    sign = "-" if value < timedelta(0) else ""
+    negative = value < timedelta(0)
     value = abs(value)
+    microseconds = value.microseconds
+    if negative and microseconds:
+        # MySQL borrows a whole second into the stored fraction of a negative TIME, and
+        # `row_event.py:449-477` carries that borrow into the timedelta it returns.
+        # Holds for the mysql-replication 1.0.17 that pyproject.toml pins.
+        microseconds = 1_000_000 - microseconds
+    sign = "-" if negative else ""
     hours, rest = divmod(value.days * 86400 + value.seconds, 3600)
     minutes, seconds = divmod(rest, 60)
     text = f"{sign}{hours:02d}:{minutes:02d}:{seconds:02d}"
-    return f"{text}.{value.microseconds:06d}" if value.microseconds else text
+    return f"{text}.{microseconds:06d}" if microseconds else text
 
 
 def _encode(value: Any) -> Any:
@@ -527,9 +550,12 @@ class MySqlCdcLiteSource(StatefulSource):
             server_id=self._server_id,
             only_events=[
                 DeleteRowsEvent,
+                GtidEvent,
+                QueryEvent,
                 TableMapEvent,
                 UpdateRowsEvent,
                 WriteRowsEvent,
+                XAPrepareEvent,
                 XidEvent,
             ],
             only_schemas=[self._database],
@@ -576,10 +602,13 @@ class MySqlCdcLiteSource(StatefulSource):
         # own (`binlogstream.py:287`), and a bound that tripped leaves it True.
         stream.is_past_end_log_pos = False
         for event in stream:
-            if isinstance(event, XidEvent):
-                self._in_statement = False
-            elif isinstance(event, TableMapEvent):
+            if isinstance(event, TableMapEvent):
                 self._in_statement = True
+            elif isinstance(event, (GtidEvent, XAPrepareEvent, XidEvent)):
+                self._in_statement = False
+            elif isinstance(event, QueryEvent):
+                if event.query.upper().startswith(_TRANSACTION_STATEMENTS):
+                    self._in_statement = False
             else:
                 self._buffer.extend(_event_to_changes(event))
                 self._in_statement = not event.flags & _STMT_END_F
