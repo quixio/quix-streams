@@ -1,13 +1,13 @@
-testcontainers[postgres]==4.13.3
+testcontainers[postgres]==4.15.0
 pytest
 docker>=7.1.0 # Required to use requests>=2.32
 fastavro>=1.8,<2.0
 protobuf>=5.27.2,<7.0
 influxdb3-python>=0.7.0,<1.0
 pyiceberg[pyarrow,glue]>=0.7
-redis[hiredis]>=5.2.0,<6
-pandas>=1.0.0,<3.0
-psycopg2-binary>=2.9,<3
+redis[hiredis]>=5.2.0,<9
+pandas>=1.5.0,<4.0
+psycopg2-binary>=2.9.5,<3
 paho-mqtt>=2.1.0,<3
 pymysql>=1.0,<2
 mysql-replication>=1.0.17,<1.0.18
