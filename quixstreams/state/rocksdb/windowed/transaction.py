@@ -15,6 +15,7 @@ from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
     append_integer,
+    deserialize,
     encode_integer_pair,
     int_to_bytes,
     serialize,
@@ -98,6 +99,20 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
                 else serialize(prefix, dumps=self._dumps)
             ),
         )
+
+    def key_from_prefix(self, prefix: bytes, message_key: Any) -> Any:
+        """
+        Reverse `as_state()`: map a store prefix back to the message key.
+
+        :param prefix: a store prefix, e.g. as yielded by `expire_all_windows()`
+        :param message_key: the key of the record being processed. Only its type
+            is read: `as_state()` stores `bytes` keys verbatim and serializes
+            every other key.
+        :return: the message key the prefix was built from
+        """
+        if isinstance(message_key, bytes):
+            return prefix
+        return deserialize(prefix, loads=self._loads)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def keys(self, cf_name: str = "default") -> Iterable[Any]:

@@ -10,10 +10,10 @@ V = TypeVar("V")
 
 WindowDetail: TypeAlias = tuple[
     tuple[int, int], V, bytes
-]  # (start, end), aggregated, key
+]  # (start, end), aggregated, store prefix
 ExpiredWindowDetail: TypeAlias = tuple[
     tuple[int, int], V, list[V], bytes
-]  # (start, end), aggregated, collected, key
+]  # (start, end), aggregated, collected, store prefix
 
 
 class WindowedState(Protocol[K, V]):
@@ -297,6 +297,18 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         """
 
     def as_state(self, prefix: Any) -> WindowedState[K, V]: ...
+
+    def key_from_prefix(self, prefix: bytes, message_key: Any) -> Any:
+        """
+        Reverse `as_state()`: map a store prefix back to the message key.
+
+        :param prefix: a store prefix, e.g. as yielded by `expire_all_windows()`
+        :param message_key: the key of the record being processed. Only its type
+            is read: `as_state()` stores `bytes` keys verbatim and serializes
+            every other key.
+        :return: the message key the prefix was built from
+        """
+        ...
 
     def get_window(
         self,
