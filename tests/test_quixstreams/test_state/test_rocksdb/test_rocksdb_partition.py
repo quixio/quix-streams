@@ -630,8 +630,8 @@ class TestRocksDBStorePartition:
         self, store_partition: RocksDBStorePartition, cache
     ):
         """
-        Validates spec §7.5: `iter_items(upper_bound=None)` means "unbounded
-        above" and returns everything at or after `lower_bound`.
+        `iter_items(upper_bound=None)` means "unbounded above" and returns
+        everything at or after `lower_bound`.
         """
         cache.set(key=append_integer(b"prefix", 1), value=b"value1", prefix=b"prefix")
         cache.set(key=append_integer(b"prefix", 2), value=b"value2", prefix=b"prefix")
@@ -648,9 +648,8 @@ class TestRocksDBStorePartition:
         self, store_partition: RocksDBStorePartition
     ):
         """
-        Validates spec §7.5: `backwards=True` combined with `upper_bound=None`
-        has no key to seek from and must raise `ValueError` rather than
-        silently mis-seeking.
+        `backwards=True` combined with `upper_bound=None` has no key to seek
+        from and raises `ValueError` rather than silently mis-seeking.
         """
         with pytest.raises(ValueError, match="upper bound"):
             list(

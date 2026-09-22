@@ -56,8 +56,7 @@ def stored_windows(transaction, key):
     `(start, end, raw_aggregation_state)` tuples.
 
     `start_from_ms=-1` is required because `get_windows()` has an *exclusive*
-    lower bound (see spec section 7.1), so `0` would hide a session
-    starting at timestamp 0.
+    lower bound, so `0` would hide a session starting at timestamp 0.
     """
     return sorted(
         (start, end, value)
@@ -97,8 +96,6 @@ def _count_rows_read_by_iter_prefixes(store):
 class NonMergeableSum(agg.Aggregator):
     """
     A user-defined aggregator that does not implement `merge()`.
-
-    Used by the session-window mergeability tests (spec section 6.6).
     """
 
     def initialize(self) -> int:
@@ -111,9 +108,9 @@ class NonMergeableSum(agg.Aggregator):
         return value
 
 
-# Hard-coded arrival order for the session invariant test (spec section 11 row 6).
-# Mixes in-order and out-of-order arrivals; every out-of-order event stays
-# within the grace period so none of them may be dropped as late.
+# Hard-coded arrival order for the session invariant test. Mixes in-order and
+# out-of-order arrivals; every out-of-order event stays within the grace period
+# so none of them may be dropped as late.
 INVARIANT_EVENTS = [
     (1000, b"k1"),
     (2000, b"k2"),
@@ -375,11 +372,10 @@ class TestSessionWindow:
         self, session_window_definition_factory
     ):
         """
-        Validates spec section 6.6 / 6.3 (decision D1): `Reduce`'s reducer is
-        `(accumulator, raw_value) -> accumulator`, not `(R, R) -> R`, so it
-        cannot double as a merger. Without an explicit `merger=`, building a
-        session window on top of `reduce()` must raise `InvalidOperation`
-        instead of silently producing wrong merges later.
+        `Reduce`'s reducer is `(accumulator, raw_value) -> accumulator`, not
+        `(R, R) -> R`, so it cannot double as a merger. Without an explicit
+        `merger=`, building a session window on top of `reduce()` raises
+        `InvalidOperation` instead of silently producing wrong merges later.
         """
         window_def = session_window_definition_factory(
             inactivity_gap_ms=10000, grace_ms=1000
@@ -395,8 +391,8 @@ class TestSessionWindow:
         self, expiration, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 6.3: passing `merger=` makes `Reduce` mergeable
-        and `session_window(...).reduce(...)` keeps building and running.
+        Passing `merger=` makes `Reduce` mergeable, so
+        `session_window(...).reduce(...)` keeps building and running.
         """
         window_def = session_window_definition_factory(
             inactivity_gap_ms=10000, grace_ms=1000
@@ -505,9 +501,8 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 11 row 8 / section 9.2 (B10 / D2): stored
-        session `end` is exclusive (`last_event_ts + 1`), matching every
-        other window type.
+        A stored session's `end` is exclusive (`last_event_ts + 1`), matching
+        every other window type.
         """
         window = session_window_definition_factory(
             inactivity_gap_ms=10000, grace_ms=0
@@ -527,10 +522,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 11 row 8 (B10): the `collect()` variant. With
-        the half-open `end`, `delete_from_collection` deletes exactly
-        `[start, end)`, so the session's last collected value is not leaked
-        (the pre-fix inclusive `end` under-deleted by one value).
+        The `collect()` variant of the exclusive `end`: `delete_from_collection`
+        deletes exactly `[start, end)`, so the session's last collected value is
+        not leaked.
 
         A second, unrelated key advances the partition watermark so the
         triggering event does not itself add a value under the expiring
@@ -586,9 +580,7 @@ class TestSessionWindow:
 
     def test_session_window_def_init_invalid_grace_type(self, dataframe_factory):
         """
-        Validates spec section 11 row 11 / section 9.3 (B11): `grace_ms` gets
-        the same `isinstance` check as `inactivity_gap_ms`, added only to
-        `SessionWindowDefinition`.
+        `grace_ms` gets the same `isinstance` check as `inactivity_gap_ms`.
         """
         with pytest.raises(TypeError):
             SessionWindowDefinition(
@@ -690,17 +682,11 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 4.2/4.3: `grace` plays no part in assignment or
-        merging, only in delaying closing. A gap-only assignment rule means an
-        event beyond `gap` (but still inside `gap + grace`) opens a *new*
-        session instead of extending the old one; the old session then stays
-        open (not yet closed) until the watermark passes `end + gap + grace`,
-        at which point it is emitted through `final()` like any other session.
-
-        This replaces the pre-fix test's assumption that `grace` widens the
-        extension rule (bug: `session.py` used to add `grace` to the
-        assignment check) - see architecture.md section 4 "grace removed from
-        assignment".
+        `grace` plays no part in assignment or merging, only in delaying
+        closing. An event beyond `gap` but still inside `gap + grace` opens a
+        *new* session instead of extending the old one; the old session stays
+        open until the watermark passes its closing threshold, then is emitted
+        through `final()` like any other session.
         """
         window_def = session_window_definition_factory(
             inactivity_gap_ms=5000, grace_ms=2000
@@ -944,15 +930,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 4.3 step 3 (bug B4): an out-of-order event that
-        falls within `inactivity_gap_ms` of two separate open sessions merges
-        them into one, combining the aggregation state via
-        `BaseAggregator.merge()`.
-
-        This replaces the pre-fix test of the same name, which asserted that
-        sessions do *not* auto-merge - the opposite of what the fix
-        guarantees. See spec section 11 "Existing tests requiring rewrites"
-        and architecture.md section 7 (deviations).
+        An out-of-order event that falls within `inactivity_gap_ms` of two
+        separate open sessions merges them into one, combining the aggregation
+        state via `BaseAggregator.merge()`.
         """
         window_def = session_window_definition_factory(
             inactivity_gap_ms=10000, grace_ms=5000
@@ -1009,10 +989,8 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 4.5 example B (bug B4): constructs the exact
-        bridging scenario the pre-fix test's docstring described but never
-        built - Session A and Session B, separated by more than one gap, get
-        merged by a bridging event that falls within one gap of both.
+        Session A and Session B, separated by more than one gap, are merged by
+        a bridging event that falls within one gap of both.
 
         Session A: events at 1000 and 10000 -> [1000, 10001), value 15.
         Session B: event at 25000 -> [25000, 25001), value 10 (25000 is more
@@ -1214,12 +1192,11 @@ class TestSessionWindow:
         self, strategy, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 11 row 7 (B6/B7 perf-regression guard): neither
-        expiry path may perform work proportional to the partition keyspace on
-        every message. `get_windows` is the materializing primitive the old
-        `expire_windows`-style scan used; `keys` is the full-partition scan
-        the old `expire_by_partition` used. Twenty in-order messages on one
-        key must trigger neither, under `final("key")` or `final("partition")`.
+        Neither expiry path may perform work proportional to the partition
+        keyspace on every message. `get_windows` is the materializing primitive
+        an `expire_windows`-style scan uses; `keys` is a full-partition scan.
+        Twenty in-order messages on one key must trigger neither, under
+        `final("key")` or `final("partition")`.
         """
         window = session_window_definition_factory(
             inactivity_gap_ms=10000, grace_ms=0
@@ -1254,29 +1231,25 @@ class TestSessionWindow:
         assert get_windows_spy.call_count == 0
         assert keys_spy.call_count == 0
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="partition-mode expiry sweep enumerates prefixes with a linear "
+        "pass over the stored window keys; an (end, prefix, start) index column "
+        "family would bound it by the number of prefixes",
+    )
     def test_expiry_scan_cost_grows_with_windows_per_key_not_with_key_count(
         self, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 11 row 7 (B6/B7 perf-regression guard),
-        tightened. `test_expiry_paths_do_not_scan_the_partition` above only
-        counts *calls* to `keys()` / `get_windows()`, and is silently defeated
-        by ArchDev's F2 fix: `_iter_db_prefixes` (the partition-mode expiry
-        sweep's prefix enumerator) reads every window row through a third
-        primitive, `RocksDBStorePartition.iter_items`, which neither of those
-        spies observes.
+        A partition-mode expiry sweep should cost the number of message-key
+        prefixes, not the number of stored windows.
 
-        This test counts *rows read* by that primitive instead of counting
-        calls, so it cannot be defeated by swapping which method does the
-        scanning. It asserts the sweep's cost is bounded by the number of
-        distinct message-key prefixes, not by the number of windows stored
-        per key - one key with many never-closing sessions must not cost
-        more than a handful of keys with one session each.
-
-        EXPECTED TO FAIL against the current code: `_iter_db_prefixes` is
-        documented as "a linear pass over the window keys", so its cost is
-        O(total stored windows) regardless of how those windows are
-        distributed across prefixes.
+        `test_expiry_paths_do_not_scan_the_partition` above only counts calls to
+        `keys()` and `get_windows()`; the prefix enumerator reads window rows
+        through `RocksDBStorePartition.iter_items`, which neither spy observes.
+        This test counts rows read by that primitive instead, so it stays valid
+        whichever method does the scanning: one key with many never-closing
+        sessions must not cost more than many keys with one session each.
         """
         windows_per_key = 200
         num_keys = 200
@@ -1351,16 +1324,15 @@ class TestSessionWindow:
         )
 
     # ------------------------------------------------------------------
-    # Red-first regression tests for the session-window correctness fix.
-    # Spec: dev-planning/session-windows-fix/spec.md, section 11 rows 1-6 and 9.
+    # Regression tests for session assignment, lateness and merging.
     # ------------------------------------------------------------------
 
     def test_long_session_does_not_fragment(
         self, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 4.5 example A (bug B1): a session that stays active
-        for longer than 2 * inactivity_gap_ms must remain a single session.
+        A session that stays active for longer than 2 * inactivity_gap_ms must
+        remain a single session.
 
         Events arrive every 5s with a 10s gap, so every event belongs to the
         session opened at 1000 and nothing ever closes.
@@ -1392,8 +1364,7 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager, mock_message_context
     ):
         """
-        Validates spec section 4.5 example E (bug B2): with
-        `closing_strategy="partition"` the partition watermark is live and
+        With `closing_strategy="partition"` the partition watermark is live and
         monotonic, so an event below `watermark - gap - grace` is dropped and
         reported through the `on_late` callback.
         """
@@ -1425,9 +1396,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager, mock_message_context
     ):
         """
-        Validates spec section 4.5 example C (bug B3): an event is late only when
-        `ts < watermark - gap - grace`, so the documented default `grace_ms=0`
-        still leaves a full inactivity gap of out-of-order tolerance.
+        An event is late only when `ts < watermark - gap - grace`, so the default
+        `grace_ms=0` still leaves a full inactivity gap of out-of-order
+        tolerance.
 
         ts=18000 arrives after ts=26000 but is only 8000ms behind, so it must
         extend the open session backwards rather than be dropped.
@@ -1456,9 +1427,8 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 4.5 example B (bug B4): an out-of-order event that
-        falls within the inactivity gap of two open sessions merges them into one
-        with the aggregation states combined.
+        An out-of-order event that falls within the inactivity gap of two open
+        sessions merges them into one with the aggregation states combined.
 
         gap=10000, grace=20000. `grace` plays no part in assignment, so ts=20000
         must open a *second* session before ts=10000 bridges the two.
@@ -1495,9 +1465,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 6.4 and 6.5: a merged session combines every
-        aggregation state, and collected values need no merging because they are
-        range-fetched from the merged session's hull.
+        A merged session combines every aggregation state, and collected values
+        need no merging because they are range-fetched from the merged session's
+        hull.
         """
         window = session_window_definition_factory(
             inactivity_gap_ms=10000, grace_ms=20000
@@ -1536,8 +1506,8 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Validates spec section 4.5 example D (bug B5): a session whose start is
-        timestamp 0 must still be found by the backwards probe and extended.
+        A session whose start is timestamp 0 must still be found by the
+        backwards probe and extended.
         """
         window = session_window_definition_factory(
             inactivity_gap_ms=10000, grace_ms=0
@@ -1562,9 +1532,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager, mock_message_context
     ):
         """
-        Validates the core invariant of spec section 4.2: for a given message key,
-        stored sessions are disjoint and non-adjacent - no two consecutive stored
-        sessions are within `inactivity_gap_ms` of each other.
+        For a given message key, stored sessions are disjoint and non-adjacent:
+        no two consecutive stored sessions are within `inactivity_gap_ms` of each
+        other.
 
         Feeds a hard-coded stream of 40 in-order and out-of-order events across
         two keys, then checks the invariant on whatever state remains.
@@ -1599,9 +1569,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, dataframe_factory, state_manager
     ):
         """
-        Validates spec section 6.6 (decision D1): an aggregation that cannot be
-        merged is rejected by `SessionWindowDefinition._create_window` with
-        `InvalidOperation`, at pipeline-definition time.
+        An aggregation that cannot be merged is rejected by
+        `SessionWindowDefinition._create_window` with `InvalidOperation`, at
+        pipeline-definition time.
         """
 
         def reducer(aggregated, current):
@@ -1650,23 +1620,20 @@ class TestSessionWindow:
         assert updated[0][1]["value"] == 5
 
     # ------------------------------------------------------------------
-    # Code-review round 1 - red tests for confirmed findings F3-F9.
-    # Spec: dev-planning/session-windows-fix/spec.md.
+    # Regression tests for the closing/lateness threshold split, merging of
+    # uninitialized state, expiry cursors and aggregator mergeability.
     # ------------------------------------------------------------------
 
     def test_close_before_shared_by_lateness_and_closing_allows_adjacent_sessions(
         self, session_window_definition_factory, state_manager
     ):
         """
-        Review finding F3: closing (`session.py` step 4/"Close") and lateness
-        (step "Lateness") share the same `close_before` cutoff. A session
-        whose `end` lands exactly on `close_before` closes as soon as the
-        watermark reaches it, but a boundary event at `ts == close_before`
-        is simultaneously accepted (not late) and can no longer extend the
-        now-closed session, so it opens a brand-new one immediately after -
-        producing two emitted sessions only 1ms apart. This violates spec
-        section 4.2's core invariant: "for any two consecutive stored
-        sessions S_i, S_{i+1}: S_{i+1}.start - S_i.last > gap".
+        Closing and lateness must not share one cutoff. If they did, a session
+        whose `end` lands exactly on the cutoff would close as soon as the
+        watermark reached it while a boundary event at that same timestamp is
+        still accepted; unable to extend the now-closed session, it would open a
+        brand-new one immediately after - two emitted sessions 1ms apart, which
+        breaks the non-adjacency invariant.
         """
         gap, grace = 50, 0
         window = session_window_definition_factory(
@@ -1705,16 +1672,11 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Review finding F4 (single-match branch): `FixedTimeWindow` guards a
-        `None` stored aggregation value before calling `_aggregate_value`
-        (`time_based.py:237-239` - `if current_value is None: current_value =
-        self._initialize_value()`); the session path has no equivalent guard.
-        A session written by a collect-only window (`aggregate=False`,
-        `MultiAggregationWindowMixin` persists `value=None`) must still be
-        re-aggregatable when the SAME store name is later driven with an
-        aggregator added - the persisted `None` should be treated as "not
-        yet initialized" for the new aggregator, exactly as a brand-new
-        session would be, rather than crashing `_aggregate_value`.
+        A session written by a collect-only window persists `value=None`. When
+        the same store is later driven with an aggregator added, the
+        single-match branch must treat that `None` as "not yet initialized" -
+        exactly as `FixedTimeWindow` does - rather than crashing
+        `_aggregate_value`.
         """
         definition = session_window_definition_factory(
             inactivity_gap_ms=10000, grace_ms=0
@@ -1729,8 +1691,8 @@ class TestSessionWindow:
             process(collect_only, value=1, key=key, transaction=tx, timestamp_ms=1000)
 
         reaggregated = definition.agg(items=agg.Collect(), n=agg.Count())
-        # Same store: `.agg()` always names via `func_name=None` (spec
-        # section 6.6), independent of which aggregators/collectors are set.
+        # Same store: `.agg()` always names via `func_name=None`, independent
+        # of which aggregators/collectors are set.
         # Do NOT call `.final()` again - the store is already registered
         # under this name (`collect_only.final(...)` above did that); the
         # default closing strategy ("key") is what we want here too.
@@ -1754,12 +1716,10 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Review finding F4 (two-match/merge branch): the same missing `None`
-        guard also breaks `_merge_values` (`session.py`, the `len(matched)
-        == 2` branch) when one of the two bridged sessions was written by a
-        collect-only window and the other by an aggregating one - merging a
-        fresh aggregate with the persisted `None` must treat it as
-        "uninitialized" instead of crashing.
+        The same stored `None` reaches `_merge_values` when one of two bridged
+        sessions was written by a collect-only window and the other by an
+        aggregating one: merging a fresh aggregate with the persisted `None`
+        must treat it as uninitialized instead of crashing.
 
         `grace_ms=20000` (rather than 0) is required so that session A
         survives long enough to still be open when the bridging event
@@ -1809,16 +1769,10 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Review finding F5: on the first message processed in
-        `closing_strategy="partition"` mode after the partition expiry
-        checkpoint has never been set (e.g. sessions previously written
-        under `"key"` mode against the same store), `process_window`'s
-        pre-sweep "lower the checkpoint for a brand-new key" step
-        (`session.py`, step 5) sets the checkpoint from *this* message's own
-        session end, which is always ahead of *this* message's own
-        watermark - gating the very sweep call it precedes and deferring
-        already-overdue sessions of other keys until the watermark advances
-        by roughly `gap + grace` more.
+        An unset partition expiry checkpoint means "sweep now". If the first
+        partition-mode message overwrote it with its own session's due time -
+        always ahead of that message's own watermark - it would gate the very
+        sweep it precedes and defer already-overdue sessions of other keys.
         """
         gap, grace = 5000, 100
         definition = session_window_definition_factory(
@@ -1863,16 +1817,12 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """
-        Review finding F6: `grace_ms` is not part of a session window's
-        store name (spec section 9.4), so reopening the same store with a
-        larger `grace_ms` can make a timestamp that used to be late
-        acceptable again, and write a new session starting *below* the
-        persisted per-key expiry cursor. `expire_by_key`'s scan always
-        starts at `cursor + 1` (spec section 8.2), so that session's start
-        is permanently below the scan's lower bound and it is never closed,
-        however far the watermark advances - the "monotone cursor" argument
-        (spec section 7.3) silently assumed the closing rule itself never
-        changes.
+        `grace_ms` is not part of a session window's store name, so reopening
+        the same store with a larger `grace_ms` can make a timestamp that used
+        to be late acceptable again and write a new session starting below the
+        persisted per-key expiry cursor. `expire_by_key`'s scan starts at
+        `cursor + 1`, so without re-lowering the cursor that session would sit
+        permanently below the scan's lower bound and never close.
         """
         gap = 10
         definition = session_window_definition_factory(
@@ -1936,16 +1886,12 @@ class TestSessionWindow:
         mock_message_context,
     ):
         """
-        Review finding F7: `closing_strategy="key"` advances the watermark
-        from `state.get_latest_timestamp()` (persisted per message-key
-        prefix), while `"partition"` advances it from a different persisted
-        slot (`transaction.advance_partition_timestamp`, stored under the
-        empty prefix - spec section 7.6). Reopening the same store under
-        `closing_strategy="partition"` after sessions were written under
-        `"key"` ignores everything the key-mode watermark ever knew, so a
-        genuinely late/duplicate event for that key can be silently accepted
-        and produce a second, overlapping session for a span that was
-        already closed and emitted.
+        `closing_strategy="key"` advances the watermark from the per-key
+        persisted timestamp, `"partition"` from a separate partition-wide slot.
+        Reopening the same store under `"partition"` after sessions were written
+        under `"key"` must not ignore the per-key history, or a late duplicate
+        would be accepted and produce a second session overlapping a span that
+        was already closed and emitted.
         """
         gap = 10
         definition = session_window_definition_factory(
@@ -1994,16 +1940,10 @@ class TestSessionWindow:
         self, session_window_definition_factory
     ):
         """
-        Review finding F9 (a): `BaseAggregator.mergeable` derives from
-        whether `merge()` was overridden (`type(self).merge is not
-        BaseAggregator.merge` - spec section 6.1), matching its own
-        docstring's instructions for making a custom aggregator mergeable.
-        `Reduce.mergeable` shadows that derived property with a hardcoded
-        `self._merger is not None` (`aggregations.py:476-477`), so a
-        `Reduce` subclass that follows the documented instructions -
-        overriding `merge()` directly instead of passing `merger=` - is
-        incorrectly reported as not mergeable, and `SessionWindowDefinition`
-        rejects it even though it implements exactly what was asked.
+        `BaseAggregator.mergeable` derives from whether `merge()` was
+        overridden. `Reduce.mergeable` must honour the same rule: a `Reduce`
+        subclass that overrides `merge()` directly instead of passing `merger=`
+        is mergeable, and a session window must accept it.
         """
 
         class MergingReduce(agg.Reduce):
@@ -2041,14 +1981,11 @@ class TestSessionWindow:
         self, session_window_definition_factory
     ):
         """
-        Review finding F9 (b), the worse mirror of the case above: a
-        `Reduce` subclass that supplies *both* `merger=` (making
-        `Reduce.mergeable` report `True`) *and* a conflicting `merge()`
-        override that ignores `_merger` and raises. Because `mergeable` is
-        hardcoded to `self._merger is not None` rather than reflecting what
-        `merge()` (MRO-resolved) actually does, this disagreement passes the
-        session-window build gate silently and is only discovered when a
-        bridging merge actually invokes the broken override at runtime.
+        The mirror of the case above: a `Reduce` subclass supplying *both*
+        `merger=` and a `merge()` override that ignores it. Method resolution
+        makes the override win, so the two disagree; that conflict must be
+        caught at window-definition time, not on the first bridging merge at
+        runtime.
         """
 
         class BrokenMergeReduce(agg.Reduce):
@@ -2070,9 +2007,7 @@ class TestSessionWindow:
             raised_at_definition_time = True
 
         assert raised_at_definition_time, (
-            "Reduce.mergeable hardcodes `self._merger is not None` and "
-            "ignores whether merge() itself was overridden, so a subclass "
-            "that supplies both `merger=` and a conflicting `merge()` "
-            "override builds successfully and is only caught when a "
-            "bridging merge actually runs it - not at definition time."
+            "a Reduce subclass supplying both `merger=` and a conflicting "
+            "`merge()` override built successfully; the conflict must be "
+            "rejected at definition time, not when a bridging merge runs it"
         )

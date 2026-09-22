@@ -1582,10 +1582,8 @@ class StreamingDataFrame:
         `inactivity_gap_ms`. A session starts with the first event and extends each
         time a new event arrives within the inactivity gap of the session's current
         boundary. The session closes once the watermark passes
-        `last_event + 2 * inactivity_gap + grace`: an admissible out-of-order
-        event (see the lateness rule below) can extend a session whose last
-        event is up to one inactivity gap before it, so a session only closes
-        when no admissible event can reach it any more.
+        `last_event + 2 * inactivity_gap + grace`, the point at which no admissible
+        out-of-order event can extend it any more.
 
         Unlike fixed-time windows, session windows have dynamic durations based on the
         actual events and their timing, making them ideal for user activity tracking,

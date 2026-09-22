@@ -4785,19 +4785,14 @@ class RocksDBStorePartition(StorePartition):
 
         :param lower_bound: The lower bound key (inclusive) for the iteration range.
         :param upper_bound: The upper bound key (exclusive) for the iteration range.
-            `None` means the range is unbounded above. Unbounded iteration cannot be
-            combined with `backwards=True` because there is no key to seek to first.
+            `None` means the range is unbounded above.
         :param backwards: If `True`, iterate in reverse order (descending).
             Default is `False` (ascending).
         :param cf_name: The name of the column family to iterate over.
             Default is "default".
         :return: An iterator yielding (key, value) tuples.
-
-        NOTE: The pinned `rocksdict` version yields zero rows when only
-        `set_iterate_lower_bound` is called on `ReadOptions` without an upper
-        bound, so the `ReadOptions` bounds are set only when `upper_bound` is
-        provided; in the unbounded forward case, `from_key=lower_bound` alone
-        guarantees no key below `lower_bound` is yielded.
+        :raises ValueError: if `backwards=True` is combined with no upper bound,
+            leaving no key to seek from.
         """
         if backwards:
             if upper_bound is None:
@@ -4811,13 +4806,8 @@ class RocksDBStorePartition(StorePartition):
         cf = self.get_or_create_column_family(cf_name=cf_name)
 
         # Set iterator bounds to reduce IO by limiting the range of keys fetched.
-        # NOTE: Setting ONLY the lower bound (no upper bound) makes the rocksdict
-        # iterator yield zero rows, so both bounds are set together or not at all.
-        # Skipping the lower bound when `upper_bound` is None is safe: a forward
-        # seek to `from_key=lower_bound` never yields keys below `lower_bound`,
-        # and the backwards branch (which always has an upper bound) additionally
-        # filters `key < lower_bound` manually below. Do not "restore" the
-        # lone lower bound.
+        # rocksdict yields zero rows when `ReadOptions` carries a lower bound and
+        # no upper bound, so the two are set together or not at all.
         read_opt = ReadOptions()
         if upper_bound is not None:
             read_opt.set_iterate_lower_bound(lower_bound)

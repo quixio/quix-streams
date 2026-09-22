@@ -503,6 +503,7 @@ sdf = (
 ```
 
 ## Session Windows
+!!! info New in v3.27.0
 
 Session windows group events that are separated by no more than a configured inactivity gap. Unlike fixed-time windows (tumbling, hopping, sliding), session windows have dynamic durations based on the actual timing of events. This makes them ideal for user activity tracking, fraud detection, and other event-driven scenarios.
 
@@ -629,7 +630,8 @@ def on_late_session_event(
 ):
     """Handle late events that couldn't extend any session"""
     print(f"Late event for key {key}: {late_by_ms}ms late")
-    print(f"Event would have belonged to session [{start}, {end}]")
+    # The event joined no session, so start/end span the event itself
+    print(f"Dropped event span [{start}, {end})")
     return False  # Suppress default logging
 
 app = Application(...)
@@ -647,6 +649,9 @@ sdf = sdf.session_window(
 
 **1. User Activity Tracking**
 ```python
+from datetime import timedelta
+from quixstreams.dataframe.windows import Collect, Count, Sum
+
 # Track user sessions on a website or app
 sdf.session_window(inactivity_gap_ms=timedelta(minutes=30)).agg(
     page_views=Count(),
@@ -657,6 +662,9 @@ sdf.session_window(inactivity_gap_ms=timedelta(minutes=30)).agg(
 
 **2. Fraud Detection**
 ```python
+from datetime import timedelta
+from quixstreams.dataframe.windows import Collect, Count, Sum
+
 # Detect suspicious transaction patterns
 sdf.session_window(inactivity_gap_ms=timedelta(minutes=10)).agg(
     transaction_count=Count(),
@@ -667,6 +675,9 @@ sdf.session_window(inactivity_gap_ms=timedelta(minutes=10)).agg(
 
 **3. IoT Device Monitoring**
 ```python
+from datetime import timedelta
+from quixstreams.dataframe.windows import Count, Max, Mean
+
 # Monitor device activity sessions
 sdf.session_window(inactivity_gap_ms=timedelta(hours=1)).agg(
     readings_count=Count(),
@@ -677,6 +688,9 @@ sdf.session_window(inactivity_gap_ms=timedelta(hours=1)).agg(
 
 **4. Gaming Analytics**
 ```python
+from datetime import timedelta
+from quixstreams.dataframe.windows import Count, Sum
+
 # Track gaming sessions
 sdf.session_window(inactivity_gap_ms=timedelta(minutes=20)).agg(
     actions_performed=Count(),
@@ -1095,7 +1109,7 @@ When you change the definition of the window (e.g. its size), the data in the st
 Quix Streams handles some of the situations, like:
 
 - Updating window type (e.g. from tumbling to hopping, from hopping to session)
-- Updating window period, step, or timeout
+- Updating window period, step, or inactivity gap
 - Adding/Removing/Updating an aggregation function (except `Reduce()`)
 
 Updating the window type and parameters will change the name of the underlying state store, and the new window definition will use a different one.

@@ -414,14 +414,14 @@ class TestWindowedRocksDBPartitionTransaction:
 
 class TestIterWindows:
     """
-    Validates spec §7.4: `iter_windows` is the lazy, inclusive-lower-bound
-    counterpart of `get_windows` (B1/B5/B7).
+    `iter_windows` is the lazy, inclusive-lower-bound counterpart of
+    `get_windows`.
     """
 
     def test_inclusive_lower_bound(self, windowed_rocksdb_store_factory):
         """
-        Validates spec §7.4 (B5 fix): a window starting exactly at
-        `start_from_ms` is included, unlike `get_windows`' exclusive bound.
+        A window starting exactly at `start_from_ms` is included, unlike
+        `get_windows`' exclusive bound.
         """
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
@@ -437,7 +437,7 @@ class TestIterWindows:
         assert result == [((0, 1), 1, prefix)]
 
     def test_unbounded_upper_bound(self, windowed_rocksdb_store_factory):
-        """Validates spec §7.4: `start_to_ms=None` means unbounded above."""
+        """`start_to_ms=None` means unbounded above."""
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
         prefix = b"__key__"
@@ -459,7 +459,7 @@ class TestIterWindows:
     def test_backwards_returns_greatest_start_first(
         self, windowed_rocksdb_store_factory
     ):
-        """Validates spec §7.4: `backwards=True` yields greatest-start-first."""
+        """`backwards=True` yields greatest-start-first."""
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
         prefix = b"__key__"
@@ -480,8 +480,8 @@ class TestIterWindows:
 
     def test_uncommitted_update_cache_visible(self, windowed_rocksdb_store_factory):
         """
-        Validates spec §7.4: uncommitted writes made earlier in the same
-        transaction are visible to `iter_windows` before any flush.
+        Uncommitted writes made earlier in the same transaction are visible to
+        `iter_windows` before any flush.
         """
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
@@ -495,8 +495,8 @@ class TestIterWindows:
         assert result == [((0, 1), 1, prefix)]
 
     def test_deleted_windows_not_returned(self, windowed_rocksdb_store_factory):
-        """Validates spec §7.4: a window deleted in this transaction's cache
-        must not be yielded, even though it is still on disk."""
+        """A window deleted in this transaction's cache must not be yielded,
+        even though it is still on disk."""
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
         prefix = b"__key__"
@@ -515,10 +515,10 @@ class TestIterWindows:
         self, windowed_rocksdb_store_factory
     ):
         """
-        Validates spec §7.4 (B7 fix): `iter_windows` must reach its first
-        element without falling back to `_get_items`, the materializing
-        primitive `get_windows` uses. A prefix holding 10k windows would be
-        fully built into a list on every message if this regressed.
+        `iter_windows` must reach its first element without falling back to
+        `_get_items`, the materializing primitive `get_windows` uses. A prefix
+        holding 10k windows would otherwise be built into a list on every
+        message.
         """
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
@@ -540,13 +540,10 @@ class TestIterWindows:
         self, windowed_rocksdb_store_factory
     ):
         """
-        Review finding F1: `_PREFIX_UPPER_BOUND` is meant to bound exactly one
-        prefix's windows, but a message key that is a SEPARATOR-extension of
-        another key (`b"user|123"` extends `b"user"`) serializes to a window
-        key that sorts *inside* `b"user"`'s bound (`b"user"` + SEPARATOR +
-        `<8 bytes>` + SEPARATOR + `<8 bytes>` sorts below `b"user"` +
-        `_PREFIX_UPPER_BOUND` because any real byte after the separator is far
-        below `0xff`). `iter_windows(prefix=b"user", ...)` must not leak
+        A message key that is a SEPARATOR-extension of another key
+        (`b"user|123"` extends `b"user"`) serializes to window keys that sort
+        *inside* `b"user"`'s byte range, so no pair of range bounds can separate
+        the two. `iter_windows(prefix=b"user", ...)` must not leak
         `b"user|123"`'s windows.
         """
         store = windowed_rocksdb_store_factory()
@@ -575,7 +572,7 @@ class TestIterWindows:
 
 
 class TestIterPrefixes:
-    """Validates spec §7.5: `iter_prefixes` (B6 fix)."""
+    """`iter_prefixes` yields each stored message-key prefix once."""
 
     def test_iter_prefixes_deterministic_order(self, windowed_rocksdb_store_factory):
         """
@@ -617,16 +614,13 @@ class TestIterPrefixes:
         self, windowed_rocksdb_store_factory
     ):
         """
-        Review finding F2: `_iter_db_prefixes` seeks to
-        `prefix + _PREFIX_UPPER_BOUND` after yielding a prefix, assuming that
-        skips exactly that prefix's keys and nothing else. For a message key
-        that is a SEPARATOR-extension of another key (`b"user|123"` extends
-        `b"user"`), that seek target sorts *above* the extended key's window
-        keys too (see the companion `test_prefix_leak_for_separator_extended_
-        key` in `TestIterWindows`), so the extended key's prefix is skipped
-        and never yielded - both prefixes must be committed to the DB, not
-        left in the uncommitted cache, or the cache-merge side of
-        `iter_prefixes` would rescue it and the test would prove nothing.
+        A SEPARATOR-extended message key (`b"user|123"` extends `b"user"`)
+        stores its window keys inside `b"user"`'s byte range, so a prefix
+        enumerator that seeks past `b"user"`'s range would skip the extended
+        key entirely and never yield it. Both prefixes are committed to the DB
+        rather than left in the uncommitted cache, or the cache-merge side of
+        `iter_prefixes` would supply the missing prefix and the test would
+        prove nothing.
         """
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)

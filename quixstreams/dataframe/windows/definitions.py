@@ -583,8 +583,7 @@ class SlidingCountWindowDefinition(HoppingCountWindowDefinition):
         )
         if func_name:
             return f"{prefix}_{func_name}"
-        else:
-            return prefix
+        return prefix
 
 
 class SessionWindowDefinition(WindowDefinition):
@@ -649,11 +648,6 @@ class SessionWindowDefinition(WindowDefinition):
         aggregators: Optional[dict[str, BaseAggregator]] = None,
         collectors: Optional[dict[str, BaseCollector]] = None,
     ) -> SessionWindow:
-        # Session windows may merge two open sessions when a late event bridges
-        # them, which requires combining their aggregation states. Validate that
-        # here - the single choke point every builder goes through - so that a
-        # pipeline that cannot work fails at build time rather than hours into a
-        # production stream on a data-dependent code path.
         non_mergeable = [
             column
             for column, aggregator in (aggregators or {}).items()

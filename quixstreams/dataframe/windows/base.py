@@ -220,8 +220,8 @@ class Window(abc.ABC):
         """
         Combine the aggregation states of two windows merged into one.
 
-        Only session windows merge windows. `a` belongs to the window that starts
-        earlier in event time, `b` to the one that starts later.
+        `a` belongs to the window that starts earlier in event time, `b` to the
+        one that starts later.
         """
         ...
 

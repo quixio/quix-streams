@@ -511,8 +511,8 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         """
         Yield each distinct message-key prefix present in the store, in key order.
 
-        Cheaper than `keys()` when only the set of prefixes is needed: the cost is
-        one seek per prefix instead of one iteration step per key.
+        Cheaper than `keys()` when only the set of prefixes is needed: no value is
+        deserialized and the result is deduplicated as it streams.
 
         :param cf_name: rocksdb column family name. Default - "default"
         :return: An iterator of prefixes

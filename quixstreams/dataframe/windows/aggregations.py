@@ -93,16 +93,11 @@ class BaseAggregator(ABC, Generic[S]):
         starts earlier in event time, `b` the state of the session that starts later;
         the two sessions never overlap.
 
-        The default implementation raises: an aggregation that cannot be merged
-        cannot be used with `session_window()`, and that is rejected when the window
-        is built rather than when a merge happens. All other window types are
-        unaffected and never call this method.
-
-        >***NOTE:*** Collectors (`BaseCollector`) deliberately have no `merge()`.
-        Their values live in a separate column family keyed by timestamp and are
-        range-fetched over the window's `[start, end)` at expiry. A merged session's
-        range is the hull of the two merged ranges, so the fetch already returns
-        both sessions' values in timestamp order.
+        :param a: The state of the session that starts earlier in event time.
+        :param b: The state of the session that starts later in event time.
+        :return: The combined state.
+        :raises NotImplementedError: if the aggregator does not implement merging,
+            in which case it cannot be used with `session_window()`.
         """
         raise NotImplementedError(
             f"{type(self).__name__} does not support merging and cannot be used "
@@ -114,8 +109,7 @@ class BaseAggregator(ABC, Generic[S]):
         """
         Whether this aggregator can be used with session windows.
 
-        True when `merge()` is overridden. Override this property directly only if
-        you implement merging some other way.
+        True when `merge()` is overridden.
         """
         return type(self).merge is not BaseAggregator.merge
 
@@ -371,10 +365,9 @@ class First(Aggregator):
     Use `First()` to get the first event, or a column of the event, within each window period.
     This aggregation works based on the processing order.
 
-    >***NOTE:*** When two session windows are merged, processing order is not
-    recoverable across two independently built sessions, so `First()` falls back to
-    **session order** and keeps the earlier session's value. Use `Earliest()` when
-    the result must be order-independent.
+    >***NOTE:*** Processing order is not recoverable across a session merge, so
+    `First()` falls back to **session order** and keeps the earlier session's
+    value. Use `Earliest()` when the result must be order-independent.
 
     :param column: The column to aggregate. Use `None` to first the whole message.
         Default - `None`
@@ -395,7 +388,6 @@ class First(Aggregator):
         return value
 
     def merge(self, a: Any, b: Any) -> Any:
-        # `a` comes from the session that starts earlier in event time.
         return b if a is None else a
 
 
@@ -404,10 +396,9 @@ class Last(Aggregator):
     Use `Last()` to get the last event, or a column of the event, within each window period.
     This aggregation works based on the processing order.
 
-    >***NOTE:*** When two session windows are merged, processing order is not
-    recoverable across two independently built sessions, so `Last()` falls back to
-    **session order** and keeps the later session's value. Use `Latest()` when the
-    result must be order-independent.
+    >***NOTE:*** Processing order is not recoverable across a session merge, so
+    `Last()` falls back to **session order** and keeps the later session's value.
+    Use `Latest()` when the result must be order-independent.
 
     :param column: The column to aggregate. Use `None` to last the whole message.
         Default - `None`
@@ -428,7 +419,6 @@ class Last(Aggregator):
         return value
 
     def merge(self, a: Any, b: Any) -> Any:
-        # `b` comes from the session that starts later in event time.
         return a if b is None else b
 
 
@@ -444,8 +434,7 @@ class Reduce(Aggregator, Generic[R]):
     :param merger: A function combining two accumulated states, required only for
         session windows. The reducer cannot be reused for this because it takes a
         raw value, not a second state. Subclasses may override `merge()` directly
-        instead of passing `merger=`; supplying both is contradictory and is
-        rejected when a session window is built. Default - `None`.
+        instead. Default - `None`.
     """
 
     def __init__(
@@ -481,14 +470,11 @@ class Reduce(Aggregator, Generic[R]):
         """
         Whether this aggregator can be used with session windows.
 
-        True when a `merger=` function was supplied or when a subclass
-        overrides `merge()` directly - both are valid ways to implement
-        merging, and either one must satisfy the session-window build gate.
+        True when a `merger=` function was supplied or when a subclass overrides
+        `merge()` directly.
 
-        Supplying *both* is contradictory: Python method resolution would
-        silently ignore the `merger=` function in favour of the override.
-        That conflict raises here, at window-definition time, instead of
-        surfacing mid-stream on the first bridging merge.
+        :raises InvalidOperation: if both are given, since method resolution
+            makes the `merge()` override take precedence over `merger=`.
         """
         merge_overridden = type(self).merge is not Reduce.merge
         if merge_overridden and self._merger is not None:

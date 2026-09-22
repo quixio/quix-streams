@@ -38,23 +38,16 @@ from .state import WindowedTransactionState
 if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
 
-# The `<start>|<end>` suffix of a window key: two 8-byte big-endian integers
-# joined by the separator. Used to recognise window keys without deserializing
-# them.
+# A window key is `<prefix>|<start>|<end>`, where `start` and `end` are 8-byte
+# big-endian integers joined by the separator.
 _TIMESTAMPS_SEGMENT = encode_integer_pair(MAX_UINT64, MAX_UINT64)
 _TIMESTAMPS_SEGMENT_LEN = len(_TIMESTAMPS_SEGMENT)
-# Byte length of a full window key minus its message-key prefix:
-# `|<start>|<end>`.
 _WINDOW_KEY_SUFFIX_LEN = SEPARATOR_LENGTH + _TIMESTAMPS_SEGMENT_LEN
-# The byte successor of the separator: `prefix + _SEPARATOR_SUCCESSOR` is the
-# smallest byte string strictly greater than every key that starts with
-# `prefix + SEPARATOR`, so it is an exact exclusive upper bound for that range.
-# >***NOTE:*** the range is a *superset* of `prefix`'s window keys. When one
-# message key is a SEPARATOR-extension of another (`b"user"` and `b"user|123"`
-# - raw bytes is the default key deserializer), the extension's window keys
-# also start with `prefix + SEPARATOR` and sort inside the range, interleaved
-# with the shorter key's windows. No pair of range bounds can separate the two,
-# so consumers must additionally check the exact key length
+# `prefix + _SEPARATOR_SUCCESSOR` is the smallest byte string strictly greater
+# than every key starting with `prefix + SEPARATOR`. That range is a superset of
+# `prefix`'s window keys: when one message key is a SEPARATOR-extension of
+# another (`b"user"` and `b"user|123"`), the extension's window keys sort inside
+# it, so consumers must also check the exact key length
 # (`len(prefix) + _WINDOW_KEY_SUFFIX_LEN`) before attributing a key to `prefix`.
 _SEPARATOR_SUCCESSOR = bytes([SEPARATOR[0] + 1])
 
@@ -136,13 +129,9 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         """
         Get the maximum event timestamp observed across the whole partition.
 
-        Stored in the "latest timestamps" cache under the empty prefix. Returns 0
-        when nothing has been observed yet.
-
-        >***NOTE:*** A message key that serializes to empty bytes shares this slot.
-        Both writers store a monotonic maximum of observed event timestamps, so the
-        only effect is a watermark that may be slightly ahead of the true one for
-        that key.
+        Stored in the "latest timestamps" cache under the empty prefix, which a
+        message key serializing to empty bytes also shares. Returns 0 when nothing
+        has been observed yet.
         """
         return self.get_latest_timestamp(prefix=b"")
 
@@ -174,17 +163,19 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
           exactly like the cursor `expire_windows` maintains;
         - for the empty prefix it is the partition-wide expiry checkpoint used by
           session windows: the earliest watermark value at which some session in
-          the partition may close.
+          the partition may close. A message key serializing to empty bytes shares
+          that slot.
 
-        >***NOTE:*** A message key that serializes to empty bytes shares the
-        partition slot. That can only make the checkpoint too low, which costs an
-        extra sweep and never skips a due close.
+        :param prefix: The key prefix. Default - the partition-wide slot.
         """
         return self._get_timestamp(prefix=prefix, cache=self._last_expired_timestamps)
 
     def set_expiry_checkpoint(self, timestamp_ms: int, prefix: bytes = b"") -> None:
         """
         Persist the expiry cursor for `prefix`. See `get_expiry_checkpoint`.
+
+        :param timestamp_ms: The cursor value to store.
+        :param prefix: The key prefix. Default - the partition-wide slot.
         """
         self._set_timestamp(
             cache=self._last_expired_timestamps,
@@ -212,16 +203,15 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         RocksDB orders window keys by `(prefix, start, end)`, so for one prefix the
         iteration order is window-start order.
 
-        The uncommitted updates of this transaction are merged in; the in-range
-        cached keys are snapshotted up front so that callers may delete windows
-        while consuming the iterator.
+        The uncommitted updates of this transaction are merged in, and callers may
+        delete windows while consuming the iterator.
 
-        :param prefix: the key prefix used to identify and filter relevant windows.
-        :param start_from_ms: the minimal window start time, inclusive.
-        :param start_to_ms: the maximum window start time, inclusive.
+        :param prefix: The key prefix used to identify and filter relevant windows.
+        :param start_from_ms: The minimal window start time, inclusive.
+        :param start_to_ms: The maximum window start time, inclusive.
             `None` means unbounded.
-        :param backwards: if True, yields windows from the greatest start down.
-        :return: an iterator of `((start, end), value, prefix)` tuples.
+        :param backwards: If True, yields windows from the greatest start down.
+        :return: An iterator of `((start, end), value, prefix)` tuples.
         """
         start_from_ms = max(start_from_ms, 0)
         if start_to_ms is not None and start_to_ms < start_from_ms:
@@ -242,8 +232,7 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         )
 
         # Snapshot the in-range cached keys before yielding anything: callers
-        # delete windows while consuming this iterator, and iterating a live dict
-        # would raise "dictionary changed size during iteration".
+        # delete windows while consuming this iterator.
         updates = self._update_cache.get_updates(cf_name="default")
         update_cache = updates.get(prefix, {})
         cached_items = sorted(
@@ -257,11 +246,9 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         )
         delete_cache = self._update_cache.get_deletes(cf_name="default")
 
-        # Window keys of `prefix` are exactly this long; window keys of a
-        # SEPARATOR-extended message key (`b"user|123"` for `prefix=b"user"`)
-        # fall inside the same byte range but are longer - the length check is
-        # what keeps them from being yielded under the wrong prefix (see the
-        # `_SEPARATOR_SUCCESSOR` note at the top of the module).
+        # A SEPARATOR-extended message key's window keys fall inside the same
+        # byte range but are longer, so only the exact length attributes a key
+        # to `prefix` (see `_SEPARATOR_SUCCESSOR`).
         window_key_len = len(prefix) + _WINDOW_KEY_SUFFIX_LEN
 
         for key, value in _merge_sorted(iter(cached_items), db_items, backwards):
@@ -274,13 +261,12 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         """
         Yield each distinct message-key prefix present in the store, in key order.
 
-        This is the cheap replacement for `keys()` when only the set of prefixes is
-        needed: window keys are streamed once, without deserializing values or
-        merging the per-key update caches, and deduplicated into prefixes.
-
-        Prefixes that exist only in the uncommitted update cache are merged in.
+        Window keys are streamed once and deduplicated into prefixes, without
+        deserializing any value. Prefixes that exist only in this transaction's
+        uncommitted update cache are included.
 
         :param cf_name: rocksdb column family name. Default - "default"
+        :return: An iterator of prefixes.
         """
         db_prefixes = self._iter_db_prefixes(cf_name=cf_name)
         # Snapshot the cached prefixes: expiring windows mutates the update cache.
@@ -312,29 +298,19 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         Yield the distinct message-key prefixes stored in RocksDB, each exactly
         once, in the order their first window key appears in the DB.
 
-        This is a linear pass over the window keys. No seek can step past a
-        visited prefix's whole key range without risking skipping other
-        prefixes: when one message key is a SEPARATOR-extension of another
-        (`b"user"` and `b"user|123"`), the extension's window keys live
-        *inside* the shorter key's byte range (see `_SEPARATOR_SUCCESSOR`).
-        For session stores the pass is cheap: closed sessions are deleted, so
-        the column family only holds the open sessions.
+        The pass is linear over the window keys: no seek can step past one
+        prefix's whole key range without risking another's, because a
+        SEPARATOR-extended message key's window keys live *inside* the shorter
+        key's byte range (see `_SEPARATOR_SUCCESSOR`).
 
-        First-appearance order equals byte order for realistic data; it can
-        deviate only when an extended key's first extension byte is `0x00` or
-        a window start exceeds 2**56 ms. In those pathological cases the
-        sorted merge in `iter_prefixes` may repeat a prefix that also exists
-        in the update cache; the session expiry sweep tolerates that (a second
-        sweep of the same prefix finds nothing new to expire).
+        First-appearance order deviates from byte order only when an extended
+        key's first extension byte is `0x00` or a window start exceeds 2**56 ms,
+        in which case `iter_prefixes` may yield the same prefix twice.
         """
         seen: set[bytes] = set()
         for key, _ in self._partition.iter_items(lower_bound=b"", cf_name=cf_name):
             if len(key) <= _TIMESTAMPS_SEGMENT_LEN:
-                # A key too short to hold `<prefix>|<start>|<end>`. This includes
-                # windows of a message key that serializes to empty bytes, which
-                # the windowed store cannot address anyway (`get_windows` and
-                # `iter_windows` build their bounds with a leading separator that
-                # such keys do not have).
+                # Too short to hold `<prefix>|<start>|<end>`.
                 continue
 
             prefix, _, _ = parse_window_key(key)
@@ -738,8 +714,6 @@ def _merge_sorted(
 
     When both sides hold the same key the `left` value wins, so callers pass the
     uncommitted update cache on the left to let it shadow the stored value.
-
-    `heapq.merge` is not usable here because it has no "reverse" flag.
     """
     left_item = next(left, None)
     right_item = next(right, None)
