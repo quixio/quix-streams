@@ -72,7 +72,7 @@ pre-commit run --all-files
 
 ### Supported Python versions
 
-The library supports **Python 3.9 to 3.13** (`requires-python = ">=3.9, <4"`), and CI runs the test suite on both 3.9 and 3.13. Your code has to work on 3.9, so avoid syntax and standard library APIs added in later versions.
+The library supports **Python 3.11 to 3.13** (`requires-python = ">=3.11, <4"`), and CI runs the test suite on both 3.11 and 3.13. Your code has to work on 3.11, so avoid syntax and standard library APIs added in later versions.
 
 ## Setting up the project locally
 
