@@ -3,6 +3,7 @@ import pytest
 from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.dataframe.windows import (
     HoppingTimeWindowDefinition,
+    SessionWindowDefinition,
     TumblingTimeWindowDefinition,
 )
 
@@ -33,6 +34,21 @@ def hopping_window_definition_factory(state_manager, dataframe_factory):
         return HoppingTimeWindowDefinition(
             duration_ms=duration_ms,
             step_ms=step_ms,
+            grace_ms=grace_ms,
+            dataframe=sdf,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def session_window_definition_factory(state_manager, dataframe_factory):
+    def factory(inactivity_gap_ms: int, grace_ms: int = 0) -> SessionWindowDefinition:
+        sdf = dataframe_factory(
+            state_manager=state_manager, registry=DataFrameRegistry()
+        )
+        return SessionWindowDefinition(
+            inactivity_gap_ms=inactivity_gap_ms,
             grace_ms=grace_ms,
             dataframe=sdf,
         )
@@ -138,6 +154,50 @@ class TestPartitionExpiryEmitsMessageKey:
             process(window, value=1, key=key, transaction=tx, timestamp_ms=100)
             _, expired = process(
                 window, value=2, key=key, transaction=tx, timestamp_ms=110
+            )
+
+        assert len(expired) == 1
+        assert expired[0][0] == key
+
+    def test_session_partition_mode_emits_the_message_key(
+        self, session_window_definition_factory, state_manager
+    ):
+        """A session window closed with closing_strategy="partition" must
+        emit the original str message key, not the serialized store prefix."""
+        window_def = session_window_definition_factory(inactivity_gap_ms=10, grace_ms=0)
+        window = window_def.sum()
+        window.final(closing_strategy="partition")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        key = "user-1"
+
+        with store.start_partition_transaction(0) as tx:
+            process(window, value=1, key=key, transaction=tx, timestamp_ms=100)
+            _, expired = process(
+                window, value=2, key=key, transaction=tx, timestamp_ms=1000
+            )
+
+        assert len(expired) == 1
+        assert expired[0][0] == key
+
+    def test_session_bytes_message_key_round_trips_unchanged(
+        self, session_window_definition_factory, state_manager
+    ):
+        """A bytes message key must be emitted unchanged by a session window in
+        partition mode, since a bytes prefix is stored without serialization."""
+        window_def = session_window_definition_factory(inactivity_gap_ms=10, grace_ms=0)
+        window = window_def.sum()
+        window.final(closing_strategy="partition")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        key = b"user-1"
+
+        with store.start_partition_transaction(0) as tx:
+            process(window, value=1, key=key, transaction=tx, timestamp_ms=100)
+            _, expired = process(
+                window, value=2, key=key, transaction=tx, timestamp_ms=1000
             )
 
         assert len(expired) == 1

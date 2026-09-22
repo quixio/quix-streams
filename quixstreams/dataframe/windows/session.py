@@ -195,7 +195,7 @@ class SessionWindow(TimeWindow):
             if checkpoint is not None and expiry_candidate < checkpoint:
                 transaction.set_expiry_checkpoint(expiry_candidate)
             expired_windows = self.expire_by_partition(
-                transaction, watermark, close_before, collect
+                transaction, watermark, close_before, collect, key
             )
         else:
             expired_windows = self.expire_by_key(key, state, close_before, collect)
@@ -264,6 +264,7 @@ class SessionWindow(TimeWindow):
         watermark: int,
         close_before: int,
         collect: bool,
+        message_key: Any,
     ) -> list[WindowKeyResult]:
         """
         Close the due sessions of every key in the partition.
@@ -280,6 +281,8 @@ class SessionWindow(TimeWindow):
         :param watermark: The current partition watermark.
         :param close_before: Sessions ending at or below this value are closed.
         :param collect: If True, collected values are attached and then deleted.
+        :param message_key: The key of the record being processed, passed to
+            `key_from_prefix()` to map each swept prefix back to a message key.
         :return: The closed sessions of every key, with their deletes applied.
         """
         checkpoint = transaction.get_expiry_checkpoint()
@@ -292,7 +295,8 @@ class SessionWindow(TimeWindow):
 
         for prefix in transaction.iter_prefixes():
             state = transaction.as_state(prefix=prefix)
-            results.extend(self.expire_by_key(prefix, state, close_before, collect))
+            key = transaction.key_from_prefix(prefix, message_key)
+            results.extend(self.expire_by_key(key, state, close_before, collect))
 
             cursor = state.get_expiry_checkpoint()
             scan_from = 0 if cursor is None else cursor + 1
