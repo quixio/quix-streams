@@ -6,8 +6,10 @@ $PREFIX/bin/pip install \
 'influxdb3-python[pandas]>=0.7,<1.0' \
 'pyiceberg[pyarrow,glue]>=0.7' \
 'redis[hiredis]>=5.2.0,<6' \
-'confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.12' \
+'confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.13' \
 'influxdb>=5.3,<6' \
 'jsonpath_ng>=1.7.0,<2' \
 'httpx>=0.28.1' \
-'paho-mqtt>=2.1.0,<3'
+'paho-mqtt>=2.1.0,<3' \
+'pymysql>=1.0,<2' \
+'mysql-replication>=1.0.17,<1.0.18'

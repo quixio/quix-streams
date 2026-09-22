@@ -97,9 +97,10 @@ The sink provides delivery guarantees based on the configured QoS level:
 During checkpointing, the sink waits for all pending publish acknowledgments to complete:
 
 - The wait time is controlled by `mqtt_flush_timeout_seconds` parameter
-- If any messages fail to publish within the flush timeout, an error is raised
+- If any messages fail to publish within the flush timeout, `MqttPublishAckTimeout` is raised and the MQTT client is cleaned up
 - When errors occur:
-  - The application will retry the entire batch from the last successful offset
+  - The checkpoint is aborted rather than paused with sink backpressure
+  - The data will be reprocessed from the last committed offset when processing resumes
   - Some messages that were successfully published in the failed batch may be published again
   - This ensures no messages are lost, but some might be delivered more than once
 

@@ -11,7 +11,12 @@ from confluent_kafka.admin import (
     NewTopic,
 )
 
-from quixstreams.app import Application, MessageProcessedCallback, ProcessingGuarantee
+from quixstreams.app import (
+    Application,
+    MessageProcessedCallback,
+    ProcessingGuarantee,
+    StateRecoveryOffsetReset,
+)
 from quixstreams.error_callbacks import (
     ConsumerErrorCallback,
     ProcessingErrorCallback,
@@ -303,6 +308,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path, store_type):
         state_dir: Optional[str] = None,
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
+        state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest",
         topic_manager: Optional[TopicManager] = None,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         request_timeout: float = 30,
@@ -325,6 +331,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path, store_type):
             state_dir=state_dir,
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
+            state_recovery_offset_reset=state_recovery_offset_reset,
             topic_manager=topic_manager,
             processing_guarantee=processing_guarantee,
             request_timeout=request_timeout,

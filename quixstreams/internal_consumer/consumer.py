@@ -138,6 +138,35 @@ class InternalConsumer(BaseConsumer):
             if on_assign is not None:
                 on_assign(consumer, partitions)
 
+            # Seed the buffer from effective positions so partitions already at
+            # their start offset can be recognized as idle before any messages
+            # are observed in this process.
+            committed = consumer.committed(buffer_partitions, timeout=30)
+            positions = {
+                (tp.topic, tp.partition): tp.offset
+                for tp in consumer.position(buffer_partitions)
+                if tp.offset >= 0
+            }
+            positions.update(
+                {
+                    (tp.topic, tp.partition): tp.offset
+                    for tp in buffer_partitions
+                    if tp.offset >= 0 and (tp.topic, tp.partition) not in positions
+                }
+            )
+            positions.update(
+                {
+                    (tp.topic, tp.partition): tp.offset
+                    for tp in committed
+                    if tp.offset >= 0 and (tp.topic, tp.partition) not in positions
+                }
+            )
+            self._buffer.feed(
+                messages=[],
+                high_watermarks={},
+                positions=positions,
+            )
+
         def _on_revoke(consumer: Consumer, partitions: list[TopicPartition]):
             buffer_partitions = [
                 tp for tp in partitions if not self._topics[tp.topic].is_changelog
@@ -340,17 +369,24 @@ class InternalConsumer(BaseConsumer):
 
         # Get the recent cached high watermarks
         high_watermarks: dict[tuple[str, int], int] = {}
+        positions: dict[tuple[str, int], int] = {}
         for tp in self.assignment():
             topic_obj = self._topics[tp.topic]
             if not topic_obj.is_changelog:
                 _, high = self.get_watermark_offsets(partition=tp, cached=True)
                 high_watermarks[(tp.topic, tp.partition)] = high
+                position, *_ = self.position([tp])
+                positions[(tp.topic, tp.partition)] = position.offset
 
         # Create a generator to validate messages
         valid_messages = _validate_message_batch(messages, on_error=self._on_error)
 
         # Feed the batch and the watermarks to the buffer
-        self._buffer.feed(messages=valid_messages, high_watermarks=high_watermarks)
+        self._buffer.feed(
+            messages=valid_messages,
+            high_watermarks=high_watermarks,
+            positions=positions,
+        )
 
         # Resume partitions with empty buffers
         for topic, partition in self._buffer.resume_empty():

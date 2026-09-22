@@ -8,14 +8,16 @@ Uses quixportal for unified blob storage access (Azure, AWS S3, GCP, MinIO, loca
 """
 
 import logging
+import math
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 try:
     import pandas as pd
     import pyarrow as pa
+    import pyarrow.compute as pc
     import pyarrow.parquet as pq
 except ImportError as exc:
     raise ImportError(
@@ -33,6 +35,7 @@ from quixstreams.sinks.base import (
 
 from ._blob_storage_client import BlobStorageClient, get_bucket_name
 from ._quix_ts_datalake_catalog_client import QuixTSDataLakeCatalogClient
+from .stream_timeout_tracker import StreamTimeoutTracker
 
 logger = logging.getLogger(__name__)
 
@@ -103,14 +106,47 @@ class QuixTSDataLakeSink(BatchingSink):
     :param workspace_id: Workspace ID for workspace-scoped storage paths
         (auto-injected by platform)
     :param hive_columns: List of columns to use for Hive partitioning. Include
-        'year', 'month', 'day', 'hour' to extract these from timestamp_column
+        'year', 'month', 'day', 'hour' to extract these from timestamp_column.
+        Prefix an entry with ``~`` to make it a VIRTUAL partition: it appears in
+        the partition tree and is filterable, but is NOT written as a physical
+        ``key=value/`` folder and does not split files (a file keeps every value
+        of it). E.g. ``["year", "month", "~driver"]`` folders by year/month and
+        exposes ``driver`` as a virtual level. Virtual columns stay in the
+        parquet data so queries can still filter rows by them.
     :param timestamp_column: Column containing timestamp to extract time partitions from
+    :param sort_column: Optional column recorded on the table (properties.sort_column)
+        that compaction orders files by, so ORDER BY / time-range queries can skip
+        files and stream. When None, the lakehouse falls back to timestamp_column.
     :param catalog_url: Optional REST Catalog URL for table registration
     :param catalog_auth_token: If using REST Catalog, the respective auth token for it
     :param auto_discover: Whether to auto-register table on first write
     :param namespace: Catalog namespace (default: "default")
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
     :param max_workers: Maximum number of parallel upload threads (default: 10)
+    :param row_group_rows: Maximum rows per Parquet ROW GROUP in the files this
+        sink writes (default 1,000,000, the same as the lakehouse compaction's
+        ``COMPACTION_ROW_GROUP_ROWS``). A reader pays about one storage range
+        request per row group, so many small groups make every query slow on a
+        high-latency storage path, while one huge group forfeits intra-file
+        skipping and inflates reader memory. A flush smaller than this is, as
+        always, a single row group.
+    :param stats_columns: Optional list of column names to compute per-file
+        min/max statistics ("zone maps") for. These are sent to the REST
+        Catalog with each file and let the query layer skip files whose value
+        range cannot satisfy a WHERE/ORDER BY on the column. ``None`` (default)
+        computes stats for every numeric and timestamp column in each written
+        file (cheap — the batch is already in memory). Pass an explicit list to
+        restrict the set and bound catalog storage on very wide tables.
+    :param stream_timeout_ms: Optional **per-key** silence threshold in
+        milliseconds. Paired with ``on_stream_timeout``; both must be
+        provided to enable the feature. See
+        :class:`quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker`
+        for the full behavioural contract (per-key tracking, fire-and-evict
+        semantics, re-arm on next record, 3x TTL safety sweep,
+        background check cadence, and zero-overhead disabled path).
+    :param on_stream_timeout: Optional callback
+        ``Callable[[str], None]`` invoked once per silence period per
+        Kafka message key. See ``stream_timeout_ms`` above.
     :param silence_azure_http_logs: If True (default), raise the log levels of
         the Azure SDK / adlfs / botocore HTTP-logging loggers to WARNING during
         setup(). These libraries log one INFO record per HTTP round-trip with
@@ -126,6 +162,17 @@ class QuixTSDataLakeSink(BatchingSink):
         Callback must resolve (or propagate/re-raise) the Exception.
     """
 
+    # ---- Parquet row-group size ----------------------------------------------
+    # Same rule as the lakehouse compaction/repartition rewrites: a reader needs
+    # about one storage range request PER ROW GROUP (column chunks are coalesced
+    # within a group, never across), so a file cut into many small groups costs
+    # a round-trip storm on a high-latency storage path, while one enormous
+    # group forfeits intra-file skipping and inflates reader memory. The size is
+    # a fixed row count (default 1,000,000 = the lakehouse's
+    # COMPACTION_ROW_GROUP_ROWS default and ~pyarrow's own default), so small
+    # flushes are a single group and only large flushes are split.
+    ROW_GROUP_ROWS_DEFAULT = 1_000_000
+
     def __init__(
         self,
         s3_prefix: str,
@@ -133,15 +180,21 @@ class QuixTSDataLakeSink(BatchingSink):
         workspace_id: str = "",
         hive_columns: Optional[List[str]] = None,
         timestamp_column: str = "ts_ms",
+        sort_column: Optional[str] = None,
         catalog_url: Optional[str] = None,
         catalog_auth_token: Optional[str] = None,
         auto_discover: bool = True,
         namespace: str = "default",
         auto_create_bucket: bool = True,
         max_workers: int = 10,
+        stats_columns: Optional[List[str]] = None,
+        row_group_rows: Optional[int] = None,
+        stream_timeout_ms: Optional[int] = None,
+        on_stream_timeout: Optional[Callable[[Any], None]] = None,
         silence_azure_http_logs: bool = True,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
+        _check_interval_ms: Optional[int] = None,
     ):
         super().__init__(
             on_client_connect_success=on_client_connect_success,
@@ -151,8 +204,25 @@ class QuixTSDataLakeSink(BatchingSink):
         self.s3_prefix = s3_prefix
         self.table_name = table_name
         self.workspace_id = workspace_id
-        self.hive_columns = hive_columns or []
+        # A ``~``-prefixed entry in hive_columns marks a VIRTUAL partition: it
+        # appears in the partition tree and is filterable, but is NOT written as
+        # a physical ``key=value/`` folder and does NOT group/split files (a
+        # single file keeps every value of it). We split the incoming list into:
+        #   * self.hive_columns          — physical columns (grouped + foldered)
+        #   * self._virtual_columns      — virtual columns (indexed, kept in data)
+        #   * self._partition_spec_order — full tree order (names, no prefix)
+        _raw_hive = hive_columns or []
+        self._virtual_columns = [c[1:] for c in _raw_hive if c.startswith("~")]
+        self.hive_columns = [c for c in _raw_hive if not c.startswith("~")]
+        self._partition_spec_order = [
+            c[1:] if c.startswith("~") else c for c in _raw_hive
+        ]
         self.timestamp_column = timestamp_column
+        # Preferred ordering column recorded on the table (properties.sort_column).
+        # Compaction writes files ordered by it so ORDER BY / range queries can
+        # skip files and stream. When None, the lakehouse falls back to the
+        # timestamp column automatically.
+        self.sort_column = sort_column or None
         self._catalog = (
             QuixTSDataLakeCatalogClient(catalog_url, catalog_auth_token)
             if catalog_url
@@ -161,6 +231,24 @@ class QuixTSDataLakeSink(BatchingSink):
         self.auto_discover = auto_discover
         self.namespace = namespace
         self.table_registered = False
+
+        # Columns to compute per-file min/max zone maps for (data-skipping at
+        # query time). ``None`` (default) -> every numeric / timestamp column
+        # in each written file, which is nearly free here because the batch is
+        # already an in-memory Arrow table. Pass an explicit list to restrict
+        # the set (e.g. just the timestamp column) and bound catalog stats-row
+        # growth on very wide tables. Stats ride along with each add-files
+        # entry as ``column_stats`` and are consumed by the catalog's pruning.
+        self._stats_columns = set(stats_columns) if stats_columns else None
+
+        # Parquet row-group size: a fixed, configurable row count.
+        if row_group_rows is not None and int(row_group_rows) < 1:
+            raise ValueError("row_group_rows must be >= 1")
+        self._row_group_rows = (
+            int(row_group_rows)
+            if row_group_rows is not None
+            else self.ROW_GROUP_ROWS_DEFAULT
+        )
 
         # Blob storage client and bucket name will be initialized in setup()
         self._blob_client: Optional[BlobStorageClient] = None
@@ -174,6 +262,26 @@ class QuixTSDataLakeSink(BatchingSink):
 
         # Batch upload tracking
         self._pending_futures: List[Dict[str, Any]] = []
+        # Virtual-index SIDECAR uploads (one per data file, written to .vidx/).
+        # Tracked separately from data files so _finalize_writes waits on them but
+        # does NOT register them in the manifest (they are metadata, not data).
+        self._pending_sidecar_futures: List[Dict[str, Any]] = []
+
+        # Stream-timeout tracking (opt-in, per-key silence detector).
+        # All state, threading, and validation live inside the
+        # StreamTimeoutTracker — the sink composes it and exposes it
+        # via integration hooks in add/flush/setup/cleanup below. See
+        # :mod:`quixstreams.sinks.core.stream_timeout_tracker` for the
+        # behavioural contract. Disabled pair -> tracker is allocated
+        # but ``tracker.enabled`` is False and every method is a
+        # zero-overhead no-op.
+        self._timeout = StreamTimeoutTracker(
+            stream_timeout_ms=stream_timeout_ms,
+            on_stream_timeout=on_stream_timeout,
+            check_interval_ms=_check_interval_ms,
+            thread_name="QuixTSDataLakeSink-timeout-check",
+            logger=logger,
+        )
 
     @property
     def s3_bucket(self) -> str:
@@ -181,6 +289,46 @@ class QuixTSDataLakeSink(BatchingSink):
         if self._s3_bucket is None:
             raise RuntimeError("s3_bucket not initialized. Call setup() first.")
         return self._s3_bucket
+
+    # ------------------------------------------------------------------
+    # Stream-timeout integration
+    # ------------------------------------------------------------------
+    #
+    # All behaviour lives in ``self._timeout``
+    # (:class:`quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker`).
+    # The three hooks below wire the sink lifecycle into the tracker:
+    # ``add`` -> ``touch``, ``flush`` -> ``check_now``,
+    # ``setup`` -> ``start``, ``cleanup`` -> ``stop``. ``on_paused`` is
+    # intentionally a no-op on tracker state (backpressure means the
+    # destination rejected a batch, not that the messages were never
+    # seen; per-key silence timers continue from their last-seen
+    # stamp regardless of write success).
+
+    def add(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+        topic: str,
+        partition: int,
+        offset: int,
+    ):
+        """Accumulate the record, then refresh the per-key last-seen
+        stamp via the tracker.
+        """
+        super().add(value, key, timestamp, headers, topic, partition, offset)
+        self._timeout.touch(key, topic=topic, partition=partition, offset=offset)
+
+    def flush(self):
+        """Flush the parent batch, then run a timeout check."""
+        super().flush()
+        self._timeout.check_now()
+
+    def on_paused(self):
+        """Inherit parent ``on_paused()`` — do **not** touch tracker state."""
+        super().on_paused()
+        # intentional no-op on tracker state
 
     def setup(self):
         """Initialize blob storage client and test connection."""
@@ -235,6 +383,11 @@ class QuixTSDataLakeSink(BatchingSink):
         except Exception as e:
             logger.error("Failed to setup blob storage connection: %s", e)
             raise
+
+        # Start the background timeout-check thread AFTER the blob
+        # client is healthy, so a blob-setup failure tears down cleanly
+        # without leaving an orphan timer thread running.
+        self._timeout.start()
 
     def _ensure_bucket(self):
         """Ensure the blob storage path is accessible."""
@@ -352,6 +505,87 @@ class QuixTSDataLakeSink(BatchingSink):
         self._finalize_writes()
         return rows_written
 
+    @staticmethod
+    def _safe_float_min(value: Any) -> float:
+        """Largest float <= value. Widening the low bound downward guarantees
+        the stored zone map is a *superset* of the real range, so float
+        rounding of large ints/decimals (e.g. nanosecond epochs beyond 2**53)
+        can only cost pruning, never wrongly skip a matching file."""
+        f = float(value)
+        while f > value:
+            f = math.nextafter(f, float("-inf"))
+        return f
+
+    @staticmethod
+    def _safe_float_max(value: Any) -> float:
+        """Smallest float >= value (see _safe_float_min for the safety rationale)."""
+        f = float(value)
+        while f < value:
+            f = math.nextafter(f, float("inf"))
+        return f
+
+    def _compute_column_stats(self, table: "pa.Table") -> Dict[str, Dict[str, Any]]:
+        """Compute per-column min/max/null_count for a written Arrow table.
+
+        Numeric columns (int/float/decimal) are reported as ``type="numeric"``
+        with float bounds (floored min / ceiled max for safety); timestamp and
+        date columns as ``type="timestamp"`` with ISO-8601 bounds. Everything
+        else (strings, structs, the ``__key`` column) is skipped. Respects
+        ``self._stats_columns`` when set. Runs on the in-memory batch, so it is
+        just vectorised min/max — no re-read of the parquet footer.
+        """
+        stats: Dict[str, Dict[str, Any]] = {}
+        for field in table.schema:
+            name = field.name
+            if name == "__key":
+                continue
+            if self._stats_columns is not None and name not in self._stats_columns:
+                continue
+
+            t = field.type
+            if (
+                pa.types.is_integer(t)
+                or pa.types.is_floating(t)
+                or pa.types.is_decimal(t)
+            ):
+                vtype = "numeric"
+            elif pa.types.is_timestamp(t) or pa.types.is_date(t):
+                vtype = "timestamp"
+            else:
+                continue
+
+            column = table.column(name)
+            null_count = column.null_count
+            if len(column) - null_count == 0:
+                # All-null column: no usable bound, skip (keeps files unpruned).
+                continue
+
+            try:
+                mm = pc.min_max(column)
+                vmin = mm["min"].as_py()
+                vmax = mm["max"].as_py()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Skipping stats for column %s: %s", name, exc)
+                continue
+            if vmin is None or vmax is None:
+                continue
+
+            if vtype == "numeric":
+                vmin = self._safe_float_min(vmin)
+                vmax = self._safe_float_max(vmax)
+            else:  # timestamp / date
+                vmin = vmin.isoformat()
+                vmax = vmax.isoformat()
+
+            stats[name] = {
+                "type": vtype,
+                "min": vmin,
+                "max": vmax,
+                "null_count": int(null_count),
+                "value_count": int(len(column) - null_count),
+            }
+        return stats
+
     def _write_parquet_to_storage(
         self,
         df: pd.DataFrame,
@@ -364,9 +598,22 @@ class QuixTSDataLakeSink(BatchingSink):
         self._null_empty_dicts(df)
         table = pa.Table.from_pandas(df)
 
+        # Compute per-column min/max zone maps from the in-memory table BEFORE
+        # serialising — nearly free, and avoids re-reading the parquet footer
+        # from storage later. Carried through _pending_futures into the catalog
+        # add-files call (see _register_files_in_manifest).
+        column_stats = self._compute_column_stats(table)
+
         buf = pa.BufferOutputStream()
-        pq.write_table(table, buf)
+        pq.write_table(table, buf, row_group_size=self._row_group_rows)
         parquet_bytes = buf.getvalue().to_pybytes()
+        if table.num_rows > self._row_group_rows:
+            logger.debug(
+                "Wrote %s with %d row groups of <= %d rows",
+                storage_key,
+                -(-table.num_rows // self._row_group_rows),
+                self._row_group_rows,
+            )
 
         # Submit async upload
         if self._blob_client is None:
@@ -381,12 +628,78 @@ class QuixTSDataLakeSink(BatchingSink):
                 "file_size": len(parquet_bytes),
                 "partition_columns": partition_columns,
                 "partition_values": partition_values,
+                "column_stats": column_stats,
             }
         )
+
+        # The VIRTUAL index for this file goes to a blob ``.vidx/`` sidecar
+        # (navigation reads it via DuckDB) — the SOLE virtual index; nothing
+        # virtual is sent to Postgres anymore. column_stats (zone maps) still go
+        # to the catalog above.
+        self._write_virtual_sidecar(
+            df, storage_key, partition_columns, partition_values
+        )
+
+    def _sidecar_key(self, storage_key: str) -> str:
+        """Blob key of a data file's virtual-index sidecar: in a ``.vidx/``
+        SUBFOLDER of the data file's own Hive partition folder (data
+        ``.../region=EU/data_<uuid>.parquet`` -> index
+        ``.../region=EU/.vidx/data_<uuid>.parquet``). Co-located with the data so
+        compaction rewrites a partition's data and its index together, but in a
+        dedicated dot-dir: a ``.vidx`` folder has no ``key=value`` and so is
+        naturally skipped by partition discovery, keeping sidecars out of the data
+        set. Navigation globs ``.../<physical path>/.vidx/*.parquet``."""
+        folder, _, basename = storage_key.rpartition("/")
+        return f"{folder}/.vidx/{basename}" if folder else f".vidx/{basename}"
+
+    def _write_virtual_sidecar(
+        self,
+        df: pd.DataFrame,
+        storage_key: str,
+        partition_columns: List[str],
+        partition_values: tuple,
+    ):
+        """Write this data file's virtual-index sidecar Parquet to ``.vidx/``.
+
+        Content: one row per DISTINCT tuple of the table's VIRTUAL columns present
+        in this file, with the file's PHYSICAL partition values added as constant
+        columns. Carrying the physical columns in the content means readers need no
+        ``hive_partitioning`` — a single ``read_parquet('{root}/.../.vidx/*')``
+        yields full (physical + virtual) tuples that navigation aggregates
+        (``SELECT DISTINCT <col> WHERE <ancestors>``) into the folder tree. The
+        index is navigation-only (no query pruning), so no per-file back-reference
+        is stored. No-op when the table has no virtual columns or none are present
+        in this file. Never raises (the index is a hint, not the data).
+        """
+        present = [c for c in self._virtual_columns if c in df.columns]
+        if not present or self._blob_client is None:
+            return
+        try:
+            vdf = df[present].drop_duplicates().reset_index(drop=True)
+            if vdf.empty:
+                return
+            # Physical partition values are constant for this file (one Hive
+            # folder) -> add them as constant columns so the sidecar holds the
+            # FULL partition tuple.
+            for col, val in zip(partition_columns or [], partition_values or ()):
+                vdf[col] = str(val)
+            buf = pa.BufferOutputStream()
+            pq.write_table(pa.Table.from_pandas(vdf, preserve_index=False), buf)
+            sidecar_key = self._sidecar_key(storage_key)
+            future = self._blob_client.put_object_async(
+                sidecar_key, buf.getvalue().to_pybytes()
+            )
+            self._pending_sidecar_futures.append(
+                {"future": future, "key": sidecar_key, "row_count": len(vdf)}
+            )
+        except Exception as e:
+            logger.warning("Failed to write virtual sidecar for %s: %s", storage_key, e)
 
     def _finalize_writes(self):
         """Wait for all pending uploads to complete and register files in catalog."""
         if not self._pending_futures:
+            # Still drain any sidecars (defensive; normally paired with data).
+            self._await_sidecar_uploads()
             return
 
         count = len(self._pending_futures)
@@ -411,11 +724,40 @@ class QuixTSDataLakeSink(BatchingSink):
 
             logger.info(f"Successfully uploaded {count} file(s)")
 
+            # Virtual-index sidecars ride alongside the data files. Wait for them
+            # too so the tree is queryable the moment the batch is acknowledged
+            # (a sidecar failure only degrades the index, never blocks the data).
+            self._await_sidecar_uploads()
+
             # Register all files in catalog manifest if configured
             if self._catalog and self.table_registered:
                 self._register_files_in_manifest()
         finally:
             self._pending_futures.clear()
+
+    def _await_sidecar_uploads(self):
+        """Block on the virtual-index sidecar uploads. Best-effort: a failed
+        sidecar is logged but never raised — the data is already safe and the
+        index self-heals on the next write/reindex."""
+        if not self._pending_sidecar_futures:
+            return
+        try:
+            ok = 0
+            for item in self._pending_sidecar_futures:
+                try:
+                    item["future"].result()
+                    ok += 1
+                except Exception as e:
+                    logger.warning(
+                        "Virtual sidecar upload failed (%s): %s", item["key"], e
+                    )
+            logger.debug(
+                "Uploaded %d/%d virtual sidecar(s)",
+                ok,
+                len(self._pending_sidecar_futures),
+            )
+        finally:
+            self._pending_sidecar_futures.clear()
 
     def _null_empty_dicts(self, df: pd.DataFrame):
         """
@@ -459,10 +801,29 @@ class QuixTSDataLakeSink(BatchingSink):
         else:
             location = f"s3://{self.s3_bucket}/{self.s3_prefix}/{self.table_name}"
 
-        # Define partition spec based on configuration
-        # For dynamic partition discovery, create table without partition spec
-        # The partition spec will be set when first files are added
-        partition_spec = []  # Empty spec for dynamic discovery
+        # Physical-only tables keep the historical dynamic-discovery behaviour
+        # (empty spec; the catalog derives it from the first files' paths). When
+        # any VIRTUAL column is configured it can't be discovered from paths, so
+        # we send the full intended tree order up front and declare which
+        # entries are virtual in properties.
+        properties = {
+            "created_by": "quixstreams-quix-lake-sink",
+            "auto_discovered": "false",
+            "expected_partitions": self._partition_spec_order.copy(),
+        }
+        if self._virtual_columns:
+            partition_spec = self._partition_spec_order.copy()
+            properties["virtual_partitions"] = self._virtual_columns.copy()
+        else:
+            partition_spec = []  # Empty spec for dynamic discovery
+
+        # Record the ordering columns so lakehouse compaction can write
+        # time-ordered, skippable files. sort_column (when set) takes precedence;
+        # timestamp_column is the automatic fallback, so persist it too.
+        if self.timestamp_column:
+            properties["timestamp_column"] = self.timestamp_column
+        if self.sort_column:
+            properties["sort_column"] = self.sort_column
 
         # Create table with minimal schema (will be inferred from data)
         create_response = self._catalog.put(
@@ -470,11 +831,7 @@ class QuixTSDataLakeSink(BatchingSink):
             json={
                 "location": location,
                 "partition_spec": partition_spec,
-                "properties": {
-                    "created_by": "quixstreams-quix-lake-sink",
-                    "auto_discovered": "false",
-                    "expected_partitions": self.hive_columns.copy(),
-                },
+                "properties": properties,
             },
             timeout=30,
         )
@@ -497,14 +854,20 @@ class QuixTSDataLakeSink(BatchingSink):
         Add timestamp-based columns (year/month/day/hour) for time-based partitioning.
 
         This method extracts time components from the timestamp column and adds them
-        as separate columns that can be used for Hive partitioning.
+        as separate columns that can be used for Hive partitioning. The source
+        ``timestamp_column`` is **not** mutated — derivation happens on a local
+        datetime64 series. Preserving its dtype is part of the sink's contract
+        with readers (in particular, ``ts_ms`` is the system-injected Kafka
+        timestamp and must always land in parquet as int64 ms, regardless of
+        whether time-based hive partitioning is configured).
         """
-        # Convert to datetime if needed (handles numeric timestamps)
-        if not pd.api.types.is_datetime64_any_dtype(df[self.timestamp_column]):
+        # Build a datetime64 view of the timestamp column to extract from.
+        # Never write this back into ``df`` — that would change the dtype of
+        # the source column in the parquet output.
+        timestamp_col = df[self.timestamp_column]
+        if not pd.api.types.is_datetime64_any_dtype(timestamp_col):
             sample_value = float(
-                df[self.timestamp_column].iloc[0]
-                if not df[self.timestamp_column].empty
-                else 0
+                timestamp_col.iloc[0] if not timestamp_col.empty else 0
             )
 
             # Auto-detect timestamp unit by inspecting the magnitude of the value
@@ -514,28 +877,14 @@ class QuixTSDataLakeSink(BatchingSink):
             # - Microseconds: ~1.7e15
             # - Nanoseconds: ~1.7e18
             if sample_value > 1e17:
-                # Nanoseconds (Java/Kafka timestamps)
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="ns"
-                )
+                unit = "ns"  # Nanoseconds (Java/Kafka timestamps)
             elif sample_value > 1e14:
-                # Microseconds
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="us"
-                )
+                unit = "us"  # Microseconds
             elif sample_value > 1e11:
-                # Milliseconds (common in JavaScript/Kafka)
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="ms"
-                )
+                unit = "ms"  # Milliseconds (common in JavaScript/Kafka)
             else:
-                # Seconds (Unix timestamp)
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="s"
-                )
-
-        # Extract time-based columns (year, month, day, hour) from the timestamp
-        timestamp_col = df[self.timestamp_column]
+                unit = "s"  # Seconds (Unix timestamp)
+            timestamp_col = pd.to_datetime(timestamp_col, unit=unit)
 
         # Only add columns that are specified in _ts_hive_columns
         # TIMESTAMP_COL_MAPPER handles proper formatting (e.g., zero-padding for months/days)
@@ -548,8 +897,13 @@ class QuixTSDataLakeSink(BatchingSink):
         """Validate that the sink's partition strategy matches the existing table."""
         existing_partition_spec = table_metadata.get("partition_spec", [])
 
-        # Build expected partition spec from sink configuration
-        expected_partition_spec = self.hive_columns.copy()
+        # Build expected partition spec from sink configuration. Use the FULL tree
+        # order (physical + virtual, `~` stripped) — that's what the sink registers
+        # for a table with virtual columns (partition_spec = physical + virtual).
+        # Comparing against hive_columns (physical only) here would see the virtual
+        # columns as a spurious mismatch and wrongly reject the sink on RESTART to
+        # an existing table.
+        expected_partition_spec = self._partition_spec_order.copy()
 
         # Special case: If table has no partition spec yet (empty list),
         # it will be set when first files are added
@@ -655,6 +1009,7 @@ class QuixTSDataLakeSink(BatchingSink):
             file_size = item["file_size"]
             partition_columns = item["partition_columns"]
             partition_values = item["partition_values"]
+            column_stats = item.get("column_stats") or {}
 
             # Build file path as full S3 URI for catalog (API uses this with DuckDB)
             # Include workspace_id if set (for workspace-scoped storage)
@@ -667,32 +1022,42 @@ class QuixTSDataLakeSink(BatchingSink):
             # _write_batch fillna()'s NaN partition values with HIVE_NULL_PARTITION
             # (the on-disk sentinel — see the constant near the top) so they
             # survive groupby and land in a single ``col=__None__`` directory on
-            # disk. The catalog, however, should record those values as actual
-            # SQL NULL — not the literal sentinel string — so that downstream
-            # `partition_<col> IS NULL` filters and partition-tree NULL rendering
-            # work natively. Translate back here.
-            partition_dict: Dict[str, Optional[str]] = {}
+            # disk. The catalog receives the same literal string — including
+            # the ``__None__`` sentinel for NULL buckets — so the manifest
+            # row, the on-disk path, and what DuckDB's
+            # ``hive_partitioning=true`` exposes at query time all agree.
+            # Equality filters then resolve end-to-end without any sentinel
+            # translation in the lake.
+            partition_dict: Dict[str, str] = {}
             if partition_columns and partition_values:
                 for col, val in zip(partition_columns, partition_values):
-                    partition_dict[col] = (
-                        None if val == HIVE_NULL_PARTITION else str(val)
-                    )
+                    partition_dict[col] = str(val)
 
             # Create file entry
-            file_entries.append(
-                {
-                    "file_path": file_path,
-                    "file_size": file_size,
-                    "last_modified": datetime.now(tz=timezone.utc).isoformat(),
-                    "partition_values": partition_dict,
-                    "row_count": row_count,
-                }
-            )
+            entry = {
+                "file_path": file_path,
+                "file_size": file_size,
+                "last_modified": datetime.now(tz=timezone.utc).isoformat(),
+                "partition_values": partition_dict,
+                "row_count": row_count,
+            }
+            # Attach per-column zone maps when computed (catalog stores them in
+            # column_stats for query-time file pruning). Omit the key entirely
+            # when empty so older catalogs simply ignore the absent field.
+            if column_stats:
+                entry["column_stats"] = column_stats
+            # NOTE: the VIRTUAL index (per-file virtual values + co-occurrence
+            # tuples) is no longer sent to the catalog/Postgres — it lives entirely
+            # in the blob ``.vidx/`` sidecars written by _write_virtual_sidecar.
+            # Only column_stats (zone maps) still ride along in the manifest.
+            file_entries.append(entry)
 
-        # Send all files to catalog in a single request
+        # Send all files to catalog in a single request (files + column_stats
+        # only; the virtual index is in blob sidecars now, not Postgres).
+        body: Dict[str, Any] = {"files": file_entries}
         response = self._catalog.post(
             f"/namespaces/{self.namespace}/tables/{self.table_name}/manifest/add-files",
-            json={"files": file_entries},
+            json=body,
             timeout=10,
         )
 
@@ -706,5 +1071,8 @@ class QuixTSDataLakeSink(BatchingSink):
 
     def cleanup(self):
         """Cleanup resources when sink is stopped."""
+        # Signal the background timer to exit its loop. No-op when the
+        # timeout feature is disabled.
+        self._timeout.stop()
         if self._blob_client:
             self._blob_client.shutdown()

@@ -8,7 +8,9 @@ from unittest.mock import Mock, patch
 import orjson
 import pytest
 
-from quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup import Lookup
+from quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup import (
+    Lookup,
+)
 from quixstreams.dataframe.joins.lookups.quix_configuration_service.models import (
     Configuration,
     ConfigurationVersion,

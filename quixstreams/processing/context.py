@@ -36,6 +36,10 @@ class ProcessingContext:
     commit_every: int = 0
     exactly_once: bool = False
     printer: Printer = Printer()
+    # Wall-clock budget (seconds) for each bounded flush on the revoke path.
+    # -1.0 = librdkafka "infinite" (preserves legacy behavior if unset); the
+    # Application always supplies ApplicationConfig.revoke_flush_timeout.
+    revoke_flush_timeout: float = -1.0
 
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
@@ -70,9 +74,10 @@ class ProcessingContext:
             sink_manager=self.sink_manager,
             dataframe_registry=self.dataframe_registry,
             exactly_once=self.exactly_once,
+            revoke_flush_timeout=self.revoke_flush_timeout,
         )
 
-    def commit_checkpoint(self, force: bool = False):
+    def commit_checkpoint(self, force: bool = False, revoking: bool = False):
         """
         Attempts finalizing the current Checkpoint only if the Checkpoint is "expired",
         or `force=True` is passed, otherwise do nothing.
@@ -81,14 +86,16 @@ class ProcessingContext:
         else just close it. A new Checkpoint is then created.
 
         :param force: if `True`, commit the Checkpoint before its expiration deadline.
+        :param revoking: if `True`, commit as part of a partition revoke, enabling
+            "fast revoke" (skip the local state flush for changelog-backed stores).
         """
         if self.checkpoint.expired() or force:
             if self.checkpoint.empty():
-                self.checkpoint.close()
+                self.checkpoint.close(revoking=revoking)
             else:
                 logger.debug(f"Committing a checkpoint; forced={force}")
                 start = time.monotonic()
-                self.checkpoint.commit()
+                self.checkpoint.commit(revoking=revoking)
                 elapsed = round(time.monotonic() - start, 2)
                 logger.debug(
                     f"Committed a checkpoint; forced={force}, time_elapsed={elapsed}s"

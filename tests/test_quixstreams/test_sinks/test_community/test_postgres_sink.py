@@ -119,6 +119,8 @@ def postgres_sink_factory(postgres_connection) -> callable:
         table_name: TableName = DEFAULT_TABLE_NAME,
         primary_key_columns: PrimaryKeyColumns = (),
         upsert_on_primary_key: bool = False,
+        on_conflict_do_nothing: bool = False,
+        include_metadata: bool = True,
     ) -> PostgreSQLSink:
         info = postgres_connection.info
         return PostgreSQLSink(
@@ -130,6 +132,8 @@ def postgres_sink_factory(postgres_connection) -> callable:
             table_name=table_name,
             primary_key_columns=primary_key_columns,
             upsert_on_primary_key=upsert_on_primary_key,
+            on_conflict_do_nothing=on_conflict_do_nothing,
+            include_metadata=include_metadata,
         )
 
     return inner
@@ -613,3 +617,408 @@ def test_sink_composite_primary_key_upsert(
             r["_timestamp"] / 1000
         )
     assert data == get_all_table_rows()
+
+
+def test_sink_without_metadata(
+    sink_app_factory,
+    postgres_sink_factory,
+    resource_source_factory,
+    postgres_connection,
+):
+    """Validates PR #1098: include_metadata=False omits __key and timestamp columns.
+
+    When include_metadata=False, the written table must contain ONLY data columns
+    (event_time, hostname, resource, used_percent) and must NOT contain the
+    metadata columns (__key, timestamp).
+    """
+    data = [
+        {
+            "event_time": 1752158109872,
+            "hostname": "host_0",
+            "resource": "CPU",
+            "used_percent": 91.61,
+        },
+        {
+            "event_time": 1752158109873,
+            "hostname": "host_0",
+            "resource": "RAM",
+            "used_percent": 37.03,
+        },
+        {
+            "event_time": 1752158109876,
+            "hostname": "host_1",
+            "resource": "CPU",
+            "used_percent": 56.22,
+        },
+        {
+            "event_time": 1752158109877,
+            "hostname": "host_1",
+            "resource": "RAM",
+            "used_percent": 80.01,
+        },
+    ]
+    app = sink_app_factory(
+        resource_source_factory(data),
+        postgres_sink_factory(include_metadata=False),
+    )
+    app.run(count=len(data))
+
+    # -- Assert metadata columns are ABSENT from the table schema --
+    data_columns = {"event_time", "hostname", "resource", "used_percent"}
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+            (DEFAULT_TABLE_NAME,),
+        )
+        actual_columns = {row[0] for row in cursor.fetchall()}
+    postgres_connection.commit()
+
+    assert KEY_COLUMN_NAME not in actual_columns, (
+        f"Metadata column {KEY_COLUMN_NAME!r} should be absent when "
+        f"include_metadata=False, but found columns: {actual_columns}"
+    )
+    assert TIMESTAMP_COLUMN_NAME not in actual_columns, (
+        f"Metadata column {TIMESTAMP_COLUMN_NAME!r} should be absent when "
+        f"include_metadata=False, but found columns: {actual_columns}"
+    )
+    for col in data_columns:
+        assert col in actual_columns, (
+            f"Data column {col!r} should be present, "
+            f"but found columns: {actual_columns}"
+        )
+
+    # -- Assert the written row data matches the input data --
+    data_col_list = sorted(data_columns)
+    select_query = sql.SQL("SELECT {columns} FROM {table} ORDER BY {order}").format(
+        columns=sql.SQL(", ").join(map(sql.Identifier, data_col_list)),
+        table=sql.Identifier(DEFAULT_TABLE_NAME),
+        order=sql.Identifier("event_time"),
+    )
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(select_query)
+        rows = [dict(zip(data_col_list, row)) for row in cursor.fetchall()]
+    postgres_connection.commit()
+
+    expected = sorted(data, key=lambda r: r["event_time"])
+    assert rows == expected
+
+
+def test_sink_with_metadata_default(
+    sink_app_factory,
+    postgres_sink_factory,
+    resource_source_factory,
+    postgres_connection,
+):
+    """Validates PR #1098: default include_metadata=True still includes __key and
+    timestamp columns, ensuring backward compatibility.
+    """
+    data = [
+        {
+            "event_time": 1752158109872,
+            "hostname": "host_0",
+            "resource": "CPU",
+            "used_percent": 91.61,
+        },
+    ]
+    app = sink_app_factory(
+        resource_source_factory(data),
+        postgres_sink_factory(),  # default include_metadata=True
+    )
+    app.run(count=len(data))
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+            (DEFAULT_TABLE_NAME,),
+        )
+        actual_columns = {row[0] for row in cursor.fetchall()}
+    postgres_connection.commit()
+
+    assert KEY_COLUMN_NAME in actual_columns, (
+        f"Metadata column {KEY_COLUMN_NAME!r} should be present by default, "
+        f"but found columns: {actual_columns}"
+    )
+    assert TIMESTAMP_COLUMN_NAME in actual_columns, (
+        f"Metadata column {TIMESTAMP_COLUMN_NAME!r} should be present by default, "
+        f"but found columns: {actual_columns}"
+    )
+
+
+def test_sink_without_metadata_upsert_primary_key(
+    sink_app_factory,
+    postgres_sink_factory,
+    resource_source_factory,
+    postgres_connection,
+):
+    """Validates PR #1098: include_metadata=False combined with primary-key upsert.
+
+    When include_metadata=False and upsert_on_primary_key=True, the dedup/upsert
+    logic must still work correctly and the written table must contain only data
+    columns (no __key, no timestamp). After dedup on hostname, only the last
+    value per hostname should survive (data[2:]).
+    """
+    data = [
+        {
+            "event_time": 1752158109872,
+            "hostname": "host_0",
+            "resource": "CPU",
+            "used_percent": 91.61,
+        },
+        {
+            "event_time": 1752158109876,
+            "hostname": "host_1",
+            "resource": "CPU",
+            "used_percent": 56.22,
+        },
+        {
+            "event_time": 1752158109881,
+            "hostname": "host_0",
+            "resource": "CPU",
+            "used_percent": 11.29,
+        },
+        {
+            "event_time": 1752158109883,
+            "hostname": "host_1",
+            "resource": "CPU",
+            "used_percent": 96.12,
+        },
+    ]
+    app = sink_app_factory(
+        resource_source_factory(data),
+        postgres_sink_factory(
+            primary_key_columns=["hostname"],
+            upsert_on_primary_key=True,
+            include_metadata=False,
+        ),
+    )
+    app.run(count=len(data))
+
+    # -- Assert metadata columns are ABSENT from the table schema --
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+            (DEFAULT_TABLE_NAME,),
+        )
+        actual_columns = {row[0] for row in cursor.fetchall()}
+    postgres_connection.commit()
+
+    assert KEY_COLUMN_NAME not in actual_columns, (
+        f"Metadata column {KEY_COLUMN_NAME!r} should be absent when "
+        f"include_metadata=False, but found columns: {actual_columns}"
+    )
+    assert TIMESTAMP_COLUMN_NAME not in actual_columns, (
+        f"Metadata column {TIMESTAMP_COLUMN_NAME!r} should be absent when "
+        f"include_metadata=False, but found columns: {actual_columns}"
+    )
+
+    # -- Assert the surviving rows are the deduped last-per-hostname values --
+    data_columns = sorted(["event_time", "hostname", "resource", "used_percent"])
+    select_query = sql.SQL("SELECT {columns} FROM {table} ORDER BY {order}").format(
+        columns=sql.SQL(", ").join(map(sql.Identifier, data_columns)),
+        table=sql.Identifier(DEFAULT_TABLE_NAME),
+        order=sql.Identifier("hostname"),
+    )
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(select_query)
+        rows = [dict(zip(data_columns, row)) for row in cursor.fetchall()]
+    postgres_connection.commit()
+
+    expected = sorted(data[2:], key=lambda r: r["hostname"])
+    assert rows == expected
+
+
+def test_sink_on_conflict_do_nothing(
+    sink_app_factory,
+    postgres_sink_factory,
+    resource_source_factory,
+    get_all_table_rows,
+):
+    """Validates PR #1099: on_conflict_do_nothing=True silently ignores duplicate
+    primary-key inserts via ON CONFLICT DO NOTHING instead of raising an exception.
+    """
+    data = [
+        {
+            "event_time": 1752158109872,
+            "hostname": "host_0",
+            "resource": "CPU",
+            "used_percent": 91.61,
+        },
+        {
+            "event_time": 1752158109876,
+            "hostname": "host_0",
+            "resource": "RAM",
+            "used_percent": 56.22,
+        },
+    ]
+    app = sink_app_factory(
+        resource_source_factory(data),
+        postgres_sink_factory(
+            primary_key_columns=["hostname"],
+            on_conflict_do_nothing=True,
+        ),
+    )
+    # Without on_conflict_do_nothing this would raise PostgreSQLSinkException
+    result = app.run(count=len(data), metadata=True)
+
+    # Only the first row should survive (duplicate hostname silently dropped)
+    expected = [data[0]]
+    expected[0][KEY_COLUMN_NAME] = result[0]["_key"]
+    expected[0][TIMESTAMP_COLUMN_NAME] = datetime.datetime.fromtimestamp(
+        result[0]["_timestamp"] / 1000
+    )
+    assert expected == get_all_table_rows()
+
+
+def test_sink_on_conflict_do_nothing_default_absent(
+    sink_app_factory,
+    postgres_sink_factory,
+    resource_source_factory,
+    get_all_table_rows,
+):
+    """Validates PR #1099: when on_conflict_do_nothing is not set (default False),
+    a duplicate primary key raises PostgreSQLSinkException as before.
+    """
+    data = [
+        {
+            "event_time": 1752158109872,
+            "hostname": "host_0",
+            "resource": "CPU",
+            "used_percent": 91.61,
+        },
+        {
+            "event_time": 1752158109876,
+            "hostname": "host_0",
+            "resource": "RAM",
+            "used_percent": 56.22,
+        },
+    ]
+    app = sink_app_factory(
+        resource_source_factory(data),
+        postgres_sink_factory(primary_key_columns=["hostname"]),
+    )
+    with pytest.raises(PostgreSQLSinkException) as exc_info:
+        app.run()
+    assert "Key (hostname)=(host_0) already exists" in str(exc_info.value)
+
+
+def test_sink_upsert_and_on_conflict_do_nothing_raises(
+    postgres_sink_factory,
+):
+    """Validates PR #1099: combining upsert_on_primary_key=True with
+    on_conflict_do_nothing=True raises ValueError at construction time.
+    """
+    with pytest.raises(ValueError, match="Cannot use both"):
+        postgres_sink_factory(
+            primary_key_columns=["hostname"],
+            upsert_on_primary_key=True,
+            on_conflict_do_nothing=True,
+        )
+
+
+def test_sink_upsert_without_on_conflict_do_nothing(
+    sink_app_factory,
+    postgres_sink_factory,
+    resource_source_factory,
+    get_all_table_rows,
+):
+    """Validates PR #1099: upsert_on_primary_key=True alone performs a proper upsert
+    (ON CONFLICT ... DO UPDATE SET) and does NOT emit ON CONFLICT DO NOTHING.
+    After dedup on hostname, only the last value per hostname should survive.
+    """
+    data = [
+        {
+            "event_time": 1752158109872,
+            "hostname": "host_0",
+            "resource": "CPU",
+            "used_percent": 91.61,
+        },
+        {
+            "event_time": 1752158109876,
+            "hostname": "host_0",
+            "resource": "RAM",
+            "used_percent": 56.22,
+        },
+    ]
+    app = sink_app_factory(
+        resource_source_factory(data),
+        postgres_sink_factory(
+            primary_key_columns=["hostname"],
+            upsert_on_primary_key=True,
+        ),
+    )
+    result = app.run(count=len(data), metadata=True)
+
+    # Upsert: the second record overwrites the first (same hostname)
+    expected = [data[1]]
+    expected[0][KEY_COLUMN_NAME] = result[1]["_key"]
+    expected[0][TIMESTAMP_COLUMN_NAME] = datetime.datetime.fromtimestamp(
+        result[1]["_timestamp"] / 1000
+    )
+    assert expected == get_all_table_rows()
+
+
+def test_sink_on_conflict_do_nothing_with_metadata(
+    sink_app_factory,
+    postgres_sink_factory,
+    resource_source_factory,
+    postgres_connection,
+):
+    """Validates PR #1099 orthogonality: on_conflict_do_nothing=True combined with
+    include_metadata=True (default) — metadata columns (__key, timestamp) are
+    present AND duplicate primary keys are silently ignored.
+    """
+    data = [
+        {
+            "event_time": 1752158109872,
+            "hostname": "host_0",
+            "resource": "CPU",
+            "used_percent": 91.61,
+        },
+        {
+            "event_time": 1752158109876,
+            "hostname": "host_0",
+            "resource": "RAM",
+            "used_percent": 56.22,
+        },
+    ]
+    app = sink_app_factory(
+        resource_source_factory(data),
+        postgres_sink_factory(
+            primary_key_columns=["hostname"],
+            on_conflict_do_nothing=True,
+            include_metadata=True,
+        ),
+    )
+    # Should not raise — duplicate is silently ignored
+    app.run(count=len(data))
+
+    # Verify metadata columns are present
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+            (DEFAULT_TABLE_NAME,),
+        )
+        actual_columns = {row[0] for row in cursor.fetchall()}
+    postgres_connection.commit()
+
+    assert KEY_COLUMN_NAME in actual_columns, (
+        f"Metadata column {KEY_COLUMN_NAME!r} should be present when "
+        f"include_metadata=True, but found columns: {actual_columns}"
+    )
+    assert TIMESTAMP_COLUMN_NAME in actual_columns, (
+        f"Metadata column {TIMESTAMP_COLUMN_NAME!r} should be present when "
+        f"include_metadata=True, but found columns: {actual_columns}"
+    )
+
+    # Verify only one row survived (duplicate hostname silently dropped)
+    count_query = sql.SQL("SELECT COUNT(*) FROM {table}").format(
+        table=sql.Identifier(DEFAULT_TABLE_NAME),
+    )
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(count_query)
+        row_count = cursor.fetchone()[0]
+    postgres_connection.commit()
+
+    assert (
+        row_count == 1
+    ), f"Expected 1 row (duplicate silently dropped), got {row_count}"
