@@ -262,7 +262,7 @@ class TimeWindow(Window):
 
         if self._closing_strategy == ClosingStrategy.PARTITION:
             expired_windows = self.expire_by_partition(
-                transaction, max_expired_window_end, collect
+                transaction, max_expired_window_end, collect, key
             )
         else:
             expired_windows = self.expire_by_key(
@@ -279,17 +279,21 @@ class TimeWindow(Window):
         transaction: WindowedPartitionTransaction,
         max_expired_end: int,
         collect: bool,
+        message_key: Any,
     ) -> Iterable[WindowKeyResult]:
         for (
             window_start,
             window_end,
-        ), aggregated, collected, key in transaction.expire_all_windows(
+        ), aggregated, collected, prefix in transaction.expire_all_windows(
             max_end_time=max_expired_end,
             step_ms=self._step_ms if self._step_ms else self._duration_ms,
             collect=collect,
             delete=True,
         ):
-            yield key, self._results(aggregated, collected, window_start, window_end)
+            yield (
+                transaction.key_from_prefix(prefix, message_key),
+                self._results(aggregated, collected, window_start, window_end),
+            )
 
     def expire_by_key(
         self,
