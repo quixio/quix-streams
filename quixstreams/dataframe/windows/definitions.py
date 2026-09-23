@@ -347,6 +347,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
         on_late: Optional[WindowOnLateCallback] = None,
         before_update: Optional[WindowBeforeUpdateCallback] = None,
         after_update: Optional[WindowAfterUpdateCallback] = None,
+        close_on_idle: bool = False,
     ):
         super().__init__(
             duration_ms=duration_ms,
@@ -357,6 +358,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
             before_update=before_update,
             after_update=after_update,
         )
+        self._close_on_idle = close_on_idle
 
     def _get_name(self, func_name: Optional[str]) -> str:
         prefix = f"{self._name}_tumbling_window" if self._name else "tumbling_window"
@@ -388,6 +390,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
             on_late=self._on_late,
             before_update=self._before_update,
             after_update=self._after_update,
+            close_on_idle=self._close_on_idle,
         )
 
 

@@ -1092,6 +1092,7 @@ class StreamingDataFrame:
         on_late: Optional[WindowOnLateCallback] = None,
         before_update: Optional[WindowBeforeUpdateCallback] = None,
         after_update: Optional[WindowAfterUpdateCallback] = None,
+        close_on_idle: bool = False,
     ) -> TumblingTimeWindowDefinition:
         """
         Create a time-based tumbling window transformation on this StreamingDataFrame.
@@ -1172,6 +1173,13 @@ class StreamingDataFrame:
             If it returns `True`, the window will be expired immediately.
             Default - `None`.
 
+        :param close_on_idle: if `True`, close windows based on wall-clock time so
+            that windows on an idle stream (no new messages) still emit their
+            results once `window_end + grace_ms` passes in real time, instead of
+            waiting for the next message to advance event time.
+            Only supported with `final(closing_strategy="partition")`.
+            Default - `False` (event-time only, unchanged behavior).
+
         :return: `TumblingTimeWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
@@ -1189,6 +1197,7 @@ class StreamingDataFrame:
             on_late=on_late,
             before_update=before_update,
             after_update=after_update,
+            close_on_idle=close_on_idle,
         )
 
     def tumbling_count_window(
