@@ -129,6 +129,12 @@ log_cli_format = "[%(levelname)s] %(name)s: %(message)s"
 # Custom markers
 markers = ["timeit"]
 
+[tool.mypy]
+# Generated Protobuf modules are excluded from directory discovery, mirroring
+# [tool.ruff] exclude above. Imports of them are handled by the per-module
+# override at the bottom of this file.
+exclude = ['_pb2\.py$']
+
 [[tool.mypy.overrides]]
 module = [
   "confluent_kafka.*",
@@ -153,3 +159,15 @@ module = [
     "quixstreams.rowproducer.*"
 ]
 ignore_errors = true
+
+# Protobuf codegen builds its message classes at import time, so mypy sees an
+# empty module and reports every `pb.<Message>` access as a missing attribute.
+# "skip" makes the generated module resolve to Any at each import site. ruff
+# excludes the same file via [tool.ruff] exclude; the mypy pre-commit hook
+# excludes it from its file list so this override is not bypassed (mypy always
+# follows imports normally for files named on the command line).
+[[tool.mypy.overrides]]
+module = [
+    "quixstreams.models.serializers.ma_streaming_open_data.open_data_pb2"
+]
+follow_imports = "skip"
