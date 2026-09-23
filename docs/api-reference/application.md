@@ -623,7 +623,7 @@ Default - `False`.
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1384)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1386)
 
 Immutable object holding the application configuration
 
@@ -646,7 +646,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1422)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1424)
 
 Included to ignore reading/setting values from the environment
 
@@ -660,7 +660,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1435)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1437)
 
 Update the application config and return a copy
 
@@ -675,7 +675,7 @@ def resolve_transactional_id(transactional_id: Optional[str],
                              prefix: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1461)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1463)
 
 Utility function to resolve the transactional.id based
 on existing config and provided prefix.
