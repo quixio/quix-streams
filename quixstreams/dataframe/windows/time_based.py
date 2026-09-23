@@ -43,23 +43,13 @@ ClosingStrategyValues = Literal["key", "partition"]
 class TimeWindow(Window):
     def __init__(
         self,
-        duration_ms: int,
-        grace_ms: int,
         name: str,
         dataframe: "StreamingDataFrame",
-        step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
         before_update: Optional[WindowBeforeUpdateCallback] = None,
         after_update: Optional[WindowAfterUpdateCallback] = None,
     ):
-        super().__init__(
-            name=name,
-            dataframe=dataframe,
-        )
-
-        self._duration_ms = duration_ms
-        self._grace_ms = grace_ms
-        self._step_ms = step_ms
+        super().__init__(name=name, dataframe=dataframe)
         self._on_late = on_late
         self._before_update = before_update
         self._after_update = after_update
@@ -128,6 +118,68 @@ class TimeWindow(Window):
 
         self._closing_strategy = ClosingStrategy.new(closing_strategy)
         return super().current()
+
+    def _on_expired_window(
+        self,
+        value: Any,
+        key: Any,
+        start: int,
+        end: int,
+        timestamp_ms: int,
+        late_by_ms: int,
+    ) -> None:
+        ctx = message_context()
+        to_log = True
+        # Trigger the "on_late" callback if provided.
+        # Log the lateness warning if the callback returns True
+        if self._on_late:
+            to_log = self._on_late(
+                value,
+                key,
+                timestamp_ms,
+                late_by_ms,
+                start,
+                end,
+                self._name,
+                ctx.topic,
+                ctx.partition,
+                ctx.offset,
+            )
+        if to_log:
+            logger.warning(
+                "Skipping window processing for the closed window "
+                f"timestamp_ms={timestamp_ms} "
+                f"window={(start, end)} "
+                f"late_by_ms={late_by_ms} "
+                f"store_name={self._name} "
+                f"partition={ctx.topic}[{ctx.partition}] "
+                f"offset={ctx.offset}"
+            )
+
+
+class FixedTimeWindow(TimeWindow):
+    def __init__(
+        self,
+        duration_ms: int,
+        grace_ms: int,
+        name: str,
+        dataframe: "StreamingDataFrame",
+        step_ms: Optional[int] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
+    ):
+        super().__init__(
+            name=name,
+            dataframe=dataframe,
+            on_late=on_late,
+            before_update=before_update,
+            after_update=after_update,
+        )
+
+        self._duration_ms = duration_ms
+        self._grace_ms = grace_ms
+        self._step_ms = step_ms
 
     def process_window(
         self,
@@ -262,7 +314,7 @@ class TimeWindow(Window):
 
         if self._closing_strategy == ClosingStrategy.PARTITION:
             expired_windows = self.expire_by_partition(
-                transaction, max_expired_window_end, collect
+                transaction, max_expired_window_end, collect, key
             )
         else:
             expired_windows = self.expire_by_key(
@@ -279,17 +331,21 @@ class TimeWindow(Window):
         transaction: WindowedPartitionTransaction,
         max_expired_end: int,
         collect: bool,
+        message_key: Any,
     ) -> Iterable[WindowKeyResult]:
         for (
             window_start,
             window_end,
-        ), aggregated, collected, key in transaction.expire_all_windows(
+        ), aggregated, collected, prefix in transaction.expire_all_windows(
             max_end_time=max_expired_end,
             step_ms=self._step_ms if self._step_ms else self._duration_ms,
             collect=collect,
             delete=True,
         ):
-            yield key, self._results(aggregated, collected, window_start, window_end)
+            yield (
+                transaction.key_from_prefix(prefix, message_key),
+                self._results(aggregated, collected, window_start, window_end),
+            )
 
     def expire_by_key(
         self,
@@ -307,47 +363,10 @@ class TimeWindow(Window):
         ):
             yield (key, self._results(aggregated, collected, window_start, window_end))
 
-    def _on_expired_window(
-        self,
-        value: Any,
-        key: Any,
-        start: int,
-        end: int,
-        timestamp_ms: int,
-        late_by_ms: int,
-    ) -> None:
-        ctx = message_context()
-        to_log = True
-        # Trigger the "on_late" callback if provided.
-        # Log the lateness warning if the callback returns True
-        if self._on_late:
-            to_log = self._on_late(
-                value,
-                key,
-                timestamp_ms,
-                late_by_ms,
-                start,
-                end,
-                self._name,
-                ctx.topic,
-                ctx.partition,
-                ctx.offset,
-            )
-        if to_log:
-            logger.warning(
-                "Skipping window processing for the closed window "
-                f"timestamp_ms={timestamp_ms} "
-                f"window={(start, end)} "
-                f"late_by_ms={late_by_ms} "
-                f"store_name={self._name} "
-                f"partition={ctx.topic}[{ctx.partition}] "
-                f"offset={ctx.offset}"
-            )
 
-
-class TimeWindowSingleAggregation(SingleAggregationWindowMixin, TimeWindow):
+class FixedTimeWindowSingleAggregation(SingleAggregationWindowMixin, FixedTimeWindow):
     pass
 
 
-class TimeWindowMultiAggregation(MultiAggregationWindowMixin, TimeWindow):
+class FixedTimeWindowMultiAggregation(MultiAggregationWindowMixin, FixedTimeWindow):
     pass

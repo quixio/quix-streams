@@ -1,16 +1,21 @@
-from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, cast
 
 from quixstreams.state.base.transaction import (
     PartitionTransactionStatus,
     validate_transaction_status,
 )
-from quixstreams.state.metadata import DEFAULT_PREFIX
+from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR, SEPARATOR_LENGTH
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.rocksdb.cache import Cache
-from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
+from quixstreams.state.rocksdb.transaction import (
+    MAX_UINT64,
+    RocksDBPartitionTransaction,
+)
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
+    append_integer,
+    deserialize,
     encode_integer_pair,
     int_to_bytes,
     serialize,
@@ -33,6 +38,19 @@ from .state import WindowedTransactionState
 
 if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
+
+# A window key is `<prefix>|<start>|<end>`, where `start` and `end` are 8-byte
+# big-endian integers joined by the separator.
+_TIMESTAMPS_SEGMENT = encode_integer_pair(MAX_UINT64, MAX_UINT64)
+_TIMESTAMPS_SEGMENT_LEN = len(_TIMESTAMPS_SEGMENT)
+_WINDOW_KEY_SUFFIX_LEN = SEPARATOR_LENGTH + _TIMESTAMPS_SEGMENT_LEN
+# `prefix + _SEPARATOR_SUCCESSOR` is the smallest byte string strictly greater
+# than every key starting with `prefix + SEPARATOR`. That range is a superset of
+# `prefix`'s window keys: when one message key is a SEPARATOR-extension of
+# another (`b"user"` and `b"user|123"`), the extension's window keys sort inside
+# it, so consumers must also check the exact key length
+# (`len(prefix) + _WINDOW_KEY_SUFFIX_LEN`) before attributing a key to `prefix`.
+_SEPARATOR_SUCCESSOR = bytes([SEPARATOR[0] + 1])
 
 
 class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
@@ -82,6 +100,20 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
             ),
         )
 
+    def key_from_prefix(self, prefix: bytes, message_key: Any) -> Any:
+        """
+        Reverse `as_state()`: map a store prefix back to the message key.
+
+        :param prefix: a store prefix, e.g. as yielded by `expire_all_windows()`
+        :param message_key: the key of the record being processed. Only its type
+            is read: `as_state()` stores `bytes` keys verbatim and serializes
+            every other key.
+        :return: the message key the prefix was built from
+        """
+        if isinstance(message_key, bytes):
+            return prefix
+        return deserialize(prefix, loads=self._loads)
+
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def keys(self, cf_name: str = "default") -> Iterable[Any]:
         db_skip_keys: set[bytes] = set()
@@ -107,6 +139,199 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         return (
             self._get_timestamp(prefix=prefix, cache=self._last_expired_timestamps) or 0
         )
+
+    def get_partition_timestamp(self) -> int:
+        """
+        Get the maximum event timestamp observed across the whole partition.
+
+        Stored in the "latest timestamps" cache under the empty prefix, which a
+        message key serializing to empty bytes also shares. Returns 0 when nothing
+        has been observed yet.
+        """
+        return self.get_latest_timestamp(prefix=b"")
+
+    def advance_partition_timestamp(self, timestamp_ms: int) -> int:
+        """
+        Monotonically raise the partition-wide watermark and return its new value.
+
+        :param timestamp_ms: the event timestamp of the message being processed.
+        :return: the watermark after the update, i.e.
+            `max(timestamp_ms, previous watermark)`.
+        """
+        current = self.get_latest_timestamp(prefix=b"")
+        if timestamp_ms <= current:
+            return current
+
+        self._set_timestamp(
+            cache=self._latest_timestamps,
+            prefix=b"",
+            timestamp_ms=timestamp_ms,
+        )
+        return timestamp_ms
+
+    def get_expiry_checkpoint(self, prefix: bytes = b"") -> Optional[int]:
+        """
+        Get the expiry cursor stored for `prefix`, or `None` when unset.
+
+        Two distinct meanings share this cache, keyed by prefix:
+        - for a message-key prefix it is the **start** of the last expired window,
+          exactly like the cursor `expire_windows` maintains;
+        - for the empty prefix it is the partition-wide expiry checkpoint used by
+          session windows: the earliest watermark value at which some session in
+          the partition may close. A message key serializing to empty bytes shares
+          that slot.
+
+        :param prefix: The key prefix. Default - the partition-wide slot.
+        """
+        return self._get_timestamp(prefix=prefix, cache=self._last_expired_timestamps)
+
+    def set_expiry_checkpoint(self, timestamp_ms: int, prefix: bytes = b"") -> None:
+        """
+        Persist the expiry cursor for `prefix`. See `get_expiry_checkpoint`.
+
+        :param timestamp_ms: The cursor value to store.
+        :param prefix: The key prefix. Default - the partition-wide slot.
+        """
+        self._set_timestamp(
+            cache=self._last_expired_timestamps,
+            prefix=prefix,
+            timestamp_ms=timestamp_ms,
+        )
+
+    def iter_windows(
+        self,
+        prefix: bytes,
+        start_from_ms: int = 0,
+        start_to_ms: Optional[int] = None,
+        backwards: bool = False,
+    ) -> Iterator[WindowDetail]:
+        """
+        Lazily iterate over the windows of `prefix` ordered by window start.
+
+        Unlike `get_windows()`, this method:
+        - has an **inclusive** lower bound, so a window starting at 0 is returned
+          for `start_from_ms=0`;
+        - accepts `start_to_ms=None` for an unbounded upper bound;
+        - is a generator that reaches its first element in `O(log n)` instead of
+          materialising the whole range into a list.
+
+        RocksDB orders window keys by `(prefix, start, end)`, so for one prefix the
+        iteration order is window-start order.
+
+        The uncommitted updates of this transaction are merged in, and callers may
+        delete windows while consuming the iterator.
+
+        :param prefix: The key prefix used to identify and filter relevant windows.
+        :param start_from_ms: The minimal window start time, inclusive.
+        :param start_to_ms: The maximum window start time, inclusive.
+            `None` means unbounded.
+        :param backwards: If True, yields windows from the greatest start down.
+        :return: An iterator of `((start, end), value, prefix)` tuples.
+        """
+        start_from_ms = max(start_from_ms, 0)
+        if start_to_ms is not None and start_to_ms < start_from_ms:
+            return
+
+        lower_bound = append_integer(base_bytes=prefix, integer=start_from_ms)
+        if start_to_ms is None:
+            upper_bound = prefix + _SEPARATOR_SUCCESSOR
+        else:
+            upper_bound = append_integer(
+                base_bytes=prefix, integer=min(start_to_ms + 1, MAX_UINT64)
+            )
+
+        db_items = self._partition.iter_items(
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            backwards=backwards,
+        )
+
+        # Snapshot the in-range cached keys before yielding anything: callers
+        # delete windows while consuming this iterator.
+        updates = self._update_cache.get_updates(cf_name="default")
+        update_cache = updates.get(prefix, {})
+        cached_items = sorted(
+            (
+                (key, value)
+                for key, value in update_cache.items()
+                if lower_bound <= key < upper_bound
+            ),
+            key=lambda item: item[0],
+            reverse=backwards,
+        )
+        delete_cache = self._update_cache.get_deletes(cf_name="default")
+
+        # A SEPARATOR-extended message key's window keys fall inside the same
+        # byte range but are longer, so only the exact length attributes a key
+        # to `prefix` (see `_SEPARATOR_SUCCESSOR`).
+        window_key_len = len(prefix) + _WINDOW_KEY_SUFFIX_LEN
+
+        for key, value in _merge_sorted(iter(cached_items), db_items, backwards):
+            if key in delete_cache or len(key) != window_key_len:
+                continue
+            _, start, end = parse_window_key(key)
+            yield ((start, end), self._deserialize_value(value), prefix)
+
+    def iter_prefixes(self, cf_name: str = "default") -> Iterator[bytes]:
+        """
+        Yield each distinct message-key prefix present in the store, in key order.
+
+        Window keys are streamed once and deduplicated into prefixes, without
+        deserializing any value. Prefixes that exist only in this transaction's
+        uncommitted update cache are included.
+
+        :param cf_name: rocksdb column family name. Default - "default"
+        :return: An iterator of prefixes.
+        """
+        db_prefixes = self._iter_db_prefixes(cf_name=cf_name)
+        # Snapshot the cached prefixes: expiring windows mutates the update cache.
+        cached_prefixes = iter(
+            sorted(self._update_cache.get_updates(cf_name=cf_name).keys())
+        )
+
+        db_next = next(db_prefixes, None)
+        cached_next = next(cached_prefixes, None)
+        while True:
+            if db_next is None:
+                if cached_next is None:
+                    return
+                yield cached_next
+                cached_next = next(cached_prefixes, None)
+            elif cached_next is None or db_next < cached_next:
+                yield db_next
+                db_next = next(db_prefixes, None)
+            elif cached_next < db_next:
+                yield cached_next
+                cached_next = next(cached_prefixes, None)
+            else:  # the same prefix is present in both the store and the cache
+                yield db_next
+                db_next = next(db_prefixes, None)
+                cached_next = next(cached_prefixes, None)
+
+    def _iter_db_prefixes(self, cf_name: str) -> Iterator[bytes]:
+        """
+        Yield the distinct message-key prefixes stored in RocksDB, each exactly
+        once, in the order their first window key appears in the DB.
+
+        The pass is linear over the window keys: no seek can step past one
+        prefix's whole key range without risking another's, because a
+        SEPARATOR-extended message key's window keys live *inside* the shorter
+        key's byte range (see `_SEPARATOR_SUCCESSOR`).
+
+        First-appearance order deviates from byte order only when an extended
+        key's first extension byte is `0x00` or a window start exceeds 2**56 ms,
+        in which case `iter_prefixes` may yield the same prefix twice.
+        """
+        seen: set[bytes] = set()
+        for key, _ in self._partition.iter_items(lower_bound=b"", cf_name=cf_name):
+            if len(key) <= _TIMESTAMPS_SEGMENT_LEN:
+                # Too short to hold `<prefix>|<start>|<end>`.
+                continue
+
+            prefix, _, _ = parse_window_key(key)
+            if prefix not in seen:
+                seen.add(prefix)
+                yield prefix
 
     def get_window(
         self,
@@ -490,6 +715,42 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
                 f"Invalid window duration: window end {end_ms} is smaller or equal "
                 f"than window start {start_ms}"
             )
+
+
+def _merge_sorted(
+    left: Iterator[tuple[bytes, bytes]],
+    right: Iterator[tuple[bytes, bytes]],
+    backwards: bool,
+) -> Iterator[tuple[bytes, bytes]]:
+    """
+    Merge two key-sorted iterators of `(key, value)` pairs into a single sorted
+    stream, advancing whichever side currently holds the smaller key (the greater
+    one when `backwards` is True).
+
+    When both sides hold the same key the `left` value wins, so callers pass the
+    uncommitted update cache on the left to let it shadow the stored value.
+    """
+    left_item = next(left, None)
+    right_item = next(right, None)
+    while True:
+        if left_item is None:
+            if right_item is None:
+                return
+            yield right_item
+            right_item = next(right, None)
+        elif right_item is None:
+            yield left_item
+            left_item = next(left, None)
+        elif left_item[0] == right_item[0]:
+            yield left_item
+            left_item = next(left, None)
+            right_item = next(right, None)
+        elif (left_item[0] < right_item[0]) != backwards:
+            yield left_item
+            left_item = next(left, None)
+        else:
+            yield right_item
+            right_item = next(right, None)
 
 
 def windows_to_expire(

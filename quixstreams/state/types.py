@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Iterable, Optional, Protocol, Tuple
+from typing import Any, Iterable, Iterator, Optional, Protocol, Tuple
 
 from typing_extensions import TypeAlias, TypeVar, overload
 
@@ -10,10 +10,10 @@ V = TypeVar("V")
 
 WindowDetail: TypeAlias = tuple[
     tuple[int, int], V, bytes
-]  # (start, end), aggregated, key
+]  # (start, end), aggregated, store prefix
 ExpiredWindowDetail: TypeAlias = tuple[
     tuple[int, int], V, list[V], bytes
-]  # (start, end), aggregated, collected, key
+]  # (start, end), aggregated, collected, store prefix
 
 
 class WindowedState(Protocol[K, V]):
@@ -187,6 +187,17 @@ class WindowedState(Protocol[K, V]):
         """
         ...
 
+    def delete_window(self, start_ms: int, end_ms: int) -> None:
+        """
+        Delete a specific window from the state store.
+
+        This method removes a single window entry with the specified start and end timestamps.
+
+        :param start_ms: The start timestamp of the window to delete
+        :param end_ms: The end timestamp of the window to delete
+        """
+        ...
+
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
     ) -> list[WindowDetail[V]]:
@@ -197,6 +208,43 @@ class WindowedState(Protocol[K, V]):
         :param start_to_ms: The maximum window start time, inclusive.
         :param backwards: If True, yields windows in reverse order.
         :return: A sorted list of tuples in the format `((start, end), value)`.
+        """
+        ...
+
+    def iter_windows(
+        self,
+        start_from_ms: int = 0,
+        start_to_ms: Optional[int] = None,
+        backwards: bool = False,
+    ) -> Iterator[WindowDetail[V]]:
+        """
+        Lazily iterate over the windows of the current message key, ordered by
+        window start.
+
+        Unlike `get_windows()`, the lower bound is **inclusive**, the upper bound
+        is optional, and the result is a generator rather than a materialised list.
+
+        :param start_from_ms: The minimal window start time, inclusive.
+        :param start_to_ms: The maximum window start time, inclusive.
+            `None` means unbounded.
+        :param backwards: If True, yields windows from the greatest start down.
+        :return: An iterator of tuples in the format `((start, end), value, prefix)`.
+        """
+        ...
+
+    def get_expiry_checkpoint(self) -> Optional[int]:
+        """
+        Get the start timestamp of the last expired window for the current message
+        key, or `None` if no window has expired yet.
+        """
+        ...
+
+    def set_expiry_checkpoint(self, timestamp_ms: int) -> None:
+        """
+        Store the start timestamp of the last expired window for the current
+        message key.
+
+        :param timestamp_ms: the start timestamp of the last expired window.
         """
         ...
 
@@ -249,6 +297,18 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         """
 
     def as_state(self, prefix: Any) -> WindowedState[K, V]: ...
+
+    def key_from_prefix(self, prefix: bytes, message_key: Any) -> Any:
+        """
+        Reverse `as_state()`: map a store prefix back to the message key.
+
+        :param prefix: a store prefix, e.g. as yielded by `expire_all_windows()`
+        :param message_key: the key of the record being processed. Only its type
+            is read: `as_state()` stores `bytes` keys verbatim and serializes
+            every other key.
+        :return: the message key the prefix was built from
+        """
+        ...
 
     def get_window(
         self,
@@ -434,6 +494,76 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         :param prefix: The key prefix for filtering windows.
         :param backwards: If True, yields windows in reverse order.
         :return: A sorted list of tuples in the format `((start, end), value)`.
+        """
+        ...
+
+    def iter_windows(
+        self,
+        prefix: bytes,
+        start_from_ms: int = 0,
+        start_to_ms: Optional[int] = None,
+        backwards: bool = False,
+    ) -> Iterator[WindowDetail[V]]:
+        """
+        Lazily iterate over the windows of `prefix`, ordered by window start.
+
+        Unlike `get_windows()`, the lower bound is **inclusive**, the upper bound
+        is optional, and the result is a generator rather than a materialised list.
+
+        :param prefix: The key prefix for filtering windows.
+        :param start_from_ms: The minimal window start time, inclusive.
+        :param start_to_ms: The maximum window start time, inclusive.
+            `None` means unbounded.
+        :param backwards: If True, yields windows from the greatest start down.
+        :return: An iterator of tuples in the format `((start, end), value, prefix)`.
+        """
+        ...
+
+    def iter_prefixes(self, cf_name: str = "default") -> Iterator[bytes]:
+        """
+        Yield each distinct message-key prefix present in the store, in key order.
+
+        Cheaper than `keys()` when only the set of prefixes is needed: no value is
+        deserialized and the result is deduplicated as it streams.
+
+        :param cf_name: rocksdb column family name. Default - "default"
+        :return: An iterator of prefixes
+        """
+        ...
+
+    def get_partition_timestamp(self) -> int:
+        """
+        Get the maximum event timestamp observed across the whole partition,
+        or 0 if nothing has been observed yet.
+        """
+        ...
+
+    def advance_partition_timestamp(self, timestamp_ms: int) -> int:
+        """
+        Monotonically raise the partition-wide watermark and return its new value.
+
+        :param timestamp_ms: the event timestamp of the message being processed.
+        :return: `max(timestamp_ms, previous watermark)`.
+        """
+        ...
+
+    def get_expiry_checkpoint(self, prefix: bytes = b"") -> Optional[int]:
+        """
+        Get the expiry cursor stored for `prefix`, or `None` when unset.
+
+        For a message-key prefix it is the start of the last expired window; for
+        the empty prefix it is the partition-wide expiry checkpoint.
+
+        :param prefix: The key prefix. Default - the partition-wide slot.
+        """
+        ...
+
+    def set_expiry_checkpoint(self, timestamp_ms: int, prefix: bytes = b"") -> None:
+        """
+        Persist the expiry cursor for `prefix`. See `get_expiry_checkpoint`.
+
+        :param timestamp_ms: the cursor value to store.
+        :param prefix: The key prefix. Default - the partition-wide slot.
         """
         ...
 

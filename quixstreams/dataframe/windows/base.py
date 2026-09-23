@@ -216,6 +216,16 @@ class Window(abc.ABC):
     def _aggregate_value(self, state_value: Any, value: Any, timestamp) -> Any: ...
 
     @abstractmethod
+    def _merge_values(self, a: Any, b: Any) -> Any:
+        """
+        Combine the aggregation states of two windows merged into one.
+
+        `a` belongs to the window that starts earlier in event time, `b` to the
+        one that starts later.
+        """
+        ...
+
+    @abstractmethod
     def _collect_value(self, value: Any): ...
 
     @abstractmethod
@@ -273,6 +283,11 @@ class SingleAggregationWindowMixin:
     def _aggregate_value(self, state_value: Any, value: Any, timestamp: int) -> Any:
         if self._aggregator:
             return self._aggregator.agg(state_value, value, timestamp)
+        return None
+
+    def _merge_values(self, a: Any, b: Any) -> Any:
+        if self._aggregator:
+            return self._aggregator.merge(a, b)
         return None
 
     def _collect_value(self, value: Any):
@@ -343,6 +358,17 @@ class MultiAggregationWindowMixin:
             k: agg.agg(state_values[k], value, timestamp)
             if k in state_values
             else agg.agg(agg.initialize(), value, timestamp)
+            for k, (_, agg) in self._aggregators.items()
+        }
+
+    def _merge_values(self, a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+        # Tolerate states written before a new aggregation column was added,
+        # the same way `_aggregate_value` does.
+        return {
+            k: agg.merge(
+                a[k] if k in a else agg.initialize(),
+                b[k] if k in b else agg.initialize(),
+            )
             for k, (_, agg) in self._aggregators.items()
         }
 

@@ -68,6 +68,7 @@ from .utils import ensure_milliseconds
 from .windows import (
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
+    SessionWindowDefinition,
     SlidingCountWindowDefinition,
     SlidingTimeWindowDefinition,
     TumblingCountWindowDefinition,
@@ -1565,6 +1566,117 @@ class StreamingDataFrame:
             count=count,
             dataframe=self,
             name=name,
+        )
+
+    def session_window(
+        self,
+        inactivity_gap_ms: Union[int, timedelta],
+        grace_ms: Union[int, timedelta] = 0,
+        name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
+    ) -> SessionWindowDefinition:
+        """
+        Create a session window transformation on this StreamingDataFrame.
+
+        Session windows group events that are separated by no more than
+        `inactivity_gap_ms`. A session starts with the first event and extends each
+        time a new event arrives within the inactivity gap of the session's current
+        boundary. The session closes once the watermark passes
+        `last_event + 2 * inactivity_gap + grace`, the point at which no admissible
+        out-of-order event can extend it any more.
+
+        Unlike fixed-time windows, session windows have dynamic durations based on the
+        actual events and their timing, making them ideal for user activity tracking,
+        fraud detection, and other event-driven scenarios.
+
+        They allow performing stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        Notes:
+
+        - The timestamp of the aggregation result is set to the session start timestamp.
+        - Every session is grouped by the current Kafka message key.
+        - Messages with `None` key will be ignored.
+        - Sessions always use the current event time.
+        - Session `end` is **exclusive** (last event timestamp + 1), consistent with
+          all other window types.
+        - An event is late when `ts < watermark - inactivity_gap - grace`. With
+          `grace_ms=0` (the default) there is still a full inactivity gap of
+          out-of-order tolerance.
+        - An out-of-order event within one gap of two open sessions **merges** them
+          into one. All aggregations used with session windows must be mergeable
+          (implement `BaseAggregator.merge()`). Non-mergeable aggregations raise
+          `InvalidOperation` when the window is defined. `Reduce` requires a
+          `merger=` argument.
+        - With `closing_strategy="key"` (the default), a key that goes silent will
+          never have its last open session emitted by `final()`. Use
+          `closing_strategy="partition"` to close idle keys' sessions when other
+          keys advance the partition watermark.
+
+        Example Snippet:
+
+        ```python
+        from datetime import timedelta
+
+        from quixstreams import Application
+        import quixstreams.dataframe.windows.aggregations as agg
+
+        app = Application()
+        sdf = app.dataframe(...)
+
+        sdf = sdf.session_window(
+            # Maximum gap between two consecutive events of the same session
+            inactivity_gap_ms=timedelta(seconds=30),
+            grace_ms=timedelta(seconds=10)
+        ).agg(
+            # Specify the aggregation function
+            value=agg.Sum()
+        ).final()
+        # "current()" emits the running session on every update (including after a
+        # merge, where it supersedes two previously emitted sessions).
+        # "final()" emits each session exactly once, when it is closed.
+        ```
+
+        :param inactivity_gap_ms: The maximum gap between two consecutive events of
+            the same session. If no new event arrives within this interval of an
+            existing session's boundary, the session closes.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param grace_ms: Delays closing by this amount, giving late events extra time
+            to arrive. An event is late only when its timestamp falls below
+            `watermark - inactivity_gap - grace`. With the default of `0` there is
+            still a full inactivity gap of out-of-order tolerance.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param name: The unique identifier for the window. If not provided, it will be
+            automatically generated based on the window's properties.
+
+        :param on_late: an optional callback to react on late records in sessions and
+            to configure the logging of such events.
+            If the callback returns `True`, the message about a late record will be logged
+            (default behavior).
+            Otherwise, no message will be logged.
+
+        :return: `SessionWindowDefinition` instance representing the session window
+            configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. applied to the StreamingDataFrame.
+        """
+        inactivity_gap_ms = ensure_milliseconds(inactivity_gap_ms)
+        grace_ms = ensure_milliseconds(grace_ms)
+
+        return SessionWindowDefinition(
+            inactivity_gap_ms=inactivity_gap_ms,
+            grace_ms=grace_ms,
+            dataframe=self,
+            name=name,
+            on_late=on_late,
         )
 
     def fill(self, *columns: str, **mapping: Any) -> "StreamingDataFrame":

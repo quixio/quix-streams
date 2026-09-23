@@ -4776,7 +4776,7 @@ class RocksDBStorePartition(StorePartition):
     def iter_items(
         self,
         lower_bound: bytes,  # inclusive
-        upper_bound: bytes,  # exclusive
+        upper_bound: Optional[bytes] = None,  # exclusive
         backwards: bool = False,
         cf_name: str = "default",
     ) -> Iterator[tuple[bytes, bytes]]:
@@ -4785,20 +4785,33 @@ class RocksDBStorePartition(StorePartition):
 
         :param lower_bound: The lower bound key (inclusive) for the iteration range.
         :param upper_bound: The upper bound key (exclusive) for the iteration range.
+            `None` means the range is unbounded above.
         :param backwards: If `True`, iterate in reverse order (descending).
             Default is `False` (ascending).
         :param cf_name: The name of the column family to iterate over.
             Default is "default".
         :return: An iterator yielding (key, value) tuples.
+        :raises ValueError: if `backwards=True` is combined with no upper bound,
+            leaving no key to seek from.
         """
+        if backwards:
+            if upper_bound is None:
+                raise ValueError(
+                    "Backwards iteration requires an upper bound to seek from"
+                )
+            from_key = upper_bound
+        else:
+            from_key = lower_bound
+
         cf = self.get_or_create_column_family(cf_name=cf_name)
 
-        # Set iterator bounds to reduce IO by limiting the range of keys fetched
+        # Set iterator bounds to reduce IO by limiting the range of keys fetched.
+        # rocksdict yields zero rows when `ReadOptions` carries a lower bound and
+        # no upper bound, so the two are set together or not at all.
         read_opt = ReadOptions()
-        read_opt.set_iterate_lower_bound(lower_bound)
-        read_opt.set_iterate_upper_bound(upper_bound)
-
-        from_key = upper_bound if backwards else lower_bound
+        if upper_bound is not None:
+            read_opt.set_iterate_lower_bound(lower_bound)
+            read_opt.set_iterate_upper_bound(upper_bound)
 
         # RDict accepts Any type as value but we only write bytes so we should only get bytes back.
         items = cast(
