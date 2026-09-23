@@ -1546,6 +1546,193 @@ client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
 
+<a id="quixstreams.sources.community.mysql_cdc_lite.mysql_cdc_lite"></a>
+
+## quixstreams.sources.community.mysql\_cdc\_lite.mysql\_cdc\_lite
+
+A minimal MySQL CDC source: binlog streaming only.
+
+The server prerequisites it relies on and does not check are listed in
+`docs/connectors/sources/mysql-cdc-lite-source.md`.
+
+<a id="quixstreams.sources.community.mysql_cdc_lite.mysql_cdc_lite.MySqlCdcLiteError"></a>
+
+### MySqlCdcLiteError
+
+```python
+class MySqlCdcLiteError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mysql_cdc_lite/mysql_cdc_lite.py#L72)
+
+Raised for a configuration mistake this source can name.
+
+<a id="quixstreams.sources.community.mysql_cdc_lite.mysql_cdc_lite.MySqlCdcLiteSource"></a>
+
+### MySqlCdcLiteSource
+
+```python
+class MySqlCdcLiteSource(StatefulSource)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mysql_cdc_lite/mysql_cdc_lite.py#L237)
+
+NOTE: Requires `pip install quixstreams[mysql]` to work.
+
+Stream row-level changes from one MySQL table to a Kafka topic.
+
+Binlog streaming only: there is no initial snapshot, so the topic begins at the
+server's binlog position when the source first starts and carries every change
+from that point on. A restart resumes from the committed position, so changes made
+while the source was down arrive when it comes back.
+
+Provides "at-least-once" guarantees: the binlog position is committed only after
+the changes it covers have been flushed, so a crash between the two replays the
+last batch. Consumers must deduplicate on the primary-key columns inside
+`columnvalues`/`oldkeys` together with `kind`. Every message is keyed
+`"<database>.<table>"`, so all changes to one table land on one partition and stay
+in binlog order.
+
+Run it with exactly one replica: the replication client id is derived from `name`,
+`database` and `table`, so two replicas derive the same id and MySQL evicts them in
+turn.
+
+This source checks `binlog_format = ROW` and that the table exists, and nothing
+else. The server settings and grants it assumes, and what each one looks like
+downstream when it is wrong, are in the connector docs page.
+
+Example Usage:
+
+```python
+from quixstreams import Application
+from quixstreams.sources.community.mysql_cdc_lite import MySqlCdcLiteSource
+
+
+source = MySqlCdcLiteSource(
+    host="localhost",
+    port=3306,
+    user="cdc_user",
+    password="cdc_password",
+    database="test_database",
+    table="test_table",
+)
+
+app = Application(broker_address="localhost:9092", consumer_group="mysql-cdc")
+sdf = app.dataframe(source=source).print(metadata=True)
+
+if __name__ == "__main__":
+    app.run()
+```
+
+<a id="quixstreams.sources.community.mysql_cdc_lite.mysql_cdc_lite.MySqlCdcLiteSource.__init__"></a>
+
+<br><br>
+
+#### MySqlCdcLiteSource.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             user: str,
+             password: str,
+             database: str,
+             table: str,
+             port: int = 3306,
+             commit_interval: float = 5.0,
+             tls: Union[bool, str] = True,
+             name: Optional[str] = None,
+             shutdown_timeout: float = 10,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mysql_cdc_lite/mysql_cdc_lite.py#L287)
+
+
+<br>
+***Arguments:***
+
+- `host`: MySQL server hostname to replicate from.
+- `user`: MySQL username. Needs REPLICATION SLAVE, REPLICATION CLIENT and
+SELECT on the table.
+- `password`: MySQL password.
+- `database`: database (schema) containing the table.
+- `table`: table to stream changes from.
+- `port`: MySQL server port.
+Default - `3306`.
+- `commit_interval`: how often (seconds) to produce the buffered changes and
+commit the binlog position they cover. The source reads at the start and at
+the end of each interval, so it bounds the delay between a change and its
+message; one read may itself run for an interval on a busy server.
+Default - `5.0`.
+- `tls`: how to connect to MySQL. `True` encrypts without verifying the
+server certificate; a path to a CA file encrypts and verifies the
+certificate and the hostname against it; `False` connects in plaintext.
+Default - `True`.
+- `name`: the source unique name. It is used to generate the default topic
+name, the state store name and the derived replication client id; renaming
+a source therefore resets its committed position.
+Default - `mysql_cdc_lite_<database>_<table>`.
+- `shutdown_timeout`: Time in second the application waits for the source to
+gracefully shutdown.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+
+<a id="quixstreams.sources.community.mysql_cdc_lite.mysql_cdc_lite.MySqlCdcLiteSource.default_topic"></a>
+
+<br><br>
+
+#### MySqlCdcLiteSource.default\_topic
+
+```python
+def default_topic() -> Topic
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mysql_cdc_lite/mysql_cdc_lite.py#L363)
+
+
+<br>
+***Returns:***
+
+a topic named after the source, string keys and JSON values.
+
+<a id="quixstreams.sources.community.mysql_cdc_lite.mysql_cdc_lite.MySqlCdcLiteSource.setup"></a>
+
+<br><br>
+
+#### MySqlCdcLiteSource.setup
+
+```python
+def setup() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mysql_cdc_lite/mysql_cdc_lite.py#L373)
+
+**Raises**:
+
+- `MySqlCdcLiteError`: if the server writes anything but row images, which
+leaves nothing in the binary log for this source to read, or if the table
+is not there to read it from.
+
+<a id="quixstreams.sources.community.mysql_cdc_lite.mysql_cdc_lite.MySqlCdcLiteSource.run"></a>
+
+<br><br>
+
+#### MySqlCdcLiteSource.run
+
+```python
+def run() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mysql_cdc_lite/mysql_cdc_lite.py#L409)
+
+Stream changes until the source is asked to stop, or the retries run out.
+
 <a id="quixstreams.sources.community.pubsub.pubsub"></a>
 
 ## quixstreams.sources.community.pubsub.pubsub
