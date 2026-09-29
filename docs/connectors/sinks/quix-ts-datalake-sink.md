@@ -157,9 +157,12 @@ catalog received (without `column_stats`):
 ```
 
 The query API pushes these as `files-added` events to its subscribers (for example a QuixLab
-notebook watching the table). The notification is best effort: a timeout (5 s), a connection
-error or a non-2xx answer is logged as a WARNING and the flush still succeeds. On the Quix
-platform pass the injected `Quix__Lakehouse__Query__Url` and `Quix__Lakehouse__Query__AuthToken`.
+notebook watching the table). The call is synchronous in the flush path, made once per topic
+partition with data at each checkpoint, and `timeout=5` bounds the connect and the read
+separately, so an unreachable API can cost up to about 10 s per partition per checkpoint.
+The notification is best effort: a timeout, a connection error or a non-2xx answer is logged
+as a WARNING and the flush still succeeds. On the Quix platform pass the injected
+`Quix__Lakehouse__Query__Url` and `Quix__Lakehouse__Query__AuthToken`.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
