@@ -1077,11 +1077,45 @@ class QuixTSDataLakeSink(BatchingSink):
 
         if response.status_code == 200:
             logger.info(f"Registered {len(file_entries)} file(s) in catalog manifest")
+            self._notify_query_api(file_entries)
         else:
             raise RuntimeError(
                 f"Failed to register files in catalog manifest: "
                 f"{response.status_code} {response.text}"
             )
+
+    def _notify_query_api(self, file_entries: List[Dict[str, Any]]) -> None:
+        """Tell the query API which files were just registered.
+
+        Best effort: the catalog is the source of truth and the flush already
+        succeeded, so any failure here is logged and swallowed. Zone maps
+        (``column_stats``) are large and useless to subscribers, so they stay out.
+        """
+        if self._query_api is None:
+            return
+        files = [
+            {key: value for key, value in entry.items() if key != "column_stats"}
+            for entry in file_entries
+        ]
+        body: Dict[str, Any] = {"namespace": self.namespace, "files": files}
+        path = f"/tables/{self.table_name}/files-added"
+        try:
+            response = self._query_api.post(path, json=body, timeout=5)
+        except Exception as exc:
+            logger.warning(
+                f"Query API notify failed for table {self.table_name} "
+                f"({len(files)} file(s)): {exc}"
+            )
+            return
+        if response.status_code >= 300:
+            logger.warning(
+                f"Query API notify rejected for table {self.table_name} "
+                f"({len(files)} file(s)): {response.status_code} {response.text}"
+            )
+            return
+        logger.debug(
+            f"Notified query API of {len(files)} file(s) in table {self.table_name}"
+        )
 
     def cleanup(self):
         """Cleanup resources when sink is stopped."""

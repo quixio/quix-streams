@@ -7,6 +7,7 @@ catalog integration, and error handling.
 """
 
 import io
+import logging
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -79,6 +80,16 @@ def mock_catalog_client():
     client.put.return_value = table_create_response
     client.post.return_value = manifest_response
 
+    return client
+
+
+@pytest.fixture
+def mock_query_api_client():
+    client = MagicMock(spec=QuixTSDataLakeCatalogClient)
+    accepted = MagicMock()
+    accepted.status_code = 202
+    accepted.text = '{"subscribers": 1}'
+    client.post.return_value = accepted
     return client
 
 
@@ -1205,6 +1216,159 @@ class TestCatalogIntegration:
         assert by_partition["__None__"]["partition_values"]["machine"] == "__None__"
         null_bucket_path = by_partition["__None__"]["file_path"]
         assert "machine=__None__" in null_bucket_path
+
+
+class TestQueryApiNotify:
+    """The sink tells the query API which files it registered; the notify never fails a flush."""
+
+    def _sink(self, sink_factory, mock_catalog_client, mock_query_api_client):
+        sink = sink_factory(
+            catalog_url="http://catalog:8080",
+            query_api_url="http://lake-api:80",
+            auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink._query_api = mock_query_api_client
+        sink.table_registered = True
+        return sink
+
+    def test_notify_follows_a_successful_manifest_registration(
+        self,
+        sink_factory,
+        sample_batch,
+        mock_blob_client,
+        mock_catalog_client,
+        mock_query_api_client,
+    ):
+        sink = self._sink(sink_factory, mock_catalog_client, mock_query_api_client)
+
+        sink.write(sample_batch())
+
+        mock_query_api_client.post.assert_called_once()
+        path = mock_query_api_client.post.call_args.args[0]
+        kwargs = mock_query_api_client.post.call_args.kwargs
+        assert path == "/tables/test_table/files-added"
+        assert kwargs["timeout"] == 5
+        assert kwargs["json"]["namespace"] == "default"
+        manifest_files = mock_catalog_client.post.call_args.kwargs["json"]["files"]
+        assert [f["file_path"] for f in kwargs["json"]["files"]] == [
+            f["file_path"] for f in manifest_files
+        ]
+        assert all("partition_values" in f for f in kwargs["json"]["files"])
+
+    def test_no_notify_when_the_catalog_rejects_the_registration(
+        self,
+        sink_factory,
+        sample_batch,
+        mock_blob_client,
+        mock_catalog_client,
+        mock_query_api_client,
+    ):
+        sink = self._sink(sink_factory, mock_catalog_client, mock_query_api_client)
+        rejected = MagicMock()
+        rejected.status_code = 500
+        rejected.text = "boom"
+        mock_catalog_client.post.return_value = rejected
+
+        with pytest.raises(RuntimeError, match="Failed to register files"):
+            sink.write(sample_batch())
+
+        mock_query_api_client.post.assert_not_called()
+
+    def test_no_notify_without_a_query_api(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        sink.write(sample_batch())
+
+        assert sink._query_api is None
+        assert mock_catalog_client.post.call_count == 1
+
+    def test_notify_connection_error_is_a_warning_not_a_failure(
+        self,
+        sink_factory,
+        sample_batch,
+        mock_blob_client,
+        mock_catalog_client,
+        mock_query_api_client,
+        caplog,
+    ):
+        sink = self._sink(sink_factory, mock_catalog_client, mock_query_api_client)
+        mock_query_api_client.post.side_effect = ConnectionError("api down")
+
+        with caplog.at_level(
+            logging.WARNING, logger="quixstreams.sinks.core.quix_ts_datalake_sink"
+        ):
+            sink.write(sample_batch())
+
+        warning = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING and "notify" in r.getMessage()
+        ]
+        assert len(warning) == 1
+        assert "test_table" in warning[0].getMessage()
+        assert "api down" in warning[0].getMessage()
+
+    def test_notify_rejected_status_is_a_warning_not_a_failure(
+        self,
+        sink_factory,
+        sample_batch,
+        mock_blob_client,
+        mock_catalog_client,
+        mock_query_api_client,
+        caplog,
+    ):
+        sink = self._sink(sink_factory, mock_catalog_client, mock_query_api_client)
+        rejected = MagicMock()
+        rejected.status_code = 503
+        rejected.text = "unavailable"
+        mock_query_api_client.post.return_value = rejected
+
+        with caplog.at_level(
+            logging.WARNING, logger="quixstreams.sinks.core.quix_ts_datalake_sink"
+        ):
+            sink.write(sample_batch())
+
+        messages = [
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
+        ]
+        assert any("503" in m and "test_table" in m for m in messages)
+
+    def test_notify_strips_column_stats(self, mock_query_api_client):
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            query_api_url="http://lake-api:80",
+        )
+        sink._query_api = mock_query_api_client
+        entries = [
+            {
+                "file_path": "s3://b/p/x=1/a.parquet",
+                "file_size": 10,
+                "last_modified": "2026-09-29T00:00:00+00:00",
+                "partition_values": {"x": "1"},
+                "row_count": 3,
+                "column_stats": {"temp": {"min": 1, "max": 2}},
+            }
+        ]
+
+        sink._notify_query_api(entries)
+
+        sent = mock_query_api_client.post.call_args.kwargs["json"]["files"]
+        assert sent == [
+            {
+                "file_path": "s3://b/p/x=1/a.parquet",
+                "file_size": 10,
+                "last_modified": "2026-09-29T00:00:00+00:00",
+                "partition_values": {"x": "1"},
+                "row_count": 3,
+            }
+        ]
+        assert entries[0]["column_stats"] == {"temp": {"min": 1, "max": 2}}
 
 
 # =============================================================================
