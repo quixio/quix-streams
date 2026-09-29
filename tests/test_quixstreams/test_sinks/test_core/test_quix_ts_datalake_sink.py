@@ -289,6 +289,35 @@ class TestQuixTSDataLakeSinkInit:
         assert sink._auto_create_bucket is False
         assert sink._max_workers == 20
 
+    def test_init_without_query_api_url_has_no_query_api_client(self):
+        sink = QuixTSDataLakeSink(s3_prefix="test-prefix", table_name="test_table")
+
+        assert sink._query_api is None
+
+    def test_init_with_query_api_url_builds_a_bearer_client(self):
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            query_api_url="http://lake-api:80/",
+            query_api_auth_token="secret-token",
+        )
+
+        assert isinstance(sink._query_api, QuixTSDataLakeCatalogClient)
+        assert sink._query_api.base_url == "http://lake-api:80"
+        assert (
+            sink._query_api._session.headers["Authorization"] == "Bearer secret-token"
+        )
+
+    def test_init_with_query_api_url_and_no_token_sends_no_authorization(self):
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            query_api_url="http://lake-api:80",
+        )
+
+        assert sink._query_api is not None
+        assert "Authorization" not in sink._query_api._session.headers
+
     def test_hive_columns_defaults_to_empty_list(self):
         """Test that hive_columns=None becomes empty list."""
         sink = QuixTSDataLakeSink(

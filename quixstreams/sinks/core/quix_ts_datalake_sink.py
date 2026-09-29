@@ -119,6 +119,13 @@ class QuixTSDataLakeSink(BatchingSink):
         files and stream. When None, the lakehouse falls back to timestamp_column.
     :param catalog_url: Optional REST Catalog URL for table registration
     :param catalog_auth_token: If using REST Catalog, the respective auth token for it
+    :param query_api_url: Optional lake query API URL. When set, every successful
+        manifest registration is followed by a ``files-added`` notification to
+        ``{query_api_url}/tables/{table_name}/files-added`` so the API can push
+        the new files to its subscribers. A failed notification is logged as a
+        WARNING and never fails the flush.
+    :param query_api_auth_token: Bearer token for the query API notification
+        (the platform injects ``Quix__Lakehouse__Query__AuthToken``; pass it here)
     :param auto_discover: Whether to auto-register table on first write
     :param namespace: Catalog namespace (default: "default")
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
@@ -183,6 +190,8 @@ class QuixTSDataLakeSink(BatchingSink):
         sort_column: Optional[str] = None,
         catalog_url: Optional[str] = None,
         catalog_auth_token: Optional[str] = None,
+        query_api_url: Optional[str] = None,
+        query_api_auth_token: Optional[str] = None,
         auto_discover: bool = True,
         namespace: str = "default",
         auto_create_bucket: bool = True,
@@ -226,6 +235,11 @@ class QuixTSDataLakeSink(BatchingSink):
         self._catalog = (
             QuixTSDataLakeCatalogClient(catalog_url, catalog_auth_token)
             if catalog_url
+            else None
+        )
+        self._query_api = (
+            QuixTSDataLakeCatalogClient(query_api_url, query_api_auth_token)
+            if query_api_url
             else None
         )
         self.auto_discover = auto_discover
