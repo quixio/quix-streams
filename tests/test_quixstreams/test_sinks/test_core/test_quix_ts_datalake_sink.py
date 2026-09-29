@@ -1276,16 +1276,24 @@ class TestQueryApiNotify:
         mock_query_api_client.post.assert_not_called()
 
     def test_no_notify_without_a_query_api(
-        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client, caplog
     ):
         sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
         sink._catalog = mock_catalog_client
         sink.table_registered = True
 
-        sink.write(sample_batch())
+        with caplog.at_level(
+            logging.WARNING, logger="quixstreams.sinks.core.quix_ts_datalake_sink"
+        ):
+            sink.write(sample_batch())
 
         assert sink._query_api is None
         assert mock_catalog_client.post.call_count == 1
+        assert not [
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING and "notify" in r.getMessage()
+        ]
 
     def test_notify_connection_error_is_a_warning_not_a_failure(
         self,
@@ -1311,6 +1319,7 @@ class TestQueryApiNotify:
         ]
         assert len(warning) == 1
         assert "test_table" in warning[0].getMessage()
+        assert "1 file(s)" in warning[0].getMessage()
         assert "api down" in warning[0].getMessage()
 
     def test_notify_rejected_status_is_a_warning_not_a_failure(
