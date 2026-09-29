@@ -38,6 +38,8 @@ sink = QuixTSDataLakeSink(
     timestamp_column="ts_ms",
     catalog_url="https://iceberg-catalog.example.com",
     catalog_auth_token="<token>",
+    query_api_url="https://lake-api.example.com",
+    query_api_auth_token="<token>",
     auto_discover=True,
 )
 
@@ -139,6 +141,30 @@ sink = QuixTSDataLakeSink(
     catalog_url="https://iceberg-catalog.example.com",
 )
 ```
+
+## Query API notification
+
+When `query_api_url` is set, every successful manifest registration is followed by one
+`POST {query_api_url}/tables/{table_name}/files-added` carrying the same file entries the
+catalog received (without `column_stats`):
+
+```json
+{"namespace": "default",
+ "files": [{"file_path": "s3://…/run_id=TAS-1005/part-0001.parquet",
+            "partition_values": {"platform": "Porsche_Taycan", "run_id": "TAS-1005"},
+            "row_count": 249000, "file_size": 1834112,
+            "last_modified": "2026-09-29T09:23:19.489000+00:00"}]}
+```
+
+The query API pushes these as `files-added` events to its subscribers (for example a QuixLab
+notebook watching the table). The notification is best effort: a timeout (5 s), a connection
+error or a non-2xx answer is logged as a WARNING and the flush still succeeds. On the Quix
+platform pass the injected `Quix__Lakehouse__Query__Url` and `Quix__Lakehouse__Query__AuthToken`.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `query_api_url` | `Optional[str]` | `None` | Lake query API base URL. Unset = no notification. |
+| `query_api_auth_token` | `Optional[str]` | `None` | Bearer token sent with the notification. |
 
 ## Sort Column
 
