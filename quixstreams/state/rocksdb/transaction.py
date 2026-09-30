@@ -302,6 +302,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                     "anchor an expiry; storing the record without one.",
                     timestamp,
                 )
+                self._pending_stamps.pop((prefix, key_serialized), None)
             self._track_batch_ttl_ms(ttl)
             # Advance the high-water on TTL writes only — we don't want a
             # plain ``state.set(k, v)`` on an unflipped store to start
@@ -390,6 +391,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                     "anchor an expiry; storing the record without one.",
                     timestamp,
                 )
+                self._pending_stamps.pop((prefix, key_serialized), None)
             self._track_batch_ttl_ms(ttl)
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
@@ -501,6 +503,13 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # cold-adoption. Harmless on a normal flipped store (the hook no-ops
             # unless ``_adopt_provisional`` is set).
             self._batch_has_ttl_writes = True
+            if timestamp is None or timestamp < 0:
+                logger.warning(
+                    "state.set(..., ttl=...) carried timestamp=%s, which cannot "
+                    "anchor an expiry; storing the record without one.",
+                    timestamp,
+                )
+                stamp = SENTINEL_NEVER
         try:
             value_serialized = self._serialize_value(value)
         except Exception:
@@ -539,6 +548,13 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # See :meth:`_set_default_cf_stamped`: mark the batch as carrying a
             # live ttl= write so adoption corroboration can fire.
             self._batch_has_ttl_writes = True
+            if timestamp is None or timestamp < 0:
+                logger.warning(
+                    "state.set(..., ttl=...) carried timestamp=%s, which cannot "
+                    "anchor an expiry; storing the record without one.",
+                    timestamp,
+                )
+                stamp = SENTINEL_NEVER
         key_serialized = self._serialize_key(key, prefix=prefix)
         self._delete_stale_index_entry(key_serialized, prefix, stamp)
         stamped = encode_ttl_value(stamp, value)
