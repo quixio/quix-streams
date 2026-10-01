@@ -289,9 +289,9 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # mark the batch as flip-triggering while leaving the high-water
             # unset -- and the backfill then raises IncompatibleStateStoreError
             # out of the flush, uncommitted and redelivered forever. The write
-            # itself still succeeds and is still re-stamped if some OTHER write
-            # in this batch carries a real timestamp and flips the store; only
-            # the flip trigger is withheld.
+            # itself still succeeds, but both the flip trigger and its pending
+            # stamp are withheld, so it lands never-expiring even if some OTHER
+            # write in this batch flips the store.
             key_serialized = self._serialize_key(key, prefix=prefix)
             if timestamp is not None and timestamp >= 0:
                 self._batch_has_ttl_writes = True
@@ -378,9 +378,9 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # mark the batch as flip-triggering while leaving the high-water
             # unset -- and the backfill then raises IncompatibleStateStoreError
             # out of the flush, uncommitted and redelivered forever. The write
-            # itself still succeeds and is still re-stamped if some OTHER write
-            # in this batch carries a real timestamp and flips the store; only
-            # the flip trigger is withheld.
+            # itself still succeeds, but both the flip trigger and its pending
+            # stamp are withheld, so it lands never-expiring even if some OTHER
+            # write in this batch flips the store.
             key_serialized = self._serialize_key(key, prefix=prefix)
             if timestamp is not None and timestamp >= 0:
                 self._batch_has_ttl_writes = True
@@ -497,11 +497,10 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
         if ttl is not None:
-            # A genuine live ``ttl=`` write on an already-flipped partition (the
-            # stamp is non-sentinel by construction). Record it so the
-            # adoption-corroboration hook in :meth:`prepare` can confirm a provisional
-            # cold-adoption. Harmless on a normal flipped store (the hook no-ops
-            # unless ``_adopt_provisional`` is set).
+            # A genuine live ``ttl=`` write on an already-flipped partition. Record
+            # it so the adoption-corroboration hook in :meth:`prepare` can confirm a
+            # provisional cold-adoption. Harmless on a normal flipped store (the hook
+            # no-ops unless ``_adopt_provisional`` is set).
             self._batch_has_ttl_writes = True
             if timestamp is None or timestamp < 0:
                 logger.warning(
@@ -751,8 +750,8 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
     def _maybe_corroborate_adoption(self) -> None:
         """
         Adoption-corroboration hook. A live ``state.set(..., ttl=...)`` write (which
-        sets ``_batch_has_ttl_writes`` and always produces a non-sentinel stamp)
-        on a PROVISIONALLY cold-adopted partition confirms the adoption is genuine.
+        sets ``_batch_has_ttl_writes``) on a PROVISIONALLY cold-adopted partition
+        confirms the adoption is genuine.
         Runs AFTER :meth:`_maybe_flip_or_reject` (so the runtime flip state is
         settled) and BEFORE the sweep (so the corroborating flush's sweep, now
         un-suppressed, can reclaim now-past adopted records). A plain ``set()``

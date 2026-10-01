@@ -1916,8 +1916,8 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
         if ttl is not None:
-            # Live ttl= write on an already-flipped partition (non-sentinel stamp);
-            # record it so adoption corroboration can fire (no-op unless provisional).
+            # Live ttl= write on an already-flipped partition; record it so
+            # adoption corroboration can fire (no-op unless provisional).
             self._batch_has_ttl_writes = True
             if timestamp is None or timestamp < 0:
                 logger.warning(

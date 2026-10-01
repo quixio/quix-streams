@@ -277,4 +277,3 @@ class TestNoTimestampFlip:
             )
         finally:
             partition.close()
-        
