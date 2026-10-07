@@ -76,9 +76,15 @@ class InternalProducer:
         will be passed to `confluent_kafka.Producer` as is.
         Note: values passed as arguments override values in `extra_config`.
     :param on_error: a callback triggered when `InternalProducer.produce_row()`
-        or `InternalProducer.poll()` fail`.
+        or `InternalProducer.poll()` fail`, and when the broker reports a delivery
+        failure for a message produced via `InternalProducer.produce_row()`
+        (the callback then receives the `Row` of the failed message).
         If producer fails and the callback returns `True`, the exception
         will be logged but not propagated.
+        Delivery failures of messages produced via `InternalProducer.produce()`
+        (e.g. changelog messages) and of repartition and changelog topics
+        never reach the callback and are raised on the next `produce()` or
+        `flush()` call.
         The default callback logs an exception and returns `False`.
     :param flush_timeout: The time the producer is waiting for all messages to be delivered.
     :param transactional: whether to use Kafka transactions or not.
@@ -119,6 +125,16 @@ class InternalProducer:
 
         If this method fails, it will trigger the provided "on_error" callback.
 
+        A delivery error reported by the broker for this message after
+        it was enqueued also triggers the "on_error" callback with this Row,
+        unless the topic is a changelog or repartition topic.
+        If the callback returns `True`, the error is dropped; otherwise it is
+        raised on the next `produce()` or `flush()` call.
+
+        An error latched by an earlier message (for example a changelog
+        message) is raised here directly and is never passed to the callback,
+        because the current Row is not the one that failed.
+
         :param row: Row object
         :param topic: Topic object
         :param key: message key, optional
@@ -126,18 +142,27 @@ class InternalProducer:
         :param timestamp: timestamp in milliseconds, optional
         """
 
+        # Raise a delivery error latched by a previous message before entering
+        # the try block: it belongs to another message, so the "on_error"
+        # callback must not see it with the current Row (and must not be able to
+        # drop the current Row because of it).
+        self._raise_for_error()
+
         try:
             # Use existing key only if no other key is provided.
             # If key is provided - use it, even if it's None
             key = row.key if key is _KEY_UNSET else key
             message = topic.row_serialize(row=row, key=key)
-            self.produce(
+            self._produce(
                 topic=topic.name,
                 key=message.key,
                 value=message.value,
                 headers=message.headers,
                 partition=partition,
                 timestamp=timestamp,
+                # Changelog and repartition topics are internal: a failed write
+                # there must fail the Application instead of being suppressed.
+                row=None if topic.is_changelog or topic.is_repartition else row,
             )
         except Exception as exc:
             to_suppress = self._on_error(exc, row, logger)
@@ -181,6 +206,38 @@ class InternalProducer:
         buffer_error_max_tries: int = PRODUCER_ON_ERROR_RETRIES,
         on_delivery: Optional[Callable[[Optional[KafkaError], Message], None]] = None,
     ):
+        return self._produce(
+            topic=topic,
+            value=value,
+            key=key,
+            headers=headers,
+            partition=partition,
+            timestamp=timestamp,
+            poll_timeout=poll_timeout,
+            buffer_error_max_tries=buffer_error_max_tries,
+            on_delivery=on_delivery,
+        )
+
+    def _produce(
+        self,
+        topic: str,
+        value: Optional[Union[str, bytes]] = None,
+        key: Optional[Union[str, bytes]] = None,
+        headers: Optional[Headers] = None,
+        partition: Optional[int] = None,
+        timestamp: Optional[int] = None,
+        poll_timeout: float = PRODUCER_POLL_TIMEOUT,
+        buffer_error_max_tries: int = PRODUCER_ON_ERROR_RETRIES,
+        on_delivery: Optional[Callable[[Optional[KafkaError], Message], None]] = None,
+        row: Optional[Row] = None,
+    ):
+        """
+        Produce a message; see `produce()`.
+
+        :param row: if passed, a delivery error reported for this message
+            is handed to the "on_error" callback together with this Row instead
+            of being latched right away.
+        """
         self._raise_for_error()
 
         # An optional caller-supplied delivery callback (e.g. the legacy-TTL
@@ -189,12 +246,14 @@ class InternalProducer:
         # error capture keep working. librdkafka invokes exactly one callback per
         # record, so we combine them here.
         delivery: Callable[[Optional[KafkaError], Message], None] = self._on_delivery
-        if on_delivery is not None:
+        if on_delivery is not None or row is not None:
             caller_on_delivery = on_delivery
 
             def delivery(err: Optional[KafkaError], msg: Message) -> None:
-                self._on_delivery(err, msg)
-                caller_on_delivery(err, msg)
+                if row is None or not self._suppress_delivery_error(err, row):
+                    self._on_delivery(err, msg)
+                if caller_on_delivery is not None:
+                    caller_on_delivery(err, msg)
 
         return self._producer.produce(
             topic=topic,
@@ -207,6 +266,25 @@ class InternalProducer:
             buffer_error_max_tries=buffer_error_max_tries,
             on_delivery=delivery,
         )
+
+    def _suppress_delivery_error(self, err: Optional[KafkaError], row: Row) -> bool:
+        """
+        Ask the "on_error" callback whether the delivery error of ``row``
+        can be ignored.
+
+        :return: `True` if the callback suppressed the error, `False` if there
+            is no error to handle or the error must be recorded as usual.
+        """
+        if err is None or err.code() in _PURGE_ERROR_CODES:
+            return False
+        try:
+            return bool(self._on_error(KafkaProducerDeliveryError(err), row, logger))
+        except Exception:
+            # This runs inside a librdkafka delivery callback: do not let an
+            # exception from user code escape into poll()/flush(). The original
+            # delivery error is recorded and raised by the next produce()/flush().
+            logger.exception("The producer error callback failed")
+            return False
 
     def _on_delivery(self, err: Optional[KafkaError], msg: Message):
         if err is not None:
