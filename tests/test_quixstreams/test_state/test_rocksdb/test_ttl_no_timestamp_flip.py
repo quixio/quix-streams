@@ -15,14 +15,17 @@ applied that stale stamp to the NO_TIMESTAMP record, so it was persisted
 already expired and swept on the very next TTL sweep — silent data loss, with
 nothing logged.
 
-The fix withholds the pending-stamp bookkeeping the same way the flip-trigger
-bookkeeping was already withheld: a write with ``timestamp is None or
-timestamp < 0`` clears (rather than sets) its own pending stamp, so it falls
-back to the existing ``SENTINEL_NEVER`` (never-expires) default in
-``_restamp_default_cf_cache_for_flip`` instead of a bogus near-epoch one.
+``_compute_stamp`` is the single place every ``ttl=`` write path stamps through
+(``set`` / ``set_bytes``, flipped and unflipped), so the fix lives there: a write
+whose timestamp is negative cannot anchor an expiry and falls back to
+``SENTINEL_NEVER`` (never-expires), with a warning, instead of a bogus near-epoch
+stamp. Expiries that are non-positive or implausibly large are still rejected with
+``ValueError`` as before.
 """
 
 from datetime import timedelta
+
+import pytest
 
 from quixstreams.state.rocksdb import RocksDBOptions
 from quixstreams.state.rocksdb.metadata import TTL_INDEX_CF_NAME
@@ -171,17 +174,94 @@ class TestTtlNoTimestampFlip:
         assert payload == b'"v2"'
         partition.close()
 
-    # Sanity check pinning _compute_stamp's own behavior: it does NOT raise
-    # for timestamp=NO_TIMESTAMP with a small ttl (the non-positive-expiry
-    # guard only rejects an expiry <= 0, and -1 + 5000 = 4999 > 0). This is
-    # what makes the pending-stamps bookkeeping the only place the bug could
-    # be fixed.
-    def test_compute_stamp_does_not_reject_no_timestamp_small_ttl(
+    # The reviewer-reported case: the same NO_TIMESTAMP ttl= write on a store
+    # that is ALREADY flipped (every TTL store from its second batch onward).
+    # set() returns early into _set_default_cf_stamped(), which stamps inline
+    # and never touches the _pending_stamps bookkeeping.
+    def test_no_timestamp_write_is_never_expires_on_an_already_flipped_store(
+        self, store_partition_factory
+    ):
+        partition = store_partition_factory(name="db", options=RocksDBOptions())
+        assert partition.uses_ttl_stamps is False
+
+        # A first, ordinary ttl= write flips the store and sets the frontier.
+        with partition.begin() as tx:
+            tx.set(
+                key="k_real_ts",
+                value="v_real_ts",
+                prefix=b"pfx",
+                timestamp=1_000_000_000_000,
+                ttl=timedelta(days=1),
+            )
+        assert partition.uses_ttl_stamps is True
+
+        # A later batch carries the NO_TIMESTAMP ttl= write.
+        with partition.begin() as tx:
+            tx.set(
+                key="k_no_ts",
+                value="v_no_ts",
+                prefix=b"pfx",
+                timestamp=NO_TIMESTAMP,
+                ttl=timedelta(seconds=5),
+            )
+
+        decoded = _decode_default_cf(partition)
+        index = _decode_index_cf(partition)
+        no_ts_key = next(k for k in decoded if b"k_no_ts" in k)
+        expires_at, _ = decoded[no_ts_key]
+
+        with partition.begin() as tx:
+            # Control: the read path itself works.
+            assert tx.get(key="k_real_ts", prefix=b"pfx") == "v_real_ts"
+            readback = tx.get(key="k_no_ts", prefix=b"pfx")
+        partition.close()
+
+        assert expires_at == SENTINEL_NEVER, (
+            "a NO_TIMESTAMP ttl= write on an already-flipped store must not be "
+            f"stamped with a near-epoch expiry (got {expires_at})"
+        )
+        assert no_ts_key not in index
+        assert readback == "v_no_ts", "the record is unreadable the moment it lands"
+
+    # Same, via set_bytes() on an already-flipped store.
+    def test_no_timestamp_set_bytes_is_never_expires_on_an_already_flipped_store(
         self, store_partition_factory
     ):
         partition = store_partition_factory(name="db", options=RocksDBOptions())
         with partition.begin() as tx:
-            stamp = tx._compute_stamp(ttl=timedelta(seconds=5), timestamp=NO_TIMESTAMP)
-        assert stamp == NO_TIMESTAMP + 5_000
-        assert 0 < stamp < 10_000
+            tx.set(
+                key="k_real_ts",
+                value="v_real_ts",
+                prefix=b"pfx",
+                timestamp=1_000_000_000_000,
+                ttl=timedelta(days=1),
+            )
+        with partition.begin() as tx:
+            tx.set_bytes(
+                key="k_no_ts",
+                value=b'"v_no_ts"',
+                prefix=b"pfx",
+                timestamp=NO_TIMESTAMP,
+                ttl=timedelta(seconds=5),
+            )
+        decoded = _decode_default_cf(partition)
+        no_ts_key = next(k for k in decoded if b"k_no_ts" in k)
+        assert decoded[no_ts_key][0] == SENTINEL_NEVER
+        assert no_ts_key not in _decode_index_cf(partition)
+        partition.close()
+
+    # _compute_stamp's contract for a negative timestamp: never-expires, with a
+    # warning, but an expiry that is still non-positive is still rejected.
+    def test_compute_stamp_negative_timestamp(self, store_partition_factory, caplog):
+        partition = store_partition_factory(name="db", options=RocksDBOptions())
+        with partition.begin() as tx:
+            with caplog.at_level("WARNING"):
+                stamp = tx._compute_stamp(
+                    ttl=timedelta(seconds=5), timestamp=NO_TIMESTAMP
+                )
+            assert stamp == SENTINEL_NEVER
+            assert "negative event-time timestamp" in caplog.text
+            # -1 + 1ms = 0 -> still a loud rejection, as before.
+            with pytest.raises(ValueError, match="non-positive expiry"):
+                tx._compute_stamp(ttl=timedelta(milliseconds=1), timestamp=NO_TIMESTAMP)
         partition.close()

@@ -294,6 +294,25 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "and would be unreadable. Check for a nanosecond/second vs "
                 "millisecond timestamp mistake or an unbounded ttl."
             )
+        if timestamp < 0:
+            # A negative event-time (Kafka NO_TIMESTAMP is -1) is not a position
+            # in event time, so ``timestamp + ttl`` is not a meaningful expiry:
+            # with a large enough ttl it passes the checks above as a small
+            # positive number near the epoch (e.g. timestamp=-1, ttl=5s ->
+            # 4999 ms, i.e. 1 Jan 1970), which would store the record already
+            # expired and let the next sweep delete it silently. Fall back to
+            # never-expires instead; the checks above still reject an expiry
+            # that is non-positive or implausibly large. Every ``ttl=`` write
+            # path (flipped and unflipped, ``set`` and ``set_bytes``) stamps
+            # through here, so this is the single place the fallback lives.
+            logger.warning(
+                "ttl=%r write has a negative event-time timestamp (%d, e.g. Kafka "
+                "NO_TIMESTAMP), which cannot anchor an expiry; storing the record "
+                "without a TTL",
+                ttl,
+                timestamp,
+            )
+            return SENTINEL_NEVER
         return expiry
 
     def set(
@@ -356,25 +375,11 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # itself still succeeds and is still re-stamped if some OTHER write
             # in this batch carries a real timestamp and flips the store; only
             # the flip trigger is withheld.
-            self._track_batch_ttl_ms(ttl)
-            key_serialized = self._serialize_key(key, prefix=prefix)
             if timestamp is not None and timestamp >= 0:
                 self._batch_has_ttl_writes = True
-                self._pending_stamps[(prefix, key_serialized)] = stamp
-            else:
-                # A negative event-time (Kafka NO_TIMESTAMP is -1) cannot
-                # anchor the flip (see the flip-trigger note above), and
-                # ``stamp`` would also be a bogus near-epoch expiry if staged
-                # as-is — e.g. timestamp=-1, ttl=5s -> expiry=4999ms (1 Jan
-                # 1970) — which a later flip in this same batch would then
-                # persist, making the record expired (and swept) on arrival.
-                # Clear any earlier pending stamp for this key instead: a
-                # write with no pending stamp falls back to the existing
-                # SENTINEL_NEVER default in
-                # ``_restamp_default_cf_cache_for_flip``, so an un-anchorable
-                # TTL write behaves as never-expiring until a later write for
-                # the same key supplies a real timestamp.
-                self._pending_stamps.pop((prefix, key_serialized), None)
+            self._track_batch_ttl_ms(ttl)
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._pending_stamps[(prefix, key_serialized)] = stamp
             # Advance the high-water on TTL writes only — we don't want a
             # plain ``state.set(k, v)`` on an unflipped store to start
             # writing the TTL high-water marker (legacy stores must stay
@@ -452,19 +457,11 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             # itself still succeeds and is still re-stamped if some OTHER write
             # in this batch carries a real timestamp and flips the store; only
             # the flip trigger is withheld.
-            self._track_batch_ttl_ms(ttl)
-            key_serialized = self._serialize_key(key, prefix=prefix)
             if timestamp is not None and timestamp >= 0:
                 self._batch_has_ttl_writes = True
-                self._pending_stamps[(prefix, key_serialized)] = stamp
-            else:
-                # A negative event-time (Kafka NO_TIMESTAMP is -1) cannot
-                # anchor the flip, and ``stamp`` would also be a bogus
-                # near-epoch expiry if staged as-is (see :meth:`set`). Clear
-                # any earlier pending stamp for this key instead, falling
-                # back to the existing SENTINEL_NEVER default in
-                # ``_restamp_default_cf_cache_for_flip``.
-                self._pending_stamps.pop((prefix, key_serialized), None)
+            self._track_batch_ttl_ms(ttl)
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._pending_stamps[(prefix, key_serialized)] = stamp
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
         elif self._pending_stamps:

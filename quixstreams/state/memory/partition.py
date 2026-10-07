@@ -1884,6 +1884,21 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "and would be unreadable. Check for a nanosecond/second vs "
                 "millisecond timestamp mistake or an unbounded ttl."
             )
+        if timestamp < 0:
+            # Parity with ``RocksDBPartitionTransaction._compute_stamp``: a
+            # negative event-time (Kafka NO_TIMESTAMP is -1) cannot anchor an
+            # expiry, and ``timestamp + ttl`` would otherwise be a bogus
+            # near-epoch stamp (e.g. -1 + 5s = 4999 ms) that expires the record
+            # on arrival. Fall back to never-expires; every ``ttl=`` write path
+            # stamps through here.
+            logger.warning(
+                "ttl=%r write has a negative event-time timestamp (%d, e.g. Kafka "
+                "NO_TIMESTAMP), which cannot anchor an expiry; storing the record "
+                "without a TTL",
+                ttl,
+                timestamp,
+            )
+            return SENTINEL_NEVER
         return expiry
 
     def set(
@@ -1925,24 +1940,11 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             # write would mark the batch as flip-triggering while leaving the
             # high-water unset, and the backfill would then raise
             # IncompatibleStateStoreError out of the flush.
-            self._track_batch_ttl_ms(ttl)
-            key_serialized = self._serialize_key(key, prefix=prefix)
             if timestamp is not None and timestamp >= 0:
                 self._batch_has_ttl_writes = True
-                self._pending_stamps[(prefix, key_serialized)] = stamp
-            else:
-                # A negative event-time (Kafka NO_TIMESTAMP is -1) cannot
-                # anchor the flip, and ``stamp`` would also be a bogus
-                # near-epoch expiry if staged as-is — e.g. timestamp=-1,
-                # ttl=5s -> expiry=4999ms (1 Jan 1970) — which a later flip in
-                # this same batch would then persist, making the record
-                # expired (and swept) on arrival. Clear any earlier pending
-                # stamp for this key instead: a write with no pending stamp
-                # falls back to the existing SENTINEL_NEVER default (see the
-                # RocksDB parity note above), so an un-anchorable TTL write
-                # behaves as never-expiring until a later write for the same
-                # key supplies a real timestamp.
-                self._pending_stamps.pop((prefix, key_serialized), None)
+            self._track_batch_ttl_ms(ttl)
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._pending_stamps[(prefix, key_serialized)] = stamp
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
         elif self._pending_stamps:
@@ -2006,18 +2008,11 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             # write would mark the batch as flip-triggering while leaving the
             # high-water unset, and the backfill would then raise
             # IncompatibleStateStoreError out of the flush.
-            self._track_batch_ttl_ms(ttl)
-            key_serialized = self._serialize_key(key, prefix=prefix)
             if timestamp is not None and timestamp >= 0:
                 self._batch_has_ttl_writes = True
-                self._pending_stamps[(prefix, key_serialized)] = stamp
-            else:
-                # A negative event-time (Kafka NO_TIMESTAMP is -1) cannot
-                # anchor the flip, and ``stamp`` would also be a bogus
-                # near-epoch expiry if staged as-is (see :meth:`set`). Clear
-                # any earlier pending stamp for this key instead, falling
-                # back to the existing SENTINEL_NEVER default.
-                self._pending_stamps.pop((prefix, key_serialized), None)
+            self._track_batch_ttl_ms(ttl)
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._pending_stamps[(prefix, key_serialized)] = stamp
             if timestamp is not None:
                 self._partition.advance_high_water(timestamp)
         elif self._pending_stamps:
