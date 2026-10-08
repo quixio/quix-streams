@@ -2822,7 +2822,7 @@ class RocksDBStorePartition(StorePartition):
 
     def corroborate_adoption(self) -> None:
         """
-        Adoption corroboration: a live ``state.set(..., ttl=...)`` write (non-sentinel)
+        Adoption corroboration: a live ``state.set(..., ttl=...)`` write
         confirms a PROVISIONAL cold-heuristic adoption is genuine. Called from the
         transaction's :meth:`prepare` after :meth:`_maybe_flip_or_reject` and BEFORE
         ``super().prepare()`` (the changelog-commit barrier). One-time per partition:
