@@ -98,8 +98,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
     Implements the per-write TTL feature: every value written to the user-facing
     ``default`` column family is prefixed with an 8-byte big-endian millisecond
     expiry stamp. A ``state.set(key, value)`` call (no ``ttl=``) writes the
-    sentinel ``SENTINEL_NEVER`` meaning "never expires"; ``state.set(key, value,
-    ttl=timedelta(...))`` writes ``record.timestamp + ttl``. Non-sentinel writes
+    sentinel ``SENTINEL_NEVER`` meaning "never expires". Non-sentinel writes
     also emit a ``(expires_at || serialized_user_key)`` entry to the local-only
     ``__ttl_index__`` column family so the bounded sweep on every flush can
     reclaim expired values.

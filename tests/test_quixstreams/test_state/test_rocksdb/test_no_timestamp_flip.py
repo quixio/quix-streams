@@ -13,8 +13,7 @@ one flipping a POPULATED legacy store, the backfill found no high-water and
 raised ``IncompatibleStateStoreError`` out of the flush -- and because the offset
 is never committed, the same record is redelivered forever.
 
-The fix withholds only the FLIP TRIGGER from a write that cannot anchor it. The
-write still succeeds, which is required by the sibling guard
+The write still succeeds, which is required by the sibling guard
 ``TestNegativeEventTimeGuard::test_negative_first_timestamp_does_not_crash_high_water``
 -- rejecting it outright was the obvious fix and breaks that contract.
 """
@@ -132,8 +131,7 @@ class TestNoTimestampFlip:
     ):
         """
         Withholding the trigger must not disarm the whole batch: if any OTHER
-        write carries a real timestamp, the store still flips and the
-        no-timestamp record is re-stamped along with it.
+        write carries a real timestamp, the store still flips.
         """
         partition = store_partition_factory(
             "db", options=RocksDBOptions(legacy_records_ttl=timedelta(days=7))
