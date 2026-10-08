@@ -13693,7 +13693,7 @@ def corroborate_adoption() -> None
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L2823)
 
-Adoption corroboration: a live ``state.set(..., ttl=...)`` write (non-sentinel)
+Adoption corroboration: a live ``state.set(..., ttl=...)`` write
 confirms a PROVISIONAL cold-heuristic adoption is genuine. Called from the
 transaction's :meth:`prepare` after :meth:`_maybe_flip_or_reject` and BEFORE
 ``super().prepare()`` (the changelog-commit barrier). One-time per partition:
@@ -14241,8 +14241,7 @@ Default RocksDB transaction.
 Implements the per-write TTL feature: every value written to the user-facing
 ``default`` column family is prefixed with an 8-byte big-endian millisecond
 expiry stamp. A ``state.set(key, value)`` call (no ``ttl=``) writes the
-sentinel ``SENTINEL_NEVER`` meaning "never expires"; ``state.set(key, value,
-ttl=timedelta(...))`` writes ``record.timestamp + ttl``. Non-sentinel writes
+sentinel ``SENTINEL_NEVER`` meaning "never expires". Non-sentinel writes
 also emit a ``(expires_at || serialized_user_key)`` entry to the local-only
 ``__ttl_index__`` column family so the bounded sweep on every flush can
 reclaim expired values.
@@ -14261,7 +14260,7 @@ stamp / index machinery — those stores have their own retention model.
 def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L924)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L941)
 
 Persist the counter, run the flush-time TTL detection / flip-or-reject
 
@@ -14882,7 +14881,7 @@ straight to the parent's transaction cache.
 def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L2126)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L2141)
 
 Run flush-time TTL detection / flip-or-reject before delegating to
 the parent's changelog production. See
