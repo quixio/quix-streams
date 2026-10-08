@@ -1,0 +1,15 @@
+[
+  "Must implement a RecoveryPartition class that tracks the recovery state of a single changelog partition, including the source topic, changelog topic name, partition number, and associated store partition",
+  "RecoveryPartition must have a set_watermarks method that sets the low and high watermark offsets for the changelog partition, stored in _changelog_lowwater and _changelog_highwater attributes",
+  "RecoveryPartition must have a needs_recovery property that returns True when the store's changelog offset is less than the highwater mark, and False otherwise",
+  "RecoveryPartition must have a needs_offset_update property that returns True when the changelog has no valid offsets to read (lowwater equals highwater)",
+  "RecoveryPartition must have a recover method that passes the changelog message to the store partition's recover method",
+  "RecoveryPartition must have an update_offset method that creates an OffsetUpdate object and passes it to store_partition.set_changelog_offset, and must call _warn_bad_offset if the stored offset exceeds the highwater",
+  "Must implement a RecoveryManager class that takes a consumer parameter and manages the recovery process for assigned partitions",
+  "RecoveryManager must have an assign_partitions method that creates RecoveryPartition objects, adds them to pending assigns, and calls consumer.incremental_assign and consumer.pause on the appropriate partitions",
+  "RecoveryManager must have a revoke_partitions method that removes partitions from tracking, adds them to pending revokes, and calls consumer.incremental_unassign",
+  "RecoveryManager must have a _handle_pending_assigns method that gets watermarks from the consumer, determines which partitions need recovery, and assigns only those that do",
+  "RecoveryManager must have a _recover method that polls the consumer for changelog messages, applies them via store_partition.recover, and handles completion when all partitions are recovered",
+  "RecoveryManager must raise a RecoveryComplete exception when recovery is finalized",
+  "RocksDBStorePartition must have a recover method that applies changelog messages to the store and sets changelog offset to message offset plus one, and get_changelog_offset must return None when no offset has been set"
+]
