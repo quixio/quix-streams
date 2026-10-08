@@ -2,13 +2,8 @@
 Regression tests for a ``state.set(..., ttl=...)`` write whose record carries
 Kafka's ``NO_TIMESTAMP`` (``-1``).
 
-``_compute_stamp`` derives the expiry as ``timestamp + ttl_ms`` and only
-rejects a non-positive *result*, so ``timestamp=-1`` with a small ``ttl`` (or
-any ``ttl`` when ``timestamp`` is very close to zero) produces a small
-positive expiry near the epoch (e.g. 1 Jan 1970), rather than raising.
-
 Such a write correctly does not itself trigger the unflipped-store TTL flip
-(``advance_high_water`` ignores a negative timestamp), but the bogus near-epoch
+(``advance_high_water`` ignores a negative timestamp), but a bogus near-epoch
 stamp used to still be recorded in ``_pending_stamps``. If a DIFFERENT write in
 the same flush batch flipped the store, ``_restamp_default_cf_cache_for_flip``
 applied that stale stamp to the NO_TIMESTAMP record, so it was persisted
@@ -134,9 +129,6 @@ class TestTtlNoTimestampFlip:
         assert decoded[no_ts_key][0] == SENTINEL_NEVER
         partition.close()
 
-    # A NO_TIMESTAMP ttl= write must also clear (not leave stale) an earlier
-    # pending stamp for the SAME key from a real-timestamped write earlier in
-    # the same unflipped batch — last-write-wins.
     def test_no_timestamp_write_clears_earlier_pending_stamp_same_key(
         self, store_partition_factory
     ):
