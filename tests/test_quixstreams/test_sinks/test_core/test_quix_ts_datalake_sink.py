@@ -13,10 +13,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
-import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+import requests
 
 # Mock quixportal before importing the sink modules
 sys.modules["quixportal"] = MagicMock()
@@ -66,9 +66,15 @@ def mock_catalog_client():
     table_check_response = MagicMock()
     table_check_response.status_code = 404
 
-    # Table create response
+    # Table create response. The body matters: the sink reads it to notice that
+    # another writer won the race and the catalog kept ITS location.
     table_create_response = MagicMock()
     table_create_response.status_code = 201
+    table_create_response.json.return_value = {
+        "name": "test_table",
+        "location": "s3://test-bucket/test-prefix/test_table",
+        "properties": {},
+    }
 
     # Manifest add response
     manifest_response = MagicMock()
@@ -223,8 +229,8 @@ class TestRowGroupSizing:
     ):
         sink = sink_factory(row_group_rows=100_000)
         n = 250_000
-        df = pd.DataFrame({"ts_ms": range(n), "v": [1.5] * n, "__key": ["k"] * n})
-        sink._write_parquet_to_storage(df, "p/data.parquet", [], ())
+        table = pa.table({"ts_ms": list(range(n)), "v": [1.5] * n, "__key": ["k"] * n})
+        sink._write_parquet_to_storage(table, "p/data.parquet", [], ())
         meta = pq.ParquetFile(
             io.BytesIO(self._data_file_bytes(mock_blob_client))
         ).metadata
@@ -243,8 +249,8 @@ class TestRowGroupSizing:
     ):
         sink = sink_factory()
         n = 1_000_000
-        df = pd.DataFrame({"ts_ms": range(n), "__key": ["k"] * n})
-        sink._write_parquet_to_storage(df, "p/data.parquet", [], ())
+        table = pa.table({"ts_ms": list(range(n)), "__key": ["k"] * n})
+        sink._write_parquet_to_storage(table, "p/data.parquet", [], ())
         parquet_bytes = self._data_file_bytes(mock_blob_client)
         assert pq.ParquetFile(io.BytesIO(parquet_bytes)).num_row_groups == 1
 
@@ -423,9 +429,9 @@ class TestSilenceChattyLoggers:
         silence_chatty_loggers()
 
         for name in self._SILENCED:
-            assert (
-                _logging.getLogger(name).level == _logging.WARNING
-            ), f"{name} not raised to WARNING"
+            assert _logging.getLogger(name).level == _logging.WARNING, (
+                f"{name} not raised to WARNING"
+            )
 
     def test_setup_silences_when_flag_is_true(self, sink_factory, mock_blob_client):
         import logging as _logging
@@ -470,6 +476,10 @@ class TestSilenceChattyLoggers:
 class TestTimestampColumnMapping:
     """Tests for timestamp detection and column extraction."""
 
+    @staticmethod
+    def _table(values, column="ts_ms"):
+        return pa.table({column: values, "value": list(range(len(values)))})
+
     @pytest.mark.parametrize(
         "timestamp_value,expected_unit",
         [
@@ -485,87 +495,108 @@ class TestTimestampColumnMapping:
         """Test automatic detection of timestamp units."""
         sink = sink_factory(hive_columns=["year", "month", "day", "hour"])
 
-        df = pd.DataFrame({"ts_ms": [timestamp_value], "value": [1]})
-        result_df = sink._add_timestamp_columns(df)
+        result = sink._add_timestamp_columns(self._table([timestamp_value]))
 
         # All timestamps resolve to 2024-01-01 00:00:00 UTC
-        assert result_df["year"].iloc[0] == "2024"
-        assert result_df["month"].iloc[0] == "01"
-        assert result_df["day"].iloc[0] == "01"
-        assert result_df["hour"].iloc[0] == "00"
+        assert result.column("year")[0].as_py() == "2024"
+        assert result.column("month")[0].as_py() == "01"
+        assert result.column("day")[0].as_py() == "01"
+        assert result.column("hour")[0].as_py() == "00"
 
     def test_add_timestamp_columns_already_datetime(self, sink_factory):
-        """Test that datetime columns pass through without conversion."""
+        """Test that timestamp columns pass through without conversion."""
         sink = sink_factory(hive_columns=["year", "month"])
 
         dt = datetime(2024, 6, 15, 14, 30, 0, tzinfo=timezone.utc)
-        df = pd.DataFrame({"ts_ms": [dt], "value": [1]})
-        result_df = sink._add_timestamp_columns(df)
+        result = sink._add_timestamp_columns(self._table([dt]))
 
-        assert result_df["year"].iloc[0] == "2024"
-        assert result_df["month"].iloc[0] == "06"
+        assert result.column("year")[0].as_py() == "2024"
+        assert result.column("month")[0].as_py() == "06"
+
+    def test_add_timestamp_columns_parses_iso_strings(self, sink_factory):
+        """An ISO-8601 STRING timestamp column is parsed, not rejected. The
+        pandas path crashed on it (``float("2024-06-15T14:30:00")``), so a topic
+        carrying string timestamps could not be partitioned by time at all."""
+        sink = sink_factory(hive_columns=["year", "month", "day", "hour"])
+
+        result = sink._add_timestamp_columns(self._table(["2024-06-15T14:30:00"]))
+
+        assert result.column("year")[0].as_py() == "2024"
+        assert result.column("month")[0].as_py() == "06"
+        assert result.column("day")[0].as_py() == "15"
+        assert result.column("hour")[0].as_py() == "14"
+
+    def test_add_timestamp_columns_tolerates_leading_nulls(self, sink_factory):
+        """The unit is detected from the first NON-NULL value; a leading null
+        used to make the detection raise (``float(None)``) and fail the flush."""
+        sink = sink_factory(hive_columns=["year"])
+
+        result = sink._add_timestamp_columns(self._table([None, 1704067200000]))
+
+        assert result.column("year").to_pylist() == [None, "2024"]
+
+    def test_all_null_timestamp_yields_null_parts(self, sink_factory):
+        """An all-null timestamp column has no unit to detect: every part is
+        NULL, which the partition key turns into the Hive-NULL bucket."""
+        sink = sink_factory(hive_columns=["year"])
+
+        result = sink._add_timestamp_columns(self._table([None, None]))
+
+        assert result.column("year").to_pylist() == [None, None]
 
     def test_timestamp_column_year_extraction(self, sink_factory):
         """Test year column extraction format."""
         sink = sink_factory(hive_columns=["year"])
 
-        df = pd.DataFrame({"ts_ms": [1704067200000], "value": [1]})
-        result_df = sink._add_timestamp_columns(df)
+        result = sink._add_timestamp_columns(self._table([1704067200000]))
 
-        assert result_df["year"].iloc[0] == "2024"
-        assert isinstance(result_df["year"].iloc[0], str)
+        assert result.column("year")[0].as_py() == "2024"
+        assert pa.types.is_string(result.schema.field("year").type)
 
-    def test_timestamp_column_month_zero_padding(self, sink_factory):
-        """Test month column is zero-padded (01-12)."""
-        sink = sink_factory(hive_columns=["month"])
+    @pytest.mark.parametrize(
+        "part,expected",
+        [("month", "01"), ("day", "01"), ("hour", "00")],
+    )
+    def test_timestamp_parts_are_zero_padded(self, sink_factory, part, expected):
+        """month/day/hour are zero-padded two-digit strings (``month=01``);
+        the readers' partition values depend on it."""
+        sink = sink_factory(hive_columns=[part])
 
-        # January (should be "01", not "1")
-        df = pd.DataFrame({"ts_ms": [1704067200000], "value": [1]})
-        result_df = sink._add_timestamp_columns(df)
+        result = sink._add_timestamp_columns(self._table([1704067200000]))
 
-        assert result_df["month"].iloc[0] == "01"
-        assert len(result_df["month"].iloc[0]) == 2
-
-    def test_timestamp_column_day_zero_padding(self, sink_factory):
-        """Test day column is zero-padded (01-31)."""
-        sink = sink_factory(hive_columns=["day"])
-
-        df = pd.DataFrame({"ts_ms": [1704067200000], "value": [1]})
-        result_df = sink._add_timestamp_columns(df)
-
-        assert result_df["day"].iloc[0] == "01"
-        assert len(result_df["day"].iloc[0]) == 2
-
-    def test_timestamp_column_hour_zero_padding(self, sink_factory):
-        """Test hour column is zero-padded (00-23)."""
-        sink = sink_factory(hive_columns=["hour"])
-
-        df = pd.DataFrame({"ts_ms": [1704067200000], "value": [1]})
-        result_df = sink._add_timestamp_columns(df)
-
-        assert result_df["hour"].iloc[0] == "00"
-        assert len(result_df["hour"].iloc[0]) == 2
+        assert result.column(part)[0].as_py() == expected
+        assert len(result.column(part)[0].as_py()) == 2
 
     def test_only_specified_columns_are_added(self, sink_factory):
         """Test that only specified hive columns are added."""
         sink = sink_factory(hive_columns=["year", "day"])  # No month, no hour
 
-        df = pd.DataFrame({"ts_ms": [1704067200000], "value": [1]})
-        result_df = sink._add_timestamp_columns(df)
+        result = sink._add_timestamp_columns(self._table([1704067200000]))
 
-        assert "year" in result_df.columns
-        assert "day" in result_df.columns
-        assert "month" not in result_df.columns
-        assert "hour" not in result_df.columns
+        assert "year" in result.column_names
+        assert "day" in result.column_names
+        assert "month" not in result.column_names
+        assert "hour" not in result.column_names
 
-    def test_add_timestamp_columns_does_not_mutate_timestamp_column_dtype(
+    def test_parts_are_added_in_configured_order(self, sink_factory):
+        """The derived columns are appended in hive_columns order, not in the
+        iteration order of a Python set — which varies between processes
+        (PYTHONHASHSEED), so two sink pods would otherwise build tables whose
+        column order differs."""
+        sink = sink_factory(hive_columns=["hour", "year", "month", "day"])
+
+        result = sink._add_timestamp_columns(self._table([1704067200000]))
+
+        assert result.column_names[-4:] == ["hour", "year", "month", "day"]
+
+    def test_add_timestamp_columns_does_not_mutate_timestamp_column_type(
         self, sink_factory
     ):
         """
         Regression: extracting year/month/day/hour for time-based hive
-        partitioning must not change the dtype of the source timestamp
+        partitioning must not change the TYPE of the source timestamp
         column. ``ts_ms`` is a system column the sink injects from the
-        Kafka ``item.timestamp`` (always int64 ms); its dtype is part of
+        Kafka ``item.timestamp`` (always int64 ms); its type is part of
         the contract with readers — files written under different
         ``HIVE_COLUMNS`` configurations must store ``ts_ms`` with the same
         type, otherwise downstream readers see the same column as BIGINT
@@ -573,24 +604,30 @@ class TestTimestampColumnMapping:
         """
         sink = sink_factory(hive_columns=["year", "month", "day", "hour"])
 
-        df = pd.DataFrame({"ts_ms": [1704067200000, 1704067260000], "value": [1, 2]})
-        original_dtype = df["ts_ms"].dtype
-
-        result_df = sink._add_timestamp_columns(df)
+        table = self._table([1704067200000, 1704067260000])
+        result = sink._add_timestamp_columns(table)
 
         # Derived columns still correct.
-        assert result_df["year"].iloc[0] == "2024"
-        assert result_df["month"].iloc[0] == "01"
-        assert result_df["day"].iloc[0] == "01"
-        assert result_df["hour"].iloc[0] == "00"
+        assert result.column("year")[0].as_py() == "2024"
+        assert result.column("month")[0].as_py() == "01"
+        assert result.column("day")[0].as_py() == "01"
+        assert result.column("hour")[0].as_py() == "00"
 
-        # Source ts_ms column is untouched — same dtype, same values.
-        assert result_df["ts_ms"].dtype == original_dtype, (
-            f"ts_ms dtype changed from {original_dtype} to "
-            f"{result_df['ts_ms'].dtype}; partitioning logic must not "
-            f"mutate the data column"
-        )
-        assert list(result_df["ts_ms"]) == [1704067200000, 1704067260000]
+        # Source ts_ms column is untouched — same type, same values.
+        assert result.schema.field("ts_ms").type == table.schema.field("ts_ms").type
+        assert result.column("ts_ms").to_pylist() == [1704067200000, 1704067260000]
+
+    def test_derived_part_replaces_a_column_of_the_same_name(self, sink_factory):
+        """A record that already carries a ``year`` field does not end up with
+        two ``year`` columns: the derived partition value replaces it (as the
+        DataFrame assignment did), so the folder and the data agree."""
+        sink = sink_factory(hive_columns=["year"])
+
+        table = pa.table({"ts_ms": [1704067200000], "year": ["wrong"]})
+        result = sink._add_timestamp_columns(table)
+
+        assert result.column_names.count("year") == 1
+        assert result.column("year")[0].as_py() == "2024"
 
 
 # =============================================================================
@@ -599,49 +636,256 @@ class TestTimestampColumnMapping:
 
 
 class TestEmptyDictHandling:
-    """Tests for empty dictionary to null conversion."""
+    """An empty dict cannot be stored in parquet (an empty struct/map has no
+    type), so the batch conversion turns one into NULL. This used to be a
+    separate DataFrame scan (``_null_empty_dicts``); it now happens while the
+    column is being built."""
 
-    def test_null_empty_dicts_converts_empty_to_none(self, sink_factory):
-        """Test that empty dicts are converted to None."""
+    @staticmethod
+    def _column(sink, sample_batch, values, name="col"):
+        batch = sample_batch(
+            records=[
+                {
+                    "value": {"ts_ms": 1704067200000 + i, name: v},
+                    "key": f"k{i}",
+                    "timestamp": 1704067200000 + i,
+                    "offset": i,
+                }
+                for i, v in enumerate(values)
+            ]
+        )
+        return sink._batch_to_arrow(batch).column(name).to_pylist()
+
+    def test_empty_dicts_become_null(self, sink_factory, sample_batch):
+        assert self._column(sink_factory(), sample_batch, [{}, {}, {}]) == [
+            None,
+            None,
+            None,
+        ]
+
+    def test_non_empty_dicts_are_preserved(self, sink_factory, sample_batch):
+        assert self._column(sink_factory(), sample_batch, [{"a": 1}, {"a": 2}]) == [
+            {"a": 1},
+            {"a": 2},
+        ]
+
+    def test_mixed_empty_and_non_empty(self, sink_factory, sample_batch):
+        assert self._column(
+            sink_factory(), sample_batch, [{"a": 1}, {}, {"a": 3}, {}]
+        ) == [{"a": 1}, None, {"a": 3}, None]
+
+    def test_non_dict_column_unchanged(self, sink_factory, sample_batch):
+        assert self._column(sink_factory(), sample_batch, [1, 2, 3]) == [1, 2, 3]
+
+    def test_empty_dict_column_is_writable(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """End of the story: the file writes. An empty struct would raise
+        during serialisation."""
         sink = sink_factory()
+        sink.write(
+            sample_batch(
+                records=[
+                    {
+                        "value": {"ts_ms": 1704067200000, "meta": {}},
+                        "key": "k",
+                        "timestamp": 1704067200000,
+                        "offset": 0,
+                    }
+                ]
+            )
+        )
+        body = mock_blob_client.put_object_async.call_args_list[-1][0][1]
+        assert pq.read_table(io.BytesIO(body)).column("meta").to_pylist() == [None]
 
-        df = pd.DataFrame({"col": [{}, {}, {}]})
-        sink._null_empty_dicts(df)
 
-        assert df["col"].iloc[0] is None
-        assert df["col"].iloc[1] is None
-        assert df["col"].iloc[2] is None
+# =============================================================================
+# 3b. Arrow batch conversion / partitioning
+# =============================================================================
 
-    def test_null_empty_dicts_preserves_non_empty(self, sink_factory):
-        """Test that non-empty dicts are preserved."""
+
+class TestArrowBatchConversion:
+    """The batch becomes an Arrow table directly — no DataFrame in between.
+    These pin the behaviour that changed with it."""
+
+    @staticmethod
+    def _records(values):
+        return [
+            {
+                "value": v,
+                "key": f"k{i}",
+                "timestamp": 1704067200000 + i,
+                "offset": i,
+            }
+            for i, v in enumerate(values)
+        ]
+
+    @staticmethod
+    def _files(mock_blob_client):
+        """{storage key: pyarrow Table} for every DATA file written."""
+        return {
+            c[0][0]: pq.read_table(io.BytesIO(c[0][1]))
+            for c in mock_blob_client.put_object_async.call_args_list
+            if "/.vidx/" not in c[0][0]
+        }
+
+    def test_partitioned_file_has_no_index_column(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Regression: ``Table.from_pandas`` serialised a partition group's
+        (non-range) index as an ``__index_level_0__`` COLUMN, so every file of
+        every partitioned table carried a meaningless int64 column — in the
+        data, in the footer statistics and in the catalog's zone maps."""
+        sink = sink_factory(hive_columns=["machine"])
+        sink.write(
+            sample_batch(
+                records=self._records(
+                    [
+                        {"ts_ms": 1704067200000, "machine": "A", "v": 1},
+                        {"ts_ms": 1704067200001, "machine": "B", "v": 2},
+                        {"ts_ms": 1704067200002, "machine": "A", "v": 3},
+                    ]
+                )
+            )
+        )
+        files = self._files(mock_blob_client)
+        assert len(files) == 2
+        for key, table in files.items():
+            assert "__index_level_0__" not in table.column_names, key
+            assert table.column_names == ["ts_ms", "v", "__key"], key
+
+    def test_missing_key_keeps_the_column_integer(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """A record that omits a field pads with NULL, not with pandas' NaN —
+        so an integer column stays an integer column instead of being widened
+        to double the moment one record leaves the field out (which made the
+        same column INT in some files and DOUBLE in others)."""
         sink = sink_factory()
+        sink.write(
+            sample_batch(
+                records=self._records(
+                    [{"ts_ms": 1, "v": 1}, {"ts_ms": 2}, {"ts_ms": 3, "v": 3}]
+                )
+            )
+        )
+        table = next(iter(self._files(mock_blob_client).values()))
+        assert pa.types.is_integer(table.schema.field("v").type)
+        assert table.column("v").to_pylist() == [1, None, 3]
 
-        df = pd.DataFrame({"col": [{"a": 1}, {"b": 2}]})
-        sink._null_empty_dicts(df)
+    def test_row_order_within_a_partition_is_arrival_order(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Partitioning sorts by the partition key only, stably: a time-ordered
+        topic stays time-ordered inside each file, which is what keeps the
+        file's zone maps tight and ORDER BY streaming able to skip it."""
+        sink = sink_factory(hive_columns=["machine"])
+        sink.write(
+            sample_batch(
+                records=self._records(
+                    [
+                        {"ts_ms": 10, "machine": "A", "v": 1},
+                        {"ts_ms": 11, "machine": "B", "v": 2},
+                        {"ts_ms": 12, "machine": "A", "v": 3},
+                        {"ts_ms": 13, "machine": "B", "v": 4},
+                        {"ts_ms": 14, "machine": "A", "v": 5},
+                    ]
+                )
+            )
+        )
+        by_folder = {
+            key.split("/")[-2]: table.column("ts_ms").to_pylist()
+            for key, table in self._files(mock_blob_client).items()
+        }
+        assert by_folder == {"machine=A": [10, 12, 14], "machine=B": [11, 13]}
 
-        assert df["col"].iloc[0] == {"a": 1}
-        assert df["col"].iloc[1] == {"b": 2}
+    def test_partition_column_missing_from_every_record(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """A hive column no record carries goes to the Hive-NULL bucket. The
+        pandas path raised KeyError inside groupby, so the flush failed three
+        times and then crashed the sink."""
+        sink = sink_factory(hive_columns=["machine"])
+        sink.write(
+            sample_batch(records=self._records([{"ts_ms": 1, "v": 1}, {"ts_ms": 2}]))
+        )
+        keys = list(self._files(mock_blob_client))
+        assert len(keys) == 1
+        assert "/machine=__None__/" in keys[0]
 
-    def test_null_empty_dicts_mixed_column(self, sink_factory):
-        """Test handling of mixed empty and non-empty dicts."""
+    @pytest.mark.parametrize(
+        "value,folder",
+        [
+            ("monza", "circuit=monza"),
+            (7, "circuit=7"),
+            (5.0, "circuit=5.0"),
+            (1.25, "circuit=1.25"),
+            (True, "circuit=True"),
+            (None, "circuit=__None__"),
+        ],
+    )
+    def test_partition_folder_names_match_the_pandas_path(
+        self, sink_factory, sample_batch, mock_blob_client, value, folder
+    ):
+        """A sink upgrade must not rename a partition folder: Arrow's own cast
+        writes ``5`` for 5.0 and ``true`` for True, which would scatter one
+        logical value across two folders."""
+        sink = sink_factory(hive_columns=["circuit"])
+        sink.write(
+            sample_batch(records=self._records([{"ts_ms": 1, "circuit": value}]))
+        )
+        assert f"/{folder}/" in next(iter(self._files(mock_blob_client)))
+
+    def test_message_key_wins_over_a_field_named_key(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """``__key`` is the Kafka message key, as it was when the sink stamped
+        it into the record's dict."""
         sink = sink_factory()
+        sink.write(
+            sample_batch(records=self._records([{"ts_ms": 1, "__key": "from-record"}]))
+        )
+        table = next(iter(self._files(mock_blob_client).values()))
+        assert table.column("__key").to_pylist() == ["k0"]
+        assert table.column_names.count("__key") == 1
 
-        df = pd.DataFrame({"col": [{"a": 1}, {}, {"c": 3}, {}]})
-        sink._null_empty_dicts(df)
-
-        assert df["col"].iloc[0] == {"a": 1}
-        assert df["col"].iloc[1] is None
-        assert df["col"].iloc[2] == {"c": 3}
-        assert df["col"].iloc[3] is None
-
-    def test_null_empty_dicts_non_dict_column_unchanged(self, sink_factory):
-        """Test that non-dict columns are not modified."""
+    def test_column_order_is_first_seen_order(self, sink_factory, sample_batch):
+        """Union of every record's keys, in the order they first appear, then
+        the sink's own columns — the shape the DataFrame produced."""
         sink = sink_factory()
+        table = sink._batch_to_arrow(
+            sample_batch(
+                records=self._records(
+                    [{"b": 1, "a": 2}, {"c": 3, "a": 4}, {"ts_ms": 9, "a": 5}]
+                )
+            )
+        )
+        assert table.column_names == ["b", "a", "ts_ms", "__key", "c"]
+        assert table.column("b").to_pylist() == [1, None, None]
+        assert table.column("c").to_pylist() == [None, 3, None]
+        # The record's own timestamp wins; the other rows get Kafka's.
+        assert table.column("ts_ms").to_pylist() == [
+            1704067200000,
+            1704067200001,
+            9,
+        ]
 
-        df = pd.DataFrame({"col": [1, 2, 3]})
-        sink._null_empty_dicts(df)
-
-        assert list(df["col"]) == [1, 2, 3]
+    def test_every_row_is_written_exactly_once(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Across many partitions: no row is dropped, duplicated or moved."""
+        sink = sink_factory(hive_columns=["year", "machine"])
+        records = self._records(
+            [
+                {"ts_ms": 1704067200000 + i, "machine": f"m{i % 7}", "v": i}
+                for i in range(500)
+            ]
+        )
+        assert sink._write_batch(sample_batch(records=records)) == 500
+        files = self._files(mock_blob_client)
+        assert len(files) == 7
+        seen = sorted(v for t in files.values() for v in t.column("v").to_pylist())
+        assert seen == list(range(500))
 
 
 # =============================================================================
@@ -685,17 +929,16 @@ class TestWriteOperations:
         assert "__key" in df.columns
         assert list(df["__key"]) == ["key1", "key2"]
 
-    def test_write_empty_batch_handled(self, sink_factory, mock_blob_client):
-        """Test that empty batch is handled gracefully (writes empty parquet)."""
+    def test_write_empty_batch_writes_nothing(self, sink_factory, mock_blob_client):
+        """An empty batch uploads NOTHING. The pandas path wrote a 0-row parquet
+        file for it, which every later query then had to open (and the catalog
+        had to carry) for no rows at all."""
         sink = sink_factory()
         batch = SinkBatch(topic="test", partition=0)
 
-        # Should not raise
-        sink.write(batch)
+        sink.write(batch)  # must not raise
 
-        # Note: The sink writes an empty parquet file for empty batches.
-        # This is the current behavior - verify it completes without error.
-        mock_blob_client.put_object_async.assert_called_once()
+        mock_blob_client.put_object_async.assert_not_called()
 
     def test_write_with_partitions(self, sink_factory, sample_batch, mock_blob_client):
         """Test writing with partition columns."""
@@ -1288,7 +1531,12 @@ class TestQueryApiNotify:
             sink.write(sample_batch())
 
         assert sink._query_api is None
-        assert mock_catalog_client.post.call_count == 1
+        manifest_posts = [
+            c
+            for c in mock_catalog_client.post.call_args_list
+            if "manifest" in c.args[0]
+        ]
+        assert len(manifest_posts) == 1
         assert not [
             r
             for r in caplog.records
@@ -2048,3 +2296,413 @@ class TestQuixTSDataLakeSinkVirtualPartitions:
         # timestamp column (which is still recorded).
         assert "sort_column" not in props
         assert props["timestamp_column"] == "ts_ms"
+
+
+# =============================================================================
+# 9. The table's registered LOCATION wins
+# =============================================================================
+
+
+class TestTableLocationIsHonoured:
+    """A table's location is where every file in its manifest lives. A second
+    writer joining the table follows it instead of starting a second folder —
+    and the catalog, for its part, refuses to be re-pointed by such a writer."""
+
+    @staticmethod
+    def _catalog(location=None, properties=None, status=200):
+        """A catalog client whose table GET returns *location* (404 when None)."""
+        client = MagicMock(spec=QuixTSDataLakeCatalogClient)
+        health = MagicMock(status_code=200)
+        health.raise_for_status = MagicMock()
+        table = MagicMock(status_code=status if location else 404)
+        table.json.return_value = {
+            "name": "test_table",
+            "location": location,
+            "properties": properties or {},
+        }
+        client.get.side_effect = lambda path, **kw: (
+            health if "/health" in path else table
+        )
+        created = MagicMock(status_code=201)
+        created.json.return_value = {"location": location, "properties": {}}
+        client.put.return_value = created
+        client.post.return_value = MagicMock(status_code=200)
+        client.patch.return_value = MagicMock(status_code=200)
+        return client
+
+    def _setup(self, sink, mock_blob_client):
+        with (
+            patch(
+                "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
+                return_value="test-bucket",
+            ),
+            patch(
+                "quixstreams.sinks.core.quix_ts_datalake_sink.BlobStorageClient",
+                return_value=mock_blob_client,
+            ),
+        ):
+            sink.setup()
+
+    def test_existing_table_elsewhere_is_written_to_where_it_lives(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        sink = sink_factory(
+            s3_prefix="data-lake/time-series",
+            workspace_id="ws-a",
+            catalog_url="http://catalog:8080",
+        )
+        sink._catalog = self._catalog(
+            "s3://test-bucket/ws-a/legacy-prefix/renamed_table"
+        )
+        self._setup(sink, mock_blob_client)
+
+        assert sink._table_root == "legacy-prefix/renamed_table"
+        assert (
+            sink.table_location == "s3://test-bucket/ws-a/legacy-prefix/renamed_table"
+        )
+
+        sink.write(sample_batch())
+        key = mock_blob_client.put_object_async.call_args_list[0].args[0]
+        assert key.startswith("legacy-prefix/renamed_table/data_")
+        # And the manifest entry agrees with the folder the file went to.
+        manifest = [
+            c for c in sink._catalog.post.call_args_list if "manifest" in c.args[0]
+        ][0].kwargs["json"]
+        assert manifest["files"][0]["file_path"] == (f"s3://test-bucket/ws-a/{key}")
+        # Nothing was re-registered: the sink did not try to move the table.
+        sink._catalog.put.assert_not_called()
+
+    def test_own_location_changes_nothing(self, sink_factory, mock_blob_client, caplog):
+        sink = sink_factory(
+            s3_prefix="data-lake/time-series",
+            workspace_id="ws-a",
+            catalog_url="http://catalog:8080",
+        )
+        sink._catalog = self._catalog(
+            "s3://test-bucket/ws-a/data-lake/time-series/test_table"
+        )
+        with caplog.at_level(logging.WARNING):
+            self._setup(sink, mock_blob_client)
+
+        assert sink._table_root == "data-lake/time-series/test_table"
+        assert not [r for r in caplog.records if "registered at" in r.getMessage()]
+
+    def test_a_location_in_another_bucket_is_refused(
+        self, sink_factory, mock_blob_client
+    ):
+        sink = sink_factory(workspace_id="ws-a", catalog_url="http://catalog:8080")
+        sink._catalog = self._catalog("s3://other-bucket/ws-a/prefix/test_table")
+
+        with pytest.raises(ValueError, match="bucket"):
+            self._setup(sink, mock_blob_client)
+
+    def test_a_location_in_another_workspace_is_refused(
+        self, sink_factory, mock_blob_client
+    ):
+        sink = sink_factory(workspace_id="ws-a", catalog_url="http://catalog:8080")
+        sink._catalog = self._catalog("s3://test-bucket/ws-b/prefix/test_table")
+
+        with pytest.raises(ValueError, match="workspace"):
+            self._setup(sink, mock_blob_client)
+
+    def test_a_catalog_hiccup_leaves_the_configured_path(
+        self, sink_factory, mock_blob_client, caplog
+    ):
+        sink = sink_factory(
+            s3_prefix="data-lake/time-series", catalog_url="http://catalog:8080"
+        )
+        client = self._catalog()
+        health = MagicMock(status_code=200)
+        health.raise_for_status = MagicMock()
+
+        def _get(path, **kw):
+            if "/health" in path:
+                return health
+            raise requests.exceptions.ConnectionError("catalog down")
+
+        client.get.side_effect = _get
+        sink._catalog = client
+
+        with caplog.at_level(logging.WARNING):
+            self._setup(sink, mock_blob_client)
+
+        assert sink._table_root == "data-lake/time-series/test_table"
+        assert any(
+            "Could not read the registered location" in r.getMessage()
+            for r in caplog.records
+        )
+
+    def test_losing_the_create_race_follows_the_winner(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Two sinks can both see "no such table" and both create it. The
+        catalog keeps the winner's location and reports the conflict; the loser
+        writes where the table actually is."""
+        sink = sink_factory(
+            s3_prefix="data-lake/time-series", catalog_url="http://catalog:8080"
+        )
+        client = self._catalog()  # GET -> 404, so the sink creates the table
+        created = MagicMock(status_code=201)
+        created.json.return_value = {
+            "location": "s3://test-bucket/winner-prefix/test_table",
+            "location_conflict": {
+                "requested": "s3://test-bucket/data-lake/time-series/test_table",
+                "kept": "s3://test-bucket/winner-prefix/test_table",
+            },
+        }
+        client.put.return_value = created
+        sink._catalog = client
+        self._setup(sink, mock_blob_client)
+
+        sink.write(sample_batch())
+
+        assert sink._table_root == "winner-prefix/test_table"
+        key = mock_blob_client.put_object_async.call_args_list[0].args[0]
+        assert key.startswith("winner-prefix/test_table/data_")
+
+    def test_a_new_table_is_created_at_the_configured_location(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        sink = sink_factory(
+            s3_prefix="data-lake/time-series",
+            workspace_id="ws-a",
+            catalog_url="http://catalog:8080",
+        )
+        client = self._catalog()  # 404
+        sink._catalog = client
+        self._setup(sink, mock_blob_client)
+        sink.write(sample_batch())
+
+        body = client.put.call_args.kwargs["json"]
+        assert body["location"] == (
+            "s3://test-bucket/ws-a/data-lake/time-series/test_table"
+        )
+
+
+# =============================================================================
+# 10. Source registry: which topic / workspace feeds the table
+# =============================================================================
+
+
+class TestTableSources:
+    """The catalog records WHERE a table's data comes from. One table is
+    routinely fed by several topics, so each writer registers its own source
+    and never touches another's."""
+
+    @staticmethod
+    def _sink(sink_factory, mock_catalog_client):
+        sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+        return sink
+
+    @staticmethod
+    def _source_posts(client):
+        return [c for c in client.post.call_args_list if c.args[0].endswith("/sources")]
+
+    def test_first_write_registers_the_topic_once(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        sink = self._sink(sink_factory, mock_catalog_client)
+        sink.workspace_id = "ws-a"
+
+        sink.write(sample_batch(topic="telemetry"))
+        sink.write(sample_batch(topic="telemetry"))
+
+        posts = self._source_posts(mock_catalog_client)
+        assert len(posts) == 1, "one request per topic per process, not per flush"
+        assert posts[0].args[0] == "/namespaces/default/tables/test_table/sources"
+        source = posts[0].kwargs["json"]["source"]
+        assert source["topic"] == "telemetry"
+        assert source["workspace_id"] == "ws-a"
+        assert source["source_type"] == "kafka"
+        assert source["properties"]["sink"] == "quixstreams-quix-ts-datalake-sink"
+
+    def test_a_second_topic_is_registered_too(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        sink = self._sink(sink_factory, mock_catalog_client)
+
+        sink.write(sample_batch(topic="car-1"))
+        sink.write(sample_batch(topic="car-2"))
+
+        topics = [
+            c.kwargs["json"]["source"]["topic"]
+            for c in self._source_posts(mock_catalog_client)
+        ]
+        assert topics == ["car-1", "car-2"]
+
+    def test_add_files_carries_the_source(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        """Provenance rides along with the files, in the same request, so the
+        catalog records it in the transaction that registers them."""
+        sink = self._sink(sink_factory, mock_catalog_client)
+
+        sink.write(sample_batch(topic="telemetry"))
+
+        manifest = [
+            c
+            for c in mock_catalog_client.post.call_args_list
+            if "manifest" in c.args[0]
+        ][0].kwargs["json"]
+        assert manifest["source"]["topic"] == "telemetry"
+        assert manifest["source"]["source_type"] == "kafka"
+
+    def test_a_failed_registration_never_fails_the_write(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client, caplog
+    ):
+        def _post(path, **kwargs):
+            if path.endswith("/sources"):
+                raise requests.exceptions.ConnectionError("catalog down")
+            return MagicMock(status_code=200)
+
+        mock_catalog_client.post.side_effect = _post
+        sink = self._sink(sink_factory, mock_catalog_client)
+
+        with caplog.at_level(logging.WARNING):
+            sink.write(sample_batch(topic="telemetry"))
+
+        assert mock_blob_client.put_object_async.called
+        assert any(
+            "Could not register source" in r.getMessage() for r in caplog.records
+        )
+
+    def test_an_older_catalog_is_asked_only_once(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        """A catalog without the registry answers 501; the sink stops asking
+        instead of posting on every flush for ever."""
+
+        def _post(path, **kwargs):
+            return MagicMock(status_code=501 if path.endswith("/sources") else 200)
+
+        mock_catalog_client.post.side_effect = _post
+        sink = self._sink(sink_factory, mock_catalog_client)
+
+        sink.write(sample_batch(topic="telemetry"))
+        sink.write(sample_batch(topic="telemetry"))
+
+        assert len(self._source_posts(mock_catalog_client)) == 1
+
+
+# =============================================================================
+# 11. The zone-map column set is declared on the table
+# =============================================================================
+
+
+class TestStatsColumnsDeclaration:
+    """``stats_columns`` restricts which columns get a zone map. The lakehouse's
+    own rewrites read parquet footers and would otherwise record one for EVERY
+    numeric/timestamp column, so the restriction has to live on the TABLE, not
+    only in this process's configuration."""
+
+    @staticmethod
+    def _existing_catalog(properties):
+        client = MagicMock(spec=QuixTSDataLakeCatalogClient)
+        health = MagicMock(status_code=200)
+        health.raise_for_status = MagicMock()
+        table = MagicMock(status_code=200)
+        table.json.return_value = {
+            "name": "test_table",
+            "location": "s3://test-bucket/test-prefix/test_table",
+            "partition_spec": [],
+            "properties": properties,
+        }
+        client.get.side_effect = lambda path, **kw: (
+            health if "/health" in path else table
+        )
+        client.patch.return_value = MagicMock(status_code=200)
+        client.post.return_value = MagicMock(status_code=200)
+        return client
+
+    @staticmethod
+    def _patches(client):
+        return [c.kwargs["json"]["properties"] for c in client.patch.call_args_list]
+
+    def test_declared_on_a_new_table(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080", stats_columns=["ts_ms"])
+        sink._catalog = mock_catalog_client
+        sink.write(sample_batch())
+
+        properties = mock_catalog_client.put.call_args.kwargs["json"]["properties"]
+        assert properties["stats_columns"] == ["ts_ms"]
+
+    def test_absent_when_unrestricted(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080")
+        sink._catalog = mock_catalog_client
+        sink.write(sample_batch())
+
+        properties = mock_catalog_client.put.call_args.kwargs["json"]["properties"]
+        assert "stats_columns" not in properties
+
+    def test_pushed_onto_an_existing_table(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """The table the operator is complaining about already exists: the sink
+        must bring the declaration to it, not only to tables it creates."""
+        sink = sink_factory(
+            catalog_url="http://catalog:8080", stats_columns=["ts_ms", "speed"]
+        )
+        sink._catalog = self._existing_catalog({"timestamp_column": "ts_ms"})
+        sink.write(sample_batch())
+
+        assert self._patches(sink._catalog) == [{"stats_columns": ["speed", "ts_ms"]}]
+
+    def test_no_patch_when_the_table_already_agrees(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080", stats_columns=["ts_ms"])
+        sink._catalog = self._existing_catalog(
+            {"stats_columns": ["ts_ms"], "timestamp_column": "ts_ms"}
+        )
+        sink.write(sample_batch())
+
+        sink._catalog.patch.assert_not_called()
+
+    def test_clearing_the_restriction_clears_the_property(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080")  # unrestricted
+        sink._catalog = self._existing_catalog(
+            {"stats_columns": ["ts_ms"], "timestamp_column": "ts_ms"}
+        )
+        sink.write(sample_batch())
+
+        assert self._patches(sink._catalog) == [{"stats_columns": None}]
+
+    def test_ordering_columns_are_filled_in_but_never_overwritten(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """An operator can set the sort column in the lakehouse console; a sink
+        restart must not stamp its own value back over that choice. A table with
+        NO ordering column does learn the sink's."""
+        sink = sink_factory(
+            catalog_url="http://catalog:8080",
+            timestamp_column="ts_ms",
+            sort_column="speed",
+        )
+        sink._catalog = self._existing_catalog({"sort_column": "operator_choice"})
+        sink.write(sample_batch())
+
+        assert self._patches(sink._catalog) == [{"timestamp_column": "ts_ms"}]
+
+    def test_a_failed_patch_never_fails_the_write(
+        self, sink_factory, sample_batch, mock_blob_client, caplog
+    ):
+        sink = sink_factory(catalog_url="http://catalog:8080", stats_columns=["ts_ms"])
+        client = self._existing_catalog({})
+        client.patch.side_effect = requests.exceptions.ConnectionError("catalog down")
+        sink._catalog = client
+
+        with caplog.at_level(logging.WARNING):
+            sink.write(sample_batch())
+
+        assert mock_blob_client.put_object_async.called
+        assert any(
+            "Could not update properties" in r.getMessage() for r in caplog.records
+        )
