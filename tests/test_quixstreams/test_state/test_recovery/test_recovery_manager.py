@@ -1,4 +1,5 @@
 import logging
+import time
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -14,9 +15,22 @@ from quixstreams.state.exceptions import (
     InvalidStoreChangelogOffset,
 )
 from quixstreams.state.manager import SUPPORTED_STORES
-from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
+from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER, SEPARATOR
 from quixstreams.state.recovery import RecoveryManager
-from tests.utils import ConfluentKafkaMessageStub
+from tests.utils import ConfluentKafkaMessageStub, Timeout
+
+
+class RecoveryStalledAfterHighwater(AssertionError):
+    """Recovery kept polling after reaching the end of the grown changelog."""
+
+
+# Remove these strict expected failures when recovery accepts positions past its target.
+# Use pytest --runxfail to expose the current bug as an ordinary failure.
+_RECOVERY_OVERSHOOT = pytest.mark.xfail(
+    strict=True,
+    raises=RecoveryStalledAfterHighwater,
+    reason="Recovery requires position == captured highwater even if the log grows",
+)
 
 
 class TestRecoveryManager:
@@ -872,3 +886,189 @@ class TestRecoveryManagerRecover:
 
         # Check that RecoveryPartitions are unassigned
         assert not recovery_manager.partitions
+
+    @pytest.mark.parametrize("isolation", ["read_committed", "read_uncommitted"])
+    @pytest.mark.parametrize(
+        "scenario",
+        [
+            "control",
+            pytest.param("late_commit", marks=_RECOVERY_OVERSHOOT),
+            pytest.param("late_abort", marks=_RECOVERY_OVERSHOOT),
+            pytest.param("late_records", marks=_RECOVERY_OVERSHOOT),
+        ],
+    )
+    def test_do_recovery_after_changelog_highwater(
+        self,
+        scenario,
+        isolation,
+        store_partition,
+        topic_manager_factory,
+        recovery_manager_factory,
+        consumer_factory,
+        producer_factory,
+    ):
+        """Resolve a transaction after assignment freezes the recovery target.
+
+        Real broker offsets/markers, store writes, and recovery code are used. Only
+        polling/status calls are wrapped to bound the test if recovery never exits.
+        The late-records case reproduces the reported log numerator six above target.
+        """
+        topic_manager = topic_manager_factory()
+        source = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=topic_manager.topic_config(num_partitions=1),
+        )
+        changelog = topic_manager.changelog_topic(
+            stream_id=source.name, store_name="default", config=source.broker_config
+        )
+        source_tp = TopicPartition(source.name, 0, 0)
+        changelog_tp = TopicPartition(changelog.name, 0, 0)
+        consumer = consumer_factory(
+            auto_commit_enable=False,
+            auto_offset_reset="earliest",
+            extra_config={"isolation.level": isolation},
+        )
+        producer = producer_factory(transactional=True)
+        manager = recovery_manager_factory(
+            consumer=consumer, topic_manager=topic_manager
+        )
+        transaction_open = False
+
+        def wait_for_highwater(expected):
+            # Commit/abort can return before the marker is visible to a watermark
+            # query. Synchronize setup with the broker, not an arbitrary sleep.
+            timeout = Timeout(15)
+            while timeout:
+                _, highwater = consumer.get_watermark_offsets(changelog_tp, timeout=5)
+                if highwater == expected:
+                    return
+                time.sleep(0.1)
+
+        def produce_changelog(start, end):
+            for value in range(start, end):
+                producer.produce(
+                    changelog.name,
+                    partition=0,
+                    key=b"key" + SEPARATOR + b'"count"',
+                    value=str(value).encode(),
+                    headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
+                )
+            assert producer.flush(10) == 0
+
+        try:
+            producer.begin_transaction()
+            transaction_open = True
+            produce_changelog(0, 10)
+            producer.produce(source.name, partition=0, value=b"pending-source-message")
+            producer.commit_transaction(15)
+            transaction_open = False
+            # Ten records plus their commit marker. A committed prefix ensures
+            # read_committed recovery is needed even with an open transaction.
+            wait_for_highwater(11)
+
+            if scenario in ("late_commit", "late_abort"):
+                producer.begin_transaction()
+                transaction_open = True
+                produce_changelog(10, 11)
+
+            consumer.assign([source_tp, changelog_tp])
+            manager.assign_partition(
+                topic=source.name,
+                partition=0,
+                store_partitions={"default": store_partition},
+                committed_offsets={source.name: 0},
+            )
+            rp = manager.partitions[0][changelog.name]
+            expected_target = (
+                12
+                if isolation == "read_uncommitted"
+                and scenario in ("late_commit", "late_abort")
+                else 11
+            )
+            assert rp.changelog_highwater == expected_target
+
+            # Change the log AFTER the real manager has captured its highwater.
+            if scenario == "late_records":
+                producer.begin_transaction()
+                transaction_open = True
+                produce_changelog(10, 16)
+            if scenario == "late_abort":
+                producer.abort_transaction(15)
+                transaction_open = False
+            elif transaction_open:
+                producer.commit_transaction(15)
+                transaction_open = False
+
+            final_highwater = (
+                11
+                if scenario == "control"
+                else 18
+                if scenario == "late_records"
+                else 13
+            )
+            wait_for_highwater(final_highwater)
+            caught_up_checks = 0
+            timeout = Timeout(30)
+            original_poll = consumer.poll
+            original_update = manager._update_recovery_status
+
+            def bounded_poll(poll_timeout):
+                assert timeout  # Infrastructure failures remain errors, not xfails.
+                return original_poll(poll_timeout)
+
+            def bounded_status_update():
+                nonlocal caught_up_checks
+                original_update()
+                if (
+                    manager.has_assignments
+                    and rp.recovery_consume_position == final_highwater
+                ):
+                    caught_up_checks += 1
+                    if caught_up_checks == 3:
+                        manager.stop_recovery()
+
+            with (
+                patch.object(consumer, "poll", side_effect=bounded_poll),
+                patch.object(
+                    manager,
+                    "_update_recovery_status",
+                    side_effect=bounded_status_update,
+                ),
+            ):
+                manager.do_recovery()
+
+            assert rp.recovery_consume_position == final_highwater
+            expected_value = (
+                9
+                if scenario == "control"
+                or (scenario == "late_abort" and isolation == "read_committed")
+                else 15
+                if scenario == "late_records"
+                else 10
+            )
+            with store_partition.begin() as tx:
+                assert tx.get("count", prefix=b"key") == expected_value
+
+            if manager.has_assignments:
+                assert caught_up_checks == 3
+                raise RecoveryStalledAfterHighwater(
+                    f"Recovery still assigned after {caught_up_checks} caught-up checks: "
+                    f"position={rp.recovery_consume_position}, target={rp.changelog_highwater}"
+                )
+
+            assert not manager.recovering
+            # Successful recovery must actually release the source partition.
+            timeout = Timeout(10)
+            while timeout:
+                if (message := consumer.poll(1)) is not None:
+                    assert message.error() is None
+                    assert message.topic() == source.name
+                    assert message.offset() == 0
+                    assert message.value() == b"pending-source-message"
+                    break
+        finally:
+            try:
+                if transaction_open:
+                    producer.abort_transaction(15)
+            finally:
+                consumer.close()
