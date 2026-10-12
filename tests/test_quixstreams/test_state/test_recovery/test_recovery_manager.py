@@ -15,22 +15,14 @@ from quixstreams.state.exceptions import (
     InvalidStoreChangelogOffset,
 )
 from quixstreams.state.manager import SUPPORTED_STORES
-from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER, SEPARATOR
-from quixstreams.state.recovery import RecoveryManager
-from tests.utils import ConfluentKafkaMessageStub, Timeout
-
-
-class RecoveryStalledAfterHighwater(AssertionError):
-    """Recovery kept polling after reaching the end of the grown changelog."""
-
-
-# Remove these strict expected failures when recovery accepts positions past its target.
-# Use pytest --runxfail to expose the current bug as an ordinary failure.
-_RECOVERY_OVERSHOOT = pytest.mark.xfail(
-    strict=True,
-    raises=RecoveryStalledAfterHighwater,
-    reason="Recovery requires position == captured highwater even if the log grows",
+from quixstreams.state.metadata import (
+    CHANGELOG_CF_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    SEPARATOR,
 )
+from quixstreams.state.recovery import RecoveryManager
+from quixstreams.utils.json import dumps
+from tests.utils import ConfluentKafkaMessageStub, Timeout
 
 
 class TestRecoveryManager:
@@ -892,9 +884,10 @@ class TestRecoveryManagerRecover:
         "scenario",
         [
             "control",
-            pytest.param("late_commit", marks=_RECOVERY_OVERSHOOT),
-            pytest.param("late_abort", marks=_RECOVERY_OVERSHOOT),
-            pytest.param("late_records", marks=_RECOVERY_OVERSHOOT),
+            "late_commit",
+            "late_abort",
+            "late_records",
+            "late_uncommitted_source",
         ],
     )
     def test_do_recovery_after_changelog_highwater(
@@ -944,14 +937,22 @@ class TestRecoveryManagerRecover:
                     return
                 time.sleep(0.1)
 
-        def produce_changelog(start, end):
+        def produce_changelog(start, end, processed_offsets=None):
+            headers = [(CHANGELOG_CF_MESSAGE_HEADER, b"default")]
+            if processed_offsets is not None:
+                headers.append(
+                    (
+                        CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+                        dumps(processed_offsets),
+                    )
+                )
             for value in range(start, end):
                 producer.produce(
                     changelog.name,
                     partition=0,
                     key=b"key" + SEPARATOR + b'"count"',
                     value=str(value).encode(),
-                    headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
+                    headers=headers,
                 )
             assert producer.flush(10) == 0
 
@@ -988,10 +989,16 @@ class TestRecoveryManagerRecover:
             assert rp.changelog_highwater == expected_target
 
             # Change the log AFTER the real manager has captured its highwater.
-            if scenario == "late_records":
+            if scenario in ("late_records", "late_uncommitted_source"):
                 producer.begin_transaction()
                 transaction_open = True
-                produce_changelog(10, 16)
+                # These records may be committed to Kafka even though their
+                # source offset was not committed. Recovery must skip their
+                # state updates while still advancing beyond its target.
+                processed_offsets = (
+                    {source.name: 0} if scenario == "late_uncommitted_source" else None
+                )
+                produce_changelog(10, 16, processed_offsets=processed_offsets)
             if scenario == "late_abort":
                 producer.abort_transaction(15)
                 transaction_open = False
@@ -1003,7 +1010,7 @@ class TestRecoveryManagerRecover:
                 11
                 if scenario == "control"
                 else 18
-                if scenario == "late_records"
+                if scenario in ("late_records", "late_uncommitted_source")
                 else 13
             )
             wait_for_highwater(final_highwater)
@@ -1013,7 +1020,7 @@ class TestRecoveryManagerRecover:
             original_update = manager._update_recovery_status
 
             def bounded_poll(poll_timeout):
-                assert timeout  # Infrastructure failures remain errors, not xfails.
+                assert timeout  # Bound recovery if the completion check regresses.
                 return original_poll(poll_timeout)
 
             def bounded_status_update():
@@ -1040,7 +1047,7 @@ class TestRecoveryManagerRecover:
             assert rp.recovery_consume_position == final_highwater
             expected_value = (
                 9
-                if scenario == "control"
+                if scenario in ("control", "late_uncommitted_source")
                 or (scenario == "late_abort" and isolation == "read_committed")
                 else 15
                 if scenario == "late_records"
@@ -1049,12 +1056,10 @@ class TestRecoveryManagerRecover:
             with store_partition.begin() as tx:
                 assert tx.get("count", prefix=b"key") == expected_value
 
-            if manager.has_assignments:
-                assert caught_up_checks == 3
-                raise RecoveryStalledAfterHighwater(
-                    f"Recovery still assigned after {caught_up_checks} caught-up checks: "
-                    f"position={rp.recovery_consume_position}, target={rp.changelog_highwater}"
-                )
+            assert not manager.has_assignments, (
+                f"Recovery still assigned after {caught_up_checks} caught-up checks: "
+                f"position={rp.recovery_consume_position}, target={rp.changelog_highwater}"
+            )
 
             assert not manager.recovering
             # Successful recovery must actually release the source partition.
