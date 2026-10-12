@@ -841,10 +841,10 @@ class QuixTSDataLakeSink(BatchingSink):
             return pc.cast(column, pa.timestamp("ms"))
         if pa.types.is_string(t) or pa.types.is_large_string(t):
             try:
-                return pc.cast(column, pa.timestamp("us"))
+                return pc.cast(column, pa.timestamp("ns"))
             except pa.ArrowInvalid:
-                aware = pc.cast(column, pa.timestamp("us", tz="UTC"))
-                return pc.cast(aware, pa.timestamp("us"))
+                aware = pc.cast(column, pa.timestamp("ns", tz="UTC"))
+                return pc.cast(aware, pa.timestamp("ns"))
         if column.null_count == len(column):
             # Nothing to detect. Every part is NULL, which the partition key
             # turns into the Hive-NULL bucket like any other missing value.

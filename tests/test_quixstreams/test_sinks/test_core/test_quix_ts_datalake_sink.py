@@ -544,6 +544,35 @@ class TestTimestampColumnMapping:
         assert result.column("hour").to_pylist() == ["14", "12"]
 
     @pytest.mark.parametrize(
+        "timestamp_value,expected_hour",
+        [
+            ("2024-06-15T14:30:00.123456789Z", "14"),
+            ("2024-06-15T14:30:00.1234567Z", "14"),
+            ("2024-06-15T14:30:00.1234567", "14"),
+            ("2024-06-15T14:30:00.123456789+02:00", "12"),
+        ],
+        ids=[
+            "go_rfc3339nano",
+            "dotnet_roundtrip",
+            "seven_digits_no_offset",
+            "nanos_with_offset",
+        ],
+    )
+    def test_add_timestamp_columns_parses_iso_strings_beyond_microseconds(
+        self, sink_factory, timestamp_value, expected_hour
+    ):
+        """An ISO-8601 string with 7 to 9 fractional digits is parsed into the
+        correct UTC date parts."""
+        sink = sink_factory(hive_columns=["year", "month", "day", "hour"])
+
+        result = sink._add_timestamp_columns(self._table([timestamp_value]))
+
+        assert result.column("year")[0].as_py() == "2024"
+        assert result.column("month")[0].as_py() == "06"
+        assert result.column("day")[0].as_py() == "15"
+        assert result.column("hour")[0].as_py() == expected_hour
+
+    @pytest.mark.parametrize(
         "timestamp_value",
         [1704067200000, datetime(2024, 1, 1, tzinfo=timezone.utc)],
         ids=["epoch_ms", "utc_datetime"],
