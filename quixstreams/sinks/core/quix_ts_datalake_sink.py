@@ -40,14 +40,14 @@ logger = logging.getLogger(__name__)
 
 
 # Timestamp parts extracted from ``timestamp_column`` for Hive partitioning,
-# as the strftime format that produces each one. ``%m``/``%d``/``%H`` are
-# zero-padded by strftime itself, which is what the readers expect
-# (``month=01``, never ``month=1``).
-TIMESTAMP_PART_FORMAT = {
-    "year": "%Y",
-    "month": "%m",
-    "day": "%d",
-    "hour": "%H",
+# as the Arrow kernel that reads each one off a naive timestamp. Component
+# extraction, not ``strftime``: strftime goes through Arrow's timezone
+# database, which Windows does not ship.
+_TIMESTAMP_PART = {
+    "year": pc.year,
+    "month": pc.month,
+    "day": pc.day,
+    "hour": pc.hour,
 }
 
 # How many leading values the epoch-unit detection will read through looking
@@ -816,23 +816,35 @@ class QuixTSDataLakeSink(BatchingSink):
         return None
 
     def _timestamp_as_arrow(self, column):
-        """The timestamp column as an Arrow timestamp array, ready for strftime.
+        """The timestamp column as a NAIVE Arrow timestamp array, ready for
+        part extraction.
 
-        * a timestamp column is used as it stands (a tz-aware one formats in its
-          own zone, exactly as ``.dt`` did);
+        * a tz-aware timestamp column becomes the wall clock of its own zone
+          (what ``.dt`` gave); a UTC one is re-typed rather than converted, so
+          it stays off Arrow's timezone database (absent on Windows);
         * a date column is widened to a timestamp;
-        * an ISO-8601 string column is parsed (the pandas path crashed on one);
+        * an ISO-8601 string column is parsed (the pandas path crashed on one),
+          with or without a zone offset — Arrow accepts only one of the two per
+          cast, so an offset-carrying column is parsed as UTC and re-typed;
         * a numeric column is an epoch whose UNIT is detected from the magnitude
           of the first non-null value, with the same thresholds the pandas path
           used (>1e17 ns, >1e14 us, >1e11 ms, else s).
         """
         t = column.type
         if pa.types.is_timestamp(t):
-            return column
+            if t.tz is None:
+                return column
+            if t.tz.upper() in ("UTC", "Z", "+00:00"):
+                return pc.cast(column, pa.timestamp(t.unit))
+            return pc.local_timestamp(column)
         if pa.types.is_date(t):
             return pc.cast(column, pa.timestamp("ms"))
         if pa.types.is_string(t) or pa.types.is_large_string(t):
-            return pc.cast(column, pa.timestamp("us"))
+            try:
+                return pc.cast(column, pa.timestamp("us"))
+            except pa.ArrowInvalid:
+                aware = pc.cast(column, pa.timestamp("us", tz="UTC"))
+                return pc.cast(aware, pa.timestamp("us"))
         if column.null_count == len(column):
             # Nothing to detect. Every part is NULL, which the partition key
             # turns into the Hive-NULL bucket like any other missing value.
@@ -874,8 +886,10 @@ class QuixTSDataLakeSink(BatchingSink):
         for col in self._partition_spec_order:
             if col not in self._ts_hive_columns:
                 continue
-            # strftime zero-pads month/day/hour; year stays as-is.
-            part = pc.strftime(ts, format=TIMESTAMP_PART_FORMAT[col])
+            part = pc.cast(_TIMESTAMP_PART[col](ts), pa.string())
+            if col != "year":
+                # Readers expect ``month=01``, never ``month=1``.
+                part = pc.utf8_lpad(part, 2, "0")
             index = table.schema.get_field_index(col)
             if index >= 0:
                 table = table.set_column(index, col, part)
@@ -1542,15 +1556,10 @@ class QuixTSDataLakeSink(BatchingSink):
             else:
                 file_path = f"s3://{self.s3_bucket}/{storage_key}"
 
-            # Build partition values dict.
-            # _write_batch fillna()'s NaN partition values with HIVE_NULL_PARTITION
-            # (the on-disk sentinel — see the constant near the top) so they
-            # survive groupby and land in a single ``col=__None__`` directory on
-            # disk. The catalog receives the same literal string — including
-            # the ``__None__`` sentinel for NULL buckets — so the manifest
-            # row, the on-disk path, and what DuckDB's
-            # ``hive_partitioning=true`` exposes at query time all agree.
-            # Equality filters then resolve end-to-end without any sentinel
+            # Partition values arrive with NULLs already replaced by
+            # HIVE_NULL_PARTITION (_partition_key_strings), so the catalog
+            # receives the literal the on-disk ``col=__None__`` folder carries
+            # and equality filters resolve end-to-end with no sentinel
             # translation in the lake.
             partition_dict: Dict[str, str] = {}
             if partition_columns and partition_values:

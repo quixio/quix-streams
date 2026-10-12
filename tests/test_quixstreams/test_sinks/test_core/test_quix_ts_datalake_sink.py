@@ -429,9 +429,9 @@ class TestSilenceChattyLoggers:
         silence_chatty_loggers()
 
         for name in self._SILENCED:
-            assert _logging.getLogger(name).level == _logging.WARNING, (
-                f"{name} not raised to WARNING"
-            )
+            assert (
+                _logging.getLogger(name).level == _logging.WARNING
+            ), f"{name} not raised to WARNING"
 
     def test_setup_silences_when_flag_is_true(self, sink_factory, mock_blob_client):
         import logging as _logging
@@ -525,6 +525,51 @@ class TestTimestampColumnMapping:
         assert result.column("month")[0].as_py() == "06"
         assert result.column("day")[0].as_py() == "15"
         assert result.column("hour")[0].as_py() == "14"
+
+    def test_add_timestamp_columns_parses_iso_strings_with_zone_offset(
+        self, sink_factory
+    ):
+        """A ``Z`` / ``+hh:mm`` suffix (JavaScript ``toISOString()``, a tz-aware
+        ``isoformat()``) parses too, and the parts are the UTC wall clock.
+        Arrow's naive cast rejects any offset, which failed the flush."""
+        sink = sink_factory(hive_columns=["year", "month", "day", "hour"])
+
+        result = sink._add_timestamp_columns(
+            self._table(["2024-06-15T14:30:00Z", "2024-06-15T14:30:00+02:00"])
+        )
+
+        assert result.column("year").to_pylist() == ["2024", "2024"]
+        assert result.column("month").to_pylist() == ["06", "06"]
+        assert result.column("day").to_pylist() == ["15", "15"]
+        assert result.column("hour").to_pylist() == ["14", "12"]
+
+    @pytest.mark.parametrize(
+        "timestamp_value",
+        [1704067200000, datetime(2024, 1, 1, tzinfo=timezone.utc)],
+        ids=["epoch_ms", "utc_datetime"],
+    )
+    def test_parts_are_derived_without_the_timezone_database(
+        self, sink_factory, monkeypatch, timestamp_value
+    ):
+        """Windows ships no timezone database, so Arrow's ``strftime`` raises
+        there even for UTC. The parts must come from kernels that read a naive
+        timestamp directly; strftime is made to fail the way it does on Windows."""
+        import pyarrow.compute as pc
+
+        def no_timezone_database(*args, **kwargs):
+            raise pa.ArrowInvalid(
+                "Cannot locate timezone 'UTC': Timezone database not found"
+            )
+
+        monkeypatch.setattr(pc, "strftime", no_timezone_database)
+        sink = sink_factory(hive_columns=["year", "month", "day", "hour"])
+
+        result = sink._add_timestamp_columns(self._table([timestamp_value]))
+
+        assert result.column("year")[0].as_py() == "2024"
+        assert result.column("month")[0].as_py() == "01"
+        assert result.column("day")[0].as_py() == "01"
+        assert result.column("hour")[0].as_py() == "00"
 
     def test_add_timestamp_columns_tolerates_leading_nulls(self, sink_factory):
         """The unit is detected from the first NON-NULL value; a leading null
