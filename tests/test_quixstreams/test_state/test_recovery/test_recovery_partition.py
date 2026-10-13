@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
-from confluent_kafka import OFFSET_BEGINNING
+from confluent_kafka import OFFSET_BEGINNING, OFFSET_INVALID
 
 from quixstreams.state.exceptions import ColumnFamilyHeaderMissing
 from quixstreams.state.metadata import (
@@ -15,6 +15,28 @@ from tests.utils import ConfluentKafkaMessageStub
 
 
 class TestRecoveryPartition:
+    @pytest.mark.parametrize(
+        "highwater, position, finished",
+        [
+            (0, None, False),
+            (0, OFFSET_INVALID, False),
+            (0, 0, True),
+            (20, None, False),
+            (20, 19, False),
+            (20, 20, True),
+            (20, 21, True),
+            (20, 27, True),
+        ],
+    )
+    def test_finished_recovery_check(
+        self, recovery_partition_factory, highwater, position, finished
+    ):
+        recovery_partition = recovery_partition_factory(highwater=highwater)
+        if position is not None:
+            recovery_partition.set_recovery_consume_position(position)
+
+        assert recovery_partition.finished_recovery_check is finished
+
     @pytest.mark.parametrize(
         "offset, needs_check",
         ([21, False], [20, False], [19, False], [18, True], [17, True]),
