@@ -38,6 +38,8 @@ sink = QuixTSDataLakeSink(
     timestamp_column="ts_ms",
     catalog_url="https://iceberg-catalog.example.com",
     catalog_auth_token="<token>",
+    query_api_url="https://lake-api.example.com",
+    query_api_auth_token="<token>",
     auto_discover=True,
 )
 
@@ -58,6 +60,20 @@ Records must be dictionaries. If your values are not dicts, convert them before 
 `QuixTSDataLakeSink` is a batching sink. It buffers processed records in memory per topic partition, serializes each batch into Parquet with Hive-style partition paths (`year=YYYY/month=MM/day=DD/...`), uploads the file to blob storage, and — if a REST Catalog is configured — registers the file in the table manifest. Files are flushed at every checkpoint (controlled by `Application(commit_interval=...)`).
 
 Blob credentials are read automatically from the `Quix__BlobStorage__Connection__Json` environment variable when running on Quix Cloud; for local runs, the filesystem is inferred from the `quixportal` configuration.
+
+### Arrow all the way (no pandas)
+
+A flush is assembled column-wise straight into one `pyarrow.Table`: the batch is materialized **once**, instead of the three times a DataFrame cost (a dict copy per record, an object array per column, then the Arrow conversion). The sink therefore needs no pandas at all — `quixstreams[quixdatalake]` does not install it.
+
+Measured on a 200,000-record flush of 23 fields: peak memory during the flush dropped from ~565 MB to ~253 MB, and CPU time by about 20%.
+
+Two behavioural details follow from it:
+
+- **A record that omits a field reads NULL, not NaN.** An integer column stays an integer column instead of widening to float the moment one record leaves the field out — so the same column no longer lands as `BIGINT` in some files and `DOUBLE` in others.
+- **Files carry exactly the record's own columns.** The DataFrame path serialized a partition group's index as an extra `__index_level_0__` column into *every* file of a partitioned table. New files do not have it.
+
+!!! note "Reading a table written by both versions"
+    A table that holds files from both the old and the new sink has files that differ in columns, which a strict read (DuckDB's `union_by_name=false`) refuses. The Quix Lakehouse API retries such a query once with `union_by_name=true`, so the missing column reads NULL and the query answers; other readers should pass `union_by_name=true` (or rewrite the old files) while the table is in that mixed state.
 
 ## Partition Columns
 
@@ -105,6 +121,36 @@ The index is navigation-only — it is not used for query pruning, so it is a hi
 
 A physical-only table registers with an empty `partition_spec` and lets the catalog derive the spec from the first files' paths. As soon as any virtual column is configured, the spec cannot be discovered from paths, so the sink sends the full intended tree order up front and declares which entries are virtual in `properties.virtual_partitions`. On restart against an existing table, the sink validates against that same full order.
 
+### The table's registered location wins
+
+A table's `location` is where every file in its manifest lives, so the catalog — not the writer — is the authority on it.
+
+On startup (and before its first write) the sink reads the table's registered location. If it differs from `s3_prefix/table_name`, the sink **writes to the registered location** and logs a warning. That is what keeps a second writer from starting a second folder nothing reads: a redeploy with a different prefix, a second differently-configured sink, or a table that something else registered first.
+
+The catalog enforces the other half: registering an existing table does not move it. The response reports what was kept in `location_conflict`, and only a deliberate relocation (`allow_location_change`) re-points a table. Two sinks that both create the same new table at the same moment therefore converge — the one that loses the race follows the winner's location.
+
+A location the sink *cannot* write to is an error rather than a guess, raised from `setup()`: another bucket, or a folder outside this deployment's workspace. Writing there would put the data where the deployment cannot read it back.
+
+### Where the data came from
+
+With a catalog configured, the sink registers itself as a **source** of the table: one row per `(source_type, workspace_id, topic)` in the catalog's `table_sources`, with that source's cumulative file and row counts, when it was first seen, and when it last wrote.
+
+```
+GET /tables/telemetry/sources        # lakehouse API
+{"table": "telemetry",
+ "topics": ["car-1", "car-2"],
+ "sources": [
+   {"source_type": "kafka", "workspace_id": "prod-eu", "topic": "car-1",
+    "file_count": 1284, "row_count": 41_200_000,
+    "first_seen_at": "2026-09-01T08:12:00", "last_seen_at": "2026-10-08T16:41:09",
+    "properties": {"sink": "quixstreams-quix-ts-datalake-sink", "quixstreams_version": "3.23.6"}},
+   {"source_type": "kafka", "workspace_id": "prod-eu", "topic": "car-2", "...": "..."}]}
+```
+
+One table is routinely fed by **several** topics — one per car, line, or test rig — so this is a list, and each writer only ever touches its own row: registering is idempotent and cannot erase another writer's entry.
+
+It costs no extra round-trip per flush. The counters ride along inside the same `add-files` request that registers the files, recorded in the same transaction; the standalone registration happens once per topic per process, so a topic is visible as a source even before it has produced a file. A catalog without the registry answers `501` and the sink stops asking. Provenance never fails a write: a failed registration is a warning.
+
 ### Caveats
 
 - A virtual column must be a field your records actually carry. Unlike a physical partition, it is not derived and not reconstructible from the path: reads use `hive_partitioning=true`, which rebuilds physical columns from `key=value/` folders but has nothing to rebuild a virtual column from. The column has to be in the Parquet data for `WHERE driver = 'HAM'` to resolve, and for the lakehouse's sidecar reindex to read its values back out.
@@ -127,6 +173,8 @@ Skipped automatically: the internal `__key` column, anything that is neither num
 
 Numeric bounds are widened outward to the nearest representable float (`min` rounds down, `max` rounds up). This guarantees the stored range is a superset of the real one, so float rounding of large integers — nanosecond epochs beyond 2^53, for example — can only cost some pruning and can never wrongly skip a file that holds matching rows.
 
+`stats_columns` is also **recorded on the table** (`properties.stats_columns`) when set. That matters because the lakehouse rewrites files itself — compaction, the statistics backfill, attaching external files — by reading Parquet footers, and without the declaration it would record a zone map for every numeric and timestamp column in them, re-introducing on the next compaction exactly the statistics excluded here. Clearing `stats_columns` clears the declaration, so the table goes back to "every numeric/timestamp column".
+
 The default is deliberate: statistics are nearly free to compute here, and they benefit any range query. Restrict `stats_columns` when a table is wide enough that per-file, per-column stats rows become a meaningful cost in the catalog:
 
 ```python
@@ -139,6 +187,33 @@ sink = QuixTSDataLakeSink(
     catalog_url="https://iceberg-catalog.example.com",
 )
 ```
+
+## Query API notification
+
+When `query_api_url` is set, every successful manifest registration is followed by one
+`POST {query_api_url}/tables/{table_name}/files-added` carrying the same file entries the
+catalog received (without `column_stats`):
+
+```json
+{"namespace": "default",
+ "files": [{"file_path": "s3://…/run_id=TAS-1005/part-0001.parquet",
+            "partition_values": {"platform": "Porsche_Taycan", "run_id": "TAS-1005"},
+            "row_count": 249000, "file_size": 1834112,
+            "last_modified": "2026-09-29T09:23:19.489000+00:00"}]}
+```
+
+The query API pushes these as `files-added` events to its subscribers (for example a QuixLab
+notebook watching the table). The call is synchronous in the flush path, made once per topic
+partition with data at each checkpoint, and `timeout=5` bounds the connect and the read
+separately, so an unreachable API can cost up to about 10 s per partition per checkpoint.
+The notification is best effort: a timeout, a connection error or a non-2xx answer is logged
+as a WARNING and the flush still succeeds. On the Quix platform pass the injected
+`Quix__Lakehouse__Query__Url` and `Quix__Lakehouse__Query__AuthToken`.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `query_api_url` | `Optional[str]` | `None` | Lake query API base URL. Unset = no notification. |
+| `query_api_auth_token` | `Optional[str]` | `None` | Bearer token sent with the notification. |
 
 ## Sort Column
 
