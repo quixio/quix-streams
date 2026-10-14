@@ -148,12 +148,19 @@ class StubMessage:
 
 
 class StubConsumer:
-    """A one-partition consumer whose log is the public ``messages`` list."""
+    """A one-partition consumer whose log is the public ``messages`` list.
 
-    def __init__(self, topic: str, messages: list[bytes]):
+    ``poll`` returns ``None`` once the log is read, as a real poll does on
+    timeout. ``trailing_gap`` puts the high watermark that many offsets past
+    the last message, as a transaction marker or a compaction gap does.
+    """
+
+    def __init__(self, topic: str, messages: list[bytes], trailing_gap: int = 0):
         self.topic = topic
         self.messages = messages
+        self.trailing_gap = trailing_gap
         self.assigned: list[list] = []
+        self.polls = 0
         self._cursor = 0
 
     def list_topics(self, topic=None, timeout=None):
@@ -162,14 +169,18 @@ class StubConsumer:
         )
 
     def get_watermark_offsets(self, partition, timeout=None, cached=False):
-        return 0, len(self.messages)
+        return 0, len(self.messages) + self.trailing_gap
 
     def assign(self, partitions):
         self.assigned.append(partitions)
         if partitions:
-            self._cursor = partitions[0].offset
+            # OFFSET_BEGINNING is a negative logical offset
+            self._cursor = max(partitions[0].offset, 0)
 
     def poll(self, timeout=None):
+        self.polls += 1
+        if self._cursor >= len(self.messages):
+            return None
         message = StubMessage(self.topic, self._cursor, self.messages[self._cursor])
         self._cursor += 1
         return message

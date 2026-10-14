@@ -406,7 +406,7 @@ Sample packets name their parameters in one of two wire forms:
 - **Identifier form.** `data_format` carries only a numeric `data_format_identifier`. MA's managed producers send this form.
 - **Inline form.** `data_format.parameter_identifiers` lists the names. This form also occurs on the wire and needs no setup.
 
-The names for an identifier live in a `DataFormatDefinition` packet. The MA Stream API server writes one to the data source's `<prefix>essentials.<datasource>` topic, and to the data topic, the first time a parameter list is registered.
+The names for an identifier live in a `DataFormatDefinition` packet. The MA Stream API server writes it once, when the parameter list is first registered: to the data source's `<prefix>Essentials.<datasource>` topic and to partition 0 of `<prefix>Data.<datasource>`, never to per-stream topics. A consumer of the data topic cannot rely on seeing it, so identifier-form feeds require `definitions_topic`.
 
 Subscribe only the data topic, and pass the deserializer the essentials topic name and a consumer to read it with:
 
@@ -418,9 +418,9 @@ app = Application(broker_address="localhost:9092", consumer_group="ma-telemetry"
 
 with app.get_consumer(auto_commit_enable=False) as definitions_consumer:
     topic = app.topic(
-        "telemetry-input",
+        "Data.Car1",
         value_deserializer=MAStreamingDeserializer(
-            definitions_topic="essentials.Car1",
+            definitions_topic="Essentials.Car1",
             consumer=definitions_consumer,
         ),
         key_deserializer="str",
@@ -430,7 +430,7 @@ with app.get_consumer(auto_commit_enable=False) as definitions_consumer:
     app.run()
 ```
 
-- **On a miss**, the deserializer reads the definitions topic up to its current end, then looks the identifier up again. Each later miss reads only the messages added since. `DataFormatDefinition` packets that arrive on the data topic are used too, with or without `definitions_topic`.
+- **On a miss**, the deserializer reads the definitions topic from where its previous read stopped until the identifier appears or no message arrives for 5 seconds, then looks the identifier up again. `DataFormatDefinition` packets that arrive on the data topic are cached too.
 - **`definitions_topic` is the full broker-side topic name**, including any prefix. Do not pass it through `app.topic()`.
 - **Identifiers are per data source.** Use one deserializer per data source, each with that data source's essentials topic.
 - **A `KeyError` after seeding** means the definitions topic is wrong. The error goes to `on_consumer_error`, and by default the application stops.
@@ -460,7 +460,7 @@ deserializer = MAStreamingDeserializer(
 | `use_integers_for_enums` | `bool` | `False` | When `True`, enum fields are emitted as integers instead of string names (e.g. `1` instead of `"DATA_STATUS_VALID"`), both in tagged-union records and in the projected `status` column. |
 | `build_table` | list or dict or `None` | `DEFAULT_BUILD_TABLE` | Column projection for sample-bearing packets. Pass a list of source field names or a dict of output name → source alias list. Pass `None` to disable projection and get one tagged-union record per packet. |
 | `filter` | `dict` or `None` | `None` | Packet-type and signal allowlists. Two optional keys: `"types"` (list of `Packet.type` strings) and `"signals"` (list of parameter identifier strings). `{}` is accepted as a no-op alias for `None`. |
-| `definitions_topic` | `str` | `None` | Full broker-side name of the data source's essentials topic (`<prefix>essentials.<datasource>`). Read on an unknown `data_format_identifier`. Requires `consumer`. |
+| `definitions_topic` | `str` | `None` | Full broker-side name of the data source's essentials topic (`<prefix>Essentials.<datasource>`). Read on an unknown `data_format_identifier`. Requires `consumer`. |
 | `consumer` | `Consumer` | `None` | A consumer from `app.get_consumer(auto_commit_enable=False)`, used to read `definitions_topic`. The deserializer only assigns and polls it; it never commits or closes it. |
 
 ## Maintenance
@@ -481,6 +481,10 @@ After generation, the `# Protobuf Python Version:` comment at the top of `open_d
 ### Protocol attribution
 
 The `open_data.proto` schema is sourced from the [MA.DataPlatforms.Protocol](https://github.com/Software-Products/MA.DataPlatforms.Protocol) repository published by Motion Applied, licensed under the Apache License 2.0. `MAStreamingDeserializer.protocol_version` is `"v1"`, mirroring the `ma.streaming.open_data.v1` package name in the schema.
+
+## Limitations
+
+Importing `MAStreamingDeserializer` and your own generated `ma.streaming.open_data.v1` bindings in one process makes protobuf raise a `duplicate symbol` error, because both register the same message names; use one or the other.
 
 ## Troubleshooting
 
@@ -518,7 +522,7 @@ MAStreamingDeserializer(
 
 **Symptom:** The application stops with `KeyError: 7` (or another number) raised while deserializing a sample packet.
 
-**Cause:** The packet carries `data_format_identifier` 7 and no definition for it is known. If `definitions_topic` is set, the deserializer already read that topic and the definition was not there, so `definitions_topic` names the wrong topic, or another data source's. If `definitions_topic` is not set, the definition has not appeared on the data topic yet.
+**Cause:** The packet carries `data_format_identifier` 7 and no definition for it is known. If `definitions_topic` is set, the deserializer already read that topic and the definition was not there, so `definitions_topic` names the wrong topic, or another data source's. If `definitions_topic` is not set, the definition was never seen: it is written only once, so identifier-form feeds need `definitions_topic`.
 
 **Fix:** Set `definitions_topic` to the data source's full topic name, together with `consumer`; see [Resolving parameter names](#3-resolving-parameter-names).
 

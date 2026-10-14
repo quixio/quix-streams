@@ -11,12 +11,11 @@ from __future__ import annotations
 import base64
 from typing import Any, Mapping, Optional, Sequence, Union, cast
 
-from confluent_kafka import TopicPartition
+from confluent_kafka import OFFSET_BEGINNING, TopicPartition
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import DecodeError, Message
 
 from ....kafka import Consumer, raise_for_msg_error
-from ...types import RawConfluentKafkaMessageProto
 from ..base import SerializationContext
 from ..exceptions import SerializationError
 from ..protobuf import ProtobufDeserializer
@@ -31,6 +30,8 @@ from .sample_iter import (
 
 # Distinguishes an omitted ``build_table`` from an explicit ``None``.
 _USE_DEFAULT_BUILD_TABLE: Any = object()
+
+_SEED_POLL_TIMEOUT = 5.0
 
 _DATA_STATUS_NAMES: dict[int, str] = {
     v.number: v.name for v in pb.DataStatus.DESCRIPTOR.values
@@ -84,10 +85,12 @@ class MAStreamingDeserializer(ProtobufDeserializer):
 
     Parameter names come from the packet's inline
     ``data_format.parameter_identifiers``, or, for a packet that carries only
-    a ``data_format_identifier``, from the ``DataFormatDefinition`` packets
-    already seen on the data topic. With ``definitions_topic`` and
-    ``consumer`` set, an unknown identifier first reads that topic up to its
-    high watermark. An identifier that is still unknown raises ``KeyError``.
+    a ``data_format_identifier``, from ``DataFormatDefinition`` packets.
+    Definitions are written once, to the essentials topic and to partition 0
+    of the data topic, so identifier-form feeds need ``definitions_topic`` and
+    ``consumer``: an unknown identifier then reads that topic from where the
+    previous read stopped until the identifier appears or a poll times out.
+    An identifier that is still unknown raises ``KeyError``.
     """
 
     #: Mirrors the ``v1`` of the bundled schema's ``ma.streaming.open_data.v1``.
@@ -177,7 +180,7 @@ class MAStreamingDeserializer(ProtobufDeserializer):
               with unsupported columns.
         :param definitions_topic: Full broker-side name of the data source's
             essentials topic, as named by the MA Stream API server
-            (``<prefix>essentials.<datasource>``). It is not passed through
+            (``<prefix>Essentials.<datasource>``). It is not passed through
             ``app.topic()``. Used together with ``consumer``.
         :param consumer: A ``quixstreams.kafka.Consumer`` created with
             ``app.get_consumer(auto_commit_enable=False)``. The deserializer
@@ -383,32 +386,26 @@ class MAStreamingDeserializer(ProtobufDeserializer):
             and consumer is not None
             and topic is not None
         ):
-            self._seed(consumer, topic)
+            self._seed(consumer, topic, identifier)
         return self._formats[identifier]
 
-    def _seed(self, consumer: Consumer, topic: str) -> None:
-        """Read ``topic`` up to its current high watermarks and cache every
-        parameter definition found, resuming where the previous seed stopped.
+    def _seed(self, consumer: Consumer, topic: str, identifier: int) -> None:
+        """Read ``topic`` from where the previous seed stopped, caching every
+        parameter definition, until ``identifier`` is cached or a poll times out.
         """
         partitions = consumer.list_topics(topic).topics[topic].partitions
-        high: dict[int, int] = {}
-        assignment: list[TopicPartition] = []
-        for p in partitions:
-            low, high_p = consumer.get_watermark_offsets(TopicPartition(topic, p))
-            start = self._seed_offsets.get(p, low)
-            if start < high_p:
-                high[p] = high_p
-                assignment.append(TopicPartition(topic, p, start))
-        consumer.assign(assignment)
-        pending = set(high)
-        while pending:
-            msg = raise_for_msg_error(
-                cast(RawConfluentKafkaMessageProto, consumer.poll())
-            )
-            p = msg.partition()
-            self._seed_offsets[p] = msg.offset() + 1
-            if self._seed_offsets[p] >= high[p]:
-                pending.discard(p)
+        consumer.assign(
+            [
+                TopicPartition(topic, p, self._seed_offsets.get(p, OFFSET_BEGINNING))
+                for p in partitions
+            ]
+        )
+        while identifier not in self._formats:
+            raw = consumer.poll(_SEED_POLL_TIMEOUT)
+            if raw is None:
+                return
+            msg = raise_for_msg_error(raw)
+            self._seed_offsets[msg.partition()] = msg.offset() + 1
             packet = self._parse_inner(pb.Packet, cast(bytes, msg.value()))
             if packet.type == "DataFormatDefinition":
                 self._remember_format(packet.content)

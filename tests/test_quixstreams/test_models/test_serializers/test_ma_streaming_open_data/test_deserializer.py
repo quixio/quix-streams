@@ -471,9 +471,9 @@ class TestParameterNameResolution:
 
     def test_unknown_identifier_seeds_from_definitions_topic(self):
         """An unknown identifier is resolved from the definitions topic, and a later miss reads only the new messages; previously definitions_topic was not accepted."""
-        stub = StubConsumer("essentials.Car1", [_definition(7, ["vCar", "nEngine"])])
+        stub = StubConsumer("Essentials.Car1", [_definition(7, ["vCar", "nEngine"])])
         deserializer = MAStreamingDeserializer(
-            definitions_topic="essentials.Car1", consumer=stub
+            definitions_topic="Essentials.Car1", consumer=stub
         )
         rows = deserializer(_identifier_periodic(7, 2), DUMMY_CONTEXT)
         assert [row["name"] for row in rows] == ["vCar", "nEngine"]
@@ -482,6 +482,31 @@ class TestParameterNameResolution:
         rows = deserializer(_identifier_periodic(8, 1), DUMMY_CONTEXT)
         assert [row["name"] for row in rows] == ["nGear"]
         assert stub.assigned[-1][0].offset == 1
+
+    def test_seed_stops_at_end_of_topic_with_trailing_gap(self):
+        """A seed that runs out of messages below the high watermark returns and the lookup raises KeyError; previously raise_for_msg_error(None) raised AttributeError: 'NoneType' object has no attribute 'error'."""
+        stub = StubConsumer(
+            "Essentials.Car1",
+            [_definition(8, ["nGear"]), _definition(9, ["vCar"])],
+            trailing_gap=2,
+        )
+        deserializer = MAStreamingDeserializer(
+            definitions_topic="Essentials.Car1", consumer=stub
+        )
+        with pytest.raises(KeyError):
+            deserializer(_identifier_periodic(7, 1), DUMMY_CONTEXT)
+
+    def test_seed_stops_once_identifier_is_cached(self):
+        """A seed polls only until the wanted identifier is cached; previously it read on to the high watermark."""
+        stub = StubConsumer(
+            "Essentials.Car1",
+            [_definition(7, ["vCar"]), _definition(8, ["nGear"])],
+        )
+        deserializer = MAStreamingDeserializer(
+            definitions_topic="Essentials.Car1", consumer=stub
+        )
+        deserializer(_identifier_periodic(7, 1), DUMMY_CONTEXT)
+        assert stub.polls == 1
 
 
 class TestOutputContract:
