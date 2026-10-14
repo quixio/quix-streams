@@ -280,6 +280,9 @@ class Stream:
         """
         return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
 
+    def add_function(self, func: StreamFunction) -> "Stream":
+        return self._add(func)
+
     def merge(self, other: "Stream") -> "Stream":
         """
         Merge two Streams together and return a new Stream with two parents

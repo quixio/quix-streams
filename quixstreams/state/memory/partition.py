@@ -1884,6 +1884,21 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "and would be unreadable. Check for a nanosecond/second vs "
                 "millisecond timestamp mistake or an unbounded ttl."
             )
+        if timestamp < 0:
+            # Parity with ``RocksDBPartitionTransaction._compute_stamp``: a
+            # negative event-time (Kafka NO_TIMESTAMP is -1) cannot anchor an
+            # expiry, and ``timestamp + ttl`` would otherwise be a bogus
+            # near-epoch stamp (e.g. -1 + 5s = 4999 ms) that expires the record
+            # on arrival. Fall back to never-expires; every ``ttl=`` write path
+            # stamps through here.
+            logger.warning(
+                "ttl=%r write has a negative event-time timestamp (%d, e.g. Kafka "
+                "NO_TIMESTAMP), which cannot anchor an expiry; storing the record "
+                "without a TTL",
+                ttl,
+                timestamp,
+            )
+            return SENTINEL_NEVER
         return expiry
 
     def set(
@@ -2071,8 +2086,8 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
         if ttl is not None:
-            # Live ttl= write on an already-flipped partition (non-sentinel stamp);
-            # record it so adoption corroboration can fire (no-op unless provisional).
+            # Live ttl= write on an already-flipped partition; record it so adoption
+            # corroboration can fire (no-op unless provisional).
             self._batch_has_ttl_writes = True
         try:
             value_serialized = self._serialize_value(value)

@@ -1001,6 +1001,7 @@ class Application:
         processing_context = self._processing_context
         source_manager = self._source_manager
         process_message = self._process_message
+        run_periodic_tasks = self._dataframe_registry.run_periodic_tasks
         printer = self._processing_context.printer
         run_tracker = self._run_tracker
         consumer = self._consumer
@@ -1024,6 +1025,7 @@ class Application:
                 run_tracker.timeout_refresh()
             else:
                 process_message(dataframes_composed)
+                run_periodic_tasks()
                 processing_context.commit_checkpoint()
                 consumer.resume_backpressured()
                 source_manager.raise_for_error()

@@ -66,6 +66,20 @@ class QuixTSDataLakeCatalogClient:
         url = f"{self.base_url}{path}"
         return self._session.put(url, json=json, timeout=timeout)
 
+    def patch(
+        self, path: str, json: Optional[dict] = None, timeout: int = 30
+    ) -> requests.Response:
+        """
+        Make a PATCH request to the catalog API.
+
+        :param path: API endpoint path (will be appended to base_url)
+        :param json: JSON payload to send in request body
+        :param timeout: Request timeout in seconds
+        :returns: Response object from requests library
+        """
+        url = f"{self.base_url}{path}"
+        return self._session.patch(url, json=json, timeout=timeout)
+
     def __str__(self):
         """String representation showing the base URL."""
         return self.base_url

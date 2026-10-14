@@ -133,10 +133,6 @@ class PartitionTransactionCache:
         self._empty = False
 
     def is_empty(self) -> bool:
-        """
-        Return True if any changes have been made (updates or deletes), otherwise
-        return False.
-        """
         return self._empty
 
     def get_column_families(self) -> Set[str]:
@@ -256,6 +252,10 @@ class PartitionTransaction(ABC, Generic[K, V]):
         :return: bool
         """
         return self._status == PartitionTransactionStatus.PREPARED
+
+    @property
+    def changed(self) -> bool:
+        return not self._update_cache.is_empty()
 
     @property
     def changelog_topic_partition(self) -> Optional[Tuple[str, int]]:

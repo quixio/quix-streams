@@ -9,6 +9,8 @@ from typing import (
     Union,
 )
 
+from quixstreams.core.stream.exceptions import InvalidOperation
+
 __all__ = [
     "Collect",
     "Count",
@@ -81,6 +83,36 @@ class BaseAggregator(ABC, Generic[S]):
         """
         ...
 
+    def merge(self, a: S, b: S) -> S:
+        """
+        Combine the aggregation states of two windows that are being merged into one.
+
+        Only session windows call this method: an out-of-order event that falls
+        within the inactivity gap of two open sessions bridges them, and the two
+        aggregation states have to be combined. `a` is the state of the session that
+        starts earlier in event time, `b` the state of the session that starts later;
+        the two sessions never overlap.
+
+        :param a: The state of the session that starts earlier in event time.
+        :param b: The state of the session that starts later in event time.
+        :return: The combined state.
+        :raises NotImplementedError: if the aggregator does not implement merging,
+            in which case it cannot be used with `session_window()`.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support merging and cannot be used "
+            f"with session windows"
+        )
+
+    @property
+    def mergeable(self) -> bool:
+        """
+        Whether this aggregator can be used with session windows.
+
+        True when `merge()` is overridden.
+        """
+        return type(self).merge is not BaseAggregator.merge
+
 
 class Aggregator(BaseAggregator):
     """
@@ -119,6 +151,9 @@ class Count(Aggregator):
     def result(self, value: int) -> int:
         return value
 
+    def merge(self, a: int, b: int) -> int:
+        return a + b
+
 
 V = TypeVar("V", int, float)
 
@@ -145,6 +180,9 @@ class Sum(Aggregator):
 
     def result(self, value: V) -> V:
         return value
+
+    def merge(self, a: V, b: V) -> V:
+        return a + b
 
 
 class Mean(Aggregator):
@@ -174,6 +212,9 @@ class Mean(Aggregator):
             return None
         return sum_ / count_
 
+    def merge(self, a: tuple[V, int], b: tuple[V, int]) -> tuple[V, int]:
+        return a[0] + b[0], a[1] + b[1]
+
 
 class Max(Aggregator):
     """
@@ -199,6 +240,13 @@ class Max(Aggregator):
     def result(self, value: V) -> V:
         return value
 
+    def merge(self, a: Optional[V], b: Optional[V]) -> Optional[V]:
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return max(a, b)
+
 
 class Min(Aggregator):
     """
@@ -223,6 +271,13 @@ class Min(Aggregator):
 
     def result(self, value: V) -> V:
         return value
+
+    def merge(self, a: Optional[V], b: Optional[V]) -> Optional[V]:
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return min(a, b)
 
 
 class Earliest(Aggregator):
@@ -255,6 +310,15 @@ class Earliest(Aggregator):
             return value
         return value[0]
 
+    def merge(
+        self, a: Optional[tuple[Any, int]], b: Optional[tuple[Any, int]]
+    ) -> Optional[tuple[Any, int]]:
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return a if a[1] <= b[1] else b
+
 
 class Latest(Aggregator):
     """
@@ -286,11 +350,24 @@ class Latest(Aggregator):
             return value
         return value[0]
 
+    def merge(
+        self, a: Optional[tuple[Any, int]], b: Optional[tuple[Any, int]]
+    ) -> Optional[tuple[Any, int]]:
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return b if b[1] >= a[1] else a
+
 
 class First(Aggregator):
     """
     Use `First()` to get the first event, or a column of the event, within each window period.
     This aggregation works based on the processing order.
+
+    >***NOTE:*** Processing order is not recoverable across a session merge, so
+    `First()` falls back to **session order** and keeps the earlier session's
+    value. Use `Earliest()` when the result must be order-independent.
 
     :param column: The column to aggregate. Use `None` to first the whole message.
         Default - `None`
@@ -310,11 +387,18 @@ class First(Aggregator):
     def result(self, value: Any) -> Any:
         return value
 
+    def merge(self, a: Any, b: Any) -> Any:
+        return b if a is None else a
+
 
 class Last(Aggregator):
     """
     Use `Last()` to get the last event, or a column of the event, within each window period.
     This aggregation works based on the processing order.
+
+    >***NOTE:*** Processing order is not recoverable across a session merge, so
+    `Last()` falls back to **session order** and keeps the later session's value.
+    Use `Latest()` when the result must be order-independent.
 
     :param column: The column to aggregate. Use `None` to last the whole message.
         Default - `None`
@@ -334,6 +418,9 @@ class Last(Aggregator):
     def result(self, value: Any) -> Any:
         return value
 
+    def merge(self, a: Any, b: Any) -> Any:
+        return a if b is None else b
+
 
 R = TypeVar("R")
 
@@ -341,16 +428,25 @@ R = TypeVar("R")
 class Reduce(Aggregator, Generic[R]):
     """
     `Reduce()` allows you to perform complex aggregations using custom "reducer" and "initializer" functions.
+
+    :param reducer: A function combining the accumulated state with a new value.
+    :param initializer: A function building the state from the first value.
+    :param merger: A function combining two accumulated states, required only for
+        session windows. The reducer cannot be reused for this because it takes a
+        raw value, not a second state. Subclasses may override `merge()` directly
+        instead. Default - `None`.
     """
 
     def __init__(
         self,
         reducer: Callable[[R, Any], R],
         initializer: Callable[[Any], R],
+        merger: Optional[Callable[[R, R], R]] = None,
     ) -> None:
         super().__init__()
         self._initializer: Callable[[Any], R] = initializer
         self._reducer: Callable[[R, Any], R] = reducer
+        self._merger: Optional[Callable[[R, R], R]] = merger
 
     def initialize(self) -> None:
         return None
@@ -360,6 +456,34 @@ class Reduce(Aggregator, Generic[R]):
 
     def result(self, value: R) -> R:
         return value
+
+    def merge(self, a: R, b: R) -> R:
+        if self._merger is None:
+            raise NotImplementedError(
+                "Reduce does not support merging and cannot be used with session "
+                "windows unless a `merger=` function is provided"
+            )
+        return self._merger(a, b)
+
+    @property
+    def mergeable(self) -> bool:
+        """
+        Whether this aggregator can be used with session windows.
+
+        True when a `merger=` function was supplied or when a subclass overrides
+        `merge()` directly.
+
+        :raises InvalidOperation: if both are given, since method resolution
+            makes the `merge()` override take precedence over `merger=`.
+        """
+        merge_overridden = type(self).merge is not Reduce.merge
+        if merge_overridden and self._merger is not None:
+            raise InvalidOperation(
+                f"{type(self).__name__} both overrides `merge()` and was given a "
+                f"`merger=` function; the `merge()` override would silently take "
+                f"precedence. Provide only one of the two."
+            )
+        return merge_overridden or self._merger is not None
 
 
 I = TypeVar("I")

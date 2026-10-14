@@ -429,21 +429,6 @@ class InternalProducer:
         group_metadata: GroupMetadata,
         timeout: Optional[float] = None,
     ):
-        """
-        Send the consumer offsets into the open transaction and commit it.
-
-        Some failure cases from sending offsets or committing a transaction are
-        retriable, which is worth re-attempting since the transaction is almost
-        complete (the changelog was flushed before attempting to commit).
-
-        ``timeout`` is the OVERALL wall-clock budget (seconds) shared by BOTH the
-        send-offsets and the commit steps, so the whole operation is bounded by
-        one budget rather than 2x it -- important on the revoke path, inside the
-        rebalance callback. ``None`` (off the revoke path) means unbounded: each
-        step keeps its legacy behavior (retry up to ``_ABORT_RETRY_ATTEMPTS``
-        times, then raise ``KafkaProducerTransactionCommitFailed`` to trigger the
-        Application shutdown).
-        """
         deadline = _deadline_from_timeout(timeout)
 
         def _fail(op_name: str) -> Exception:
@@ -452,15 +437,16 @@ class InternalProducer:
                 "aborting transaction and shutting down Application..."
             )
 
-        self._retry_transaction_op(
-            lambda t: self._producer.send_offsets_to_transaction(
-                positions, group_metadata, t
-            ),
-            op_name="send_offsets_to_transaction",
-            deadline=deadline,
-            max_attempts=_ABORT_RETRY_ATTEMPTS,
-            on_exhausted=_fail,
-        )
+        if positions:
+            self._retry_transaction_op(
+                lambda t: self._producer.send_offsets_to_transaction(
+                    positions, group_metadata, t
+                ),
+                op_name="send_offsets_to_transaction",
+                deadline=deadline,
+                max_attempts=_ABORT_RETRY_ATTEMPTS,
+                on_exhausted=_fail,
+            )
         self._retry_transaction_op(
             self._producer.commit_transaction,
             op_name="commit_transaction",

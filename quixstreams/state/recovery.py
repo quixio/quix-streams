@@ -129,7 +129,13 @@ class RecoveryPartition:
 
     @property
     def finished_recovery_check(self) -> bool:
-        return self._recovery_consume_position == self._changelog_highwater
+        # The target is captured during assignment. Records or transaction
+        # markers appended afterward can advance the consumer past it before
+        # an empty poll triggers the next completion check.
+        return (
+            self._recovery_consume_position is not None
+            and self._recovery_consume_position >= self._changelog_highwater
+        )
 
     @property
     def needs_recovery_check(self) -> bool:

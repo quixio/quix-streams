@@ -230,3 +230,77 @@ class TestTimestampedPartitionTransaction:
             assert tx.get_latest(timestamp=123, prefix=b"key") == "2"
             assert tx.get(key=encode_integer_pair(123, 0), prefix=b"key") == "1"
             assert tx.get(key=encode_integer_pair(123, 1), prefix=b"key") == "2"
+
+    def test_delete_interval_respects_range_boundaries(
+        self,
+        transaction: TimestampedPartitionTransaction,
+    ):
+        with transaction(keep_duplicates=True) as tx:
+            for timestamp in (10, 20, 30, 40):
+                tx.set_for_timestamp(
+                    timestamp=timestamp, value=str(timestamp), prefix=b"key"
+                )
+
+            # `start` is inclusive, `end` is exclusive - same as `get_interval`.
+            deleted = tx.delete_interval(start=20, end=40, prefix=b"key")
+
+            assert deleted == 2
+            assert tx.get_interval(start=0, end=100, prefix=b"key") == ["10", "40"]
+
+    def test_delete_interval_removes_cached_and_stored_entries(
+        self,
+        transaction: TimestampedPartitionTransaction,
+    ):
+        with transaction(keep_duplicates=True) as tx:
+            tx.set_for_timestamp(timestamp=10, value="stored", prefix=b"key")
+
+        with transaction(keep_duplicates=True) as tx:
+            tx.set_for_timestamp(timestamp=11, value="cached", prefix=b"key")
+            assert tx.delete_interval(start=0, end=100, prefix=b"key") == 2
+            assert tx.get_interval(start=0, end=100, prefix=b"key") == []
+
+        with transaction(keep_duplicates=True) as tx:
+            assert tx.get_interval(start=0, end=100, prefix=b"key") == []
+
+    def test_delete_interval_does_not_affect_keys_sharing_byte_prefix(
+        self,
+        transaction: TimestampedPartitionTransaction,
+    ):
+        # `b"key2"` shares its leading bytes with `b"key"`, so an unscoped lower
+        # bound would let the range spill from one into the other.
+        with transaction(keep_duplicates=True) as tx:
+            tx.set_for_timestamp(timestamp=10, value="keyval", prefix=b"key")
+            tx.set_for_timestamp(timestamp=10, value="key2val", prefix=b"key2")
+
+        with transaction(keep_duplicates=True) as tx:
+            assert tx.delete_interval(start=0, end=100, prefix=b"key") == 1
+            assert tx.get_interval(start=0, end=100, prefix=b"key") == []
+            assert tx.get_interval(start=0, end=100, prefix=b"key2") == ["key2val"]
+
+    def test_delete_interval_empty_range(
+        self,
+        transaction: TimestampedPartitionTransaction,
+    ):
+        with transaction(keep_duplicates=True) as tx:
+            tx.set_for_timestamp(timestamp=10, value="value", prefix=b"key")
+            assert tx.delete_interval(start=0, end=10, prefix=b"key") == 0
+            assert tx.get_interval(start=0, end=100, prefix=b"key") == ["value"]
+
+    def test_delete_interval_deletes_exactly_what_get_interval_returns(
+        self,
+        transaction: TimestampedPartitionTransaction,
+    ):
+        # The buffer reads a range, acts on it and then deletes it. If the two
+        # views disagree, records are either emitted twice or dropped silently.
+        with transaction(keep_duplicates=True) as tx:
+            for timestamp in (5, 5, 6, 7, 8):
+                tx.set_for_timestamp(
+                    timestamp=timestamp, value=str(timestamp), prefix=b"key"
+                )
+
+            read = tx.get_interval(start=5, end=7, prefix=b"key")
+            deleted = tx.delete_interval(start=5, end=7, prefix=b"key")
+
+            assert read == ["5", "5", "6"]
+            assert deleted == len(read)
+            assert tx.get_interval(start=0, end=100, prefix=b"key") == ["7", "8"]

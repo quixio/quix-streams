@@ -60,13 +60,15 @@ from quixstreams.utils.printing import (
 from quixstreams.utils.stream_id import stream_id_from_strings
 
 from .joins import AsOfJoin, AsOfJoinHow, IntervalJoin, IntervalJoinHow, OnOverlap
-from .joins.lookups import BaseField, BaseLookup
+from .joins.lookups import BaseField, BaseLookup, LookupBuffer
+from .joins.lookups.buffer_node import BufferTransformFunction
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import (
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
+    SessionWindowDefinition,
     SlidingCountWindowDefinition,
     SlidingTimeWindowDefinition,
     TumblingCountWindowDefinition,
@@ -1566,6 +1568,117 @@ class StreamingDataFrame:
             name=name,
         )
 
+    def session_window(
+        self,
+        inactivity_gap_ms: Union[int, timedelta],
+        grace_ms: Union[int, timedelta] = 0,
+        name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
+    ) -> SessionWindowDefinition:
+        """
+        Create a session window transformation on this StreamingDataFrame.
+
+        Session windows group events that are separated by no more than
+        `inactivity_gap_ms`. A session starts with the first event and extends each
+        time a new event arrives within the inactivity gap of the session's current
+        boundary. The session closes once the watermark passes
+        `last_event + 2 * inactivity_gap + grace`, the point at which no admissible
+        out-of-order event can extend it any more.
+
+        Unlike fixed-time windows, session windows have dynamic durations based on the
+        actual events and their timing, making them ideal for user activity tracking,
+        fraud detection, and other event-driven scenarios.
+
+        They allow performing stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        Notes:
+
+        - The timestamp of the aggregation result is set to the session start timestamp.
+        - Every session is grouped by the current Kafka message key.
+        - Messages with `None` key will be ignored.
+        - Sessions always use the current event time.
+        - Session `end` is **exclusive** (last event timestamp + 1), consistent with
+          all other window types.
+        - An event is late when `ts < watermark - inactivity_gap - grace`. With
+          `grace_ms=0` (the default) there is still a full inactivity gap of
+          out-of-order tolerance.
+        - An out-of-order event within one gap of two open sessions **merges** them
+          into one. All aggregations used with session windows must be mergeable
+          (implement `BaseAggregator.merge()`). Non-mergeable aggregations raise
+          `InvalidOperation` when the window is defined. `Reduce` requires a
+          `merger=` argument.
+        - With `closing_strategy="key"` (the default), a key that goes silent will
+          never have its last open session emitted by `final()`. Use
+          `closing_strategy="partition"` to close idle keys' sessions when other
+          keys advance the partition watermark.
+
+        Example Snippet:
+
+        ```python
+        from datetime import timedelta
+
+        from quixstreams import Application
+        import quixstreams.dataframe.windows.aggregations as agg
+
+        app = Application()
+        sdf = app.dataframe(...)
+
+        sdf = sdf.session_window(
+            # Maximum gap between two consecutive events of the same session
+            inactivity_gap_ms=timedelta(seconds=30),
+            grace_ms=timedelta(seconds=10)
+        ).agg(
+            # Specify the aggregation function
+            value=agg.Sum()
+        ).final()
+        # "current()" emits the running session on every update (including after a
+        # merge, where it supersedes two previously emitted sessions).
+        # "final()" emits each session exactly once, when it is closed.
+        ```
+
+        :param inactivity_gap_ms: The maximum gap between two consecutive events of
+            the same session. If no new event arrives within this interval of an
+            existing session's boundary, the session closes.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param grace_ms: Delays closing by this amount, giving late events extra time
+            to arrive. An event is late only when its timestamp falls below
+            `watermark - inactivity_gap - grace`. With the default of `0` there is
+            still a full inactivity gap of out-of-order tolerance.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param name: The unique identifier for the window. If not provided, it will be
+            automatically generated based on the window's properties.
+
+        :param on_late: an optional callback to react on late records in sessions and
+            to configure the logging of such events.
+            If the callback returns `True`, the message about a late record will be logged
+            (default behavior).
+            Otherwise, no message will be logged.
+
+        :return: `SessionWindowDefinition` instance representing the session window
+            configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. applied to the StreamingDataFrame.
+        """
+        inactivity_gap_ms = ensure_milliseconds(inactivity_gap_ms)
+        grace_ms = ensure_milliseconds(grace_ms)
+
+        return SessionWindowDefinition(
+            inactivity_gap_ms=inactivity_gap_ms,
+            grace_ms=grace_ms,
+            dataframe=self,
+            name=name,
+            on_late=on_late,
+        )
+
     def fill(self, *columns: str, **mapping: Any) -> "StreamingDataFrame":
         """
         Fill missing values in the message value with a constant value.
@@ -1922,6 +2035,7 @@ class StreamingDataFrame:
         lookup: BaseLookup,
         fields: dict[str, BaseField],
         on: Optional[Union[str, Callable[[dict[str, Any], Any], str]]] = None,
+        buffer: Optional[LookupBuffer] = None,
     ) -> "StreamingDataFrame":
         """
         Note: This is an experimental feature, and its API is likely to change in the future.
@@ -1931,7 +2045,7 @@ class StreamingDataFrame:
         source, using a user-defined lookup strategy (subclass of BaseLookup) and a set of fields
         (subclasses of BaseField) that specify how to extract or map the enrichment data.
 
-        The join is performed in-place: the input value dictionary is updated with the enrichment data.
+        Each record's value dictionary is updated in place with the enrichment data.
 
         Lookup implementation part of the standard quixstreams library:
             - `quixstreams.dataframe.joins.lookups.QuixConfigurationService`
@@ -1942,8 +2056,14 @@ class StreamingDataFrame:
             - If a string, it is interpreted as the column name in the value dict to use as the lookup key.
             - If a callable, it should accept (value, key) and return the target key as a string.
             - If None (default), the message key is used as the lookup key.
+        :param buffer: A `LookupBuffer` holding records whose lookup does not resolve
+            yet, instead of enriching them with field defaults. Requires a state store
+            and a periodic task, both registered here. If None (default), an unresolved
+            record goes downstream immediately with its fields' defaults.
 
-        :returns: StreamingDataFrame: The same StreamingDataFrame instance with the enrichment applied in-place.
+        :returns: The same StreamingDataFrame instance, with the lookup join
+            applied in place. Both the buffered and the unbuffered path mutate
+            this instance, so reassigning the result is optional.
 
         Example:
 
@@ -1975,6 +2095,15 @@ class StreamingDataFrame:
 
             def _on(value: dict[str, Any], key: Any) -> str:
                 return key
+
+        if buffer is not None:
+            buffer.validate_fields(fields)
+            buffer.validate_key_deserializers(self._topics)
+            buffer.register_store(self)
+            operator = buffer.callback(self, lookup, fields, _on)
+            self._registry.register_periodic_task(operator.tick)
+            self._stream = self._stream.add_function(BufferTransformFunction(operator))
+            return self
 
         def _join(
             value: dict[str, Any], key: Any, timestamp: int, headers: HeadersMapping

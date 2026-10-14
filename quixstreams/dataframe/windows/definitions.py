@@ -2,6 +2,8 @@ import abc
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Generic, Optional, TypeVar, Union
 
+from quixstreams.core.stream.exceptions import InvalidOperation
+
 from .aggregations import (
     BaseAggregator,
     BaseCollector,
@@ -24,15 +26,20 @@ from .count_based import (
     CountWindowMultiAggregation,
     CountWindowSingleAggregation,
 )
+from .session import (
+    SessionWindow,
+    SessionWindowMultiAggregation,
+    SessionWindowSingleAggregation,
+)
 from .sliding import (
     SlidingWindow,
     SlidingWindowMultiAggregation,
     SlidingWindowSingleAggregation,
 )
 from .time_based import (
+    FixedTimeWindowMultiAggregation,
+    FixedTimeWindowSingleAggregation,
     TimeWindow,
-    TimeWindowMultiAggregation,
-    TimeWindowSingleAggregation,
 )
 
 if TYPE_CHECKING:
@@ -45,6 +52,7 @@ __all__ = [
     "HoppingTimeWindowDefinition",
     "SlidingTimeWindowDefinition",
     "TumblingTimeWindowDefinition",
+    "SessionWindowDefinition",
 ]
 
 WindowT = TypeVar("WindowT", bound=Window)
@@ -116,7 +124,10 @@ class WindowDefinition(abc.ABC, Generic[WindowT]):
         )
 
     def reduce(
-        self, reducer: Callable[[Any, Any], Any], initializer: Callable[[Any], Any]
+        self,
+        reducer: Callable[[Any, Any], Any],
+        initializer: Callable[[Any], Any],
+        merger: Optional[Callable[[Any, Any], Any]] = None,
     ) -> WindowT:
         """
         Configure the window to perform a custom aggregation using `reducer`
@@ -150,13 +161,24 @@ class WindowDefinition(abc.ABC, Generic[WindowT]):
             The returned value will be saved to the state store and sent downstream.
         :param initializer: A function to call for every first element of the window.
             This function is used to initialize the aggregation within a window.
+        :param merger: A function that takes two accumulated values and returns a
+            single one. Required by session windows only, which may merge two open
+            sessions when a late event bridges them. The `reducer` cannot be reused
+            here because it takes a raw value, not a second accumulated value.
+            Default - `None`.
 
         :return: A window configured to perform custom reduce aggregation on the data.
         """
 
         return self._create_window(
             func_name="reduce",
-            aggregators={"value": Reduce(reducer=reducer, initializer=initializer)},
+            aggregators={
+                "value": Reduce(
+                    reducer=reducer,
+                    initializer=initializer,
+                    merger=merger,
+                )
+            },
         )
 
     def max(self) -> WindowT:
@@ -318,10 +340,11 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
     ) -> TimeWindow:
         if func_name:
             window_type: Union[
-                type[TimeWindowSingleAggregation], type[TimeWindowMultiAggregation]
-            ] = TimeWindowSingleAggregation
+                type[FixedTimeWindowSingleAggregation],
+                type[FixedTimeWindowMultiAggregation],
+            ] = FixedTimeWindowSingleAggregation
         else:
-            window_type = TimeWindowMultiAggregation
+            window_type = FixedTimeWindowMultiAggregation
 
         return window_type(
             duration_ms=self._duration_ms,
@@ -373,10 +396,11 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
     ) -> TimeWindow:
         if func_name:
             window_type: Union[
-                type[TimeWindowSingleAggregation], type[TimeWindowMultiAggregation]
-            ] = TimeWindowSingleAggregation
+                type[FixedTimeWindowSingleAggregation],
+                type[FixedTimeWindowMultiAggregation],
+            ] = FixedTimeWindowSingleAggregation
         else:
-            window_type = TimeWindowMultiAggregation
+            window_type = FixedTimeWindowMultiAggregation
 
         return window_type(
             duration_ms=self._duration_ms,
@@ -560,3 +584,102 @@ class SlidingCountWindowDefinition(HoppingCountWindowDefinition):
         if func_name:
             return f"{prefix}_{func_name}"
         return prefix
+
+
+class SessionWindowDefinition(WindowDefinition):
+    """
+    Definition for session windows that group events by activity sessions.
+
+    Session windows group events separated by no more than `inactivity_gap_ms`.
+    A session starts with the first event and extends each time a new event arrives
+    within the inactivity gap. The session closes once the watermark passes
+    `last event + 2 * inactivity_gap_ms + grace_ms` - the point at which no
+    admissible out-of-order event can extend it any more.
+    """
+
+    def __init__(
+        self,
+        inactivity_gap_ms: int,
+        grace_ms: int,
+        dataframe: "StreamingDataFrame",
+        name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
+    ):
+        if not isinstance(inactivity_gap_ms, int):
+            raise TypeError("inactivity_gap_ms must be an integer")
+        if inactivity_gap_ms < 1:
+            raise ValueError("inactivity_gap_ms cannot be smaller than 1ms")
+        if not isinstance(grace_ms, int):
+            raise TypeError("grace_ms must be an integer")
+        if grace_ms < 0:
+            raise ValueError("grace_ms cannot be smaller than 0ms")
+        if before_update is not None or after_update is not None:
+            raise ValueError(
+                "Session windows do not support trigger callbacks "
+                "(before_update/after_update). "
+                "Use tumbling or hopping windows instead."
+            )
+
+        super().__init__(name, dataframe, on_late, before_update, after_update)
+
+        self._inactivity_gap_ms = inactivity_gap_ms
+        self._grace_ms = grace_ms
+
+    @property
+    def inactivity_gap_ms(self) -> int:
+        return self._inactivity_gap_ms
+
+    @property
+    def grace_ms(self) -> int:
+        return self._grace_ms
+
+    def _get_name(self, func_name: Optional[str]) -> str:
+        prefix = f"{self._name}_session_window" if self._name else "session_window"
+        if func_name:
+            return f"{prefix}_{self._inactivity_gap_ms}_{func_name}"
+        else:
+            return f"{prefix}_{self._inactivity_gap_ms}"
+
+    def _create_window(
+        self,
+        func_name: Optional[str],
+        aggregators: Optional[dict[str, BaseAggregator]] = None,
+        collectors: Optional[dict[str, BaseCollector]] = None,
+    ) -> SessionWindow:
+        non_mergeable = [
+            column
+            for column, aggregator in (aggregators or {}).items()
+            if not aggregator.mergeable
+        ]
+        if non_mergeable:
+            raise InvalidOperation(
+                f"Aggregations {non_mergeable} cannot be used with session windows "
+                f"because they do not implement `merge`. Session windows may merge "
+                f"two open sessions into one when a late event bridges them, which "
+                f"requires combining their aggregation states. Use a mergeable "
+                f"aggregation (Count, Sum, Mean, Min, Max, First, Last, Earliest, "
+                f"Latest, Collect), pass `merger=` to `Reduce`, or implement "
+                f"`merge()` on your custom aggregator."
+            )
+
+        if func_name:
+            window_type: Union[
+                type[SessionWindowSingleAggregation],
+                type[SessionWindowMultiAggregation],
+            ] = SessionWindowSingleAggregation
+        else:
+            window_type = SessionWindowMultiAggregation
+
+        return window_type(
+            inactivity_gap_ms=self._inactivity_gap_ms,
+            grace_ms=self._grace_ms,
+            name=self._get_name(func_name=func_name),
+            dataframe=self._dataframe,
+            aggregators=aggregators or {},
+            collectors=collectors or {},
+            on_late=self._on_late,
+            before_update=self._before_update,
+            after_update=self._after_update,
+        )

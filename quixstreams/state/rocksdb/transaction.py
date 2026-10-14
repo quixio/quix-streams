@@ -1,6 +1,5 @@
 import logging
 from datetime import timedelta
-from itertools import chain
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, Optional, Set, Union, cast
 
 from quixstreams.state.base.transaction import (
@@ -163,8 +162,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
     Implements the per-write TTL feature: every value written to the user-facing
     ``default`` column family is prefixed with an 8-byte big-endian millisecond
     expiry stamp. A ``state.set(key, value)`` call (no ``ttl=``) writes the
-    sentinel ``SENTINEL_NEVER`` meaning "never expires"; ``state.set(key, value,
-    ttl=timedelta(...))`` writes ``record.timestamp + ttl``. Non-sentinel writes
+    sentinel ``SENTINEL_NEVER`` meaning "never expires". Non-sentinel writes
     also emit a ``(expires_at || serialized_user_key)`` entry to the local-only
     ``__ttl_index__`` column family so the bounded sweep on every flush can
     reclaim expired values.
@@ -295,6 +293,25 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 "and would be unreadable. Check for a nanosecond/second vs "
                 "millisecond timestamp mistake or an unbounded ttl."
             )
+        if timestamp < 0:
+            # A negative event-time (Kafka NO_TIMESTAMP is -1) is not a position
+            # in event time, so ``timestamp + ttl`` is not a meaningful expiry:
+            # with a large enough ttl it passes the checks above as a small
+            # positive number near the epoch (e.g. timestamp=-1, ttl=5s ->
+            # 4999 ms, i.e. 1 Jan 1970), which would store the record already
+            # expired and let the next sweep delete it silently. Fall back to
+            # never-expires instead; the checks above still reject an expiry
+            # that is non-positive or implausibly large. Every ``ttl=`` write
+            # path (flipped and unflipped, ``set`` and ``set_bytes``) stamps
+            # through here, so this is the single place the fallback lives.
+            logger.warning(
+                "ttl=%r write has a negative event-time timestamp (%d, e.g. Kafka "
+                "NO_TIMESTAMP), which cannot anchor an expiry; storing the record "
+                "without a TTL",
+                ttl,
+                timestamp,
+            )
+            return SENTINEL_NEVER
         return expiry
 
     def set(
@@ -548,11 +565,10 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
         if ttl is not None:
-            # A genuine live ``ttl=`` write on an already-flipped partition (the
-            # stamp is non-sentinel by construction). Record it so the
-            # adoption-corroboration hook in :meth:`prepare` can confirm a provisional
-            # cold-adoption. Harmless on a normal flipped store (the hook no-ops
-            # unless ``_adopt_provisional`` is set).
+            # A genuine live ``ttl=`` write on an already-flipped partition. Record
+            # it so the adoption-corroboration hook in :meth:`prepare` can confirm a
+            # provisional cold-adoption. Harmless on a normal flipped store (the hook
+            # no-ops unless ``_adopt_provisional`` is set).
             self._batch_has_ttl_writes = True
         try:
             value_serialized = self._serialize_value(value)
@@ -882,23 +898,12 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         prefix: bytes,
         backwards: bool = False,
         cf_name: str = "default",
+        limit: Optional[int] = None,
     ) -> list[tuple[bytes, bytes]]:
-        """
-        Get all items that start between `start` and `end`
-        within the specified prefix.
-
-        This function also checks the update cache for any updates not yet
-        committed to RocksDB.
-
-        :param start: Start of the range, inclusive.
-        :param end: End of the range, exclusive.
-        :param prefix: The key prefix for filtering items.
-        :param backwards: If True, returns items in reverse order.
-        :param cf_name: The RocksDB column family name.
-        :return: A sorted list of key-value pairs.
-        """
         start = max(start, 0)
         if start > end:
+            return []
+        if limit is not None and limit <= 0:
             return []
 
         seek_from_key = append_integer(base_bytes=prefix, integer=start)
@@ -915,21 +920,22 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         update_cache = cache.get_updates(cf_name=cf_name).get(prefix, {})
         delete_cache = cache.get_deletes(cf_name=cf_name)
 
-        # Get cached updates with matching keys
-        updated_items = (
-            (key, value)
-            for key, value in update_cache.items()
-            if seek_from_key < key <= seek_to_key
-        )
+        merged_items: dict[bytes, bytes] = {}
+        stop_at = None if backwards else limit
+        for key, value in db_items:
+            if key in delete_cache:
+                continue
+            merged_items[key] = value
+            if stop_at is not None and len(merged_items) >= stop_at:
+                break
 
-        # Iterate over stored and cached items and merge them to a single dict
-        merged_items = {}
-        for key, value in chain(db_items, updated_items):
-            if key not in delete_cache:
+        for key, value in update_cache.items():
+            if seek_from_key < key <= seek_to_key and key not in delete_cache:
                 merged_items[key] = value
 
         # Sort items merged from the cache and store
-        return sorted(merged_items.items(), key=lambda kv: kv[0], reverse=backwards)
+        items = sorted(merged_items.items(), key=lambda kv: kv[0], reverse=backwards)
+        return items if limit is None else items[:limit]
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def prepare(self, processed_offsets: Optional[dict[str, int]] = None) -> None:
@@ -968,8 +974,8 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
     def _maybe_corroborate_adoption(self) -> None:
         """
         Adoption-corroboration hook. A live ``state.set(..., ttl=...)`` write (which
-        sets ``_batch_has_ttl_writes`` and always produces a non-sentinel stamp)
-        on a PROVISIONALLY cold-adopted partition confirms the adoption is genuine.
+        sets ``_batch_has_ttl_writes``) on a PROVISIONALLY cold-adopted partition
+        confirms the adoption is genuine.
         Runs AFTER :meth:`_maybe_flip_or_reject` (so the runtime flip state is
         settled) and BEFORE the sweep (so the corroborating flush's sweep, now
         un-suppressed, can reclaim now-past adopted records). A plain ``set()``

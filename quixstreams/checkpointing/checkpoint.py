@@ -104,11 +104,9 @@ class BaseCheckpoint:
         )
 
     def empty(self) -> bool:
-        """
-        Returns `True` if checkpoint doesn't have any offsets stored yet.
-        :return:
-        """
-        return not bool(self._tp_offsets)
+        return not self._tp_offsets and not any(
+            transaction.changed for transaction in self._store_transactions.values()
+        )
 
     def store_offset(self, topic: str, partition: int, offset: int):
         """
@@ -402,7 +400,7 @@ class Checkpoint(BaseCheckpoint):
                     self._commit_budget(deadline) if deadline is not None else None
                 ),
             )
-        else:
+        elif offsets:
             logger.debug("Checkpoint: committing consumer")
             try:
                 partitions = self._consumer.commit(offsets=offsets, asynchronous=False)
