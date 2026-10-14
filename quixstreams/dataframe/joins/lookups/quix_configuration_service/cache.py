@@ -27,7 +27,8 @@ class VersionDataLRU:
         maxsize: int = 128,
     ):
         self.cache: OrderedDict[
-            Tuple[Optional[ConfigurationVersion], Tuple[int, ...]], Any
+            Tuple[Optional[ConfigurationVersion], Tuple[Tuple[str, BaseField], ...]],
+            Any,
         ] = OrderedDict()
         self.func = func
         self.maxsize = maxsize
@@ -46,7 +47,7 @@ class VersionDataLRU:
         :returns: The cached or newly computed data.
         """
         cache = self.cache
-        key = (version, tuple(hash(field) for field in fields.values()))
+        key = (version, tuple(fields.items()))
         if key in cache:
             self.hits += 1
             cache.move_to_end(key)
@@ -68,7 +69,7 @@ class VersionDataLRU:
         :param version: The configuration version to remove from the cache.
         :param fields: The fields to remove from the cache.
         """
-        key = (version, tuple(hash(field) for field in fields.values()))
+        key = (version, tuple(fields.items()))
         if key in self.cache:
             del self.cache[key]
 

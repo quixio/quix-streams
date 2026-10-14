@@ -686,6 +686,71 @@ class TestLookupFindVersion:
 class TestLookupJoin:
     """Test suite for the Lookup.join method."""
 
+    @pytest.mark.parametrize("has_configuration", [False, True])
+    @pytest.mark.parametrize(
+        "defaults", [("A", "B"), (["A"], ["B"]), ({"name": "A"}, {"name": "B"})]
+    )
+    def test_join_cache_distinguishes_defaults(
+        self, lookup, has_configuration, defaults
+    ):
+        if has_configuration:
+            version = create_configuration_version(valid_from=0)
+            config_id = lookup._config_id("device-config", "device")
+            lookup._configurations[config_id] = Configuration(versions={1: version})
+            lookup._fetch_version_content = Mock(return_value=b"{}")
+
+        first_fields = {
+            "name": lookup.json_field(
+                type="device-config", jsonpath="$.name", default=defaults[0]
+            )
+        }
+        second_fields = {
+            "name": lookup.json_field(
+                type="device-config", jsonpath="$.name", default=defaults[1]
+            )
+        }
+        for fields, expected in [
+            (first_fields, defaults[0]),
+            (second_fields, defaults[1]),
+        ]:
+            value = {}
+            lookup.join(fields, "device", value, "key", 1000, {})
+            assert value == {"name": expected}
+
+        value = {}
+        lookup.join(second_fields, "device", value, "key", 1000, {})
+        assert value == {"name": defaults[1]}
+        assert lookup.cache_info()["hits"] == 1
+
+    def test_join_cache_distinguishes_output_names(self, lookup):
+        field = lookup.json_field(type="device-config", jsonpath="$.name", default="A")
+        first_fields = {"name": field}
+        second_fields = {"renamed": field}
+        for fields in [first_fields, second_fields]:
+            value = {}
+            lookup.join(fields, "device", value, "key", 1000, {})
+            assert value == {name: "A" for name in fields}
+
+    def test_join_cache_removes_only_matching_fields(self, lookup):
+        first_fields = {
+            "name": lookup.json_field(
+                type="device-config", jsonpath="$.name", default="A"
+            )
+        }
+        second_fields = {
+            "name": lookup.json_field(
+                type="device-config", jsonpath="$.name", default="B"
+            )
+        }
+        cache = lookup._version_data_cached
+        cache(None, first_fields)
+        cache(None, second_fields)
+        cache.remove(None, first_fields)
+        assert cache(None, second_fields) == {"name": "B"}
+        assert cache.info()["hits"] == 1
+        assert cache(None, first_fields) == {"name": "A"}
+        assert cache.info()["misses"] == 3
+
     def test_join_successful_enrichment(self, lookup):
         """Test successful enrichment with join method."""
 
