@@ -1,10 +1,9 @@
 """Filter resolution for :class:`MAStreamingDeserializer`.
 
 The deserializer accepts a single ``filter`` mapping that can express
-two orthogonal allowlists: packet ``types`` and signal names. This
-module owns the validation logic and the immutable record the
-deserializer consults at runtime, so ``deserializer.py`` can stay
-focused on decode orchestration.
+two allowlists: packet ``types`` and signal names. This module
+validates it and builds the immutable record the deserializer consults
+at runtime.
 
 See the "Filtering" section of ``docs/advanced/ma-streaming-open-data.md``
 for the user-facing semantics of both allowlists.
@@ -15,30 +14,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Mapping, Optional
 
-# Packet types that carry sample data (PeriodicData / SynchroData /
-# RowData). Signal filtering only ever applies inside these; everything
-# else is non-sample-bearing and passes through the type filter only.
+# Packet types that carry samples; signal filtering applies only to these.
 SAMPLE_BEARING_TYPES: frozenset[str] = frozenset(
     {"PeriodicData", "RowData", "SynchroData"}
 )
 
-# Keys accepted inside the ``filter`` mapping. Anything else is a
-# typo (e.g. ``"signal"`` for ``"signals"``) and we reject it at
-# construction so the user sees the mistake immediately.
 _ALLOWED_FILTER_KEYS: frozenset[str] = frozenset({"types", "signals"})
 
 
-# NOTE: no ``slots=True`` here - that keyword is Python 3.10+ and this
-# package must import on 3.9 (``requires-python = ">=3.9"``). The
-# instance is built once per deserializer, so slots buy nothing here.
 @dataclass(frozen=True)
 class ResolvedFilter:
     """Immutable resolved filter consulted by the deserializer.
 
     ``None`` on either attribute means "no constraint on this axis".
-    When both are ``None`` the deserializer treats this as equivalent
-    to ``filter=None`` (no filtering applied, today's shape contract
-    preserved).
+    When both are ``None`` no filtering applies, as with ``filter=None``.
     """
 
     types: Optional[frozenset[str]]
@@ -46,7 +35,7 @@ class ResolvedFilter:
 
     @property
     def is_active(self) -> bool:
-        """True when any filter axis is set (drives list-wrapping)."""
+        """True when any filter axis is set."""
         return self.types is not None or self.signals is not None
 
 
@@ -128,10 +117,6 @@ def resolve_filter(
     signals: Optional[frozenset[str]] = None
     if "signals" in filter_arg:
         signals = _validate_string_iterable(filter_arg["signals"], "signals")
-        # Cross-axis validation: signal filtering requires both the
-        # inner payload to be decoded AND a row projection to be
-        # active. Both errors are surfaced at construction so misuse
-        # cannot reach runtime.
         if not decode_content:
             raise ValueError(
                 "filter['signals'] is set but decode_content=False; "

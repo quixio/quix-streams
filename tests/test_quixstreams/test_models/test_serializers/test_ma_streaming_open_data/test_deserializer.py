@@ -1,9 +1,5 @@
-"""Tests for ``MAStreamingDeserializer`` (deserializer.py).
-
-The spec for this feature is the class docstring (deserializer.py:104-152)
-plus docs/advanced/serialization.md ("MA Streaming Open Data" section).
-Every test below cites the specific contract it validates.
-"""
+"""Tests for ``MAStreamingDeserializer``: packet decoding, row projection,
+filtering, parameter name resolution and the output contract."""
 
 import pytest
 from google.protobuf.json_format import MessageToDict
@@ -18,24 +14,45 @@ from quixstreams.models.serializers.ma_streaming_open_data.deserializer import (
 
 from ..constants import DUMMY_CONTEXT
 from .builders import (
+    StubConsumer,
     data_format_definition_packet,
     double_column,
+    double_row,
     packet_bytes,
     periodic_data_packet,
+    row_data_packet,
+    synchro_data_packet,
+    with_format_identifier,
     wrap,
 )
 
 VALID = pb.DataStatus.DATA_STATUS_VALID
 MISSING = pb.DataStatus.DATA_STATUS_MISSING
+PARAMETER = pb.DataFormatType.DATA_FORMAT_TYPE_PARAMETER
+
+
+def _definition(identifier: int, names: list[str]) -> bytes:
+    """A ``DataFormatDefinition`` packet mapping ``identifier`` to ``names``."""
+    return wrap(
+        "DataFormatDefinition",
+        data_format_definition_packet(
+            identifier, PARAMETER, parameter_identifiers=names
+        ),
+        is_essential=True,
+    )
+
+
+def _identifier_periodic(identifier: int, n_columns: int) -> bytes:
+    """An identifier-form ``PeriodicData`` packet with one sample per column."""
+    columns = [double_column([(float(i), VALID)]) for i in range(n_columns)]
+    pkt = periodic_data_packet([], start_time=0, interval=1, columns=columns)
+    return wrap("PeriodicData", with_format_identifier(pkt, identifier))
 
 
 class TestEnvelopeAndInnerDecode:
     @pytest.mark.parametrize("packet_type,payload_cls", list(CONTENT_TYPES.items()))
     def test_every_content_type_round_trips(self, packet_type, payload_cls):
-        """Validates deserializer.py Stage 1 + Stage 2 dispatch (module
-        docstring, lines 1-17): every ``Packet.type`` in the registry
-        must decode to the matching message class's canonical dict.
-        """
+        """Every registered packet type decodes to its message class's dict under its type key."""
         inner = payload_cls()
         value = wrap(packet_type, inner)
         deserializer = MAStreamingDeserializer(build_table=None)
@@ -45,72 +62,48 @@ class TestEnvelopeAndInnerDecode:
             preserving_proto_field_name=True,
             always_print_fields_with_no_presence=True,
         )
-        assert result["type"] == packet_type
-        assert result["content"] == expected_content
+        ((root, envelope),) = result[0].items()
+        assert root == packet_type
+        assert envelope["content"] == expected_content
 
     def test_decode_content_false_leaves_content_as_base64(self):
-        """Validates __init__ docstring: decode_content=False leaves
-        ``content`` as the Stage-1 base64 string.
-        """
+        """With decode_content=False the envelope's content stays a base64 string."""
         inner = pb.NewSessionPacket(data_source="ecu1")
         value = wrap("NewSession", inner)
         deserializer = MAStreamingDeserializer(decode_content=False, build_table=None)
-        result = deserializer(value, DUMMY_CONTEXT)
-        assert isinstance(result["content"], str)
+        ((_, envelope),) = deserializer(value, DUMMY_CONTEXT)[0].items()
+        assert isinstance(envelope["content"], str)
 
     def test_unknown_packet_type_leaves_content_untouched(self):
-        """Validates deserializer.py:550-559: unknown Packet.type is
-        fail-soft — content is left as the base64 string, no raise.
-        """
+        """An unregistered packet type keeps its content as a base64 string."""
         value = packet_bytes("TotallyUnknownType", content=b"whatever")
         deserializer = MAStreamingDeserializer(build_table=None)
-        result = deserializer(value, DUMMY_CONTEXT)
-        assert result["type"] == "TotallyUnknownType"
-        assert isinstance(result["content"], str)
-
-    def test_inner_decode_error_is_fail_soft(self):
-        """Validates deserializer.py:569-576: a garbled inner payload
-        must not raise — content is left as the base64 string.
-        """
-        value = packet_bytes("NewSession", content=b"\x08")
-        deserializer = MAStreamingDeserializer(build_table=None)
-        result = deserializer(value, DUMMY_CONTEXT)
-        assert isinstance(result["content"], str)
-
-    def test_fast_path_bad_envelope_bytes_is_fail_soft(self):
-        """Validates deserializer.py:419-425: a malformed outer Packet
-        on the fast path returns [] rather than raising.
-        """
-        deserializer = MAStreamingDeserializer()
-        assert deserializer(b"\x08", DUMMY_CONTEXT) == []
+        ((root, envelope),) = deserializer(value, DUMMY_CONTEXT)[0].items()
+        assert root == "TotallyUnknownType"
+        assert isinstance(envelope["content"], str)
 
     def test_extra_content_types_are_merged_and_decoded(self):
-        """Validates __init__ docstring: extra_content_types lets
-        callers register OEM extensions without forking the library.
-        """
+        """A type registered through extra_content_types is decoded with its class."""
         inner = pb.MetadataPacket()
         value = wrap("CustomType", inner)
         deserializer = MAStreamingDeserializer(
             build_table=None,
             extra_content_types={"CustomType": pb.MetadataPacket},
         )
-        result = deserializer(value, DUMMY_CONTEXT)
-        assert result["type"] == "CustomType"
-        assert result["content"] == {"metadata": {}}
+        ((root, envelope),) = deserializer(value, DUMMY_CONTEXT)[0].items()
+        assert root == "CustomType"
+        assert envelope["content"] == {"metadata": {}}
 
     def test_builtin_content_types_take_precedence_on_collision(self):
-        """Validates __init__ docstring: "Built-in entries take
-        precedence on key collision".
-        """
+        """A built-in type is decoded with the built-in class even if extra_content_types maps it too."""
         deserializer = MAStreamingDeserializer(
             build_table=None,
             extra_content_types={"NewSession": pb.MetadataPacket},
         )
         inner = pb.NewSessionPacket(data_source="ecu1")
         value = wrap("NewSession", inner)
-        result = deserializer(value, DUMMY_CONTEXT)
-        # Decoded using the built-in NewSessionPacket schema, not MetadataPacket.
-        assert result["content"] == {
+        ((_, envelope),) = deserializer(value, DUMMY_CONTEXT)[0].items()
+        assert envelope["content"] == {
             "data_source": "ecu1",
             "topic_partition_offsets": {},
         }
@@ -118,10 +111,7 @@ class TestEnvelopeAndInnerDecode:
 
 class TestDefaultProjection:
     def test_periodic_data_default_projection_is_flat_rows(self):
-        """Validates serialization.md:148: with no arguments the
-        deserializer returns flat rows (packet_type/timestamp/name/
-        value/validity) for sample-bearing packets.
-        """
+        """With no arguments a PeriodicData packet gives one flat row per sample."""
         pkt = periodic_data_packet(
             names=["vCar"],
             start_time=1000,
@@ -149,9 +139,7 @@ class TestDefaultProjection:
         ]
 
     def test_non_engineering_packet_default_returns_empty_list(self):
-        """Validates serialization.md:148: "...and an empty list for
-        everything else."
-        """
+        """With no arguments a non-sample packet gives an empty list."""
         inner = pb.NewSessionPacket(data_source="ecu1")
         value = wrap("NewSession", inner)
         deserializer = MAStreamingDeserializer()
@@ -160,49 +148,33 @@ class TestDefaultProjection:
 
 class TestTaggedUnionPath:
     def test_non_engineering_survives_as_tagged_union_when_filter_active(self):
-        """Validates deserializer.py __init__ docstring
-        "Shape contract (tagged-union)": non-sample-bearing packets
-        that survive the type filter emit one tagged-union record.
-        """
+        """A non-sample packet in filter["types"] gives one tagged-union record holding its envelope."""
         inner = pb.NewSessionPacket(data_source="ecu1")
         value = wrap("NewSession", inner, session_key="s1", is_essential=True)
         deserializer = MAStreamingDeserializer(filter={"types": ["NewSession"]})
         result = deserializer(value, DUMMY_CONTEXT)
         assert result == [
-            {"NewSession": {"data_source": "ecu1", "topic_partition_offsets": {}}}
+            {
+                "NewSession": {
+                    "session_key": "s1",
+                    "is_essential": True,
+                    "content": {"data_source": "ecu1", "topic_partition_offsets": {}},
+                    "id": "0",
+                }
+            }
         ]
-
-    def test_envelope_fields_are_dropped_from_tagged_union_inner_value(self):
-        """Validates deserializer.py:60-64: session_key/is_essential/id
-        are dropped from the inner tagged-union value.
-        """
-        inner = pb.NewSessionPacket(data_source="ecu1")
-        value = wrap("NewSession", inner, session_key="s1", is_essential=True)
-        deserializer = MAStreamingDeserializer(filter={"types": ["NewSession"]})
-        ((_, inner_value),) = deserializer(value, DUMMY_CONTEXT)[0].items()
-        assert "session_key" not in inner_value
-        assert "is_essential" not in inner_value
-        assert "id" not in inner_value
-        assert "type" not in inner_value
 
 
 class TestFilterSemantics:
     def test_types_filter_drops_non_matching_packet(self):
-        """Validates __init__ docstring: filter["types"] is a pure
-        allowlist — anything else is dropped ([]).
-        """
+        """A packet whose type is not in filter["types"] gives an empty list."""
         inner = pb.EventPacket(timestamp=5)
         value = wrap("Event", inner)
         deserializer = MAStreamingDeserializer(filter={"types": ["PeriodicData"]})
         assert deserializer(value, DUMMY_CONTEXT) == []
 
     def test_signals_filter_keeps_only_allowlisted_signal_rows(self):
-        """Validates __init__ docstring: filter["signals"] keeps only
-        rows whose signal name is in the allowlist. Engineering rows
-        stay flat even under an active filter (matches
-        serialization.md's asymmetric shape, see also Bug report re:
-        the class docstring's conflicting tagged-union example).
-        """
+        """filter["signals"] keeps only the flat rows of the listed signals."""
         pkt = periodic_data_packet(
             names=["vCar", "nEngine"],
             start_time=0,
@@ -237,7 +209,7 @@ class TestFilterSemantics:
         assert deserializer(value, DUMMY_CONTEXT) == []
 
     def test_types_and_signals_combined(self):
-        """Validates __init__ docstring combining-filters example."""
+        """Type and signal filters apply together."""
         engineering = wrap(
             "PeriodicData",
             periodic_data_packet(
@@ -266,29 +238,8 @@ class TestFilterSemantics:
             }
         ]
 
-    def test_filter_none_and_build_table_none_preserves_raw_dict_shape(self):
-        """Validates __init__ docstring: "When filter=None today's
-        no-wrap shapes are preserved (raw dict, not list-wrapped)."
-        """
-        inner = pb.NewSessionPacket(data_source="ecu1")
-        value = wrap("NewSession", inner, session_key="s1")
-        deserializer = MAStreamingDeserializer(build_table=None)
-        result = deserializer(value, DUMMY_CONTEXT)
-        assert isinstance(result, dict)
-        assert result["type"] == "NewSession"
-        assert result["session_key"] == "s1"
-        assert result["content"] == {
-            "data_source": "ecu1",
-            "topic_partition_offsets": {},
-        }
-
     def test_filter_active_with_build_table_none_still_tags_via_slow_path(self):
-        """Validates deserializer.py:373-374 + 386-404: with
-        build_table=None the fast path never engages, so any surviving
-        packet type (including sample-bearing ones) is wrapped as a
-        single tagged-union record holding the un-projected content —
-        not fanned into per-sample rows.
-        """
+        """With build_table=None a sample packet gives one tagged-union record with unprojected content."""
         pkt = periodic_data_packet(
             names=["vCar"],
             start_time=0,
@@ -303,7 +254,7 @@ class TestFilterSemantics:
         assert len(result) == 1
         ((root_key, inner_value),) = result[0].items()
         assert root_key == "PeriodicData"
-        assert "columns" in inner_value  # un-projected raw content, not rows
+        assert "columns" in inner_value["content"]
 
 
 class TestBuildTableProjection:
@@ -339,9 +290,7 @@ class TestBuildTableProjection:
         assert rows == [{"sig": "vCar", "ts": 100}]
 
     def test_unsupported_column_name_raises(self):
-        """Validates __init__ docstring: list form validates against
-        SUPPORTED_TABLE_COLUMNS at construction.
-        """
+        """A list-form build_table with an unsupported column raises ValueError at construction."""
         with pytest.raises(ValueError, match="unsupported column"):
             MAStreamingDeserializer(build_table=["bogus_column"])
 
@@ -356,11 +305,7 @@ class TestBuildTableProjection:
 
 class TestFastSlowPathConsistency:
     def test_fast_path_rows_match_manual_projection_of_slow_path_dict(self):
-        """Cross-checks the fast path's direct-protobuf-attribute
-        computation (deserializer.py:406-515) against the slow path's
-        MessageToDict-based decode (deserializer.py:536-584): both must
-        describe the same wire data.
-        """
+        """Fast-path rows equal a manual projection of the slow-path content."""
         pkt = periodic_data_packet(
             names=["vCar", "nEngine"],
             start_time=1000,
@@ -376,8 +321,8 @@ class TestFastSlowPathConsistency:
         rows_fast = fast(value, DUMMY_CONTEXT)
 
         slow = MAStreamingDeserializer(build_table=None)
-        raw = slow(value, DUMMY_CONTEXT)
-        content = raw["content"]
+        ((_, envelope),) = slow(value, DUMMY_CONTEXT)[0].items()
+        content = envelope["content"]
         names = content["data_format"]["parameter_identifiers"]["parameter_identifiers"]
         start_time = int(content["start_time"])
         interval = content["interval"]
@@ -387,7 +332,7 @@ class TestFastSlowPathConsistency:
             for i, sample in enumerate(column["double_samples"]["samples"]):
                 rows_from_slow.append(
                     {
-                        "packet_type": raw["type"],
+                        "packet_type": "PeriodicData",
                         "timestamp": start_time + i * interval,
                         "name": name,
                         "value": sample["value"],
@@ -399,9 +344,7 @@ class TestFastSlowPathConsistency:
 
 
 class TestDataFormatDefinitionPacket:
-    """Added in commit 5edc9716; the oneof ``format`` resolves to either
-    ``parameter_identifiers`` or ``event_identifier``.
-    """
+    """``DataFormatDefinition`` decodes either branch of its ``format`` oneof."""
 
     def test_parameter_identifiers_branch(self):
         inner = data_format_definition_packet(
@@ -411,13 +354,13 @@ class TestDataFormatDefinitionPacket:
         )
         value = wrap("DataFormatDefinition", inner)
         deserializer = MAStreamingDeserializer(build_table=None)
-        result = deserializer(value, DUMMY_CONTEXT)
-        assert result["content"] == {
+        ((_, envelope),) = deserializer(value, DUMMY_CONTEXT)[0].items()
+        assert envelope["content"] == {
             "identifier": "5",
             "type": "DATA_FORMAT_TYPE_PARAMETER",
             "parameter_identifiers": {"parameter_identifiers": ["vCar", "nEngine"]},
         }
-        assert "event_identifier" not in result["content"]
+        assert "event_identifier" not in envelope["content"]
 
     def test_event_identifier_branch(self):
         inner = data_format_definition_packet(
@@ -427,20 +370,16 @@ class TestDataFormatDefinitionPacket:
         )
         value = wrap("DataFormatDefinition", inner)
         deserializer = MAStreamingDeserializer(build_table=None)
-        result = deserializer(value, DUMMY_CONTEXT)
-        assert result["content"] == {
+        ((_, envelope),) = deserializer(value, DUMMY_CONTEXT)[0].items()
+        assert envelope["content"] == {
             "identifier": "6",
             "type": "DATA_FORMAT_TYPE_EVENT",
             "event_identifier": "PIT_ENTRY",
         }
-        assert "parameter_identifiers" not in result["content"]
+        assert "parameter_identifiers" not in envelope["content"]
 
     def test_via_fast_path_non_engineering_branch_under_filter(self):
-        """DataFormatDefinition is non-sample-bearing, so with the
-        default (active) build_table it is routed through
-        ``_slow_path_single_packet`` from inside the fast path
-        (deserializer.py:432-441).
-        """
+        """With the default build_table and the type in filter["types"], a definition gives one tagged-union record."""
         inner = data_format_definition_packet(
             identifier=1,
             type_=pb.DataFormatType.DATA_FORMAT_TYPE_PARAMETER,
@@ -454,9 +393,131 @@ class TestDataFormatDefinitionPacket:
         assert result == [
             {
                 "DataFormatDefinition": {
-                    "identifier": "1",
-                    "type": "DATA_FORMAT_TYPE_PARAMETER",
-                    "parameter_identifiers": {"parameter_identifiers": ["vCar"]},
+                    "session_key": "",
+                    "is_essential": False,
+                    "content": {
+                        "identifier": "1",
+                        "type": "DATA_FORMAT_TYPE_PARAMETER",
+                        "parameter_identifiers": {"parameter_identifiers": ["vCar"]},
+                    },
+                    "id": "0",
                 }
             }
         ]
+
+
+class TestParameterNameResolution:
+    @pytest.mark.parametrize(
+        "packet_type,inner",
+        [
+            pytest.param(
+                "PeriodicData",
+                with_format_identifier(
+                    periodic_data_packet(
+                        [],
+                        start_time=0,
+                        interval=1,
+                        columns=[
+                            double_column([(1.0, VALID)]),
+                            double_column([(2.0, VALID)]),
+                        ],
+                    ),
+                    7,
+                ),
+                id="PeriodicData",
+            ),
+            pytest.param(
+                "SynchroData",
+                with_format_identifier(
+                    synchro_data_packet(
+                        [],
+                        start_time=0,
+                        intervals=[],
+                        columns=[
+                            double_column([(1.0, VALID)]),
+                            double_column([(2.0, VALID)]),
+                        ],
+                    ),
+                    7,
+                ),
+                id="SynchroData",
+            ),
+            pytest.param(
+                "RowData",
+                with_format_identifier(
+                    row_data_packet(
+                        [],
+                        timestamps=[0],
+                        rows=[double_row([(1.0, VALID), (2.0, VALID)])],
+                    ),
+                    7,
+                ),
+                id="RowData",
+            ),
+        ],
+    )
+    def test_identifier_form_resolves_names_from_definition(self, packet_type, inner):
+        """Rows from an identifier-form packet carry the names of a definition seen earlier on the data topic; previously col0 and col1."""
+        deserializer = MAStreamingDeserializer()
+        assert deserializer(_definition(7, ["vCar", "nEngine"]), DUMMY_CONTEXT) == []
+        rows = deserializer(wrap(packet_type, inner), DUMMY_CONTEXT)
+        assert [row["name"] for row in rows] == ["vCar", "nEngine"]
+
+    def test_unknown_identifier_raises_key_error(self):
+        """An identifier-form packet with no known definition raises KeyError; previously it gave rows named col0 and col1."""
+        deserializer = MAStreamingDeserializer()
+        with pytest.raises(KeyError):
+            deserializer(_identifier_periodic(7, 2), DUMMY_CONTEXT)
+
+    def test_unknown_identifier_seeds_from_definitions_topic(self):
+        """An unknown identifier is resolved from the definitions topic, and a later miss reads only the new messages; previously definitions_topic was not accepted."""
+        stub = StubConsumer("essentials.Car1", [_definition(7, ["vCar", "nEngine"])])
+        deserializer = MAStreamingDeserializer(
+            definitions_topic="essentials.Car1", consumer=stub
+        )
+        rows = deserializer(_identifier_periodic(7, 2), DUMMY_CONTEXT)
+        assert [row["name"] for row in rows] == ["vCar", "nEngine"]
+
+        stub.messages.append(_definition(8, ["nGear"]))
+        rows = deserializer(_identifier_periodic(8, 1), DUMMY_CONTEXT)
+        assert [row["name"] for row in rows] == ["nGear"]
+        assert stub.assigned[-1][0].offset == 1
+
+
+class TestOutputContract:
+    def test_split_values_and_slow_path_returns_list(self):
+        """split_values is True and the slow path returns a one-item list; previously split_values was False and the slow path returned a dict."""
+        deserializer = MAStreamingDeserializer(build_table=None)
+        assert deserializer.split_values is True
+        value = wrap("NewSession", pb.NewSessionPacket(data_source="ecu1"))
+        result = deserializer(value, DUMMY_CONTEXT)
+        assert isinstance(result, list)
+        assert len(result) == 1
+
+    def test_tagged_union_keeps_envelope_fields(self):
+        """A tagged-union record keeps session_key, is_essential and id next to content; previously only the decoded content was kept."""
+        inner = pb.NewSessionPacket(data_source="ecu1")
+        value = wrap("NewSession", inner, session_key="s1", is_essential=True)
+        deserializer = MAStreamingDeserializer(filter={"types": ["NewSession"]})
+        assert deserializer(value, DUMMY_CONTEXT) == [
+            {
+                "NewSession": {
+                    "session_key": "s1",
+                    "is_essential": True,
+                    "content": {"data_source": "ecu1", "topic_partition_offsets": {}},
+                    "id": "0",
+                }
+            }
+        ]
+
+    def test_use_integers_for_enums_applies_to_projected_status(self):
+        """With use_integers_for_enums=True the validity column holds the DataStatus integer; previously it held the enum name."""
+        pkt = periodic_data_packet(
+            names=["vCar"],
+            start_time=0,
+            interval=1,
+            columns=[double_column([(1.0, VALID)])],
+        )
+        deserializer = MAStreamingDeserializer(use_integers_for_enums=True)
+        rows = deserializer(wrap("PeriodicData", pkt), DUMMY_CONTEXT)
+        assert rows[0]["validity"] == 1

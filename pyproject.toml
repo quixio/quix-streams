@@ -145,6 +145,7 @@ module = [
   "quixportal.*",
   "requests.*",
   "pandas.*",
+  "grpc_tools.*",
 ]
 ignore_missing_imports = true
 

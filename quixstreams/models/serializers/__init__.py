@@ -2,7 +2,6 @@
 from .base import *
 from .exceptions import *
 from .json import JSONDeserializer, JSONSerializer
-from .ma_streaming_open_data import MAStreamingDeserializer as MAStreamingDeserializer
 from .quix import (
     QuixDeserializer,
     QuixEventsSerializer,

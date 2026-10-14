@@ -1,12 +1,13 @@
 """Helpers to build MA Streaming Open Data v1 protobuf fixtures in-process.
 
-No binary blobs are committed — every fixture is constructed from
-``open_data_pb2`` message classes and serialized on the fly, per the
-Tester brief's constraint against committing ``.bin`` fixtures.
+Every fixture is constructed from ``open_data_pb2`` message classes and
+serialized on the fly. ``StubConsumer`` stands in for
+``quixstreams.kafka.Consumer`` when a deserializer reads a definitions topic.
 """
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Iterable, Optional, Sequence
 
 from quixstreams.models.serializers.ma_streaming_open_data import (
@@ -114,3 +115,64 @@ def data_format_definition_packet(
     if event_identifier is not None:
         pkt.event_identifier = event_identifier
     return pkt
+
+
+def with_format_identifier(pkt, identifier: int):
+    """Switch ``pkt.data_format`` to the ``data_format_identifier`` form."""
+    pkt.data_format.data_format_identifier = identifier
+    return pkt
+
+
+class StubMessage:
+    """A successful Kafka message on partition 0."""
+
+    def __init__(self, topic: str, offset: int, value: bytes):
+        self._topic = topic
+        self._offset = offset
+        self._value = value
+
+    def error(self):
+        return None
+
+    def topic(self) -> str:
+        return self._topic
+
+    def partition(self) -> int:
+        return 0
+
+    def offset(self) -> int:
+        return self._offset
+
+    def value(self) -> bytes:
+        return self._value
+
+
+class StubConsumer:
+    """A one-partition consumer whose log is the public ``messages`` list."""
+
+    def __init__(self, topic: str, messages: list[bytes]):
+        self.topic = topic
+        self.messages = messages
+        self.assigned: list[list] = []
+        self._cursor = 0
+
+    def list_topics(self, topic=None, timeout=None):
+        return SimpleNamespace(
+            topics={self.topic: SimpleNamespace(partitions={0: None})}
+        )
+
+    def get_watermark_offsets(self, partition, timeout=None, cached=False):
+        return 0, len(self.messages)
+
+    def assign(self, partitions):
+        self.assigned.append(partitions)
+        if partitions:
+            self._cursor = partitions[0].offset
+
+    def poll(self, timeout=None):
+        message = StubMessage(self.topic, self._cursor, self.messages[self._cursor])
+        self._cursor += 1
+        return message
+
+    def close(self):
+        pass

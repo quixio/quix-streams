@@ -6,21 +6,22 @@ bundled schema to a new MA Streaming Open Data revision.
 Requirements
 ------------
 
-- ``grpcio-tools >= 1.62`` (ships ``grpc_tools.protoc`` with a bundled
-  protoc compiler; no system-level ``protoc`` binary needed).
-- The bundled compiler in ``grpcio-tools`` 1.62+ is protoc 26+, which
-  matches the ``# Protobuf Python Version: 6.31.1`` marker at the top of
-  the committed ``open_data_pb2.py``. If you produce a file with a
-  noticeably different marker, double-check your ``grpcio-tools`` version
-  before committing.
+- ``grpcio-tools==1.66.2``, which bundles protoc 27.2 and writes the
+  ``# Protobuf Python Version: 5.27.2`` marker.
+- That marker must equal the floor of the ``protobuf`` extra in
+  ``pyproject.toml`` (``protobuf>=5.27.2``). Newer gencode refuses to import
+  on older runtimes.
 
 Usage
 -----
 
-From the repo root::
+From the repo root, in a virtualenv that holds only ``grpcio-tools``::
 
-    python -m pip install grpcio-tools
-    python -m quixstreams.models.serializers.ma_streaming_open_data.regenerate
+    python -m pip install grpcio-tools==1.66.2
+    python quixstreams/models/serializers/ma_streaming_open_data/regenerate.py
+
+Run the script by file path. ``python -m`` imports the package, which loads
+the committed ``open_data_pb2.py`` under the virtualenv's protobuf runtime.
 
 The generated ``open_data_pb2.py`` is committed alongside this script so
 end-users (``pip install quixstreams``) do not need a protoc toolchain.
@@ -39,7 +40,7 @@ PROTO_FILE = "open_data.proto"
 
 def main() -> int:
     try:
-        from grpc_tools import protoc  # type: ignore[import-not-found]
+        from grpc_tools import protoc
     except ImportError:
         print(
             "grpcio-tools is required to regenerate protobuf bindings.\n"

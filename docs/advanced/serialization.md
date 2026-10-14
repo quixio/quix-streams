@@ -129,6 +129,7 @@ output_topic = app.topic('output', value_serializer=ProtobufSerializer(msg_type=
 By default, the Protobuf deserializer will deserialize the message to a Python dictionary. Doing this has a big performance impact. You can disable this behavior by initializing the deserializer with `to_dict` set to `False`. The Protobuf message object will then be used directly as the record value. This means column-based operations like `sdf['field']` and `sdf.drop()` will raise an error at runtime, as they require a Python dictionary. `sdf.fill()` will silently do nothing for non-dict values. You can still use `sdf.apply()` and `sdf.update()` with functions that accept the Protobuf object directly.
 
 ## MA Streaming Open Data
+!!! info New in v3.28.0
 
 `MAStreamingDeserializer` is a built-in decoder for the MA Streaming Open Data v1 protocol (used by ATLAS / McLaren Applied telemetry feeds). It wraps the generic Protobuf deserializer and adds two-stage decoding (outer `Packet` envelope + dispatch to the matching inner-payload class), a per-sample row projection, and an optional filter.
 
@@ -136,7 +137,7 @@ By default, the Protobuf deserializer will deserialize the message to a Python d
 
 ```python
 from quixstreams import Application
-from quixstreams.models.serializers import MAStreamingDeserializer
+from quixstreams.models.serializers.ma_streaming_open_data import MAStreamingDeserializer
 
 app = Application(broker_address="localhost:9092", consumer_group="masd")
 topic = app.topic(
@@ -145,7 +146,7 @@ topic = app.topic(
 )
 ```
 
-With no arguments the deserializer returns a list of flat row dicts (`packet_type`, `timestamp`, `name`, `value`, `validity`) for sample-bearing packets (`PeriodicData`, `RowData`, `SynchroData`) and an empty list for everything else. Fan rows out into the dataframe with `sdf.apply(lambda x: x, expand=True)`. `packet_type` is a discriminator column for `partitionBy("packet_type")` in lakehouse sinks.
+With no arguments the deserializer returns a list of flat row dicts (`packet_type`, `timestamp`, `name`, `value`, `validity`) for sample-bearing packets (`PeriodicData`, `RowData`, `SynchroData`) and an empty list for everything else. Quix Streams processes each list item as its own row. `packet_type` is a discriminator column for `partitionBy("packet_type")` in lakehouse sinks.
 
 Per-sample timestamps are reconstructed from the wire format: `start_time + i * interval` for `PeriodicData`, cumulative `intervals` for `SynchroData`, per-row `timestamps[]` for `RowData`. Each sample becomes one row with its own absolute timestamp.
 
@@ -173,24 +174,50 @@ Engineering (sample-bearing) packets and non-engineering packets use two differe
 [
     {"packet_type": "PeriodicData", "timestamp": 1715000000, "name": "vCar",    "value": 312.4, "validity": "DATA_STATUS_VALID"},
     {"packet_type": "PeriodicData", "timestamp": 1715000010, "name": "vCar",    "value": 313.1, "validity": "DATA_STATUS_VALID"},
-    {"packet_type": "PeriodicData", "timestamp": 1715000000, "name": "nEngine", "value": 11200, "validity": "DATA_STATUS_VALID"},
+    {"packet_type": "PeriodicData", "timestamp": 1715000000, "name": "nEngine", "value": 11200.0, "validity": "DATA_STATUS_VALID"},
 ]
 
-# Kafka msg #2 — a Configuration packet (non-engineering, tagged-union, content only)
+# Kafka msg #2 — a Configuration packet (non-engineering, tagged-union)
 [
-    {"Configuration": {"channels": [...], "sample_rates": {...}}}
+    {
+        "Configuration": {
+            "session_key": "run-42",
+            "is_essential": True,
+            "content": {
+                "config_id": "cfg-1",
+                "parameter_definitions": [...],
+                "event_definitions": [],
+                "group_definitions": [],
+                "partial_packet": False,
+                "packet_number": 0,
+                "total_packet_number": 0,
+            },
+            "id": "0",
+        }
+    }
 ]
 
 # Kafka msg #3 — an Event packet (non-engineering, tagged-union)
 [
-    {"Event": {"identifier": "PIT_ENTRY", "timestamp": 1715000023}}
+    {
+        "Event": {
+            "session_key": "run-42",
+            "content": {
+                "data_format": {"event_identifier": "PIT_ENTRY"},
+                "timestamp": "1715000023",
+                "raw_values": [],
+            },
+            "is_essential": False,
+            "id": "0",
+        }
+    }
 ]
 
 # Kafka msg #4 — a NewSession packet (not in filter)
 []
 ```
 
-Rationale: engineering data is high-throughput time-series and benefits from a flat schema (cheap row materialization, `partitionBy("packet_type")` works directly, fits any time-series store). Non-engineering payloads vary too much across types to flatten uniformly, so we keep them under the type as the root key and let downstream branch on it. Envelope fields (`session_key`, `is_essential`, `id`) are dropped from non-engineering inner dicts — sinks recover session context from upstream Kafka keys or topic names.
+Rationale: engineering data is high-throughput time-series and benefits from a flat schema (cheap row materialization, `partitionBy("packet_type")` works directly, fits any time-series store). Non-engineering payloads vary too much across types to flatten uniformly, so we keep them under the type as the root key and let downstream branch on it. The value under the root key is the packet envelope without `type`: `session_key`, `is_essential`, `content` and `id`.
 
 Downstream routing:
 
@@ -203,9 +230,9 @@ def route(record):
         handle_non_engineering(packet_type, inner)
 ```
 
-When `filter=None` the non-engineering path returns `[]` (today's behavior); engineering still emits flat rows.
+When `filter=None`, non-sample packets produce no rows; engineering packets still emit flat rows.
 
-`build_table` is **on by default** — you don't need to pass it. The bundled `DEFAULT_BUILD_TABLE` projects sample-bearing packets into the five-column flat schema (`packet_type, timestamp, name, value, validity`) and is what makes signal filtering possible. You only touch `build_table` to opt out (`build_table=None` returns raw packet dicts) or to rename columns. Signal filtering requires the default (or any custom) `build_table` to be active and `decode_content=True`; combining `filter["signals"]` with `build_table=None` or `decode_content=False` raises `ValueError` at construction.
+`build_table` is **on by default** — you don't need to pass it. The bundled `DEFAULT_BUILD_TABLE` projects sample-bearing packets into the five-column flat schema (`packet_type, timestamp, name, value, validity`) and is what makes signal filtering possible. You only touch `build_table` to opt out (`build_table=None` gives one tagged-union record per packet) or to rename columns. Signal filtering requires the default (or any custom) `build_table` to be active and `decode_content=True`; combining `filter["signals"]` with `build_table=None` or `decode_content=False` raises `ValueError` at construction.
 
 ### Configuring the filter from environment variables
 
@@ -231,4 +258,4 @@ MAStreamingDeserializer(filter=filter_spec)
 
 Leave an env var empty (or unset) to drop that axis of the filter — the library rejects a literal empty list with `ValueError` as an anti-footgun guard, so the `if ...: include` pattern translates "empty env" into "axis not present" cleanly. If **both** axes end up empty, `filter_spec` is `{}` which the library accepts as a no-op alias for `filter=None`.
 
-Runnable examples live in [`apps/masd_filter_examples/`](https://github.com/quixio/quix-streams/tree/main/apps/masd_filter_examples).
+If your feed sends `data_format_identifier` instead of parameter names, see [Resolving parameter names](ma-streaming-open-data.md#3-resolving-parameter-names).
