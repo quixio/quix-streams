@@ -1,0 +1,361 @@
+// <copyright file="open_data.proto" company="Motion Applied Ltd.">
+//
+// Copyright 2025 Motion Applied Ltd
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// </copyright>
+//
+// Source: https://github.com/Software-Products/MA.DataPlatforms.Protocol/blob/main/proto/ma/streaming/open_data/v1/open_data.proto
+// Fetched: 2026-05-14
+
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+package ma.streaming.open_data.v1;
+
+option csharp_namespace = "MA.Streaming.OpenData";
+option optimize_for = LITE_RUNTIME;
+
+// Wrapper for all packets
+message Packet {
+  string type = 1;
+  string session_key = 2;
+  bool is_essential = 3;
+  bytes content = 4;
+  uint64 id = 5;
+}
+
+message NewSessionPacket {
+  string data_source = 1;
+  map<string, int64> topic_partition_offsets = 2;
+  google.protobuf.Duration utc_offset = 3;
+  optional SessionInfoPacket session_info = 4;
+  google.protobuf.Timestamp creation_time = 5;
+}
+
+message EndOfSessionPacket {
+  string data_source = 1;
+  map<string, int64> topic_partition_offsets = 2;
+  google.protobuf.Timestamp termination_time = 3;
+}
+
+message CoverageCursorInfoPacket {
+  string data_source = 1;
+  fixed64 coverage_cursor_time = 2;
+}
+
+message SessionInfoPacket {
+  string data_source = 1;
+  string identifier = 2;
+  string type = 3;
+  uint32 version = 4;
+  repeated string associate_session_keys = 5;
+  map<string, string> details = 6;
+  google.protobuf.Duration utc_offset = 7;
+  google.protobuf.Timestamp creation_time = 8;
+  google.protobuf.Timestamp termination_time = 9;
+}
+
+message MetadataPacket {
+  map<string, google.protobuf.Any> metadata = 1;
+}
+
+message ConfigurationPacket {
+  string config_id = 1;
+  repeated ParameterDefinition parameter_definitions = 2;
+  repeated EventDefinition event_definitions = 3;
+  repeated GroupDefinition group_definitions = 4;
+  bool partial_packet = 5;
+  uint32 packet_number = 6;
+  uint32 total_packet_number = 7;
+}
+
+message EventDefinition {
+  string identifier = 1;
+  string name = 2;
+  uint32 definition_id = 3;
+  string application_name = 4;
+  string description = 5;
+  EventPriority priority = 6;
+  repeated string groups = 7;
+  repeated DataType data_types = 8;
+  repeated string format_strings = 9;
+  repeated TextConversionDefinition conversions = 10;
+  repeated string units = 11;
+}
+
+enum DataType {
+  DATA_TYPE_UNSPECIFIED = 0;
+  DATA_TYPE_FLOAT64 = 1;
+  DATA_TYPE_FLOAT32 = 2;
+  DATA_TYPE_UINT32 = 3;
+  DATA_TYPE_SINT32 = 4;
+  DATA_TYPE_UINT16 = 5;
+  DATA_TYPE_SINT16 = 6;
+  DATA_TYPE_UINT8 = 7;
+  DATA_TYPE_SINT8 = 8;
+  DATA_TYPE_STRING = 9;
+}
+
+enum EventPriority {
+  EVENT_PRIORITY_UNSPECIFIED = 0;
+  EVENT_PRIORITY_CRITICAL = 1;
+  EVENT_PRIORITY_HIGH = 2;
+  EVENT_PRIORITY_MEDIUM = 3;
+  EVENT_PRIORITY_LOW = 4;
+  EVENT_PRIORITY_DEBUG = 5;
+}
+
+message ParameterDefinition {
+  string identifier = 1;
+  string name = 2;
+  string application_name = 3;
+  string description = 4;
+  repeated string groups = 5;
+  string units = 6;
+  DataType data_type = 7;
+  string format_string = 8;
+  double min_value = 9;
+  double max_value = 10;
+  double warning_min_value = 11;
+  double warning_max_value = 12;
+  repeated double frequencies = 13;
+  bool includes_row_data = 14;
+  bool includes_synchro_data = 15;
+  TextConversionDefinition conversion = 16;
+  FormulaDefinition formula = 17;
+}
+
+message TextConversionDefinition {
+  string conversion_identifier = 1;
+  repeated double input_values = 2;
+  repeated string string_values = 3;
+  string default = 4;
+}
+
+message FormulaDefinition {
+  FormulaType type = 1;
+  string formula = 2;
+}
+
+enum FormulaType {
+  FORMULA_TYPE_UNSPECIFIED = 0;
+  FORMULA_TYPE_FDL = 1;
+  FORMULA_TYPE_CSHARP = 2;
+}
+
+message GroupDefinition {
+  string identifier = 1;
+  string name = 2;
+  string application_name = 3;
+  string description = 4;
+  repeated GroupDefinition groups = 5;
+}
+
+message DataFormatConfigurationPacket {
+  string data_format_id = 1;
+  repeated DataFormatDefinitionPacket data_formats = 2;
+}
+
+enum DataFormatType {
+  DATA_FORMAT_TYPE_UNSPECIFIED = 0;
+  DATA_FORMAT_TYPE_PARAMETER = 1;
+  DATA_FORMAT_TYPE_EVENT = 2;
+}
+
+message ParameterList {
+  repeated string parameter_identifiers = 1;
+}
+
+message DataFormatDefinitionPacket {
+  uint64 identifier = 1;
+  DataFormatType type = 2;
+  oneof format {
+    ParameterList parameter_identifiers = 3;
+    string event_identifier = 4;
+  }
+}
+
+message EventDataFormat {
+  oneof format {
+    uint64 data_format_identifier = 1;
+    string event_identifier = 2;
+  }
+}
+
+message EventPacket {
+  EventDataFormat data_format = 1;
+  fixed64 timestamp = 2;
+  repeated double raw_values = 3;
+}
+
+message MarkerPacket {
+  fixed64 timestamp = 1;
+  fixed64 end_time = 2;
+  string label = 3;
+  string type = 4;
+  string description = 5;
+  string source = 6;
+  int64 value = 7;
+}
+
+message SampleDataFormat {
+  oneof format {
+    uint64 data_format_identifier = 1;
+    ParameterList parameter_identifiers = 2;
+  }
+}
+
+enum DataStatus {
+  DATA_STATUS_UNSPECIFIED = 0;
+  DATA_STATUS_VALID = 1;
+  DATA_STATUS_MISSING = 2;
+  DATA_STATUS_ERROR = 3;
+}
+
+message SampleColumn {
+  oneof list {
+    DoubleSampleList double_samples = 1;
+    Int32SampleList int32_samples = 2;
+    BoolSampleList bool_samples = 3;
+    StringSampleList string_samples = 4;
+  }
+}
+
+message SampleRow {
+  oneof list {
+    DoubleSampleList double_samples = 1;
+    Int32SampleList int32_samples = 2;
+    BoolSampleList bool_samples = 3;
+    StringSampleList string_samples = 4;
+  }
+}
+
+message DoubleSampleList { repeated DoubleSample samples = 1; }
+message Int32SampleList  { repeated Int32Sample  samples = 1; }
+message BoolSampleList   { repeated BoolSample   samples = 1; }
+message StringSampleList { repeated StringSample samples = 1; }
+
+message DoubleSample { double value = 1; DataStatus status = 2; }
+message Int32Sample  { int32  value = 1; DataStatus status = 2; }
+message BoolSample   { bool   value = 1; DataStatus status = 2; }
+message StringSample { string value = 1; DataStatus status = 2; }
+
+message RowDataPacket {
+  SampleDataFormat data_format = 1;
+  repeated fixed64 timestamps = 2;
+  repeated SampleRow rows = 3;
+}
+
+message PeriodicDataPacket {
+  SampleDataFormat data_format = 1;
+  fixed64 start_time = 2;
+  uint32 interval = 3;
+  repeated SampleColumn columns = 4;
+}
+
+message SynchroDataPacket {
+  SampleDataFormat data_format = 1;
+  fixed64 start_time = 2;
+  repeated uint32 intervals = 3;
+  repeated SampleColumn columns = 4;
+}
+
+enum CanType {
+  CAN_TYPE_UNSPECIFIED = 0;
+  CAN_TYPE_TRANSMIT = 1;
+  CAN_TYPE_RECEIVE = 2;
+}
+
+message RawCANDataPacket {
+  fixed64 timestamp = 1;
+  uint32 bus = 2;
+  uint32 can_id = 3;
+  bytes payload = 4;
+  CanType type = 5;
+}
+
+message ValueArray {
+  repeated double values = 1;
+}
+
+message AxisDataPacket {
+  string axis_identifier = 1;
+  fixed64 timestamp = 2;
+  ValueArray values = 3;
+}
+
+message MapDataPacket {
+  string map_identifier = 1;
+  fixed64 timestamp = 2;
+  string x_axis_identifier = 3;
+  string x_index_identifier = 4;
+  string y_axis_identifier = 5;
+  string y_index_identifier = 6;
+  repeated ValueArray values = 7;
+}
+
+enum SystemStatusType {
+  SYSTEM_STATUS_TYPE_UNSPECIFIED = 0;
+  SYSTEM_STATUS_TYPE_HEARTBEAT = 1;
+  SYSTEM_STATUS_TYPE_STATUS = 2;
+  SYSTEM_STATUS_TYPE_ERROR = 3;
+  SYSTEM_STATUS_TYPE_WARNING = 4;
+  SYSTEM_STATUS_TYPE_CONNECTION = 5;
+}
+
+message SystemStatusMessage {
+  string service = 1;
+  string data_source = 2;
+  SystemStatusType type = 3;
+}
+
+enum ErrorType {
+  ERROR_TYPE_UNSPECIFIED = 0;
+  ERROR_TYPE_CURRENT = 1;
+  ERROR_TYPE_LOGGED = 2;
+}
+
+enum ErrorStatus {
+  ERROR_STATUS_UNSPECIFIED = 0;
+  ERROR_STATUS_SET = 1;
+  ERROR_STATUS_CLEARED = 2;
+}
+
+message ErrorPacket {
+  string error_identifier = 1;
+  fixed64 timestamp = 2;
+  string application_name = 3;
+  string group = 4;
+  string name = 5;
+  string description = 6;
+  ErrorType type = 7;
+  ErrorStatus status = 8;
+}
+
+message StreamStartedPacket {
+  string data_source = 1;
+  string session_key = 2;
+  string stream_name = 3;
+  google.protobuf.Timestamp start_time = 4;
+}
+
+message StreamStoppedPacket {
+  string data_source = 1;
+  string session_key = 2;
+  string stream_name = 3;
+  google.protobuf.Timestamp stop_time = 4;
+}

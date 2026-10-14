@@ -18,3 +18,7 @@ repos:
         args: []
         language: system
         files: ^quixstreams/
+        # Generated Protobuf modules have no static symbols; mypy is told to
+        # treat them as Any via [[tool.mypy.overrides]] in pyproject.toml,
+        # which only applies to imported (not command-line) files.
+        exclude: _pb2\.py$
