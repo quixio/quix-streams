@@ -1,6 +1,6 @@
 """Unit tests for the module-level helpers in ``deserializer.py``."""
 
-from quixstreams.models.serializers.ma_streaming_open_data.deserializer import (
+from quixstreams.models.serializers.fia_open_data.deserializer import (
     _to_tagged_union,
 )
 

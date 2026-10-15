@@ -18,7 +18,7 @@ Usage
 From the repo root, in a virtualenv that holds only ``grpcio-tools``::
 
     python -m pip install grpcio-tools==1.66.2
-    python quixstreams/models/serializers/ma_streaming_open_data/regenerate.py
+    python quixstreams/models/serializers/fia_open_data/regenerate.py
 
 Run the script by file path. ``python -m`` imports the package, which loads
 the committed ``open_data_pb2.py`` under the virtualenv's protobuf runtime.

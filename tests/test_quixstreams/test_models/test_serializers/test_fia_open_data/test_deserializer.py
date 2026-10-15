@@ -1,15 +1,15 @@
-"""Tests for ``MAStreamingDeserializer``: packet decoding, row projection,
+"""Tests for ``FIAOpenDataDeserializer``: packet decoding, row projection,
 filtering, parameter name resolution and the output contract."""
 
 import pytest
 from google.protobuf.json_format import MessageToDict
 
-from quixstreams.models.serializers.ma_streaming_open_data import open_data_pb2 as pb
-from quixstreams.models.serializers.ma_streaming_open_data.content_types import (
+from quixstreams.models.serializers.fia_open_data import open_data_pb2 as pb
+from quixstreams.models.serializers.fia_open_data.content_types import (
     CONTENT_TYPES,
 )
-from quixstreams.models.serializers.ma_streaming_open_data.deserializer import (
-    MAStreamingDeserializer,
+from quixstreams.models.serializers.fia_open_data.deserializer import (
+    FIAOpenDataDeserializer,
 )
 
 from ..constants import DUMMY_CONTEXT
@@ -55,7 +55,7 @@ class TestEnvelopeAndInnerDecode:
         """Every registered packet type decodes to its message class's dict under its type key."""
         inner = payload_cls()
         value = wrap(packet_type, inner)
-        deserializer = MAStreamingDeserializer(build_table=None)
+        deserializer = FIAOpenDataDeserializer(build_table=None)
         result = deserializer(value, DUMMY_CONTEXT)
         expected_content = MessageToDict(
             inner,
@@ -70,14 +70,14 @@ class TestEnvelopeAndInnerDecode:
         """With decode_content=False the envelope's content stays a base64 string."""
         inner = pb.NewSessionPacket(data_source="ecu1")
         value = wrap("NewSession", inner)
-        deserializer = MAStreamingDeserializer(decode_content=False, build_table=None)
+        deserializer = FIAOpenDataDeserializer(decode_content=False, build_table=None)
         ((_, envelope),) = deserializer(value, DUMMY_CONTEXT)[0].items()
         assert isinstance(envelope["content"], str)
 
     def test_unknown_packet_type_leaves_content_untouched(self):
         """An unregistered packet type keeps its content as a base64 string."""
         value = packet_bytes("TotallyUnknownType", content=b"whatever")
-        deserializer = MAStreamingDeserializer(build_table=None)
+        deserializer = FIAOpenDataDeserializer(build_table=None)
         ((root, envelope),) = deserializer(value, DUMMY_CONTEXT)[0].items()
         assert root == "TotallyUnknownType"
         assert isinstance(envelope["content"], str)
@@ -86,7 +86,7 @@ class TestEnvelopeAndInnerDecode:
         """A type registered through extra_content_types is decoded with its class."""
         inner = pb.MetadataPacket()
         value = wrap("CustomType", inner)
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             build_table=None,
             extra_content_types={"CustomType": pb.MetadataPacket},
         )
@@ -96,7 +96,7 @@ class TestEnvelopeAndInnerDecode:
 
     def test_builtin_content_types_take_precedence_on_collision(self):
         """A built-in type is decoded with the built-in class even if extra_content_types maps it too."""
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             build_table=None,
             extra_content_types={"NewSession": pb.MetadataPacket},
         )
@@ -119,7 +119,7 @@ class TestDefaultProjection:
             columns=[double_column([(312.4, VALID), (313.1, VALID)])],
         )
         value = wrap("PeriodicData", pkt, session_key="s1")
-        deserializer = MAStreamingDeserializer()
+        deserializer = FIAOpenDataDeserializer()
         rows = deserializer(value, DUMMY_CONTEXT)
         assert rows == [
             {
@@ -142,7 +142,7 @@ class TestDefaultProjection:
         """With no arguments a non-sample packet gives an empty list."""
         inner = pb.NewSessionPacket(data_source="ecu1")
         value = wrap("NewSession", inner)
-        deserializer = MAStreamingDeserializer()
+        deserializer = FIAOpenDataDeserializer()
         assert deserializer(value, DUMMY_CONTEXT) == []
 
 
@@ -151,7 +151,7 @@ class TestTaggedUnionPath:
         """A non-sample packet in filter["types"] gives one tagged-union record holding its envelope."""
         inner = pb.NewSessionPacket(data_source="ecu1")
         value = wrap("NewSession", inner, session_key="s1", is_essential=True)
-        deserializer = MAStreamingDeserializer(filter={"types": ["NewSession"]})
+        deserializer = FIAOpenDataDeserializer(filter={"types": ["NewSession"]})
         result = deserializer(value, DUMMY_CONTEXT)
         assert result == [
             {
@@ -170,7 +170,7 @@ class TestFilterSemantics:
         """A packet whose type is not in filter["types"] gives an empty list."""
         inner = pb.EventPacket(timestamp=5)
         value = wrap("Event", inner)
-        deserializer = MAStreamingDeserializer(filter={"types": ["PeriodicData"]})
+        deserializer = FIAOpenDataDeserializer(filter={"types": ["PeriodicData"]})
         assert deserializer(value, DUMMY_CONTEXT) == []
 
     def test_signals_filter_keeps_only_allowlisted_signal_rows(self):
@@ -185,7 +185,7 @@ class TestFilterSemantics:
             ],
         )
         value = wrap("PeriodicData", pkt)
-        deserializer = MAStreamingDeserializer(filter={"signals": ["nEngine"]})
+        deserializer = FIAOpenDataDeserializer(filter={"signals": ["nEngine"]})
         result = deserializer(value, DUMMY_CONTEXT)
         assert result == [
             {
@@ -205,7 +205,7 @@ class TestFilterSemantics:
             columns=[double_column([(1.0, VALID)])],
         )
         value = wrap("PeriodicData", pkt)
-        deserializer = MAStreamingDeserializer(filter={"signals": ["unknown"]})
+        deserializer = FIAOpenDataDeserializer(filter={"signals": ["unknown"]})
         assert deserializer(value, DUMMY_CONTEXT) == []
 
     def test_types_and_signals_combined(self):
@@ -223,7 +223,7 @@ class TestFilterSemantics:
             ),
         )
         dropped_type = wrap("Event", pb.EventPacket(timestamp=1))
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             filter={"types": ["PeriodicData", "NewSession"], "signals": ["nEngine"]}
         )
         assert deserializer(dropped_type, DUMMY_CONTEXT) == []
@@ -247,7 +247,7 @@ class TestFilterSemantics:
             columns=[double_column([(1.0, VALID)])],
         )
         value = wrap("PeriodicData", pkt)
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             build_table=None, filter={"types": ["PeriodicData"]}
         )
         result = deserializer(value, DUMMY_CONTEXT)
@@ -266,7 +266,7 @@ class TestBuildTableProjection:
             columns=[double_column([(1.0, VALID)])],
         )
         value = wrap("PeriodicData", pkt)
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             build_table=["parameter_identifier", "value"]
         )
         rows = deserializer(value, DUMMY_CONTEXT)
@@ -280,7 +280,7 @@ class TestBuildTableProjection:
             columns=[double_column([(1.0, VALID)])],
         )
         value = wrap("PeriodicData", pkt)
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             build_table={
                 "sig": ["parameter_identifier"],
                 "ts": ["start_time", "timestamp"],
@@ -292,15 +292,15 @@ class TestBuildTableProjection:
     def test_unsupported_column_name_raises(self):
         """A list-form build_table with an unsupported column raises ValueError at construction."""
         with pytest.raises(ValueError, match="unsupported column"):
-            MAStreamingDeserializer(build_table=["bogus_column"])
+            FIAOpenDataDeserializer(build_table=["bogus_column"])
 
     def test_dict_form_empty_sources_raises(self):
         with pytest.raises(ValueError, match="at least one source field"):
-            MAStreamingDeserializer(build_table={"x": []})
+            FIAOpenDataDeserializer(build_table={"x": []})
 
     def test_dict_form_unrecognized_source_raises(self):
         with pytest.raises(ValueError, match="no recognized field"):
-            MAStreamingDeserializer(build_table={"x": ["bogus_field"]})
+            FIAOpenDataDeserializer(build_table={"x": ["bogus_field"]})
 
 
 class TestFastSlowPathConsistency:
@@ -317,10 +317,10 @@ class TestFastSlowPathConsistency:
         )
         value = wrap("PeriodicData", pkt, session_key="s1")
 
-        fast = MAStreamingDeserializer()
+        fast = FIAOpenDataDeserializer()
         rows_fast = fast(value, DUMMY_CONTEXT)
 
-        slow = MAStreamingDeserializer(build_table=None)
+        slow = FIAOpenDataDeserializer(build_table=None)
         ((_, envelope),) = slow(value, DUMMY_CONTEXT)[0].items()
         content = envelope["content"]
         names = content["data_format"]["parameter_identifiers"]["parameter_identifiers"]
@@ -353,7 +353,7 @@ class TestDataFormatDefinitionPacket:
             parameter_identifiers=["vCar", "nEngine"],
         )
         value = wrap("DataFormatDefinition", inner)
-        deserializer = MAStreamingDeserializer(build_table=None)
+        deserializer = FIAOpenDataDeserializer(build_table=None)
         ((_, envelope),) = deserializer(value, DUMMY_CONTEXT)[0].items()
         assert envelope["content"] == {
             "identifier": "5",
@@ -369,7 +369,7 @@ class TestDataFormatDefinitionPacket:
             event_identifier="PIT_ENTRY",
         )
         value = wrap("DataFormatDefinition", inner)
-        deserializer = MAStreamingDeserializer(build_table=None)
+        deserializer = FIAOpenDataDeserializer(build_table=None)
         ((_, envelope),) = deserializer(value, DUMMY_CONTEXT)[0].items()
         assert envelope["content"] == {
             "identifier": "6",
@@ -386,7 +386,7 @@ class TestDataFormatDefinitionPacket:
             parameter_identifiers=["vCar"],
         )
         value = wrap("DataFormatDefinition", inner)
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             filter={"types": ["DataFormatDefinition"]}
         )
         result = deserializer(value, DUMMY_CONTEXT)
@@ -458,21 +458,21 @@ class TestParameterNameResolution:
     )
     def test_identifier_form_resolves_names_from_definition(self, packet_type, inner):
         """Rows from an identifier-form packet carry the names of a definition seen earlier on the data topic; previously col0 and col1."""
-        deserializer = MAStreamingDeserializer()
+        deserializer = FIAOpenDataDeserializer()
         assert deserializer(_definition(7, ["vCar", "nEngine"]), DUMMY_CONTEXT) == []
         rows = deserializer(wrap(packet_type, inner), DUMMY_CONTEXT)
         assert [row["name"] for row in rows] == ["vCar", "nEngine"]
 
     def test_unknown_identifier_raises_key_error(self):
         """An identifier-form packet with no known definition raises KeyError; previously it gave rows named col0 and col1."""
-        deserializer = MAStreamingDeserializer()
+        deserializer = FIAOpenDataDeserializer()
         with pytest.raises(KeyError):
             deserializer(_identifier_periodic(7, 2), DUMMY_CONTEXT)
 
     def test_unknown_identifier_seeds_from_definitions_topic(self):
         """An unknown identifier is resolved from the definitions topic, and a later miss reads only the new messages; previously definitions_topic was not accepted."""
         stub = StubConsumer("Essentials.Car1", [_definition(7, ["vCar", "nEngine"])])
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             definitions_topic="Essentials.Car1", consumer=stub
         )
         rows = deserializer(_identifier_periodic(7, 2), DUMMY_CONTEXT)
@@ -490,7 +490,7 @@ class TestParameterNameResolution:
             [_definition(8, ["nGear"]), _definition(9, ["vCar"])],
             trailing_gap=2,
         )
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             definitions_topic="Essentials.Car1", consumer=stub
         )
         with pytest.raises(KeyError):
@@ -502,7 +502,7 @@ class TestParameterNameResolution:
             "Essentials.Car1",
             [_definition(7, ["vCar"]), _definition(8, ["nGear"])],
         )
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             definitions_topic="Essentials.Car1", consumer=stub
         )
         deserializer(_identifier_periodic(7, 1), DUMMY_CONTEXT)
@@ -512,7 +512,7 @@ class TestParameterNameResolution:
 class TestOutputContract:
     def test_split_values_and_slow_path_returns_list(self):
         """split_values is True and the slow path returns a one-item list; previously split_values was False and the slow path returned a dict."""
-        deserializer = MAStreamingDeserializer(build_table=None)
+        deserializer = FIAOpenDataDeserializer(build_table=None)
         assert deserializer.split_values is True
         value = wrap("NewSession", pb.NewSessionPacket(data_source="ecu1"))
         result = deserializer(value, DUMMY_CONTEXT)
@@ -523,7 +523,7 @@ class TestOutputContract:
         """A tagged-union record keeps session_key, is_essential and id next to content; previously only the decoded content was kept."""
         inner = pb.NewSessionPacket(data_source="ecu1")
         value = wrap("NewSession", inner, session_key="s1", is_essential=True)
-        deserializer = MAStreamingDeserializer(filter={"types": ["NewSession"]})
+        deserializer = FIAOpenDataDeserializer(filter={"types": ["NewSession"]})
         assert deserializer(value, DUMMY_CONTEXT) == [
             {
                 "NewSession": {
@@ -543,6 +543,6 @@ class TestOutputContract:
             interval=1,
             columns=[double_column([(1.0, VALID)])],
         )
-        deserializer = MAStreamingDeserializer(use_integers_for_enums=True)
+        deserializer = FIAOpenDataDeserializer(use_integers_for_enums=True)
         rows = deserializer(wrap("PeriodicData", pkt), DUMMY_CONTEXT)
         assert rows[0]["validity"] == 1

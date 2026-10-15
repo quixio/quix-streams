@@ -171,6 +171,6 @@ ignore_errors = true
 # follows imports normally for files named on the command line).
 [[tool.mypy.overrides]]
 module = [
-    "quixstreams.models.serializers.ma_streaming_open_data.open_data_pb2"
+    "quixstreams.models.serializers.fia_open_data.open_data_pb2"
 ]
 follow_imports = "skip"

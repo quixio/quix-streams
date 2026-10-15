@@ -53,7 +53,7 @@ nav:
   - Advanced Usage:
     - Checkpointing: advanced/checkpointing.md
     - Serialization Formats: advanced/serialization.md
-    - MA Streaming Open Data: advanced/ma-streaming-open-data.md
+    - FIA Open Data: advanced/fia-open-data.md
     - Schema Registry: advanced/schema-registry.md
     - Stateful Processing: advanced/stateful-processing.md
     - State TTL — Cookbook: advanced/state-ttl.md

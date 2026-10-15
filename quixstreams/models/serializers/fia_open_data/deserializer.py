@@ -1,9 +1,9 @@
-"""``MAStreamingDeserializer``, the built-in MA Streaming Open Data v1 decoder.
+"""``FIAOpenDataDeserializer``, the built-in FIA Open Data decoder.
 
 Parses the outer ``ma.streaming.open_data.v1.Packet`` envelope, decodes the
 inner payload named by ``Packet.type``, and returns either flat sample rows or
 one tagged-union record per packet. See
-``docs/advanced/ma-streaming-open-data.md``.
+``docs/advanced/fia-open-data.md``.
 """
 
 from __future__ import annotations
@@ -43,8 +43,10 @@ def _to_tagged_union(packet: dict) -> dict:
     return {packet.pop("type"): packet}
 
 
-class MAStreamingDeserializer(ProtobufDeserializer):
-    """Deserializer for **MA Streaming Open Data v1** wire packets.
+class FIAOpenDataDeserializer(ProtobufDeserializer):
+    """Deserializer for **FIA Open Data** wire packets.
+
+    The wire protocol is Motion Applied's MA Streaming Open Data v1.
 
     Parses the outer ``Packet`` envelope and the inner payload named by
     ``Packet.type`` in one call. Every call returns a list, and Quix Streams
@@ -57,14 +59,14 @@ class MAStreamingDeserializer(ProtobufDeserializer):
     .. code-block:: python
 
         from quixstreams import Application
-        from quixstreams.models.serializers.ma_streaming_open_data import (
-            MAStreamingDeserializer,
+        from quixstreams.models.serializers.fia_open_data import (
+            FIAOpenDataDeserializer,
         )
 
         app = Application(...)
         topic = app.topic(
             name="telemetry-input",
-            value_deserializer=MAStreamingDeserializer(
+            value_deserializer=FIAOpenDataDeserializer(
                 filter={"types": ["PeriodicData", "NewSession"]},
             ),
             key_deserializer="str",
@@ -130,7 +132,7 @@ class MAStreamingDeserializer(ProtobufDeserializer):
         definitions_topic: Optional[str] = None,
         consumer: Optional[Consumer] = None,
     ) -> None:
-        """Construct a new MA Streaming Open Data v1 deserializer.
+        """Construct a new FIA Open Data deserializer.
 
         :param decode_content: If True (default), parse the inner payload. If
             False, ``content`` stays the Stage-1 base64 string and every

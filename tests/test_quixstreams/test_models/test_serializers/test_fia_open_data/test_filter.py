@@ -1,12 +1,12 @@
 """Unit tests for ``resolve_filter`` validation and for the filter checks
-``MAStreamingDeserializer`` runs at construction."""
+``FIAOpenDataDeserializer`` runs at construction."""
 
 import pytest
 
-from quixstreams.models.serializers.ma_streaming_open_data.deserializer import (
-    MAStreamingDeserializer,
+from quixstreams.models.serializers.fia_open_data.deserializer import (
+    FIAOpenDataDeserializer,
 )
-from quixstreams.models.serializers.ma_streaming_open_data.filter import (
+from quixstreams.models.serializers.fia_open_data.filter import (
     ResolvedFilter,
     resolve_filter,
 )
@@ -138,31 +138,31 @@ class TestResolveFilter:
 
 
 class TestDeserializerFilterConstruction:
-    """``MAStreamingDeserializer`` applies ``resolve_filter`` at construction."""
+    """``FIAOpenDataDeserializer`` applies ``resolve_filter`` at construction."""
 
     def test_unknown_type_rejected_at_construction(self):
         with pytest.raises(ValueError, match="unknown packet types"):
-            MAStreamingDeserializer(filter={"types": ["NotARealType"]})
+            FIAOpenDataDeserializer(filter={"types": ["NotARealType"]})
 
     def test_non_mapping_filter_rejected(self):
         with pytest.raises(TypeError):
-            MAStreamingDeserializer(filter=["PeriodicData"])
+            FIAOpenDataDeserializer(filter=["PeriodicData"])
 
     def test_signals_with_decode_content_false_rejected(self):
         with pytest.raises(ValueError):
-            MAStreamingDeserializer(decode_content=False, filter={"signals": ["vCar"]})
+            FIAOpenDataDeserializer(decode_content=False, filter={"signals": ["vCar"]})
 
     def test_signals_with_build_table_none_rejected(self):
         with pytest.raises(ValueError):
-            MAStreamingDeserializer(build_table=None, filter={"signals": ["vCar"]})
+            FIAOpenDataDeserializer(build_table=None, filter={"signals": ["vCar"]})
 
     def test_extra_content_types_extend_known_type_registry(self):
         """filter["types"] accepts types registered through extra_content_types."""
-        from quixstreams.models.serializers.ma_streaming_open_data import (
+        from quixstreams.models.serializers.fia_open_data import (
             open_data_pb2 as pb,
         )
 
-        deserializer = MAStreamingDeserializer(
+        deserializer = FIAOpenDataDeserializer(
             extra_content_types={"CustomType": pb.MetadataPacket},
             filter={"types": ["CustomType"]},
         )

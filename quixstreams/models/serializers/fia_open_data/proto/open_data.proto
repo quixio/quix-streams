@@ -1,0 +1,556 @@
+// <copyright file="open_data.proto" company="Motion Applied Ltd.">
+//
+// Copyright 2025 Motion Applied Ltd
+// 
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// </copyright>
+
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+package ma.streaming.open_data.v1;
+
+option csharp_namespace = "MA.Streaming.OpenData";
+option optimize_for = LITE_RUNTIME;
+
+// Wrapper for all packets
+message Packet {
+  // Message type (unique name)
+  string type = 1;
+  // Unique session key
+  string session_key = 2;
+  // Is this packet essential?
+  bool is_essential = 3;
+  // Content
+  bytes content = 4;
+  // Id (optional if needed by default is 0)
+  uint64 id = 5;
+}
+
+// New session has started
+message NewSessionPacket {
+  // Data Source name
+  string data_source = 1;
+  // The offsets into each topic / partition (key is topic name, optionally appended with a ':' followed by the partition number)
+  map<string, int64> topic_partition_offsets = 2;
+  // Difference between UTC time and local standard time in the timezone in which the data is recorded (negative for negative longitudes, positive for positive longitudes)
+  google.protobuf.Duration utc_offset = 3;
+  // Session info
+  optional SessionInfoPacket session_info = 4; 
+  // Session Creation Time
+  google.protobuf.Timestamp creation_time = 5;
+  }
+
+// A session has ended
+message EndOfSessionPacket {
+  // Data Source name
+  string data_source = 1;
+  // The offsets into each topic / partition (key is topic name, optionally appended with a ':' followed by the partition number)
+  map<string, int64> topic_partition_offsets = 2;
+  // Session Termination Time
+  google.protobuf.Timestamp termination_time = 3;
+}
+
+// Coverage cursor position for a session has been updated
+message CoverageCursorInfoPacket {
+  // Data Source name
+  string data_source = 1;
+  // Coverage cursor time (nanoseconds since the UNIX epoch of 1st January 1970, UTC)
+  fixed64 coverage_cursor_time = 2;
+}
+
+// Session info
+message SessionInfoPacket {
+  // Data Source name
+  string data_source = 1;
+  // Identifier
+  string identifier = 2; 
+  // Type
+  string type = 3;
+  // Version
+  uint32 version = 4;
+  // Associate session keys
+  repeated string associate_session_keys = 5;
+  // Session details (detail name, detail value)
+  map<string, string> details = 6;
+  // Difference between UTC time and local standard time in the timezone in which the data is recorded (negative for negative longitudes, positive for positive longitudes)
+  google.protobuf.Duration utc_offset = 7;
+  // Session Creation Time
+  google.protobuf.Timestamp creation_time = 8;
+  // Session Termination Time
+  google.protobuf.Timestamp termination_time = 9;
+}
+
+// General metadata
+message MetadataPacket {
+  // Metadata
+  map<string,google.protobuf.Any> metadata = 1;
+}
+
+// Data configuration
+message ConfigurationPacket {
+  // Configuration ID
+  string config_id = 1;
+  // The parameter definitions
+  repeated ParameterDefinition parameter_definitions = 2;
+  // The event definitions
+  repeated EventDefinition event_definitions = 3;
+  // The group definitions
+  repeated GroupDefinition group_definitions = 4;
+  // Flag to indicate if this packet is part of a larger config.
+  bool partial_packet = 5;
+  // The packet number out of the total packets sent if partial packet was set to true.
+  uint32 packet_number = 6;
+  // The total packet number that make up the config id if partial packet was set to true.
+  uint32 total_packet_number = 7;
+}
+
+// Defines the metadata for a given event
+message EventDefinition {
+  // The full identifier for the event
+  string identifier = 1;
+  // The name of the event
+  string name = 2;
+  // A numeric identifier for the event
+  uint32 definition_id = 3;
+  // The application containing the event
+  string application_name = 4;
+  // The event description
+  string description = 5;
+  // Event priority
+  EventPriority priority = 6;
+  // List of group identifiers in which the event should appear
+  repeated string groups = 7;
+  // List of native data types for each value
+  repeated DataType data_types = 8;
+  // List of format strings, applied to event values for display
+  repeated string format_strings = 9;
+  // Text conversion rules to be applied to event values if applicable
+  repeated TextConversionDefinition conversions = 10;
+  // List of units applied to event values for display
+  repeated string units = 11;
+}
+
+// Native data type
+enum DataType {
+  DATA_TYPE_UNSPECIFIED = 0; // Unspecified
+  DATA_TYPE_FLOAT64 = 1; // 64 bit floating point (i.e. “double”)
+  DATA_TYPE_FLOAT32 = 2; // 32 bit floating point
+  DATA_TYPE_UINT32 = 3; // 32 bit unsigned integer
+  DATA_TYPE_SINT32 = 4; // 32 bit signed integer
+  DATA_TYPE_UINT16 = 5; // 16 bit unsigned integer
+  DATA_TYPE_SINT16 = 6; // 16 bit signed integer
+  DATA_TYPE_UINT8 = 7; // 8 bit unsigned integer
+  DATA_TYPE_SINT8 = 8; // 8 bit signed integer
+  DATA_TYPE_STRING = 9; // String
+}
+
+// Event priority type
+enum EventPriority {
+  EVENT_PRIORITY_UNSPECIFIED = 0;
+  EVENT_PRIORITY_CRITICAL = 1;
+  EVENT_PRIORITY_HIGH = 2;
+  EVENT_PRIORITY_MEDIUM = 3;
+  EVENT_PRIORITY_LOW = 4;
+  EVENT_PRIORITY_DEBUG = 5;
+}
+
+// Defines the metadata for a given parameter
+message ParameterDefinition {
+  // The full identifier for the parameter
+  string identifier = 1;
+  // The name of the parameter
+  string name = 2;
+  // The application containing the parameter
+  string application_name = 3;
+  // The parameter description
+  string description = 4;
+  // List of group identifiers in which the parameter should appear
+  repeated string groups = 5;
+  // Units that this parameter is measured in
+  string units = 6;
+  // Native data type
+  DataType data_type = 7;
+  // Format strings, applied to sample values for display
+  string format_string = 8;
+  // Minimum value expected for samples of this parameter
+  double min_value = 9;
+  // Maximum value expected for samples of this parameter
+  double max_value = 10;
+  // Threshold minimum value for warnings
+  double warning_min_value = 11;
+  // Threshold maximum value for warnings
+  double warning_max_value = 12;
+  // Frequencies at which samples of this parameter may be sent
+  repeated double frequencies = 13;
+  // Whether row data samples may be sent for this parameter
+  bool includes_row_data = 14;
+  // Whether synchro data samples may be sent for this parameter
+  bool includes_synchro_data = 15;
+  // Text conversion rule to be applied if applicable
+  TextConversionDefinition conversion = 16;
+  // Formula for calculating sample values if applicable
+  FormulaDefinition formula = 17;
+}
+
+// A text conversion definition
+message TextConversionDefinition {
+  // The conversion rule identifier
+  string conversion_identifier = 1;
+  // The values to convert from
+  repeated double input_values = 2;
+  // The strings to convert to
+  repeated string string_values = 3;
+  // The default string if the input does not match
+  string default = 4;
+}
+
+// A formula definition
+message FormulaDefinition {
+  // Type of formula
+  FormulaType type = 1;
+  // The formula code
+  string formula = 2;
+}
+
+// Types of formula. Can be extended to support other languages in the future
+enum FormulaType {
+  FORMULA_TYPE_UNSPECIFIED = 0; // Unspecified
+  FORMULA_TYPE_FDL = 1; // Mclaren Applied proprietary FDL, used for virtual parameters with System Monitor
+  FORMULA_TYPE_CSHARP = 2; // An open format translated from FDL to C#
+}
+
+// Defines the group
+message GroupDefinition {
+  // The full identifier for the group
+  string identifier = 1;
+  // The name of the group
+  string name = 2;
+  // The applicaion that the group is contained within
+  string application_name = 3;
+  // Description for the group
+  string description = 4;
+  // Any subgroups nested within the group
+  repeated GroupDefinition groups = 5;
+}
+  
+// Data format
+message DataFormatConfigurationPacket {
+  // Data format ID
+  string data_format_id = 1;
+  // The data format definitions
+  repeated DataFormatDefinitionPacket data_formats = 2;
+}
+    
+// Data format type
+enum DataFormatType {
+  DATA_FORMAT_TYPE_UNSPECIFIED = 0;
+  DATA_FORMAT_TYPE_PARAMETER = 1;
+  DATA_FORMAT_TYPE_EVENT = 2;
+}
+
+// List of parameter identifiers
+message ParameterList {
+  repeated string parameter_identifiers = 1;
+}
+
+// Data Format Definition
+message DataFormatDefinitionPacket {
+  // Data format identifier
+  uint64 identifier = 1;
+  // Data format type
+  DataFormatType type = 2;
+  // The data format
+  oneof format {
+    ParameterList parameter_identifiers = 3; 
+    string event_identifier = 4; 
+  }
+}
+
+// Desribes the event in this data packet
+message EventDataFormat {
+  // The data format identifier, or event identifier
+  oneof format {
+    uint64 data_format_identifier = 1; 
+    string event_identifier = 2; 
+  }
+}
+
+// Event
+message EventPacket {
+  // Data format
+  EventDataFormat data_format = 1;
+  // Time the event occurred
+  fixed64 timestamp = 2;
+  // Raw data (list of doubles, event specific meaning)
+  repeated double raw_values = 3;
+}
+
+// Marker
+message MarkerPacket {
+  // Start time of marker
+  fixed64 timestamp = 1;
+  // End time of marker (optional)
+  fixed64 end_time = 2;
+  // Text label
+  string label = 3;
+  // Type of marker
+  string type = 4;
+  // Text Description
+  string description = 5;
+  // Source
+  string source = 6;
+  // Value of the marker if applicable
+  int64 value = 7;
+}
+
+// Desribes the parameters in this data packet
+message SampleDataFormat {
+  // The data format identifier, or parameter list
+  oneof format {
+    uint64 data_format_identifier = 1; 
+    ParameterList parameter_identifiers = 2; 
+  }
+}
+
+// Data status showing if samples are invalid for any reason
+enum DataStatus {
+  DATA_STATUS_UNSPECIFIED = 0;
+  DATA_STATUS_VALID = 1;
+  DATA_STATUS_MISSING = 2;
+  DATA_STATUS_ERROR = 3;
+}
+
+// "Column" of telemetry sample values
+message SampleColumn {
+  oneof list {
+    DoubleSampleList double_samples = 1; 
+    Int32SampleList int32_samples = 2; 
+    BoolSampleList bool_samples = 3; 
+    StringSampleList string_samples = 4; 
+  }
+}
+
+// "Row" of telemetry sample values
+message SampleRow {
+  oneof list {
+    DoubleSampleList double_samples = 1; 
+    Int32SampleList int32_samples = 2; 
+    BoolSampleList bool_samples = 3; 
+    StringSampleList string_samples = 4; 
+  }
+}
+
+message DoubleSampleList {
+  repeated DoubleSample samples = 1;
+}
+message Int32SampleList {
+  repeated Int32Sample samples = 1;
+}
+message BoolSampleList {
+  repeated BoolSample samples = 1;
+}
+message StringSampleList {
+  repeated StringSample samples = 1;
+}
+
+message DoubleSample {
+  double value = 1;
+  DataStatus status = 2;
+}
+message Int32Sample {
+  int32 value = 1;
+  DataStatus status = 2;
+}
+message BoolSample {
+  bool value = 1;
+  DataStatus status = 2;
+}	
+message StringSample {
+  string value = 1;
+  DataStatus status = 2;
+}
+
+// Telemetry samples in time series format (timestamped rows)
+message RowDataPacket {
+  // Data format
+  SampleDataFormat data_format = 1;
+  // Timestamps
+  repeated fixed64 timestamps = 2;
+  // The rest of the Data
+  // Each row must have the same no of values = the same as the parameters
+  repeated SampleRow rows = 3;
+}
+
+// Telemetry samples in periodic format (equally spaced / fixed frequency samples)
+message PeriodicDataPacket {
+  // Data format
+  SampleDataFormat data_format = 1;
+  // Start time (timestamp of first sample)
+  fixed64 start_time = 2;
+  // Step / time between samples
+  uint32 interval = 3;
+  // The rest of the Data
+  // Each column must have the same no of values
+  repeated SampleColumn columns = 4;
+}
+
+// Telemetry samples in synchro format (variable frequency samples)
+message SynchroDataPacket {
+  // Data format
+  SampleDataFormat data_format = 1;
+  // Start time (timestamp of first sample)
+  fixed64 start_time = 2;
+  // Step / time between each sample and the previous
+  repeated uint32 intervals = 3;
+  // The rest of the Data
+  // Each column must have number of values = number of intervals + 1
+  repeated SampleColumn columns = 4;
+}
+
+// CAN type
+enum CanType {
+  CAN_TYPE_UNSPECIFIED = 0;
+  CAN_TYPE_TRANSMIT = 1;
+  CAN_TYPE_RECEIVE = 2;
+}
+
+// Raw CAN message
+message RawCANDataPacket {
+  // Timestamp of the packet
+  fixed64 timestamp = 1;
+  // CAN Bus
+  uint32 bus = 2;
+  // CAN ID
+  uint32 can_id = 3;
+  // Message payload
+  bytes payload = 4;
+  // CAN RxTx
+  CanType type = 5;
+}
+
+// "Array" of values
+message ValueArray {
+  repeated double values = 1;
+}
+
+// Values corresponsponding to points on an axis for map parameters
+message AxisDataPacket {
+  // Axis identifier
+  string axis_identifier = 1;
+  // Timestamp
+  fixed64 timestamp = 2;
+  // The data for the axis
+  ValueArray values = 3;
+}
+
+// Values corresponsponding to the map
+message MapDataPacket {
+  // Map identifier
+  string map_identifier = 1;
+  // Timestamp
+  fixed64 timestamp = 2;
+  // The identifier of the X axis
+  string x_axis_identifier = 3;
+  // The identifier of the X axis index parameter
+  string x_index_identifier = 4;
+  // The name of the Y axis (only for 2D maps)
+  string y_axis_identifier = 5;
+  // The identifier of the Y axis index parameter (only for 2D maps)
+  string y_index_identifier = 6;
+  // The data for the map
+  repeated ValueArray values = 7;
+}
+
+// Types of status message
+enum SystemStatusType {
+  SYSTEM_STATUS_TYPE_UNSPECIFIED = 0;  // Unspecified
+  SYSTEM_STATUS_TYPE_HEARTBEAT = 1;  // Service is still alive
+  SYSTEM_STATUS_TYPE_STATUS = 2;	  // Service has a status update
+  SYSTEM_STATUS_TYPE_ERROR = 3;      // Service has generated an error
+  SYSTEM_STATUS_TYPE_WARNING = 4;    // Service has generated a warning
+  SYSTEM_STATUS_TYPE_CONNECTION = 5; // A source has connected/disconnected
+}
+
+// A system status message
+message SystemStatusMessage {
+  // Service to which this message relates
+  string service = 1;
+  // Data source name that this service relates to
+  string data_source = 2;
+  // Type of message
+  SystemStatusType type = 3;
+  // Contents.........
+  // TBD
+}
+
+// Error type
+enum ErrorType {
+  ERROR_TYPE_UNSPECIFIED = 0;
+  ERROR_TYPE_CURRENT = 1;
+  ERROR_TYPE_LOGGED = 2;
+}
+
+// Error Status 
+enum ErrorStatus {
+  ERROR_STATUS_UNSPECIFIED = 0;
+  ERROR_STATUS_SET = 1;
+  ERROR_STATUS_CLEARED = 2;
+}
+
+// Error Packet
+message ErrorPacket {
+  // Error Identifier
+  string error_identifier = 1;
+  // Time the error occurred
+  fixed64 timestamp = 2;
+  // The application containing the error
+  string application_name = 3;
+  // The error group
+  string group = 4;
+  // The error name
+  string name = 5;
+  // The error description
+  string description = 6;
+  // The error type
+  ErrorType type = 7;
+    // The error status
+  ErrorStatus status = 8;
+}
+
+// Indicates that a stream has started
+message StreamStartedPacket{
+    // Data Source
+    string data_source = 1;
+    // Session Key
+    string session_key = 2;
+    // Stream Name
+    string stream_name = 3;
+    // Start Time
+    google.protobuf.Timestamp start_time = 4;
+}
+
+// Indicates that a stream has stopped
+message StreamStoppedPacket{
+    // Data Source
+    string data_source = 1;
+    // Session Key
+    string session_key = 2;
+    // Stream Name
+    string stream_name = 3;
+    // Stop Time
+    google.protobuf.Timestamp stop_time = 4;
+}

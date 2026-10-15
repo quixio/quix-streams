@@ -128,21 +128,21 @@ output_topic = app.topic('output', value_serializer=ProtobufSerializer(msg_type=
 
 By default, the Protobuf deserializer will deserialize the message to a Python dictionary. Doing this has a big performance impact. You can disable this behavior by initializing the deserializer with `to_dict` set to `False`. The Protobuf message object will then be used directly as the record value. This means column-based operations like `sdf['field']` and `sdf.drop()` will raise an error at runtime, as they require a Python dictionary. `sdf.fill()` will silently do nothing for non-dict values. You can still use `sdf.apply()` and `sdf.update()` with functions that accept the Protobuf object directly.
 
-## MA Streaming Open Data
+## FIA Open Data
 !!! info New in v3.28.0
 
-`MAStreamingDeserializer` is a built-in decoder for the MA Streaming Open Data v1 protocol (used by ATLAS / McLaren Applied telemetry feeds). It wraps the generic Protobuf deserializer and adds two-stage decoding (outer `Packet` envelope + dispatch to the matching inner-payload class), a per-sample row projection, and an optional filter.
+`FIAOpenDataDeserializer` is a built-in decoder for FIA Open Data, the data API of the FIA 2026 Standard ECU (SECU); see [FIA Open Data](fia-open-data.md). It wraps the generic Protobuf deserializer and adds two-stage decoding (outer `Packet` envelope + dispatch to the matching inner-payload class), a per-sample row projection, and an optional filter.
 
 > **WARNING:** Requires the `protobuf` extra: `pip install quixstreams[protobuf]`.
 
 ```python
 from quixstreams import Application
-from quixstreams.models.serializers.ma_streaming_open_data import MAStreamingDeserializer
+from quixstreams.models.serializers.fia_open_data import FIAOpenDataDeserializer
 
-app = Application(broker_address="localhost:9092", consumer_group="masd")
+app = Application(broker_address="localhost:9092", consumer_group="fia-open-data")
 topic = app.topic(
     "telemetry-in",
-    value_deserializer=MAStreamingDeserializer(),
+    value_deserializer=FIAOpenDataDeserializer(),
 )
 ```
 
@@ -155,7 +155,7 @@ Per-sample timestamps are reconstructed from the wire format: `start_time + i * 
 `filter` is a mapping with two optional keys: `types` (packet-type allowlist) and `signals` (parameter_identifier allowlist). Both are pure allowlists — anything not listed is dropped.
 
 ```python
-MAStreamingDeserializer(
+FIAOpenDataDeserializer(
     filter={
         "types": ["PeriodicData", "Configuration", "Event"],
         "signals": ["vCar", "nEngine"],
@@ -253,9 +253,9 @@ signals = csv_env("FILTER_SIGNALS")
 if signals:
     filter_spec["signals"] = signals
 
-MAStreamingDeserializer(filter=filter_spec)
+FIAOpenDataDeserializer(filter=filter_spec)
 ```
 
 Leave an env var empty (or unset) to drop that axis of the filter — the library rejects a literal empty list with `ValueError` as an anti-footgun guard, so the `if ...: include` pattern translates "empty env" into "axis not present" cleanly. If **both** axes end up empty, `filter_spec` is `{}` which the library accepts as a no-op alias for `filter=None`.
 
-If your feed sends `data_format_identifier` instead of parameter names, see [Resolving parameter names](ma-streaming-open-data.md#3-resolving-parameter-names).
+If your feed sends `data_format_identifier` instead of parameter names, see [Resolving parameter names](fia-open-data.md#3-resolving-parameter-names).
