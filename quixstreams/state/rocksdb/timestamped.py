@@ -254,7 +254,9 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
         cached = cache.values.get(prefix)
         if cached is not None:
             return cached
-        stored = self.get_bytes(key=cache.key, prefix=prefix, default=ZERO)
+        stored = self.get_bytes(
+            key=cache.key, prefix=prefix, default=ZERO, cf_name=cache.cf_name
+        )
         # Write the timestamp back to cache since it is known now
         cache.values[prefix] = stored
         return stored

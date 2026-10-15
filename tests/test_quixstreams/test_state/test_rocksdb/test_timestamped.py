@@ -158,6 +158,25 @@ class TestTimestampedPartitionTransaction:
             assert tx.get_latest(timestamp=2, prefix=b"key") is None
             assert tx.get_latest(timestamp=5, prefix=b"key") == "v5"
 
+    @pytest.mark.parametrize("reopen_partition", [False, True])
+    def test_retention_floor_survives_late_writes(
+        self, transaction, store, reopen_partition
+    ):
+        with transaction(grace_ms=10) as tx:
+            tx.set_for_timestamp(timestamp=100, value="current", prefix=b"key")
+
+        if reopen_partition:
+            store.revoke_partition(0)
+
+        with transaction(grace_ms=10) as tx:
+            tx.set_for_timestamp(timestamp=1, value="late", prefix=b"key")
+            tx.set_for_timestamp(timestamp=1, value="other", prefix=b"other")
+
+        with transaction(grace_ms=10) as tx:
+            assert tx.get_latest(timestamp=1, prefix=b"key") is None
+            assert tx.get_latest(timestamp=100, prefix=b"key") == "current"
+            assert tx.get_latest(timestamp=1, prefix=b"other") == "other"
+
     def test_expire_multiple_keys(self, transaction: TimestampedPartitionTransaction):
         with transaction(grace_ms=10) as tx:
             tx.set_for_timestamp(timestamp=1, value="11", prefix=b"key1")
