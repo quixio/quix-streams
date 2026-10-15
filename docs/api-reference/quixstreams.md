@@ -11615,409 +11615,11 @@ Default - `None`
 Default - `None`
 >***NOTE:*** `schema_registry_client_config` must also be set.
 
-<a id="quixstreams.models.serializers.ma_streaming_open_data.deserializer"></a>
-
-## quixstreams.models.serializers.ma\_streaming\_open\_data.deserializer
-
-``MAStreamingDeserializer``, the built-in MA Streaming Open Data v1 decoder.
-
-Parses the outer ``ma.streaming.open_data.v1.Packet`` envelope, decodes the
-inner payload named by ``Packet.type``, and returns either flat sample rows or
-one tagged-union record per packet. See
-``docs/advanced/ma-streaming-open-data.md``.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.deserializer.MAStreamingDeserializer"></a>
-
-### MAStreamingDeserializer
-
-```python
-class MAStreamingDeserializer(ProtobufDeserializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/ma_streaming_open_data/deserializer.py#L46)
-
-Deserializer for **MA Streaming Open Data v1** wire packets.
-
-Parses the outer ``Packet`` envelope and the inner payload named by
-``Packet.type`` in one call. Every call returns a list, and Quix Streams
-processes each item as its own row: one flat row per sample for
-``PeriodicData``, ``SynchroData`` and ``RowData``, or one tagged-union
-record per packet (see ``filter`` and ``build_table``).
-
-**Example**:
-
-  
-  .. code-block:: python
-  
-  from quixstreams import Application
-  from quixstreams.models.serializers.ma_streaming_open_data import (
-  MAStreamingDeserializer,
-  )
-  
-  app = Application(...)
-  topic = app.topic(
-  name="telemetry-input",
-  value_deserializer=MAStreamingDeserializer(
-- `filter={"types"` - ["PeriodicData", "NewSession"]},
-  ),
-  key_deserializer="str",
-  )
-  
-  .. code-block:: python
-  
-  # one PeriodicData packet -> one flat row per sample
-- `[{"packet_type"` - "PeriodicData", "timestamp": 1715000000,
-- `"name"` - "vCar", "value": 312.4, "validity": "DATA_STATUS_VALID"},
-- `{"packet_type"` - "PeriodicData", "timestamp": 1715000010,
-- `"name"` - "vCar", "value": 313.1, "validity": "DATA_STATUS_VALID"}]
-  # one NewSession packet -> one tagged-union record
-- `[{"NewSession"` - {"session_key": "s1", "is_essential": True,
-- `"content"` - {"data_source": "ecu1",
-- `"topic_partition_offsets"` - {}},
-- `"id"` - "0"}}]
-  
-  Parameter names come from the packet's inline
-  ``data_format.parameter_identifiers``, or, for a packet that carries only
-  a ``data_format_identifier``, from ``DataFormatDefinition`` packets.
-  Definitions are written once, to the essentials topic and to partition 0
-  of the data topic, so identifier-form feeds need ``definitions_topic`` and
-- ```consumer``` - an unknown identifier then reads that topic from where the
-  previous read stopped until the identifier appears or a poll times out.
-  An identifier that is still unknown raises ``KeyError``.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.deserializer.MAStreamingDeserializer.protocol_version"></a>
-
-#### protocol\_version
-
-Mirrors the ``v1`` of the bundled schema's ``ma.streaming.open_data.v1``.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.deserializer.MAStreamingDeserializer.SUPPORTED_TABLE_COLUMNS"></a>
-
-#### SUPPORTED\_TABLE\_COLUMNS
-
-Columns supported by the ``build_table`` projection.
-``parameter_identifier`` is the resolved parameter name; ``timestamp``,
-``value`` and ``status`` come from each sample; ``session_key``,
-``packet_type`` and ``is_essential`` come from the envelope.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.deserializer.MAStreamingDeserializer.DEFAULT_BUILD_TABLE"></a>
-
-#### DEFAULT\_BUILD\_TABLE
-
-Projection used when ``build_table`` is omitted.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.deserializer.MAStreamingDeserializer.__init__"></a>
-
-#### MAStreamingDeserializer.\_\_init\_\_
-
-```python
-def __init__(*,
-             decode_content: bool = True,
-             extra_content_types: Optional[Mapping[str, type[Message]]] = None,
-             use_integers_for_enums: bool = False,
-             build_table: Any = _USE_DEFAULT_BUILD_TABLE,
-             filter: Optional[Mapping[str, Sequence[str]]] = None,
-             definitions_topic: Optional[str] = None,
-             consumer: Optional[Consumer] = None) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/ma_streaming_open_data/deserializer.py#L122)
-
-Construct a new MA Streaming Open Data v1 deserializer.
-
-**Arguments**:
-
-- `decode_content`: If True (default), parse the inner payload. If
-False, ``content`` stays the Stage-1 base64 string and every
-packet becomes a tagged-union record.
-- `extra_content_types`: Optional mapping from ``Packet.type`` to
-a protobuf ``Message`` class, for private OEM extensions.
-Built-in entries take precedence on key collision; subclass and
-rebind ``_content_types`` for the opposite.
-- `use_integers_for_enums`: Emit enums as integers instead of
-names, in tagged-union records and in the projected ``status``
-column.
-- `build_table`: Column projection for sample packets; each sample
-becomes one row. Either a **list** of
-:attr:`SUPPORTED_TABLE_COLUMNS` names, or a **dict** mapping each
-output column to a list of candidate source fields, resolved at
-construction to the first entry found in
-:attr:`SUPPORTED_TABLE_COLUMNS`. ``build_table=None`` gives one
-tagged-union record per packet, sample packets included, with
-parameter names unresolved: ``content["data_format"]`` stays as
-on the wire.
-- `filter`: Optional mapping with two optional keys: ``"types"``,
-the ``Packet.type`` strings to keep, and ``"signals"``, the
-parameter names to keep inside sample packets. ``filter={}`` is
-a no-op alias for ``filter=None``.
-
-**Output.** Every call returns a list:
-
-* With ``build_table`` set and ``decode_content=True`` (the
-  defaults), a sample packet gives one flat row per sample,
-  limited by ``signals``; any other packet gives ``[]`` when
-  ``filter`` is unset, else one tagged-union record.
-* With ``build_table=None`` or ``decode_content=False``, every
-  packet gives one tagged-union record.
-* A packet whose type is not in ``filter["types"]`` gives ``[]``.
-
-A tagged-union record is ``{<Packet.type>: <envelope>}``; the
-envelope holds ``session_key``, ``is_essential``, ``content``
-and ``id``.
-
-**Validation errors raised at construction:**
-
-* ``TypeError`` if ``filter`` is not a mapping.
-* ``ValueError`` for empty lists, unknown mapping keys
-  (e.g. ``"signal"`` typo), unknown packet-type strings,
-  ``signals`` set with ``build_table=None``, or ``signals``
-  set with ``decode_content=False``, and for a ``build_table``
-  with unsupported columns.
-- `definitions_topic`: Full broker-side name of the data source's
-essentials topic, as named by the MA Stream API server
-(``<prefix>Essentials.<datasource>``). It is not passed through
-``app.topic()``. Used together with ``consumer``.
-- `consumer`: A ``quixstreams.kafka.Consumer`` created with
-``app.get_consumer(auto_commit_enable=False)``. The deserializer
-only ``assign()``s and ``poll()``s it, and never commits or
-closes it.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.deserializer.MAStreamingDeserializer.split_values"></a>
-
-#### MAStreamingDeserializer.split\_values
-
-```python
-@property
-def split_values() -> bool
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/ma_streaming_open_data/deserializer.py#L256)
-
-Each item of the returned list is processed as its own row.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.proto"></a>
-
-## quixstreams.models.serializers.ma\_streaming\_open\_data.proto
-
-Vendored schema source for MA Streaming Open Data v1.
-
-The ``open_data.proto`` file in this directory is the canonical schema
-fetched from `MA.DataPlatforms.Protocol`_ (Apache-2.0, Motion Applied Ltd.).
-It is committed for traceability and as the input to ``regenerate.py``.
-
-End users do **not** need this file at runtime — the deserializer uses
-the generated ``open_data_pb2.py`` one level up.
-
-.. _MA.DataPlatforms.Protocol:
-   https://github.com/Software-Products/MA.DataPlatforms.Protocol
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.sample_iter"></a>
-
-## quixstreams.models.serializers.ma\_streaming\_open\_data.sample\_iter
-
-Sample iterators for :class:`MAStreamingDeserializer` row projection.
-
-Each iterator walks a parsed ``PeriodicDataPacket``, ``SynchroDataPacket`` or
-``RowDataPacket`` and yields ``(parameter_name, timestamp, value, status)``
-tuples, where ``status`` is the raw ``DataStatus`` integer.
-
-``names`` holds the parameter name of each column (Periodic / Synchro) or of
-each sample position within a row (RowData), in wire order. ``signals`` is an
-optional allowlist of names; columns or sample positions whose name is not in
-it are skipped.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.sample_iter.iter_periodic_proto"></a>
-
-#### iter\_periodic\_proto
-
-```python
-def iter_periodic_proto(
-    packet: Any,
-    names: Sequence[str],
-    signals: Optional[frozenset[str]] = None
-) -> Iterator[tuple[str, int, Any, int]]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/ma_streaming_open_data/sample_iter.py#L27)
-
-Yield one tuple per sample; timestamps are ``start_time + i * interval``.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.sample_iter.iter_synchro_proto"></a>
-
-#### iter\_synchro\_proto
-
-```python
-def iter_synchro_proto(
-    packet: Any,
-    names: Sequence[str],
-    signals: Optional[frozenset[str]] = None
-) -> Iterator[tuple[str, int, Any, int]]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/ma_streaming_open_data/sample_iter.py#L45)
-
-Yield one tuple per sample; timestamps are ``start_time`` plus the
-cumulative ``intervals``.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.sample_iter.iter_row_proto"></a>
-
-#### iter\_row\_proto
-
-```python
-def iter_row_proto(
-    packet: Any,
-    names: Sequence[str],
-    signals: Optional[frozenset[str]] = None
-) -> Iterator[tuple[str, int, Any, int]]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/ma_streaming_open_data/sample_iter.py#L67)
-
-Yield one tuple per sample; the samples of row ``i`` share
-``timestamps[i]``.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.content_types"></a>
-
-## quixstreams.models.serializers.ma\_streaming\_open\_data.content\_types
-
-Mapping from ``Packet.type`` string to the matching MA payload class.
-
-The outer envelope ``ma.streaming.open_data.v1.Packet`` carries the actual
-payload as ``content`` bytes. The deserializer picks the right protobuf
-message class to parse those bytes based on the ``type`` discriminator
-string.
-
-Names here mirror what is observed on the wire (e.g. ``"RawCANData"``,
-``"StreamStarted"``) — they are the message-name suffix without the
-trailing ``Packet`` token. ``SystemStatus`` is the lone exception: the
-matching class is named ``SystemStatusMessage``, not ``SystemStatusPacket``.
-
 <a id="quixstreams.models.serializers.ma_streaming_open_data"></a>
 
 ## quixstreams.models.serializers.ma\_streaming\_open\_data
 
-MA Streaming Open Data v1 deserializer package.
-
-Exports :class:`MAStreamingDeserializer`, a ``ProtobufDeserializer``
-subclass that decodes both the outer ``Packet`` envelope and the inner
-typed payload in one call.
-
-The ``__protocol_version__`` constant matches the ``v1`` suffix of the
-bundled schema's protobuf package (``ma.streaming.open_data.v1``).
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.regenerate"></a>
-
-## quixstreams.models.serializers.ma\_streaming\_open\_data.regenerate
-
-Regenerate ``open_data_pb2.py`` from ``proto/open_data.proto``.
-
-Developer-only helper. Not invoked at install time. Run after bumping the
-bundled schema to a new MA Streaming Open Data revision.
-
-Requirements
-------------
-
-- ``grpcio-tools==1.66.2``, which bundles protoc 27.2 and writes the
-  ``# Protobuf Python Version: 5.27.2`` marker.
-- That marker must equal the floor of the ``protobuf`` extra in
-  ``pyproject.toml`` (``protobuf>=5.27.2``). Newer gencode refuses to import
-  on older runtimes.
-
-Usage
------
-
-From the repo root, in a virtualenv that holds only ``grpcio-tools``::
-
-    python -m pip install grpcio-tools==1.66.2
-    python quixstreams/models/serializers/ma_streaming_open_data/regenerate.py
-
-Run the script by file path. ``python -m`` imports the package, which loads
-the committed ``open_data_pb2.py`` under the virtualenv's protobuf runtime.
-
-The generated ``open_data_pb2.py`` is committed alongside this script so
-end-users (``pip install quixstreams``) do not need a protoc toolchain.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.filter"></a>
-
-## quixstreams.models.serializers.ma\_streaming\_open\_data.filter
-
-Filter resolution for :class:`MAStreamingDeserializer`.
-
-The deserializer accepts a single ``filter`` mapping that can express
-two allowlists: packet ``types`` and signal names. This module
-validates it and builds the immutable record the deserializer consults
-at runtime.
-
-See the "Filtering" section of ``docs/advanced/ma-streaming-open-data.md``
-for the user-facing semantics of both allowlists.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.filter.ResolvedFilter"></a>
-
-### ResolvedFilter
-
-```python
-@dataclass(frozen=True)
-class ResolvedFilter()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/ma_streaming_open_data/filter.py#L26)
-
-Immutable resolved filter consulted by the deserializer.
-
-``None`` on either attribute means "no constraint on this axis".
-When both are ``None`` no filtering applies, as with ``filter=None``.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.filter.ResolvedFilter.is_active"></a>
-
-#### ResolvedFilter.is\_active
-
-```python
-@property
-def is_active() -> bool
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/ma_streaming_open_data/filter.py#L37)
-
-True when any filter axis is set.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.filter.resolve_filter"></a>
-
-#### resolve\_filter
-
-```python
-def resolve_filter(filter_arg: Optional[Mapping[str, Iterable[str]]],
-                   known_packet_types: Iterable[str], *, decode_content: bool,
-                   build_table_active: bool) -> ResolvedFilter
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/ma_streaming_open_data/filter.py#L64)
-
-Validate ``filter_arg`` and return a :class:`ResolvedFilter`.
-
-**Arguments**:
-
-- `filter_arg`: The constructor argument from the user.
-- `known_packet_types`: All packet-type strings the deserializer
-can decode (built-ins merged with ``extra_content_types``). Used
-to reject typos in ``filter["types"]`` at construction.
-- `decode_content`: ``False`` means signal filtering is
-impossible (inner payload is never parsed) and we must reject
-``filter["signals"]``.
-- `build_table_active`: ``True`` when the deserializer will emit
-projected rows (fast path). Signal filtering only makes sense
-    when rows are being built, so we reject ``filter["signals"]``
-    when this is ``False``.
-
-Raises ``TypeError`` for non-mapping input. Raises ``ValueError``
-for empty lists, unknown keys, unknown packet types, and the two
-cross-validation failures. Unknown signal names are accepted —
-signal names are runtime data.
-
-<a id="quixstreams.models.serializers.ma_streaming_open_data.open_data_pb2"></a>
-
-## quixstreams.models.serializers.ma\_streaming\_open\_data.open\_data\_pb2
-
-Generated protocol buffer code.
+Deprecated alias of :mod:`quixstreams.models.serializers.fia_open_data`.
 
 <a id="quixstreams.models.serializers.json"></a>
 
@@ -12190,6 +11792,418 @@ Keys must be strings, and values must be strings, bytes or None.
 **Returns**:
 
 dict with headers
+
+<a id="quixstreams.models.serializers.fia_open_data.deserializer"></a>
+
+## quixstreams.models.serializers.fia\_open\_data.deserializer
+
+``FIAOpenDataDeserializer``, the built-in FIA Open Data decoder.
+
+Parses the outer ``ma.streaming.open_data.v1.Packet`` envelope, decodes the
+inner payload named by ``Packet.type``, and returns either flat sample rows or
+one tagged-union record per packet. See
+``docs/advanced/fia-open-data.md``.
+
+<a id="quixstreams.models.serializers.fia_open_data.deserializer.FIAOpenDataDeserializer"></a>
+
+### FIAOpenDataDeserializer
+
+```python
+class FIAOpenDataDeserializer(ProtobufDeserializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/fia_open_data/deserializer.py#L46)
+
+Deserializer for **FIA Open Data** wire packets.
+
+The wire protocol is Motion Applied's MA Streaming Open Data v1.
+
+Parses the outer ``Packet`` envelope and the inner payload named by
+``Packet.type`` in one call. Every call returns a list, and Quix Streams
+processes each item as its own row: one flat row per sample for
+``PeriodicData``, ``SynchroData`` and ``RowData``, or one tagged-union
+record per packet (see ``filter`` and ``build_table``).
+
+**Example**:
+
+  
+  .. code-block:: python
+  
+  from quixstreams import Application
+  from quixstreams.models.serializers.fia_open_data import (
+  FIAOpenDataDeserializer,
+  )
+  
+  app = Application(...)
+  topic = app.topic(
+  name="telemetry-input",
+  value_deserializer=FIAOpenDataDeserializer(
+- `filter={"types"` - ["PeriodicData", "NewSession"]},
+  ),
+  key_deserializer="str",
+  )
+  
+  .. code-block:: python
+  
+  # one PeriodicData packet -> one flat row per sample
+- `[{"packet_type"` - "PeriodicData", "timestamp": 1715000000,
+- `"name"` - "vCar", "value": 312.4, "validity": "DATA_STATUS_VALID"},
+- `{"packet_type"` - "PeriodicData", "timestamp": 1715000010,
+- `"name"` - "vCar", "value": 313.1, "validity": "DATA_STATUS_VALID"}]
+  # one NewSession packet -> one tagged-union record
+- `[{"NewSession"` - {"session_key": "s1", "is_essential": True,
+- `"content"` - {"data_source": "ecu1",
+- `"topic_partition_offsets"` - {}},
+- `"id"` - "0"}}]
+  
+  Parameter names come from the packet's inline
+  ``data_format.parameter_identifiers``, or, for a packet that carries only
+  a ``data_format_identifier``, from ``DataFormatDefinition`` packets.
+  Definitions are written once, to the essentials topic and to partition 0
+  of the data topic, so identifier-form feeds need ``definitions_topic`` and
+- ```consumer``` - an unknown identifier then reads that topic from where the
+  previous read stopped until the identifier appears or a poll times out.
+  An identifier that is still unknown raises ``KeyError``.
+
+<a id="quixstreams.models.serializers.fia_open_data.deserializer.FIAOpenDataDeserializer.protocol_version"></a>
+
+#### protocol\_version
+
+Mirrors the ``v1`` of the bundled schema's ``ma.streaming.open_data.v1``.
+
+<a id="quixstreams.models.serializers.fia_open_data.deserializer.FIAOpenDataDeserializer.SUPPORTED_TABLE_COLUMNS"></a>
+
+#### SUPPORTED\_TABLE\_COLUMNS
+
+Columns supported by the ``build_table`` projection.
+``parameter_identifier`` is the resolved parameter name; ``timestamp``,
+``value`` and ``status`` come from each sample; ``session_key``,
+``packet_type`` and ``is_essential`` come from the envelope.
+
+<a id="quixstreams.models.serializers.fia_open_data.deserializer.FIAOpenDataDeserializer.DEFAULT_BUILD_TABLE"></a>
+
+#### DEFAULT\_BUILD\_TABLE
+
+Projection used when ``build_table`` is omitted.
+
+<a id="quixstreams.models.serializers.fia_open_data.deserializer.FIAOpenDataDeserializer.__init__"></a>
+
+#### FIAOpenDataDeserializer.\_\_init\_\_
+
+```python
+def __init__(*,
+             decode_content: bool = True,
+             extra_content_types: Optional[Mapping[str, type[Message]]] = None,
+             use_integers_for_enums: bool = False,
+             build_table: Any = _USE_DEFAULT_BUILD_TABLE,
+             filter: Optional[Mapping[str, Sequence[str]]] = None,
+             definitions_topic: Optional[str] = None,
+             consumer: Optional[Consumer] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/fia_open_data/deserializer.py#L124)
+
+Construct a new FIA Open Data deserializer.
+
+**Arguments**:
+
+- `decode_content`: If True (default), parse the inner payload. If
+False, ``content`` stays the Stage-1 base64 string and every
+packet becomes a tagged-union record.
+- `extra_content_types`: Optional mapping from ``Packet.type`` to
+a protobuf ``Message`` class, for private OEM extensions.
+Built-in entries take precedence on key collision; subclass and
+rebind ``_content_types`` for the opposite.
+- `use_integers_for_enums`: Emit enums as integers instead of
+names, in tagged-union records and in the projected ``status``
+column.
+- `build_table`: Column projection for sample packets; each sample
+becomes one row. Either a **list** of
+:attr:`SUPPORTED_TABLE_COLUMNS` names, or a **dict** mapping each
+output column to a list of candidate source fields, resolved at
+construction to the first entry found in
+:attr:`SUPPORTED_TABLE_COLUMNS`. ``build_table=None`` gives one
+tagged-union record per packet, sample packets included, with
+parameter names unresolved: ``content["data_format"]`` stays as
+on the wire.
+- `filter`: Optional mapping with two optional keys: ``"types"``,
+the ``Packet.type`` strings to keep, and ``"signals"``, the
+parameter names to keep inside sample packets. ``filter={}`` is
+a no-op alias for ``filter=None``.
+
+**Output.** Every call returns a list:
+
+* With ``build_table`` set and ``decode_content=True`` (the
+  defaults), a sample packet gives one flat row per sample,
+  limited by ``signals``; any other packet gives ``[]`` when
+  ``filter`` is unset, else one tagged-union record.
+* With ``build_table=None`` or ``decode_content=False``, every
+  packet gives one tagged-union record.
+* A packet whose type is not in ``filter["types"]`` gives ``[]``.
+
+A tagged-union record is ``{<Packet.type>: <envelope>}``; the
+envelope holds ``session_key``, ``is_essential``, ``content``
+and ``id``.
+
+**Validation errors raised at construction:**
+
+* ``TypeError`` if ``filter`` is not a mapping.
+* ``ValueError`` for empty lists, unknown mapping keys
+  (e.g. ``"signal"`` typo), unknown packet-type strings,
+  ``signals`` set with ``build_table=None``, or ``signals``
+  set with ``decode_content=False``, and for a ``build_table``
+  with unsupported columns.
+- `definitions_topic`: Full broker-side name of the data source's
+essentials topic, as named by the MA Stream API server
+(``<prefix>Essentials.<datasource>``). It is not passed through
+``app.topic()``. Used together with ``consumer``.
+- `consumer`: A ``quixstreams.kafka.Consumer`` created with
+``app.get_consumer(auto_commit_enable=False)``. The deserializer
+only ``assign()``s and ``poll()``s it, and never commits or
+closes it.
+
+<a id="quixstreams.models.serializers.fia_open_data.deserializer.FIAOpenDataDeserializer.split_values"></a>
+
+#### FIAOpenDataDeserializer.split\_values
+
+```python
+@property
+def split_values() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/fia_open_data/deserializer.py#L258)
+
+Each item of the returned list is processed as its own row.
+
+<a id="quixstreams.models.serializers.fia_open_data.proto"></a>
+
+## quixstreams.models.serializers.fia\_open\_data.proto
+
+Vendored schema source for MA Streaming Open Data v1.
+
+The ``open_data.proto`` file in this directory is the canonical schema
+fetched from `MA.DataPlatforms.Protocol`_ (Apache-2.0, Motion Applied Ltd.).
+It is committed for traceability and as the input to ``regenerate.py``.
+Schema licence: ``LICENSES/LICENSE.ma-dataplatforms-protocol``.
+
+Source: `open_data.proto`_ at upstream commit ``34881082`` (2026-01-26),
+fetched 2026-10-15.
+
+End users do **not** need this file at runtime — the deserializer uses
+the generated ``open_data_pb2.py`` one level up.
+
+.. _MA.DataPlatforms.Protocol:
+   https://github.com/Software-Products/MA.DataPlatforms.Protocol
+.. _open_data.proto:
+   https://github.com/Software-Products/MA.DataPlatforms.Protocol/blob/main/proto/ma/streaming/open_data/v1/open_data.proto
+
+<a id="quixstreams.models.serializers.fia_open_data.sample_iter"></a>
+
+## quixstreams.models.serializers.fia\_open\_data.sample\_iter
+
+Sample iterators for :class:`FIAOpenDataDeserializer` row projection.
+
+Each iterator walks a parsed ``PeriodicDataPacket``, ``SynchroDataPacket`` or
+``RowDataPacket`` and yields ``(parameter_name, timestamp, value, status)``
+tuples, where ``status`` is the raw ``DataStatus`` integer.
+
+``names`` holds the parameter name of each column (Periodic / Synchro) or of
+each sample position within a row (RowData), in wire order. ``signals`` is an
+optional allowlist of names; columns or sample positions whose name is not in
+it are skipped.
+
+<a id="quixstreams.models.serializers.fia_open_data.sample_iter.iter_periodic_proto"></a>
+
+#### iter\_periodic\_proto
+
+```python
+def iter_periodic_proto(
+    packet: Any,
+    names: Sequence[str],
+    signals: Optional[frozenset[str]] = None
+) -> Iterator[tuple[str, int, Any, int]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/fia_open_data/sample_iter.py#L27)
+
+Yield one tuple per sample; timestamps are ``start_time + i * interval``.
+
+<a id="quixstreams.models.serializers.fia_open_data.sample_iter.iter_synchro_proto"></a>
+
+#### iter\_synchro\_proto
+
+```python
+def iter_synchro_proto(
+    packet: Any,
+    names: Sequence[str],
+    signals: Optional[frozenset[str]] = None
+) -> Iterator[tuple[str, int, Any, int]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/fia_open_data/sample_iter.py#L45)
+
+Yield one tuple per sample; timestamps are ``start_time`` plus the
+cumulative ``intervals``.
+
+<a id="quixstreams.models.serializers.fia_open_data.sample_iter.iter_row_proto"></a>
+
+#### iter\_row\_proto
+
+```python
+def iter_row_proto(
+    packet: Any,
+    names: Sequence[str],
+    signals: Optional[frozenset[str]] = None
+) -> Iterator[tuple[str, int, Any, int]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/fia_open_data/sample_iter.py#L67)
+
+Yield one tuple per sample; the samples of row ``i`` share
+``timestamps[i]``.
+
+<a id="quixstreams.models.serializers.fia_open_data.content_types"></a>
+
+## quixstreams.models.serializers.fia\_open\_data.content\_types
+
+Mapping from ``Packet.type`` string to the matching MA payload class.
+
+The outer envelope ``ma.streaming.open_data.v1.Packet`` carries the actual
+payload as ``content`` bytes. The deserializer picks the right protobuf
+message class to parse those bytes based on the ``type`` discriminator
+string.
+
+Names here mirror what is observed on the wire (e.g. ``"RawCANData"``,
+``"StreamStarted"``) — they are the message-name suffix without the
+trailing ``Packet`` token. ``SystemStatus`` is the lone exception: the
+matching class is named ``SystemStatusMessage``, not ``SystemStatusPacket``.
+
+<a id="quixstreams.models.serializers.fia_open_data"></a>
+
+## quixstreams.models.serializers.fia\_open\_data
+
+FIA Open Data deserializer package.
+
+Exports :class:`FIAOpenDataDeserializer`, a ``ProtobufDeserializer``
+subclass that decodes both the outer ``Packet`` envelope and the inner
+typed payload in one call.
+
+The ``__protocol_version__`` constant matches the ``v1`` suffix of the
+bundled schema's protobuf package (``ma.streaming.open_data.v1``).
+
+<a id="quixstreams.models.serializers.fia_open_data.regenerate"></a>
+
+## quixstreams.models.serializers.fia\_open\_data.regenerate
+
+Regenerate ``open_data_pb2.py`` from ``proto/open_data.proto``.
+
+Developer-only helper. Not invoked at install time. Run after bumping the
+bundled schema to a new MA Streaming Open Data revision.
+
+Requirements
+------------
+
+- ``grpcio-tools==1.66.2``, which bundles protoc 27.2 and writes the
+  ``# Protobuf Python Version: 5.27.2`` marker.
+- That marker must equal the floor of the ``protobuf`` extra in
+  ``pyproject.toml`` (``protobuf>=5.27.2``). Newer gencode refuses to import
+  on older runtimes.
+
+Usage
+-----
+
+From the repo root, in a virtualenv that holds only ``grpcio-tools``::
+
+    python -m pip install grpcio-tools==1.66.2
+    python quixstreams/models/serializers/fia_open_data/regenerate.py
+
+Run the script by file path. ``python -m`` imports the package, which loads
+the committed ``open_data_pb2.py`` under the virtualenv's protobuf runtime.
+
+The generated ``open_data_pb2.py`` is committed alongside this script so
+end-users (``pip install quixstreams``) do not need a protoc toolchain.
+
+<a id="quixstreams.models.serializers.fia_open_data.filter"></a>
+
+## quixstreams.models.serializers.fia\_open\_data.filter
+
+Filter resolution for :class:`FIAOpenDataDeserializer`.
+
+The deserializer accepts a single ``filter`` mapping that can express
+two allowlists: packet ``types`` and signal names. This module
+validates it and builds the immutable record the deserializer consults
+at runtime.
+
+See the "Filtering" section of ``docs/advanced/fia-open-data.md``
+for the user-facing semantics of both allowlists.
+
+<a id="quixstreams.models.serializers.fia_open_data.filter.ResolvedFilter"></a>
+
+### ResolvedFilter
+
+```python
+@dataclass(frozen=True)
+class ResolvedFilter()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/fia_open_data/filter.py#L26)
+
+Immutable resolved filter consulted by the deserializer.
+
+``None`` on either attribute means "no constraint on this axis".
+When both are ``None`` no filtering applies, as with ``filter=None``.
+
+<a id="quixstreams.models.serializers.fia_open_data.filter.ResolvedFilter.is_active"></a>
+
+#### ResolvedFilter.is\_active
+
+```python
+@property
+def is_active() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/fia_open_data/filter.py#L37)
+
+True when any filter axis is set.
+
+<a id="quixstreams.models.serializers.fia_open_data.filter.resolve_filter"></a>
+
+#### resolve\_filter
+
+```python
+def resolve_filter(filter_arg: Optional[Mapping[str, Iterable[str]]],
+                   known_packet_types: Iterable[str], *, decode_content: bool,
+                   build_table_active: bool) -> ResolvedFilter
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/fia_open_data/filter.py#L64)
+
+Validate ``filter_arg`` and return a :class:`ResolvedFilter`.
+
+**Arguments**:
+
+- `filter_arg`: The constructor argument from the user.
+- `known_packet_types`: All packet-type strings the deserializer
+can decode (built-ins merged with ``extra_content_types``). Used
+to reject typos in ``filter["types"]`` at construction.
+- `decode_content`: ``False`` means signal filtering is
+impossible (inner payload is never parsed) and we must reject
+``filter["signals"]``.
+- `build_table_active`: ``True`` when the deserializer will emit
+projected rows (fast path). Signal filtering only makes sense
+    when rows are being built, so we reject ``filter["signals"]``
+    when this is ``False``.
+
+Raises ``TypeError`` for non-mapping input. Raises ``ValueError``
+for empty lists, unknown keys, unknown packet types, and the two
+cross-validation failures. Unknown signal names are accepted —
+signal names are runtime data.
+
+<a id="quixstreams.models.serializers.fia_open_data.open_data_pb2"></a>
+
+## quixstreams.models.serializers.fia\_open\_data.open\_data\_pb2
+
+Generated protocol buffer code.
 
 <a id="quixstreams.models.messages"></a>
 
