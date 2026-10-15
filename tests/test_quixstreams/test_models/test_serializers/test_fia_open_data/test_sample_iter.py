@@ -1,8 +1,8 @@
 """Unit tests for the sample iterators in ``sample_iter.py``: per-sample
 timestamps, parameter names and signal filtering."""
 
-from quixstreams.models.serializers.ma_streaming_open_data import open_data_pb2 as pb
-from quixstreams.models.serializers.ma_streaming_open_data.sample_iter import (
+from quixstreams.models.serializers.fia_open_data import open_data_pb2 as pb
+from quixstreams.models.serializers.fia_open_data.sample_iter import (
     iter_periodic_proto,
     iter_row_proto,
     iter_synchro_proto,

@@ -1,4 +1,4 @@
-"""Import-time behaviour of the MA Streaming Open Data generated code."""
+"""Import-time behaviour of the FIA Open Data generated code."""
 
 import re
 import subprocess

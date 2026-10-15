@@ -1,11 +1,15 @@
-# MA Streaming Open Data
+# FIA Open Data
 !!! info New in v3.28.0
+
+!!! info "Renamed in v3.28.1"
+
+    Up to v3.28.0 this deserializer shipped as `MAStreamingDeserializer` in `quixstreams.models.serializers.ma_streaming_open_data`. Those names still import, with a `DeprecationWarning`, and will be removed in a future major release.
 
 ## What this is
 
-The **MA Streaming Open Data v1** protocol is a Protobuf-based telemetry wire format published by Motion Applied (Apache 2.0). Every Kafka message is framed as an outer `Packet` envelope that carries a `type` discriminator string and an `content` field — raw bytes of a separate inner-payload protobuf message whose schema depends on that type. ATLAS-based data systems emit this format.
+FIA Open Data is the data API of the FIA 2026 Standard ECU (SECU). The wire protocol is currently Motion Applied's MA Streaming Open Data v1, whose Apache-2.0 schema is vendored here. Every Kafka message is framed as an outer `Packet` envelope that carries a `type` discriminator string and an `content` field — raw bytes of a separate inner-payload protobuf message whose schema depends on that type. ATLAS-based data systems emit this format.
 
-`MAStreamingDeserializer` handles both decoding stages in one call: it unwraps the outer `Packet`, dispatches the `content` bytes to the matching inner-payload class, and — for the three sample-bearing packet types (`PeriodicData`, `SynchroData`, `RowData`) — fans the samples out into flat row dicts ready for time-series sinks. The generic `ProtobufDeserializer` handles only the outer envelope; per-type dispatch, timestamp reconstruction, and row projection would still be your responsibility.
+`FIAOpenDataDeserializer` handles both decoding stages in one call: it unwraps the outer `Packet`, dispatches the `content` bytes to the matching inner-payload class, and — for the three sample-bearing packet types (`PeriodicData`, `SynchroData`, `RowData`) — fans the samples out into flat row dicts ready for time-series sinks. The generic `ProtobufDeserializer` handles only the outer envelope; per-type dispatch, timestamp reconstruction, and row projection would still be your responsibility.
 
 ## Prerequisites
 
@@ -17,15 +21,15 @@ pip install quixstreams[protobuf]
 
 No additional build toolchain is required. The vendored `open_data_pb2.py` is committed alongside the library.
 
-Import the deserializer from `quixstreams.models.serializers.ma_streaming_open_data`. `import quixstreams` on its own does not load the protobuf bindings.
+Import the deserializer from `quixstreams.models.serializers.fia_open_data`. `import quixstreams` on its own does not load the protobuf bindings.
 
 ## Quickstart
 
-The smallest working pipeline reads a topic carrying MA Streaming Open Data packets and prints every flat row:
+The smallest working pipeline reads a topic carrying FIA Open Data packets and prints every flat row:
 
 ```python
 from quixstreams import Application
-from quixstreams.models.serializers.ma_streaming_open_data import MAStreamingDeserializer
+from quixstreams.models.serializers.fia_open_data import FIAOpenDataDeserializer
 
 app = Application(
     broker_address="localhost:9092",
@@ -34,7 +38,7 @@ app = Application(
 
 topic = app.topic(
     name="telemetry-input",
-    value_deserializer=MAStreamingDeserializer(),
+    value_deserializer=FIAOpenDataDeserializer(),
     key_deserializer="str",
 )
 
@@ -126,7 +130,7 @@ Without a filter, non-sample-bearing packets return `[]` and do not appear in th
 Pass `build_table=None` to disable row projection. The deserializer returns one tagged-union record per packet, sample packets included, with no per-sample fan-out. Useful for diagnostic pipelines that need the full unmodified payload.
 
 ```python
-MAStreamingDeserializer(build_table=None)
+FIAOpenDataDeserializer(build_table=None)
 ```
 
 On this path parameter names are not resolved: `content.data_format` stays as on the wire, for example `{"data_format_identifier": "7"}`.
@@ -138,7 +142,7 @@ On this path parameter names are not resolved: `content.data_format` stays as on
 ### Filter by packet type
 
 ```python
-MAStreamingDeserializer(
+FIAOpenDataDeserializer(
     filter={"types": ["PeriodicData", "SynchroData", "NewSession"]},
 )
 ```
@@ -148,7 +152,7 @@ All other packet types return `[]`. Non-sample-bearing types that survive (e.g. 
 ### Filter by signal name
 
 ```python
-MAStreamingDeserializer(
+FIAOpenDataDeserializer(
     filter={"signals": ["vCar", "nEngine"]},
 )
 ```
@@ -158,7 +162,7 @@ Signal filtering applies inside sample-bearing packets only. Rows whose `name` i
 ### Combining both axes
 
 ```python
-MAStreamingDeserializer(
+FIAOpenDataDeserializer(
     filter={
         "types": ["PeriodicData", "RowData", "NewSession"],
         "signals": ["vCar", "nEngine"],
@@ -193,7 +197,7 @@ def route(record: dict):
 
 ### Validation errors raised at construction
 
-The `filter` argument is validated when you construct `MAStreamingDeserializer(...)`, not at message-processing time:
+The `filter` argument is validated when you construct `FIAOpenDataDeserializer(...)`, not at message-processing time:
 
 | Error | Cause |
 |---|---|
@@ -211,7 +215,7 @@ For containerised deployments, store each axis as a comma-separated environment 
 
 ```python
 import os
-from quixstreams.models.serializers.ma_streaming_open_data import MAStreamingDeserializer
+from quixstreams.models.serializers.fia_open_data import FIAOpenDataDeserializer
 
 def csv_env(name: str) -> list[str]:
     raw = os.environ.get(name, "")
@@ -225,7 +229,7 @@ signals = csv_env("FILTER_SIGNALS")
 if signals:
     filter_spec["signals"] = signals
 
-deserializer = MAStreamingDeserializer(filter=filter_spec or None)
+deserializer = FIAOpenDataDeserializer(filter=filter_spec or None)
 ```
 
 Leaving an env var empty or unset omits that axis. The library rejects an explicit empty list with `ValueError`, so the `if ...:` guard converts "empty env var" into "axis not present" before the validator sees it. If both axes end up empty, `filter_spec` is `{}`, which the library accepts as a no-op alias for `filter=None`.
@@ -255,7 +259,7 @@ Note that the default projection's output columns (`name`, `validity`) are diffe
 Pass a list of source field names. The output column names match the source field names:
 
 ```python
-MAStreamingDeserializer(
+FIAOpenDataDeserializer(
     build_table=["parameter_identifier", "timestamp", "value"],
 )
 # Row: {"parameter_identifier": "vCar", "timestamp": 1715000000, "value": 312.4}
@@ -266,7 +270,7 @@ MAStreamingDeserializer(
 Pass a dict where keys are the output column names and values are lists of source field aliases. The first alias in the list that matches a supported column is used as the source:
 
 ```python
-MAStreamingDeserializer(
+FIAOpenDataDeserializer(
     build_table={
         "signal":    ["parameter_identifier"],
         "ts_ns":     ["timestamp"],
@@ -285,7 +289,7 @@ Passing an unrecognised name raises `ValueError` at construction, not at runtime
 
 ```python
 # Raises: ValueError: build_table contains unsupported column: 'signal_name'
-MAStreamingDeserializer(build_table=["signal_name", "timestamp", "value"])
+FIAOpenDataDeserializer(build_table=["signal_name", "timestamp", "value"])
 ```
 
 ## Supported packet types
@@ -325,7 +329,7 @@ Subscribe to two signals from periodic and synchro packets only, then forward th
 
 ```python
 from quixstreams import Application
-from quixstreams.models.serializers.ma_streaming_open_data import MAStreamingDeserializer
+from quixstreams.models.serializers.fia_open_data import FIAOpenDataDeserializer
 
 app = Application(
     broker_address="localhost:9092",
@@ -334,7 +338,7 @@ app = Application(
 
 topic = app.topic(
     name="telemetry-input",
-    value_deserializer=MAStreamingDeserializer(
+    value_deserializer=FIAOpenDataDeserializer(
         filter={
             "types": ["PeriodicData", "SynchroData"],
             "signals": ["vCar", "nEngine"],
@@ -366,7 +370,7 @@ Use `sdf.filter()` to branch on whether a record is a flat engineering row or a 
 
 ```python
 from quixstreams import Application
-from quixstreams.models.serializers.ma_streaming_open_data import MAStreamingDeserializer
+from quixstreams.models.serializers.fia_open_data import FIAOpenDataDeserializer
 
 app = Application(
     broker_address="localhost:9092",
@@ -375,7 +379,7 @@ app = Application(
 
 topic = app.topic(
     name="telemetry-input",
-    value_deserializer=MAStreamingDeserializer(
+    value_deserializer=FIAOpenDataDeserializer(
         filter={
             "types": [
                 "PeriodicData", "SynchroData", "RowData",
@@ -412,14 +416,14 @@ Subscribe only the data topic, and pass the deserializer the essentials topic na
 
 ```python
 from quixstreams import Application
-from quixstreams.models.serializers.ma_streaming_open_data import MAStreamingDeserializer
+from quixstreams.models.serializers.fia_open_data import FIAOpenDataDeserializer
 
 app = Application(broker_address="localhost:9092", consumer_group="ma-telemetry")
 
 with app.get_consumer(auto_commit_enable=False) as definitions_consumer:
     topic = app.topic(
         "Data.Car1",
-        value_deserializer=MAStreamingDeserializer(
+        value_deserializer=FIAOpenDataDeserializer(
             definitions_topic="Essentials.Car1",
             consumer=definitions_consumer,
         ),
@@ -439,13 +443,13 @@ with app.get_consumer(auto_commit_enable=False) as definitions_consumer:
 
 ### 4 — Register a custom (OEM extension) packet type
 
-If your feed carries private extension packets not listed in the built-in type table, register them with `extra_content_types`. Built-in types take precedence on key collision; to override a built-in, subclass `MAStreamingDeserializer` and rebind `_content_types` after `super().__init__()`.
+If your feed carries private extension packets not listed in the built-in type table, register them with `extra_content_types`. Built-in types take precedence on key collision; to override a built-in, subclass `FIAOpenDataDeserializer` and rebind `_content_types` after `super().__init__()`.
 
 ```python
-from quixstreams.models.serializers.ma_streaming_open_data import MAStreamingDeserializer
+from quixstreams.models.serializers.fia_open_data import FIAOpenDataDeserializer
 from my_oem_proto_pb2 import MyOemPacket
 
-deserializer = MAStreamingDeserializer(
+deserializer = FIAOpenDataDeserializer(
     extra_content_types={"MyOemType": MyOemPacket},
     filter={"types": ["PeriodicData", "MyOemType"]},
 )
@@ -471,7 +475,7 @@ The vendored `open_data_pb2.py` is generated from `proto/open_data.proto`. End u
 
 ```bash
 pip install grpcio-tools==1.66.2
-python quixstreams/models/serializers/ma_streaming_open_data/regenerate.py
+python quixstreams/models/serializers/fia_open_data/regenerate.py
 ```
 
 Run it in a virtual environment that holds only `grpcio-tools`, and run the script by file path: `python -m` imports the package, which loads the committed bindings under the environment's protobuf runtime. The script uses the `grpc_tools.protoc` compiler bundled with `grpcio-tools` — no system-level `protoc` binary is required. The generated file is committed alongside the library so that `pip install quixstreams[protobuf]` works without a build toolchain.
@@ -480,11 +484,11 @@ After generation, the `# Protobuf Python Version:` comment at the top of `open_d
 
 ### Protocol attribution
 
-The `open_data.proto` schema is sourced from the [MA.DataPlatforms.Protocol](https://github.com/Software-Products/MA.DataPlatforms.Protocol) repository published by Motion Applied, licensed under the Apache License 2.0. `MAStreamingDeserializer.protocol_version` is `"v1"`, mirroring the `ma.streaming.open_data.v1` package name in the schema.
+The `open_data.proto` schema is sourced from the [MA.DataPlatforms.Protocol](https://github.com/Software-Products/MA.DataPlatforms.Protocol) repository published by Motion Applied, licensed under the Apache License 2.0. Schema licence: `LICENSES/LICENSE.ma-dataplatforms-protocol`. `FIAOpenDataDeserializer.protocol_version` is `"v1"`, mirroring the `ma.streaming.open_data.v1` package name in the schema.
 
 ## Limitations
 
-Importing `MAStreamingDeserializer` and your own generated `ma.streaming.open_data.v1` bindings in one process makes protobuf raise a `duplicate symbol` error, because both register the same message names; use one or the other.
+Importing `FIAOpenDataDeserializer` and your own generated `ma.streaming.open_data.v1` bindings in one process makes protobuf raise a `duplicate symbol` error, because both register the same message names; use one or the other.
 
 ## Troubleshooting
 
@@ -497,7 +501,7 @@ Importing `MAStreamingDeserializer` and your own generated `ma.streaming.open_da
 **Fix:** Add a `filter` that includes the packet types you need. They will appear as tagged-union records:
 
 ```python
-MAStreamingDeserializer(
+FIAOpenDataDeserializer(
     filter={"types": ["PeriodicData", "NewSession", "Configuration"]},
 )
 ```
@@ -512,7 +516,7 @@ MAStreamingDeserializer(
 
 ### `ValueError` at construction when combining `build_table=None` and `filter["signals"]`
 
-**Symptom:** `MAStreamingDeserializer(build_table=None, filter={"signals": ["vCar"]})` raises immediately with a `ValueError`.
+**Symptom:** `FIAOpenDataDeserializer(build_table=None, filter={"signals": ["vCar"]})` raises immediately with a `ValueError`.
 
 **Cause:** Signal filtering is implemented inside the row-projection fast path. Without a `build_table`, the deserializer has no mechanism to compare sample names against the allowlist.
 
@@ -530,22 +534,22 @@ MAStreamingDeserializer(
 
 **Symptom:** The application stops with a `SerializationError` raised while deserializing a message.
 
-**Cause:** The message bytes, or the payload inside them, are not a valid MA Streaming Open Data `Packet`.
+**Cause:** The message bytes, or the payload inside them, are not a valid FIA Open Data `Packet`.
 
-**Fix:** Check that the topic carries MA Streaming Open Data. To skip such messages instead of stopping, handle the error in `on_consumer_error`.
+**Fix:** Check that the topic carries FIA Open Data. To skip such messages instead of stopping, handle the error in `on_consumer_error`.
 
 ### Message keys arrive as bytes instead of strings
 
 **Symptom:** Keys appear as `b"run-42"` instead of `"run-42"`, or the pipeline raises a deserialization error on message keys.
 
-**Cause:** The default `key_deserializer` is `"bytes"`. MA Streaming Open Data topics typically use string session identifiers as keys.
+**Cause:** The default `key_deserializer` is `"bytes"`. FIA Open Data topics typically use string session identifiers as keys.
 
 **Fix:** Pass `key_deserializer="str"` to `app.topic()`:
 
 ```python
 topic = app.topic(
     name="telemetry-input",
-    value_deserializer=MAStreamingDeserializer(),
+    value_deserializer=FIAOpenDataDeserializer(),
     key_deserializer="str",
 )
 ```

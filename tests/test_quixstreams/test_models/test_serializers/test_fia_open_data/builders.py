@@ -1,4 +1,4 @@
-"""Helpers to build MA Streaming Open Data v1 protobuf fixtures in-process.
+"""Helpers to build FIA Open Data protobuf fixtures in-process.
 
 Every fixture is constructed from ``open_data_pb2`` message classes and
 serialized on the fly. ``StubConsumer`` stands in for
@@ -10,7 +10,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Iterable, Optional, Sequence
 
-from quixstreams.models.serializers.ma_streaming_open_data import (
+from quixstreams.models.serializers.fia_open_data import (
     open_data_pb2 as pb,
 )
 

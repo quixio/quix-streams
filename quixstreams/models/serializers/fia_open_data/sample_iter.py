@@ -1,4 +1,4 @@
-"""Sample iterators for :class:`MAStreamingDeserializer` row projection.
+"""Sample iterators for :class:`FIAOpenDataDeserializer` row projection.
 
 Each iterator walks a parsed ``PeriodicDataPacket``, ``SynchroDataPacket`` or
 ``RowDataPacket`` and yields ``(parameter_name, timestamp, value, status)``

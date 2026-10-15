@@ -1,11 +1,11 @@
-"""Filter resolution for :class:`MAStreamingDeserializer`.
+"""Filter resolution for :class:`FIAOpenDataDeserializer`.
 
 The deserializer accepts a single ``filter`` mapping that can express
 two allowlists: packet ``types`` and signal names. This module
 validates it and builds the immutable record the deserializer consults
 at runtime.
 
-See the "Filtering" section of ``docs/advanced/ma-streaming-open-data.md``
+See the "Filtering" section of ``docs/advanced/fia-open-data.md``
 for the user-facing semantics of both allowlists.
 """
 
