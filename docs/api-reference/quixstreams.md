@@ -5173,7 +5173,7 @@ def remove(version: Optional[ConfigurationVersion],
            fields: dict[str, BaseField]) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L62)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L63)
 
 Remove the cached data for the given version and fields, if present.
 
@@ -5190,7 +5190,7 @@ Remove the cached data for the given version and fields, if present.
 def info() -> CacheInfo
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L76)
 
 Get cache statistics.
 
@@ -14897,7 +14897,7 @@ their timestamps and grace periods, then calls the parent class's
 class TimestampedStorePartition(RocksDBStorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L280)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L282)
 
 Represents a single partition within a `TimestampedStore`.
 
@@ -14915,7 +14915,7 @@ opt out of the always-on per-write TTL stamp.
 class TimestampedStore(RocksDBStore)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L324)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L326)
 
 A RocksDB-backed state store implementation that manages key-value pairs
 associated with timestamps.
