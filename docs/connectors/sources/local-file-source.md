@@ -143,7 +143,7 @@ To enable this:
 1. subclass your `*FileSource` instance and define the `file_partition_counter` method.
     - this will be run before processing any files.
 2. Enable the use of `file_partition_counter` by setting the flag `has_partition_folders=True`.
-3. Extract the original Kafka key with `key_setter` (by default, it uses the same field name that `*FinkSink` writes to).
+3. Extract the original Kafka key with `key_setter` (by default, it uses the same field name that `*FileSink` writes to).
    - see [message data schema](#message-data-formatschema) for more info around expected defaults.
 
 #### Example

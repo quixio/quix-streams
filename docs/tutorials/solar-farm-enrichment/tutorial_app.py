@@ -135,7 +135,7 @@ def main():
         grace_ms=timedelta(days=7),  # Store forecast updates in state for 7d
     )
 
-    # Convert timestamps to strings for readbility
+    # Convert timestamps to strings for readability
     enriched_sdf["timestamp"] = enriched_sdf["timestamp"].apply(timestamp_to_str)
     enriched_sdf["forecast.timestamp"] = enriched_sdf["forecast.timestamp"].apply(
         timestamp_to_str

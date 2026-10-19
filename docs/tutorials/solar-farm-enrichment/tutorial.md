@@ -221,7 +221,7 @@ You can find more details on the [Joins](../../joins.md) page.
 ### Printing the enriched data
 
 ```python
-# Convert timestamps to strings for readbility
+# Convert timestamps to strings for readability
 enriched_sdf["timestamp"] = enriched_sdf["timestamp"].apply(timestamp_to_str)
 enriched_sdf["forecast.timestamp"] = enriched_sdf["forecast.timestamp"].apply(
     timestamp_to_str
