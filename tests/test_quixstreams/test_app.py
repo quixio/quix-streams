@@ -8,7 +8,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
-from confluent_kafka import KafkaException, TopicPartition
+from confluent_kafka import (
+    OFFSET_INVALID,
+    Consumer,
+    ConsumerGroupTopicPartitions,
+    KafkaException,
+    TopicPartition,
+)
 
 from quixstreams.app import Application
 from quixstreams.dataframe import StreamingDataFrame
@@ -31,11 +37,17 @@ from quixstreams.platforms.quix import QuixApplicationConfig, QuixKafkaConfigsBu
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.sinks import SinkBackpressureError, SinkBatch
 from quixstreams.sources import SourceException, multiprocessing
-from quixstreams.state import RecoveryManager, State
+from quixstreams.state import RecoveryManager, State, StateStoreManager
 from quixstreams.state.exceptions import StateRecoveryOffsetOutOfRange
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.rocksdb import RocksDBStore
-from tests.utils import DummySink, DummySource, DummyStatefulSource, Timeout
+from tests.utils import (
+    ConfluentKafkaMessageStub,
+    DummySink,
+    DummySource,
+    DummyStatefulSource,
+    Timeout,
+)
 
 
 def _stop_app_on_future(app: Application, future: Future, timeout: float):
@@ -1372,6 +1384,163 @@ class TestApplicationWithState:
         app._state_manager.destroy_partition_state.assert_not_called()
         app._state_manager.on_partition_assign.assert_not_called()
 
+    @pytest.mark.parametrize(
+        ("committed_offset", "position", "new_source_record"),
+        [
+            pytest.param(
+                4,
+                OFFSET_INVALID,
+                False,
+                id="expired_commit",
+                marks=pytest.mark.xfail(
+                    strict=True,
+                    raises=AssertionError,
+                    reason="Issue #1190: an empty reset input blocks its paired input",
+                ),
+            ),
+            pytest.param(5, OFFSET_INVALID, False, id="corrected_commit"),
+            pytest.param(4, 5, False, id="effective_position"),
+            pytest.param(4, OFFSET_INVALID, True, id="new_source_record"),
+        ],
+    )
+    def test_on_assign_stateful_empty_source_offset_reset_allows_buffered_poll(
+        self,
+        monkeypatch,
+        tmp_path,
+        store_type,
+        committed_offset,
+        position,
+        new_source_record,
+    ):
+        """
+        Test that buffered consumption continues after resetting an expired source
+        offset to an empty partition. Partition 1 is already committed at its end.
+        """
+        app = Application(
+            broker_address="localhost:9092",
+            consumer_group="offset-reset-test",
+            state_dir=tmp_path,
+            auto_offset_reset="earliest",
+            use_changelog_topics=False,
+            loglevel=None,
+        )
+        config = TopicConfig(
+            num_partitions=2,
+            replication_factor=1,
+            extra_config={"retention.ms": "-1"},
+        )
+        monkeypatch.setattr(
+            app._topic_manager._admin,
+            "inspect_topics",
+            lambda topics, **_: {name: config for name in topics},
+        )
+        quiet = app.topic("quiet-input", config=config)
+        active = app.topic("active-input", config=config)
+        app.dataframe(quiet).concat(app.dataframe(active)).update(
+            lambda value, state: state.set("value", value), stateful=True
+        )
+
+        state_manager = MagicMock(spec=StateStoreManager)
+        state_manager.stores = app._state_manager.stores
+        state_manager.destroy_partition_state.return_value = ["default"]
+        monkeypatch.setattr(app, "_state_manager", state_manager)
+
+        consumer = app._consumer
+        kafka = MagicMock(spec=Consumer)
+        monkeypatch.setattr(consumer, "_inner_consumer", kafka)
+        assignment = [
+            TopicPartition(topic.name, partition)
+            for topic in (quiet, active)
+            for partition in (0, 1)
+        ]
+        kafka.assignment.return_value = assignment
+        kafka.committed.side_effect = lambda partitions, **_: [
+            TopicPartition(
+                tp.topic,
+                tp.partition,
+                (committed_offset if tp.partition == 0 else 5)
+                if tp.topic == quiet.name
+                else 0,
+            )
+            for tp in partitions
+        ]
+        consumed = False
+
+        def positions(partitions):
+            return [
+                TopicPartition(
+                    tp.topic,
+                    tp.partition,
+                    position
+                    if tp.topic == quiet.name
+                    else (3 if consumed else OFFSET_INVALID),
+                )
+                for tp in partitions
+            ]
+
+        def watermarks(partition, **_):
+            if partition.topic == quiet.name:
+                high_watermark = 6 if new_source_record else 5
+                return (5, high_watermark) if partition.partition == 0 else (0, 5)
+            return 0, 3
+
+        kafka.position.side_effect = positions
+        kafka.get_watermark_offsets.side_effect = watermarks
+        consumer.subscribe([quiet, active], on_assign=app._on_assign)
+        kafka.subscribe.call_args.kwargs["on_assign"](kafka, assignment)
+
+        if committed_offset == 5:
+            kafka.seek.assert_not_called()
+            state_manager.destroy_partition_state.assert_not_called()
+        else:
+            kafka.seek.assert_called_once_with(TopicPartition(quiet.name, 0, 5))
+            assert state_manager.destroy_partition_state.called
+            for call in state_manager.on_partition_assign.call_args_list:
+                if call.kwargs["partition"] == 0:
+                    assert call.kwargs["committed_offsets"][quiet.name] == 5
+
+        records = [
+            ConfluentKafkaMessageStub(
+                topic=active.name,
+                partition=partition,
+                offset=offset,
+                timestamp=(1, offset),
+                key=b"key",
+                value=b'{"value": 1}',
+            )
+            for partition in (0, 1)
+            for offset in range(3)
+        ]
+        if new_source_record:
+            records.append(
+                ConfluentKafkaMessageStub(
+                    topic=quiet.name,
+                    partition=0,
+                    offset=5,
+                    timestamp=(1, 10),
+                    key=b"key",
+                    value=b'{"value": 2}',
+                )
+            )
+
+        def consume(**_):
+            nonlocal consumed
+            if consumed:
+                return []
+            consumed = True
+            return records
+
+        kafka.consume.side_effect = consume
+        rows = [consumer.poll_row(timeout=0, buffered=True) for _ in range(12)]
+        received = sorted(
+            (row.partition, row.offset)
+            for row in rows
+            if row is not None and row.topic == active.name
+        )
+        assert received == [
+            (partition, offset) for partition in (0, 1) for offset in range(3)
+        ]
+
     def _validate_state(
         self,
         stores,
@@ -1826,6 +1995,166 @@ class TestApplicationSourceOffsetRecoveryProof:
             )[0]
 
         assert recovered_committed.offset == expected_recovered_offset + 1
+
+    @pytest.mark.parametrize("store_type", [RocksDBStore], indirect=True)
+    @pytest.mark.parametrize("processing_guarantee", ["at-least-once", "exactly-once"])
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="Issue #1190: an empty reset input blocks its paired input",
+    )
+    def test_stateful_concat_progress_after_empty_source_reset(
+        self,
+        executor,
+        app_factory,
+        consumer_factory,
+        kafka_admin_client,
+        producer,
+        random_consumer_group,
+        caplog,
+        processing_guarantee,
+    ):
+        """
+        Test that a stateful concat continues processing both partitions after an
+        expired offset is reset on an empty input. Partition 1 is a healthy control.
+        """
+        quiet_name, active_name = str(uuid.uuid4()), str(uuid.uuid4())
+
+        def build_app():
+            app = app_factory(
+                consumer_group=random_consumer_group,
+                auto_offset_reset="earliest",
+                state_recovery_offset_reset="earliest",
+                processing_guarantee=processing_guarantee,
+                consumer_poll_timeout=0.05,
+                commit_interval=0.1,
+                commit_every=1,
+            )
+            config = TopicConfig(num_partitions=2, replication_factor=1)
+            quiet = app.topic(quiet_name, config=config)
+            active = app.topic(active_name, config=config)
+
+            def count(value, state):
+                value = dict(value)
+                value["count"] = state.get("count", 0) + 1
+                state.set("count", value["count"])
+                return value
+
+            app.dataframe(quiet).concat(app.dataframe(active)).apply(
+                count, stateful=True
+            )
+            return app
+
+        def run_app(app, count):
+            # Recovery refreshes the idle timeout, so also bound the entire run.
+            done = Future()
+            stopped = executor.submit(_stop_app_on_future, app, done, 30)
+            try:
+                return app.run(count=count, timeout=15, metadata=True)
+            finally:
+                done.set_result(None)
+                stopped.result(timeout=5)
+
+        app = build_app()
+        timestamp = int(time.time() * 1000)
+        with app.get_producer() as warm_producer:
+            for partition in (0, 1):
+                for offset in range(5):
+                    warm_producer.produce(
+                        quiet_name,
+                        partition=partition,
+                        key=b"key",
+                        value=dumps({"id": f"quiet-{partition}-{offset}"}).encode(),
+                        timestamp=timestamp + offset,
+                    )
+                warm_producer.produce(
+                    active_name,
+                    partition=partition,
+                    key=b"key",
+                    value=dumps({"id": f"active-{partition}-warm"}).encode(),
+                    timestamp=timestamp + 10,
+                )
+        assert len(run_app(app, count=12)) == 12
+
+        assignment = [
+            TopicPartition(topic, partition)
+            for topic in (quiet_name, active_name)
+            for partition in (0, 1)
+        ]
+        with consumer_factory(auto_commit_enable=False) as probe:
+            offsets = {
+                (tp.topic, tp.partition): tp.offset
+                for tp in probe.committed(assignment, timeout=5)
+            }
+        assert offsets == {
+            (quiet_name, 0): 5,
+            (quiet_name, 1): 5,
+            (active_name, 0): 1,
+            (active_name, 1): 1,
+        }
+
+        # Create an expired source commit while the application is stopped, without
+        # depending on retention timing. The paired active input remains readable.
+        changes = kafka_admin_client.alter_consumer_group_offsets(
+            [
+                ConsumerGroupTopicPartitions(
+                    random_consumer_group, [TopicPartition(quiet_name, 0, 4)]
+                )
+            ]
+        )
+        changed = changes[random_consumer_group].result(timeout=10)
+        assert all(tp.error is None for tp in changed.topic_partitions)
+        for future in kafka_admin_client.delete_records(
+            [TopicPartition(quiet_name, 0, 5)]
+        ).values():
+            future.result(timeout=15)
+
+        with consumer_factory(auto_commit_enable=False) as probe:
+            assert probe.get_watermark_offsets(
+                TopicPartition(quiet_name, 0), timeout=5
+            ) == (
+                5,
+                5,
+            )
+
+        with producer:
+            for partition in (0, 1):
+                for offset in range(3):
+                    producer.produce(
+                        active_name,
+                        partition=partition,
+                        key=b"key",
+                        value=dumps({"id": f"pending-{partition}-{offset}"}).encode(),
+                        timestamp=timestamp + 20 + offset,
+                    )
+
+        with consumer_factory(auto_commit_enable=False) as probe:
+            probe.assign([TopicPartition(active_name, 0, 1)])
+            readable = []
+            timeout = Timeout(10)
+            while len(readable) < 3 and timeout:
+                message = probe.poll(0.1)
+                if message is not None:
+                    assert message.error() is None
+                    readable.append(loads(message.value())["id"])
+            assert readable == [f"pending-0-{offset}" for offset in range(3)]
+
+        app = build_app()
+        caplog.clear()
+        caplog.set_level("INFO")
+        result = run_app(app, count=6)
+        assert "DESTRUCTIVE STATE RECOVERY" in caplog.text
+        assert "Recovery process complete!" in caplog.text
+        healthy = [row for row in result if row["_partition"] == 1]
+        assert [value["id"] for value in healthy] == [
+            f"pending-1-{i}" for i in range(3)
+        ]
+        assert [value["count"] for value in healthy] == [7, 8, 9]
+        assert sorted(row["id"] for row in result) == [
+            f"pending-{partition}-{offset}"
+            for partition in (0, 1)
+            for offset in range(3)
+        ]
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
