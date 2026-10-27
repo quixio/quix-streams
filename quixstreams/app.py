@@ -1211,6 +1211,9 @@ class Application:
             non_changelog_tps = [
                 tp for tp in topic_partitions if tp.topic in non_changelog_topics
             ]
+            assigned_source_tps = {
+                (tp.topic, tp.partition): tp for tp in non_changelog_tps
+            }
             committed_tps = self._consumer.committed(
                 partitions=non_changelog_tps, timeout=30
             )
@@ -1292,6 +1295,11 @@ class Application:
                             offset=source_offset_target,
                         )
                     )
+                    # Preserve the effective starting offset for buffer initialization
+                    # while Kafka's live consumer position may still be unknown.
+                    assigned_source_tps[
+                        (tp.topic, tp.partition)
+                    ].offset = source_offset_target
                 else:
                     committed_offsets[tp.partition][tp.topic] = tp.offset
 

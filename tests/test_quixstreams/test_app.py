@@ -1385,22 +1385,23 @@ class TestApplicationWithState:
         app._state_manager.on_partition_assign.assert_not_called()
 
     @pytest.mark.parametrize(
-        ("committed_offset", "position", "new_source_record"),
+        (
+            "committed_offset",
+            "position",
+            "new_source_record",
+            "state_recovery_offset_reset",
+        ),
         [
+            pytest.param(4, OFFSET_INVALID, False, "earliest", id="expired_commit"),
             pytest.param(
-                4,
-                OFFSET_INVALID,
-                False,
-                id="expired_commit",
-                marks=pytest.mark.xfail(
-                    strict=True,
-                    raises=AssertionError,
-                    reason="Issue #1190: an empty reset input blocks its paired input",
-                ),
+                4, OFFSET_INVALID, False, "latest", id="expired_commit_latest"
             ),
-            pytest.param(5, OFFSET_INVALID, False, id="corrected_commit"),
-            pytest.param(4, 5, False, id="effective_position"),
-            pytest.param(4, OFFSET_INVALID, True, id="new_source_record"),
+            pytest.param(
+                4, OFFSET_INVALID, True, "latest", id="latest_skips_retained_record"
+            ),
+            pytest.param(5, OFFSET_INVALID, False, "earliest", id="corrected_commit"),
+            pytest.param(4, 5, False, "earliest", id="effective_position"),
+            pytest.param(4, OFFSET_INVALID, True, "earliest", id="new_source_record"),
         ],
     )
     def test_on_assign_stateful_empty_source_offset_reset_allows_buffered_poll(
@@ -1411,6 +1412,7 @@ class TestApplicationWithState:
         committed_offset,
         position,
         new_source_record,
+        state_recovery_offset_reset,
     ):
         """
         Test that buffered consumption continues after resetting an expired source
@@ -1421,6 +1423,7 @@ class TestApplicationWithState:
             consumer_group="offset-reset-test",
             state_dir=tmp_path,
             auto_offset_reset="earliest",
+            state_recovery_offset_reset=state_recovery_offset_reset,
             use_changelog_topics=False,
             loglevel=None,
         )
@@ -1493,11 +1496,22 @@ class TestApplicationWithState:
             kafka.seek.assert_not_called()
             state_manager.destroy_partition_state.assert_not_called()
         else:
-            kafka.seek.assert_called_once_with(TopicPartition(quiet.name, 0, 5))
+            source_offset_target = (
+                6
+                if new_source_record and state_recovery_offset_reset == "latest"
+                else 5
+            )
+            recovery_offset_target = 0 if state_recovery_offset_reset == "latest" else 5
+            kafka.seek.assert_called_once_with(
+                TopicPartition(quiet.name, 0, source_offset_target)
+            )
             assert state_manager.destroy_partition_state.called
             for call in state_manager.on_partition_assign.call_args_list:
                 if call.kwargs["partition"] == 0:
-                    assert call.kwargs["committed_offsets"][quiet.name] == 5
+                    assert (
+                        call.kwargs["committed_offsets"][quiet.name]
+                        == recovery_offset_target
+                    )
 
         records = [
             ConfluentKafkaMessageStub(
@@ -1511,7 +1525,10 @@ class TestApplicationWithState:
             for partition in (0, 1)
             for offset in range(3)
         ]
-        if new_source_record:
+        read_source_record = (
+            new_source_record and state_recovery_offset_reset == "earliest"
+        )
+        if read_source_record:
             records.append(
                 ConfluentKafkaMessageStub(
                     topic=quiet.name,
@@ -1540,6 +1557,9 @@ class TestApplicationWithState:
         assert received == [
             (partition, offset) for partition in (0, 1) for offset in range(3)
         ]
+        assert [
+            row.offset for row in rows if row is not None and row.topic == quiet.name
+        ] == ([5] if read_source_record else [])
 
     def _validate_state(
         self,
@@ -1998,11 +2018,6 @@ class TestApplicationSourceOffsetRecoveryProof:
 
     @pytest.mark.parametrize("store_type", [RocksDBStore], indirect=True)
     @pytest.mark.parametrize("processing_guarantee", ["at-least-once", "exactly-once"])
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="Issue #1190: an empty reset input blocks its paired input",
-    )
     def test_stateful_concat_progress_after_empty_source_reset(
         self,
         executor,
