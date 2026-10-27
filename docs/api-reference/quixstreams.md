@@ -5173,7 +5173,7 @@ def remove(version: Optional[ConfigurationVersion],
            fields: dict[str, BaseField]) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L62)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L63)
 
 Remove the cached data for the given version and fields, if present.
 
@@ -5190,7 +5190,7 @@ Remove the cached data for the given version and fields, if present.
 def info() -> CacheInfo
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L76)
 
 Get cache statistics.
 
@@ -7169,7 +7169,7 @@ between `Application` and `StreamingDataFrame` instances.
 def store_offset(topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L59)
 
 Store the offset of the processed message to the checkpoint.
 
@@ -7179,6 +7179,33 @@ Store the offset of the processed message to the checkpoint.
 - `partition`: partition number
 - `offset`: message offset
 
+<a id="quixstreams.processing.context.ProcessingContext.store_offset_reset"></a>
+
+#### ProcessingContext.store\_offset\_reset
+
+```python
+def store_offset_reset(topic: str, partition: int, offset: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L69)
+
+Record a recovery seek's next offset for a successful checkpoint.
+
+This does not count as processing a message or establish a rewind offset.
+The reset remains pending until state recovery and checkpointing finish.
+
+<a id="quixstreams.processing.context.ProcessingContext.discard_offset_reset"></a>
+
+#### ProcessingContext.discard\_offset\_reset
+
+```python
+def discard_offset_reset(topic: str, partition: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L77)
+
+Forget a pending reset when its partition is revoked or lost.
+
 <a id="quixstreams.processing.context.ProcessingContext.init_checkpoint"></a>
 
 #### ProcessingContext.init\_checkpoint
@@ -7187,7 +7214,7 @@ Store the offset of the processed message to the checkpoint.
 def init_checkpoint()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L81)
 
 Initialize a new checkpoint
 
@@ -7199,7 +7226,7 @@ Initialize a new checkpoint
 def commit_checkpoint(force: bool = False, revoking: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L98)
 
 Attempts finalizing the current Checkpoint only if the Checkpoint is "expired",
 
@@ -14897,7 +14924,7 @@ their timestamps and grace periods, then calls the parent class's
 class TimestampedStorePartition(RocksDBStorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L280)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L282)
 
 Represents a single partition within a `TimestampedStore`.
 
@@ -14915,7 +14942,7 @@ opt out of the always-on per-write TTL stamp.
 class TimestampedStore(RocksDBStore)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L324)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L326)
 
 A RocksDB-backed state store implementation that manages key-value pairs
 associated with timestamps.
@@ -20337,7 +20364,7 @@ Default - `False`.
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1386)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1400)
 
 Immutable object holding the application configuration
 
@@ -20358,7 +20385,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1424)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1438)
 
 Included to ignore reading/setting values from the environment
 
@@ -20370,7 +20397,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1437)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1451)
 
 Update the application config and return a copy
 
@@ -20383,7 +20410,7 @@ def resolve_transactional_id(transactional_id: Optional[str],
                              prefix: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1463)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1477)
 
 Utility function to resolve the transactional.id based
 on existing config and provided prefix.
@@ -22974,7 +23001,7 @@ def get_store_transaction(
         store_name: str = DEFAULT_STATE_STORE_NAME) -> PartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L188)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L197)
 
 Get a PartitionTransaction for the given store, topic and partition.
 
@@ -22998,7 +23025,7 @@ instance of `PartitionTransaction`
 def close(*, revoking: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L213)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L222)
 
 Perform cleanup (when the checkpoint is empty) instead of committing.
 
@@ -23023,7 +23050,7 @@ enough to ride out a transient coordinator blip. See
 def commit(*, revoking: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L242)
 
 Commit the checkpoint.
 
@@ -23239,7 +23266,7 @@ def poll_row(timeout: Optional[float] = None,
              buffered: bool = False) -> Union[Row, list[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L198)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L225)
 
 Consumes a single message and deserialize it to Row or a list of Rows.
 
@@ -23269,7 +23296,7 @@ def trigger_backpressure(offsets_to_seek: dict[tuple[str, int], int],
                          resume_after: float)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L248)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L275)
 
 Pause all partitions for the certain period of time and seek the partitions
 provided in the `offsets_to_seek` dict.
@@ -23284,7 +23311,7 @@ This method is supposed to be called in case of backpressure from Sinks.
 def resume_backpressured()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L294)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L324)
 
 Resume consuming from assigned data partitions after the wait period has elapsed.
 
@@ -23660,7 +23687,7 @@ Only previously paused partitions are resumed.
 class InternalConsumerBuffer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L316)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L320)
 
 <a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.__init__"></a>
 
@@ -23670,7 +23697,7 @@ class InternalConsumerBuffer()
 def __init__(max_partition_buffer_size: int = 10000)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L317)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L321)
 
 A buffer to align messages across different topics by timestamps and consume them
 
@@ -23710,7 +23737,7 @@ to let other partitions to be consumed too.
 def assign_partitions(topic_partitions: list[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L349)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L353)
 
 Assign new partitions to the buffer.
 
@@ -23726,7 +23753,7 @@ Assign new partitions to the buffer.
 def revoke_partitions(topic_partitions: list[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L367)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L371)
 
 Drop the partitions from the buffer.
 
@@ -23744,7 +23771,7 @@ def feed(messages: Iterable[SuccessfulConfluentKafkaMessageProto],
          positions: Optional[dict[tuple[str, int], int]] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L378)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L382)
 
 Feed new batch of messages to the buffer.
 
@@ -23762,7 +23789,7 @@ Feed new batch of messages to the buffer.
 def pop() -> Optional[SuccessfulConfluentKafkaMessageProto]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L410)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L414)
 
 Pop the next message from the buffer in the timestamp order.
 
@@ -23778,7 +23805,7 @@ Pop the next message from the buffer in the timestamp order.
 def pause_full() -> list[tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L423)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L427)
 
 Pause the full partition buffers and return them as a list.
 
@@ -23790,7 +23817,7 @@ Pause the full partition buffers and return them as a list.
 def resume_empty() -> list[tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L432)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L436)
 
 Resume the empty partition buffers and return them as a list.
 
@@ -23802,9 +23829,21 @@ Resume the empty partition buffers and return them as a list.
 def clear(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L441)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L445)
 
 Clear the buffer for the given topic partition and keep it assigned.
+
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.resume_partition"></a>
+
+#### InternalConsumerBuffer.resume\_partition
+
+```python
+def resume_partition(topic: str, partition: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L453)
+
+Clear the buffer's paused flag after its Kafka partition is resumed.
 
 <a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.close"></a>
 
@@ -23814,7 +23853,7 @@ Clear the buffer for the given topic partition and keep it assigned.
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L449)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L459)
 
 Drop all partition buffers.
 
