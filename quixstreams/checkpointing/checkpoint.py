@@ -166,6 +166,7 @@ class Checkpoint(BaseCheckpoint):
         exactly_once: bool = False,
         commit_every: int = 0,
         revoke_flush_timeout: float = -1.0,
+        offset_resets: Optional[Dict[Tuple[str, int], int]] = None,
     ):
         super().__init__(
             commit_interval=commit_interval,
@@ -182,8 +183,16 @@ class Checkpoint(BaseCheckpoint):
         # -1.0 is librdkafka "infinite", preserving the pre-existing behavior for
         # any caller that omits it; the Application always supplies it.
         self._revoke_flush_timeout = revoke_flush_timeout
+        # Shared with ProcessingContext so aborted checkpoints retain resets.
+        # These are next offsets, not offsets of processed messages.
+        self._offset_resets = offset_resets if offset_resets is not None else {}
         if self._exactly_once:
             self._producer.begin_transaction()
+
+    def empty(self) -> bool:
+        return super().empty() and (
+            not self._offset_resets or self._state_manager.recovery_required
+        )
 
     def get_store_transaction(
         self, stream_id: str, partition: int, store_name: str = DEFAULT_STATE_STORE_NAME
@@ -379,9 +388,18 @@ class Checkpoint(BaseCheckpoint):
                 )
 
         # Step 4. Commit offsets to Kafka
+        # Do not make a reset durable until its state recovery has completed.
+        # In particular, an interrupted latest reset must retain its original
+        # recovery boundary on restart. Never count resets as processed records.
+        reset_offsets = (
+            {} if self._state_manager.recovery_required else self._offset_resets.copy()
+        )
+        next_offsets = reset_offsets.copy()
+        for tp, offset in self._tp_offsets.items():
+            next_offsets[tp] = max(offset + 1, next_offsets.get(tp, 0))
         offsets = [
-            TopicPartition(topic=topic, partition=partition, offset=offset + 1)
-            for (topic, partition), offset in self._tp_offsets.items()
+            TopicPartition(topic=topic, partition=partition, offset=offset)
+            for (topic, partition), offset in next_offsets.items()
         ]
 
         if self._exactly_once:
@@ -439,6 +457,10 @@ class Checkpoint(BaseCheckpoint):
                 produced_offsets.get(changelog_tp) if changelog_tp is not None else None
             )
             transaction.flush(changelog_offset=changelog_offset)
+
+        for tp, offset in reset_offsets.items():
+            if self._offset_resets.get(tp) == offset:
+                del self._offset_resets[tp]
 
     def _flush_budget(self, deadline: Optional[Deadline]) -> float:
         """

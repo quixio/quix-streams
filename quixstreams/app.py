@@ -1300,6 +1300,11 @@ class Application:
                     assigned_source_tps[
                         (tp.topic, tp.partition)
                     ].offset = source_offset_target
+                    self._processing_context.store_offset_reset(
+                        topic=tp.topic,
+                        partition=tp.partition,
+                        offset=source_offset_target,
+                    )
                 else:
                     committed_offsets[tp.partition][tp.topic] = tp.offset
 
@@ -1366,6 +1371,7 @@ class Application:
             tp for tp in topic_partitions if tp.topic in non_changelog_topics
         ]
         for tp in non_changelog_tps:
+            self._processing_context.discard_offset_reset(tp.topic, tp.partition)
             if self._state_manager.stores:
                 stream_ids = self._dataframe_registry.get_stream_ids(
                     topic_name=tp.topic

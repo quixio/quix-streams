@@ -135,6 +135,19 @@ class InternalConsumer(BaseConsumer):
                 tp for tp in partitions if not self._topics[tp.topic].is_changelog
             ]
             self._buffer.assign_partitions(buffer_partitions)
+            reset_policy = self._consumer_config["auto.offset.reset"]
+            # Capture retention bounds before a callback can assign and prefetch.
+            # A later low watermark could already be ahead of fetched records.
+            watermarks = (
+                {
+                    (tp.topic, tp.partition): consumer.get_watermark_offsets(
+                        tp, timeout=30
+                    )
+                    for tp in buffer_partitions
+                }
+                if reset_policy != "error"
+                else {}
+            )
             if on_assign is not None:
                 on_assign(consumer, partitions)
 
@@ -154,13 +167,22 @@ class InternalConsumer(BaseConsumer):
                     if tp.offset >= 0 and (tp.topic, tp.partition) not in positions
                 }
             )
-            positions.update(
-                {
-                    (tp.topic, tp.partition): tp.offset
-                    for tp in committed
-                    if tp.offset >= 0 and (tp.topic, tp.partition) not in positions
-                }
-            )
+            for tp in committed:
+                key = (tp.topic, tp.partition)
+                if key in positions:
+                    continue
+                if tp.offset >= 0:
+                    positions[key] = tp.offset
+                if reset_policy == "error":
+                    continue
+                low, high = watermarks[key]
+                if low >= 0 and tp.offset < low:
+                    # Retention may leave an empty partition at a nonzero offset,
+                    # with an expired or missing commit and no live position.
+                    # For latest, infer a position only when the partition is empty:
+                    # a later high watermark may be ahead of records already fetched.
+                    if reset_policy == "earliest" or low == high:
+                        positions[key] = low
             self._buffer.feed(
                 messages=[],
                 high_watermarks={},
@@ -260,6 +282,7 @@ class InternalConsumer(BaseConsumer):
         self._backpressure_resume_at = min(self._backpressure_resume_at, resume_at)
 
         changelog_topics = {k for k, v in self._topics.items() if v.is_changelog}
+        rewound_positions: dict[tuple[str, int], int] = {}
         for tp in self.assignment():
             # Pause only data TPs excluding changelog TPs
             if tp.topic in changelog_topics:
@@ -271,7 +294,6 @@ class InternalConsumer(BaseConsumer):
                 f"position={position.offset}"
             )
             self.pause(partitions=[tp])
-            self._buffer.clear(topic=tp.topic, partition=tp.partition)
 
             # Seek the TP back to the "offset_to_seek" to start from it on resume.
             # The "offset_to_seek" is provided by the Checkpoint and is expected to be the
@@ -288,8 +310,15 @@ class InternalConsumer(BaseConsumer):
                         topic=tp.topic, partition=tp.partition, offset=seek_offset
                     )
                 )
+                self._buffer.clear(topic=tp.topic, partition=tp.partition)
+                rewound_positions[(tp.topic, tp.partition)] = seek_offset
+
+            # With no rewind, nothing from this partition was processed in the
+            # failed checkpoint. Keep its unread records and its idle position.
 
             self._backpressurred_tps.add(tp)
+
+        self._buffer.feed(messages=[], high_watermarks={}, positions=rewound_positions)
 
     def resume_backpressured(self):
         """
@@ -302,6 +331,7 @@ class InternalConsumer(BaseConsumer):
         for tp in self._backpressurred_tps:
             logger.debug(f'Resuming topic partition "{tp.topic}[{tp.partition}]"')
             self.resume(partitions=[tp])
+            self._buffer.resume_partition(topic=tp.topic, partition=tp.partition)
         self.reset_backpressure()
 
     def reset_backpressure(self):
@@ -338,12 +368,14 @@ class InternalConsumer(BaseConsumer):
         topic partitions with the same partition number.
         """
 
-        # Probe the buffer and return immediately if there's data available
-        msg = self._buffer.pop()
+        # Retained buffers must respect sink backpressure too. Keep polling Kafka
+        # for callbacks while paused, but return rows only after resuming.
+        msg = None if self._backpressurred_tps else self._buffer.pop()
         if msg is None:
             # If the buffer is empty, feed it and try the probing again
             self._feed_buffer(timeout=timeout)
-            msg = self._buffer.pop()
+            if not self._backpressurred_tps:
+                msg = self._buffer.pop()
 
         return msg
 

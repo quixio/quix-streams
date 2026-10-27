@@ -312,6 +312,10 @@ class PartitionBufferGroup:
         if buffer := self._partition_buffers.get(topic):
             buffer.clear()
 
+    def resume_partition(self, topic: str):
+        if buffer := self._partition_buffers.get(topic):
+            buffer.resume()
+
 
 class InternalConsumerBuffer:
     def __init__(self, max_partition_buffer_size: int = 10000):
@@ -445,6 +449,12 @@ class InternalConsumerBuffer:
         partition_group = self._partition_groups.get(partition)
         if partition_group is not None:
             partition_group.clear(topic)
+
+    def resume_partition(self, topic: str, partition: int):
+        """Clear the buffer's paused flag after its Kafka partition is resumed."""
+        partition_group = self._partition_groups.get(partition)
+        if partition_group is not None:
+            partition_group.resume_partition(topic)
 
     def close(self):
         """

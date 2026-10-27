@@ -44,6 +44,11 @@ class ProcessingContext:
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
     )
+    # Next source offsets established by recovery, including empty inputs that
+    # cannot advance through normal message processing. Keep them across retries.
+    _offset_resets: dict[tuple[str, int], int] = dataclasses.field(
+        init=False, repr=False, default_factory=dict
+    )
 
     @property
     def checkpoint(self) -> Checkpoint:
@@ -61,6 +66,18 @@ class ProcessingContext:
         """
         self.checkpoint.store_offset(topic=topic, partition=partition, offset=offset)
 
+    def store_offset_reset(self, topic: str, partition: int, offset: int):
+        """Record a recovery seek's next offset for a successful checkpoint.
+
+        This does not count as processing a message or establish a rewind offset.
+        The reset remains pending until state recovery and checkpointing finish.
+        """
+        self._offset_resets[(topic, partition)] = offset
+
+    def discard_offset_reset(self, topic: str, partition: int):
+        """Forget a pending reset when its partition is revoked or lost."""
+        self._offset_resets.pop((topic, partition), None)
+
     def init_checkpoint(self):
         """
         Initialize a new checkpoint
@@ -75,6 +92,7 @@ class ProcessingContext:
             dataframe_registry=self.dataframe_registry,
             exactly_once=self.exactly_once,
             revoke_flush_timeout=self.revoke_flush_timeout,
+            offset_resets=self._offset_resets,
         )
 
     def commit_checkpoint(self, force: bool = False, revoking: bool = False):
@@ -107,6 +125,7 @@ class ProcessingContext:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self._offset_resets.clear()
         if self.exactly_once:
             self.producer.abort_transaction(5)
         self.printer.clear()
