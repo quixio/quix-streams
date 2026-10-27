@@ -282,7 +282,6 @@ class InternalConsumer(BaseConsumer):
         self._backpressure_resume_at = min(self._backpressure_resume_at, resume_at)
 
         changelog_topics = {k for k, v in self._topics.items() if v.is_changelog}
-        rewound_positions: dict[tuple[str, int], int] = {}
         for tp in self.assignment():
             # Pause only data TPs excluding changelog TPs
             if tp.topic in changelog_topics:
@@ -311,14 +310,11 @@ class InternalConsumer(BaseConsumer):
                     )
                 )
                 self._buffer.clear(topic=tp.topic, partition=tp.partition)
-                rewound_positions[(tp.topic, tp.partition)] = seek_offset
 
             # With no rewind, nothing from this partition was processed in the
             # failed checkpoint. Keep its unread records and its idle position.
 
             self._backpressurred_tps.add(tp)
-
-        self._buffer.feed(messages=[], high_watermarks={}, positions=rewound_positions)
 
     def resume_backpressured(self):
         """
