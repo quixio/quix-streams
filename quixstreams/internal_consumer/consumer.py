@@ -2,7 +2,7 @@ import logging
 from time import monotonic
 from typing import Callable, Iterator, Optional, Union
 
-from confluent_kafka import Consumer, KafkaError, TopicPartition
+from confluent_kafka import Consumer, KafkaError, KafkaException, TopicPartition
 
 from quixstreams.error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from quixstreams.exceptions import PartitionAssignmentError
@@ -138,16 +138,21 @@ class InternalConsumer(BaseConsumer):
             reset_policy = self._consumer_config["auto.offset.reset"]
             # Capture retention bounds before a callback can assign and prefetch.
             # A later low watermark could already be ahead of fetched records.
-            watermarks = (
-                {
-                    (tp.topic, tp.partition): consumer.get_watermark_offsets(
-                        tp, timeout=30
-                    )
-                    for tp in buffer_partitions
-                }
-                if reset_policy != "error"
-                else {}
-            )
+            watermarks = {}
+            if reset_policy != "error":
+                for tp in buffer_partitions:
+                    try:
+                        watermarks[(tp.topic, tp.partition)] = (
+                            consumer.get_watermark_offsets(tp, timeout=30)
+                        )
+                    except KafkaException as exc:
+                        logger.warning(
+                            "Failed to fetch watermarks for %s[%s]; "
+                            "skipping buffer position inference: %s",
+                            tp.topic,
+                            tp.partition,
+                            exc,
+                        )
             if on_assign is not None:
                 on_assign(consumer, partitions)
 
@@ -173,7 +178,7 @@ class InternalConsumer(BaseConsumer):
                     continue
                 if tp.offset >= 0:
                     positions[key] = tp.offset
-                if reset_policy == "error":
+                if key not in watermarks:
                     continue
                 low, high = watermarks[key]
                 if low >= 0 and tp.offset < low:

@@ -2,7 +2,13 @@ from time import monotonic
 from unittest.mock import MagicMock
 
 import pytest
-from confluent_kafka import OFFSET_INVALID, Consumer, TopicPartition
+from confluent_kafka import (
+    OFFSET_INVALID,
+    Consumer,
+    KafkaError,
+    KafkaException,
+    TopicPartition,
+)
 
 from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.models import Topic
@@ -70,6 +76,54 @@ def buffered_consumer(monkeypatch):
         return consumer, kafka
 
     return factory
+
+
+@pytest.mark.parametrize("committed_offset", [4, 5], ids=["expired", "valid"])
+def test_watermark_failure_during_rebalance_preserves_available_progress(
+    buffered_consumer, committed_offset, caplog
+):
+    on_assign = MagicMock()
+    consumer, kafka = buffered_consumer(
+        committed_offset=committed_offset, on_assign=on_assign
+    )
+    callbacks = kafka.subscribe.call_args.kwargs
+    assignment = kafka.assignment()
+    callbacks["on_revoke"](kafka, assignment)
+    on_assign.reset_mock()
+    original_watermarks = kafka.get_watermark_offsets.side_effect
+
+    def watermarks(partition, **kwargs):
+        if (partition.topic, partition.partition) == ("quiet", 1) and not kwargs.get(
+            "cached", False
+        ):
+            raise KafkaException(
+                KafkaError(KafkaError.NOT_LEADER_FOR_PARTITION, "leader changed")
+            )
+        return original_watermarks(partition, **kwargs)
+
+    kafka.get_watermark_offsets.side_effect = watermarks
+    callbacks["on_assign"](kafka, assignment)
+    on_assign.assert_called_once()
+    warnings = [record for record in caplog.records if record.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "quiet[1]" in warnings[0].getMessage()
+    assert "leader changed" in warnings[0].getMessage()
+
+    kafka.consume.side_effect = [
+        [
+            _message("active", partition, offset)
+            for partition in (1, 3)
+            for offset in range(3)
+        ],
+        *[[] for _ in range(12)],
+    ]
+    rows = [consumer.poll_row(0, buffered=True) for _ in range(12)]
+    # A failed lookup preserves a valid committed seed. Otherwise only that
+    # partition waits; the other partition still receives its inferred seed.
+    expected_partitions = (1, 3) if committed_offset == 5 else (3,)
+    assert [(row.partition, row.offset) for row in rows if row] == [
+        (partition, offset) for partition in expected_partitions for offset in range(3)
+    ]
 
 
 @pytest.mark.parametrize(
