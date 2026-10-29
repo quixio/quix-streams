@@ -19,6 +19,7 @@ from quixstreams.models import (
     JSONSerializer,
     SerializationError,
 )
+from quixstreams.models.topics import Topic, TopicType
 from tests.utils import make_kafka_exception
 
 
@@ -701,6 +702,226 @@ class TestInternalProducerChainedOnDelivery:
         assert producer.offsets[("test-topic", 0)] == 7
         # The caller-supplied callback also fired, with the same args.
         assert caller_calls == [(None, mock_msg)]
+
+
+class TestInternalProducerDeliveryErrorCallback:
+    """
+    Delivery errors reported by the broker after a message has been enqueued
+    must be handed to ``on_error`` together with the Row they belong to. An error
+    latched by an earlier message must never be attributed to the Row that
+    happens to be produced next, and must never make that Row disappear.
+
+    No broker is needed: the wrapped ``Producer`` is mocked and the delivery
+    reports librdkafka would send from ``poll()`` are fired by hand.
+    """
+
+    @pytest.fixture()
+    def inner(self):
+        """Mocked wrapped Producer, records the delivery callbacks it receives."""
+        inner = create_autospec(Producer)
+        inner.delivery_callbacks = []
+
+        def _produce(*args, **kwargs):
+            inner.delivery_callbacks.append(kwargs["on_delivery"])
+
+        inner.produce.side_effect = _produce
+        return inner
+
+    @pytest.fixture()
+    def producer_factory(self, inner):
+        def factory(on_error=None):
+            with patch("quixstreams.internal_producer.Producer", return_value=inner):
+                return InternalProducer(broker_address="xyz", on_error=on_error)
+
+        return factory
+
+    @staticmethod
+    def _msg(topic="out", partition=0, offset=0):
+        msg = MagicMock()
+        msg.topic.return_value = topic
+        msg.partition.return_value = partition
+        msg.offset.return_value = offset
+        return msg
+
+    @staticmethod
+    def _error(code=ConfluentKafkaError._MSG_TIMED_OUT):
+        return ConfluentKafkaError(code)
+
+    @pytest.fixture()
+    def topic(self):
+        return Topic(name="out", value_serializer="json")
+
+    def test_delivery_error_is_passed_to_callback_with_its_own_row(
+        self, producer_factory, inner, topic, row_factory
+    ):
+        calls = []
+
+        def on_error(exc, row, logger):
+            calls.append((exc, row))
+            return True
+
+        producer = producer_factory(on_error=on_error)
+        row1 = row_factory(value={"n": 1}, offset=1)
+        row2 = row_factory(value={"n": 2}, offset=2)
+        producer.produce_row(row=row1, topic=topic)
+        producer.produce_row(row=row2, topic=topic)
+
+        # The broker reports a failure for the first message only
+        inner.delivery_callbacks[0](self._error(), self._msg(offset=-1))
+
+        assert len(calls) == 1
+        exc, row = calls[0]
+        assert isinstance(exc, KafkaProducerDeliveryError)
+        assert exc.code == ConfluentKafkaError._MSG_TIMED_OUT
+        assert row is row1
+
+    def test_suppressed_delivery_error_does_not_drop_next_row(
+        self, producer_factory, inner, topic, row_factory
+    ):
+        calls = []
+
+        def on_error(exc, row, logger):
+            calls.append(row)
+            return True
+
+        producer = producer_factory(on_error=on_error)
+        row1 = row_factory(value={"n": 1}, offset=1)
+        row2 = row_factory(value={"n": 2}, offset=2)
+        producer.produce_row(row=row1, topic=topic)
+        inner.delivery_callbacks[0](self._error(), self._msg(offset=-1))
+
+        producer.produce_row(row=row2, topic=topic)
+
+        # The second row reached the underlying producer and the callback was
+        # asked about the failed row only
+        assert inner.produce.call_count == 2
+        assert inner.produce.call_args.kwargs["value"] == b'{"n":2}'
+        assert calls == [row1]
+        # The suppressed error is gone: nothing is raised on flush
+        producer.flush()
+
+    def test_unsuppressed_delivery_error_is_raised_once_on_next_produce_row(
+        self, producer_factory, inner, topic, row_factory
+    ):
+        calls = []
+
+        def on_error(exc, row, logger):
+            calls.append(row)
+            return False
+
+        producer = producer_factory(on_error=on_error)
+        row1 = row_factory(value={"n": 1}, offset=1)
+        row2 = row_factory(value={"n": 2}, offset=2)
+        producer.produce_row(row=row1, topic=topic)
+        inner.delivery_callbacks[0](self._error(), self._msg(offset=-1))
+
+        with pytest.raises(KafkaProducerDeliveryError):
+            producer.produce_row(row=row2, topic=topic)
+
+        # The failure was reported for row1 only, row2 was not produced
+        assert calls == [row1]
+        assert inner.produce.call_count == 1
+
+    def test_latched_error_of_other_message_is_not_passed_to_callback(
+        self, producer_factory, inner, topic, row_factory
+    ):
+        """
+        A delivery error of a message produced outside of ``produce_row()``
+        (e.g. a changelog message) must fail the next ``produce_row()`` even if
+        the callback suppresses everything, and must not drop the current Row.
+        """
+        on_error = MagicMock(return_value=True)
+        producer = producer_factory(on_error=on_error)
+
+        producer.produce(topic="changelog", key=b"k", value=b"v")
+        inner.delivery_callbacks[0](self._error(), self._msg(topic="changelog"))
+
+        row = row_factory(value={"n": 2}, offset=2)
+        with pytest.raises(KafkaProducerDeliveryError):
+            producer.produce_row(row=row, topic=topic)
+
+        on_error.assert_not_called()
+        # Only the changelog message was ever handed to the underlying producer
+        assert inner.produce.call_count == 1
+
+    @pytest.mark.parametrize("topic_type", [TopicType.CHANGELOG, TopicType.REPARTITION])
+    def test_delivery_error_of_internal_topic_cannot_be_suppressed(
+        self, producer_factory, inner, row_factory, topic_type
+    ):
+        on_error = MagicMock(return_value=True)
+        producer = producer_factory(on_error=on_error)
+        internal_topic = Topic(name="internal", topic_type=topic_type)
+
+        producer.produce_row(
+            row=row_factory(value={"n": 1}, key=b"k"), topic=internal_topic
+        )
+        inner.delivery_callbacks[0](self._error(), self._msg(topic="internal"))
+
+        on_error.assert_not_called()
+        with pytest.raises(KafkaProducerDeliveryError):
+            producer.flush()
+
+    def test_delivery_error_surfaced_by_flush_reaches_callback(
+        self, producer_factory, inner, topic, row_factory
+    ):
+        """flush() used to raise a delivery error without consulting on_error."""
+        on_error = MagicMock(return_value=True)
+        producer = producer_factory(on_error=on_error)
+        row = row_factory(value={"n": 1})
+        producer.produce_row(row=row, topic=topic)
+
+        def _flush(timeout=None):
+            inner.delivery_callbacks[0](self._error(), self._msg(offset=-1))
+            return 0
+
+        inner.flush.side_effect = _flush
+
+        producer.flush()
+
+        assert on_error.call_count == 1
+        assert on_error.call_args.args[1] is row
+
+    def test_callback_raising_does_not_escape_delivery_callback(
+        self, producer_factory, inner, topic, row_factory
+    ):
+        def on_error(exc, row, logger):
+            raise RuntimeError("boom")
+
+        producer = producer_factory(on_error=on_error)
+        producer.produce_row(row=row_factory(value={"n": 1}), topic=topic)
+
+        # Must not raise out of the librdkafka delivery callback ...
+        inner.delivery_callbacks[0](self._error(), self._msg(offset=-1))
+
+        # ... and the delivery error is still reported to the caller
+        with pytest.raises(KafkaProducerDeliveryError):
+            producer.flush()
+
+    def test_purge_report_is_not_passed_to_callback(
+        self, producer_factory, inner, topic, row_factory
+    ):
+        on_error = MagicMock(return_value=False)
+        producer = producer_factory(on_error=on_error)
+        producer.produce_row(row=row_factory(value={"n": 1}), topic=topic)
+
+        inner.delivery_callbacks[0](
+            self._error(ConfluentKafkaError._PURGE_QUEUE), self._msg(offset=-1)
+        )
+
+        on_error.assert_not_called()
+        producer.flush()
+
+    def test_successful_delivery_tracks_offset_and_chains_caller_callback(
+        self, producer_factory, inner, topic, row_factory
+    ):
+        on_error = MagicMock(return_value=False)
+        producer = producer_factory(on_error=on_error)
+        producer.produce_row(row=row_factory(value={"n": 1}), topic=topic)
+
+        inner.delivery_callbacks[0](None, self._msg(topic="out", offset=5))
+
+        assert producer.offsets == {("out", 0): 5}
+        on_error.assert_not_called()
 
 
 class TestInstantiatedGuard:
