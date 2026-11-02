@@ -1,4 +1,5 @@
 import sys
+import threading
 import time
 import uuid
 from datetime import datetime
@@ -7,6 +8,7 @@ from unittest.mock import Mock, patch
 
 import orjson
 import pytest
+from confluent_kafka import KafkaError
 
 from quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup import (
     Lookup,
@@ -16,6 +18,7 @@ from quixstreams.dataframe.joins.lookups.quix_configuration_service.models impor
     ConfigurationVersion,
     Event,
 )
+from quixstreams.kafka.exceptions import KafkaConsumerException
 
 
 @pytest.fixture
@@ -1373,3 +1376,47 @@ class TestLookupInit:
             app_config=app.config,
         )
         assert len(lookup._configurations) == num_configs
+
+    def test_lookup_init_raises_if_consumer_fails_before_configs_are_read(self):
+        """
+        An error in the config consumer before the topic is fully read must
+        reach the caller instead of leaving `Lookup()` blocked forever.
+        """
+        topic = Mock()
+        topic.name = "configs"
+        topic.broker_config.num_partitions = 1
+
+        failed_message = Mock()
+        failed_message.error.return_value = KafkaError(KafkaError.NOT_COORDINATOR)
+
+        errors: list[Exception] = []
+
+        def create_lookup():
+            try:
+                Lookup(topic=topic, broker_address="dummy:9092")
+            except Exception as exc:
+                errors.append(exc)
+
+        with (
+            patch(
+                "quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Consumer"
+            ) as consumer_cls,
+            patch(
+                "quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.httpx.Client"
+            ),
+        ):
+            consumer = consumer_cls.return_value
+            consumer.assignment.return_value = []
+            consumer.poll.return_value = failed_message
+
+            # Create the Lookup in its own thread, so that a regression blocks
+            # only that thread and not the whole test session.
+            creator = threading.Thread(target=create_lookup, daemon=True)
+            creator.start()
+            creator.join(timeout=10)
+
+        assert not creator.is_alive(), "Lookup() is still waiting for the consumer"
+        assert len(errors) == 1
+        assert isinstance(errors[0], RuntimeError)
+        assert isinstance(errors[0].__cause__, KafkaConsumerException)
+        consumer.close.assert_called_once()

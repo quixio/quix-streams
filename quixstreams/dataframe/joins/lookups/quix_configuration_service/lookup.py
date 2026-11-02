@@ -60,6 +60,9 @@ class Lookup(BaseLookup[BaseField]):
     Example:
         lookup = Lookup(topic, app_config=app.config)
         sdf = sdf.join_lookup(lookup, fields)
+
+    Raises:
+        RuntimeError: if the configuration consumer fails before the topic is fully read.
     """
 
     def __init__(
@@ -103,6 +106,7 @@ class Lookup(BaseLookup[BaseField]):
         self._unresolved_types_field = unresolved_types_field
 
         self._started = threading.Event()
+        self._consumer_error: Optional[Exception] = None
 
         headers = {
             "User-Agent": "quixstreams-lookup",
@@ -211,6 +215,11 @@ class Lookup(BaseLookup[BaseField]):
         logger.info("Initializing enrichment process")
         threading.Thread(target=self._consumer_thread, daemon=True).start()
         self._started.wait()
+        if self._consumer_error is not None:
+            self._config_consumer.close()
+            raise RuntimeError(
+                f'Failed to read configurations from topic "{self._topic.name}"'
+            ) from self._consumer_error
         logger.info("Enrichment process initialized")
 
     def _consumer_thread(self) -> None:
@@ -258,8 +267,13 @@ class Lookup(BaseLookup[BaseField]):
                     logger.exception(
                         f"Failed to process message: {key} at partition: {message.partition()}, offset: {message.offset()}"
                     )
-        except Exception:
+        except Exception as exc:
             logger.exception("Error in consumer thread")
+            self._consumer_error = exc
+        finally:
+            # Release __init__ however the thread exits, so that it can never
+            # wait for a thread that is no longer running.
+            self._started.set()
 
     def _process_config_event(self, event: Event) -> None:
         """
