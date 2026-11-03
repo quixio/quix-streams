@@ -161,7 +161,9 @@ class InternalProducer:
                 partition=partition,
                 timestamp=timestamp,
                 # Changelog and repartition topics are internal: a failed write
-                # there must fail the Application instead of being suppressed.
+                # there is never passed to ``on_error``. It is latched and
+                # raised by the next produce()/flush() like any other delivery
+                # error (so it can still reach ``on_processing_error``).
                 row=None if topic.is_changelog or topic.is_repartition else row,
             )
         except Exception as exc:

@@ -271,8 +271,10 @@ class Application:
             or to produce a message to Kafka, or when Kafka reports a delivery error
             for a message produced from a `StreamingDataFrame` (the callback
             receives the `Row` of the failed message).
-            Errors for changelog and repartition topics are never passed to
-            the callback and always stop the `Application`.
+            Delivery errors for changelog and repartition topics are never
+            passed to the callback. While a `Row` is being processed they are
+            still raised through `on_processing_error`, which may suppress
+            them.
         <br><br>***Quix Cloud Parameters***<br>
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
             instead of the default one.

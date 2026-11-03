@@ -233,7 +233,7 @@ def on_processing_error(exc: Exception, row, logger) -> bool:
 - **`on_producer_error`** - triggered when internal Producer fails to serialize or to produce a message to Kafka,
 or when Kafka reports a delivery error for a message produced from a `StreamingDataFrame` (e.g. via `StreamingDataFrame.to_topic()`).
 The callback receives the `Row` of the message that failed.
-Delivery errors for changelog and repartition topics are never passed to the callback and always stop the Application.  
+Delivery errors for changelog and repartition topics are never passed to the callback. While a `Row` is being processed they are still raised through `on_processing_error`, which may suppress them.  
 Example:
 
 ```python
