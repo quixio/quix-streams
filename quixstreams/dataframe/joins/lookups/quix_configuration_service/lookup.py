@@ -137,6 +137,7 @@ class Lookup(BaseLookup[BaseField]):
         self._start_consumer_thread()
 
         self._fields_by_type: dict[int, dict[str, dict[str, BaseField]]] = {}
+        self._warned_non_str_key = False
 
     def json_field(
         self,
@@ -421,7 +422,7 @@ class Lookup(BaseLookup[BaseField]):
     def join(
         self,
         fields: Mapping[str, BaseField],
-        on: str,
+        on: Union[str, bytes],
         value: dict[str, Any],
         key: Any,
         timestamp: int,
@@ -435,6 +436,9 @@ class Lookup(BaseLookup[BaseField]):
 
         :param fields: Mapping of field names to Field objects specifying how to extract and parse configuration data.
         :param on: The key used to identify the target configuration for enrichment.
+            Configuration target keys are strings, so `bytes` are decoded as UTF-8,
+            as `key_deserializer="str"` would. Any other type is matched as `str(on)`,
+            and a warning is logged the first time that happens.
         :param value: The message value to be updated with enriched configuration values.
         :param key: The message key.
         :param timestamp: The message timestamp, used to select the appropriate configuration version.
@@ -443,6 +447,24 @@ class Lookup(BaseLookup[BaseField]):
         :returns: None. The input value dictionary is updated in-place with the enriched configuration data.
         """
         start = time.time()
+        if isinstance(on, bytes):
+            on = on.decode("utf-8")
+        elif not isinstance(on, str):
+            # `join_lookup()` passes the raw message key or column value, so
+            # other types reach here at runtime. They have always been matched
+            # as `str(on)`, which works for an int key; warn instead of raising
+            # so those pipelines keep running.
+            if not self._warned_non_str_key:
+                self._warned_non_str_key = True
+                logger.warning(
+                    "Lookup key %r has type %s, so it is matched against "
+                    "configuration target keys as %r. Pass the key as str or "
+                    "bytes to match it explicitly. This warning is logged once.",
+                    on,
+                    type(on).__name__,
+                    str(on),
+                )
+            on = str(on)
         logger.debug(f"Joining message with key: {on}, timestamp: {timestamp}")
 
         fields_ids = id(fields)

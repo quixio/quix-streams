@@ -1,3 +1,4 @@
+import logging
 import sys
 import threading
 import time
@@ -804,6 +805,70 @@ class TestLookupJoin:
             assert value["user_role"] == "admin"
             assert value["user_permissions"] == ["read", "write"]
             assert value["original_key"] == "original_value"  # Original data preserved
+
+    def test_join_bytes_on_key_is_decoded(self, lookup):
+        """
+        A `bytes` lookup key matches the configuration for its UTF-8 text.
+
+        This is what `join_lookup(on=None)` passes when the input topic uses
+        `key_deserializer="bytes"`.
+        """
+        version = create_configuration_version(valid_from=1000.0)
+        config_id = lookup._config_id("user-config", "user123")
+        lookup._configurations[config_id] = Configuration(versions={1: version})
+        fields = {
+            "user_name": lookup.json_field(
+                type="user-config", jsonpath="$.name", default="unknown"
+            )
+        }
+
+        with patch.object(
+            lookup,
+            "_fetch_version_content",
+            return_value=orjson.dumps({"name": "John Doe"}),
+        ):
+            value = {}
+            lookup.join(
+                fields=fields,
+                on=b"user123",
+                value=value,
+                key=b"user123",
+                timestamp=1500,
+                headers={},
+            )
+
+        assert value["user_name"] == "John Doe"
+
+    def test_join_non_str_on_key_warns_once(self, lookup, caplog):
+        """
+        A lookup key that is neither `str` nor `bytes` is still matched as
+        `str(on)`, and a warning is logged on the first such key only.
+        """
+        version = create_configuration_version(valid_from=1000.0)
+        config_id = lookup._config_id("user-config", "123")
+        lookup._configurations[config_id] = Configuration(versions={1: version})
+        fields = {
+            "user_name": lookup.json_field(
+                type="user-config", jsonpath="$.name", default="unknown"
+            )
+        }
+
+        with (
+            patch.object(
+                lookup,
+                "_fetch_version_content",
+                return_value=orjson.dumps({"name": "John Doe"}),
+            ),
+            caplog.at_level(logging.WARNING),
+        ):
+            for _ in range(2):
+                value = {}
+                lookup.join(fields, 123, value, 123, 1500, {})
+                assert value["user_name"] == "John Doe"
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert "int" in warnings[0].getMessage()
 
     def test_join_with_default_values(self, lookup):
         """Test join method with default values when fields are missing."""

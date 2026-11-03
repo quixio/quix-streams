@@ -244,6 +244,8 @@ if __name__ == '__main__':
     app.run()
 ```
 
+Configuration target keys are strings. If the lookup key is `bytes`, for example the message key when `on` is omitted and the input topic uses `key_deserializer="bytes"`, it is decoded as UTF-8 before matching.
+
 ### Late-arriving configuration (`LookupBuffer`)
 
 By default, `join_lookup()` is non-blocking and never waits: if the matching configuration has not arrived when a record does, the join resolves every field to its declared `default=` immediately and the record moves on. That is safe and costs nothing, but it means a record that arrived one second before its configuration is enriched with defaults forever.
