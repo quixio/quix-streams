@@ -436,9 +436,10 @@ class Lookup(BaseLookup[BaseField]):
 
         :param fields: Mapping of field names to Field objects specifying how to extract and parse configuration data.
         :param on: The key used to identify the target configuration for enrichment.
-            Configuration target keys are strings, so `bytes` are decoded as UTF-8,
-            as `key_deserializer="str"` would. Any other type is matched as `str(on)`,
-            and a warning is logged the first time that happens.
+            Configuration target keys are strings, so `bytes` are decoded as UTF-8.
+            Invalid bytes are replaced rather than raised on, so such a key can only
+            match the `*` configuration. Any other type is matched as `str(on)`, and
+            a warning is logged the first time that happens.
         :param value: The message value to be updated with enriched configuration values.
         :param key: The message key.
         :param timestamp: The message timestamp, used to select the appropriate configuration version.
@@ -448,7 +449,9 @@ class Lookup(BaseLookup[BaseField]):
         """
         start = time.time()
         if isinstance(on, bytes):
-            on = on.decode("utf-8")
+            # "replace": a non-UTF-8 key cannot equal any str target key, and
+            # raising here would crash-loop on the uncommitted record.
+            on = on.decode("utf-8", errors="replace")
         elif not isinstance(on, str):
             # `join_lookup()` passes the raw message key or column value, so
             # other types reach here at runtime. They have always been matched

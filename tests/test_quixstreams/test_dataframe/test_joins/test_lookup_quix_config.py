@@ -839,6 +839,27 @@ class TestLookupJoin:
 
         assert value["user_name"] == "John Doe"
 
+    def test_join_non_utf8_bytes_on_key_falls_back_to_wildcard(self, lookup):
+        """A `bytes` key that is not valid UTF-8 does not raise."""
+        version = create_configuration_version(valid_from=1000.0)
+        config_id = lookup._config_id("user-config", "*")
+        lookup._configurations[config_id] = Configuration(versions={1: version})
+        fields = {
+            "user_name": lookup.json_field(
+                type="user-config", jsonpath="$.name", default="unknown"
+            )
+        }
+
+        with patch.object(
+            lookup,
+            "_fetch_version_content",
+            return_value=orjson.dumps({"name": "Anyone"}),
+        ):
+            value = {}
+            lookup.join(fields, b"\xff\xfe", value, b"\xff\xfe", 1500, {})
+
+        assert value["user_name"] == "Anyone"
+
     def test_join_non_str_on_key_warns_once(self, lookup, caplog):
         """
         A lookup key that is neither `str` nor `bytes` is still matched as
