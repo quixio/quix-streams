@@ -32,6 +32,9 @@ if __name__ == '__main__':
 `CSVSink` is a batching sink.  
 It batches processed records in memory per topic partition, and writes them to the file when a checkpoint is committed.  
 
+The sink preserves newlines in serialized keys and values. Record terminators follow
+the selected CSV dialect on every platform, including Windows.
+
 The output file format is the following:
 ```
 key,value,timestamp,topic,partition,offset
