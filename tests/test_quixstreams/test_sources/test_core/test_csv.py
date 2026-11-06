@@ -1,4 +1,5 @@
 import csv
+import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -14,9 +15,34 @@ class TestCSVSource:
         producer.flush.return_value = 0
         return producer
 
+    @pytest.mark.parametrize("newline", ["\r\n", "\r", "\n"])
+    @pytest.mark.parametrize("delimiter,dialect", [(",", "excel"), ("\t", "excel-tab")])
+    def test_read_preserves_quoted_newlines(
+        self, tmp_path, producer, newline, delimiter, dialect
+    ):
+        path = tmp_path / "source.csv"
+        value = f"first{newline}second"
+        path.write_bytes(
+            f'key{delimiter}field\r\n"{value}"{delimiter}"{value}"\r\n'.encode()
+        )
+        source = CSVSource(
+            path=path,
+            name="csv",
+            dialect=dialect,
+            key_extractor=lambda row: row["key"],
+        )
+        source.configure(source.default_topic(), producer)
+
+        source.start()
+
+        producer.produce.assert_called_once()
+        message = producer.produce.call_args.kwargs
+        assert message["key"] == value.encode()
+        assert json.loads(message["value"]) == {"key": value, "field": value}
+
     def test_read(self, tmp_path, producer):
         path = tmp_path / "source.csv"
-        with open(path, "w") as f:
+        with open(path, "w", newline="") as f:
             writer = csv.DictWriter(
                 f, dialect="excel", fieldnames=("key", "field", "timestamp")
             )
@@ -56,7 +82,7 @@ class TestCSVSource:
 
     def test_read_no_extractors(self, tmp_path, producer):
         path = tmp_path / "source.csv"
-        with open(path, "w") as f:
+        with open(path, "w", newline="") as f:
             writer = csv.DictWriter(
                 f, dialect="excel", fieldnames=("key", "field", "timestamp")
             )

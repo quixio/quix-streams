@@ -33,6 +33,10 @@ The CSV source expect the input file to have headers.
 
 Every row will be converted to a JSON dictionary and set to the topic.
 
+Quoted fields can contain line breaks. CR, LF, and CRLF characters inside these
+fields are preserved in the produced values and passed unchanged to key and
+timestamp extractors.
+
 Example file:
 
 ```csv
