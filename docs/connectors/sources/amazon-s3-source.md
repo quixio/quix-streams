@@ -27,6 +27,9 @@ pip install quixstreams[s3]
 contained in each file as a message to a Kafka topic. Folders are navigated in 
 lexicographical order.
 
+File discovery and partition-folder counting follow every S3 listing page, including
+prefixes with more than 1,000 files or folders.
+
 Records are read in a streaming fashion and committed after every file, offering 
 [at-least-once guarantees](#processingdelivery-guarantees).
 
