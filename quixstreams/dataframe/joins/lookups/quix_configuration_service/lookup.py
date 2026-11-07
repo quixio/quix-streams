@@ -247,8 +247,9 @@ class Lookup(BaseLookup[BaseField]):
                 )
                 if message is None:
                     continue
-                elif message.error():
-                    raise KafkaConsumerException(error=message.error())
+                error = message.error()
+                if error is not None:
+                    raise KafkaConsumerException(error=error)
 
                 value = message.value()
                 if value is None:
