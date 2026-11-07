@@ -1,6 +1,6 @@
 import logging
 from time import monotonic, sleep
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
 from confluent_kafka import KafkaError, KafkaException, Message, TopicPartition
 from confluent_kafka.admin import GroupMetadata
@@ -308,6 +308,9 @@ class InternalProducer:
             return
 
         topic, partition, offset = msg.topic(), msg.partition(), msg.offset()
+        topic = cast(str, topic)
+        partition = cast(int, partition)
+        offset = cast(int, offset)
         self._tp_offsets[(topic, partition)] = offset
         # Successful delivery confirms broker is reachable
         self._producer._broker_available()  # noqa: SLF001

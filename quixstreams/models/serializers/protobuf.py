@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, Mapping, Optional, Type, Union
+from typing import Any, Dict, Iterable, Mapping, Optional, Type, Union, cast
 
 from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.protobuf import (
@@ -83,7 +83,7 @@ class ProtobufSerializer(Serializer):
         else:
             try:
                 msg = ParseDict(
-                    value,
+                    cast(Dict[str, Any], value),
                     self._msg_type(),
                     ignore_unknown_fields=self._ignore_unknown_fields,
                 )

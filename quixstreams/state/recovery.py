@@ -1,7 +1,7 @@
 import inspect
 import logging
 import time
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, cast
 
 from confluent_kafka import OFFSET_BEGINNING
 from confluent_kafka import TopicPartition as ConfluentPartition
@@ -811,7 +811,7 @@ class RecoveryManager:
             # stateless partition assigned mid-recovery must wait for recovery
             # like every other data partition.
             self._pause_for_recovery(
-                [ConfluentPartition(topic=topic, partition=partition)]
+                [ConfluentPartition(topic=cast(str, topic), partition=partition)]
             )
             self.pause_assigned_data_partitions(current_assignment)
             # The running loop is already past `do_recovery`'s seek+resume
