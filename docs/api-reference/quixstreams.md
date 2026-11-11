@@ -5042,6 +5042,11 @@ Features:
 
   lookup = Lookup(topic, app_config=app.config)
   sdf = sdf.join_lookup(lookup, fields)
+  
+
+**Raises**:
+
+- `RuntimeError` - if the configuration consumer fails before the topic is fully read.
 
 <a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Lookup.json_field"></a>
 
@@ -5054,7 +5059,7 @@ def json_field(jsonpath: str,
                default: Any = RAISE_ON_MISSING) -> JSONField
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L137)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L142)
 
 Create a JSON field for extracting values from configuration content using JSONPath.
 
@@ -5077,7 +5082,7 @@ A JSONField instance.
 def bytes_field(type: str, default: Any = RAISE_ON_MISSING) -> BytesField
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L161)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L166)
 
 Create a bytes field for extracting binary content from configuration.
 
@@ -5098,7 +5103,7 @@ A BytesField instance.
 def cache_info() -> CacheInfo
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L395)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L410)
 
 Get information about the cache.
 
@@ -5114,11 +5119,12 @@ dict[str, int]: A dictionary containing cache information.
 #### Lookup.join
 
 ```python
-def join(fields: Mapping[str, BaseField], on: str, value: dict[str, Any],
-         key: Any, timestamp: int, headers: HeadersMapping) -> None
+def join(fields: Mapping[str, BaseField], on: Union[str, bytes],
+         value: dict[str, Any], key: Any, timestamp: int,
+         headers: HeadersMapping) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L407)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L422)
 
 Enrich the message with configuration data from the Quix Configuration Service.
 
@@ -5129,6 +5135,10 @@ If a configuration version is not found or content retrieval fails, the correspo
 
 - `fields`: Mapping of field names to Field objects specifying how to extract and parse configuration data.
 - `on`: The key used to identify the target configuration for enrichment.
+Configuration target keys are strings, so `bytes` are decoded as UTF-8.
+Invalid bytes are replaced rather than raised on, so such a key can only
+match the `*` configuration. Any other type is matched as `str(on)`, and
+a warning is logged the first time that happens.
 - `value`: The message value to be updated with enriched configuration values.
 - `key`: The message key.
 - `timestamp`: The message timestamp, used to select the appropriate configuration version.
@@ -5173,7 +5183,7 @@ def remove(version: Optional[ConfigurationVersion],
            fields: dict[str, BaseField]) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L62)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L63)
 
 Remove the cached data for the given version and fields, if present.
 
@@ -5190,7 +5200,7 @@ Remove the cached data for the given version and fields, if present.
 def info() -> CacheInfo
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L76)
 
 Get cache statistics.
 
@@ -6453,9 +6463,15 @@ or a ConnectionConfig object if authentication is required.
 will be passed to `confluent_kafka.Producer` as is.
 Note: values passed as arguments override values in `extra_config`.
 - `on_error`: a callback triggered when `InternalProducer.produce_row()`
-or `InternalProducer.poll()` fail`.
+or `InternalProducer.poll()` fail`, and when the broker reports a delivery
+failure for a message produced via `InternalProducer.produce_row()`
+(the callback then receives the `Row` of the failed message).
 If producer fails and the callback returns `True`, the exception
 will be logged but not propagated.
+Delivery failures of messages produced via `InternalProducer.produce()`
+(e.g. changelog messages) and of repartition and changelog topics
+never reach the callback and are raised on the next `produce()` or
+`flush()` call.
 The default callback logs an exception and returns `False`.
 - `flush_timeout`: The time the producer is waiting for all messages to be delivered.
 - `transactional`: whether to use Kafka transactions or not.
@@ -6473,13 +6489,23 @@ def produce_row(row: Row,
                 timestamp: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L108)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L114)
 
 Serialize Row to bytes according to the Topic serialization settings
 
 and produce it to Kafka
 
 If this method fails, it will trigger the provided "on_error" callback.
+
+A delivery error reported by the broker for this message after
+it was enqueued also triggers the "on_error" callback with this Row,
+unless the topic is a changelog or repartition topic.
+If the callback returns `True`, the error is dropped; otherwise it is
+raised on the next `produce()` or `flush()` call.
+
+An error latched by an earlier message (for example a changelog
+message) is raised here directly and is never passed to the callback,
+because the current Row is not the one that failed.
 
 **Arguments**:
 
@@ -6497,7 +6523,7 @@ If this method fails, it will trigger the provided "on_error" callback.
 def poll(timeout: float = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L148)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L175)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -6515,7 +6541,7 @@ If `poll()` fails, it will trigger the provided "on_error" callback
 def raise_if_broker_unavailable(timeout: float)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L168)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L195)
 
 Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
 
@@ -6527,7 +6553,7 @@ Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
 def purge()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L246)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L326)
 
 Purge all messages currently queued or in-flight in the producer.
 
@@ -6553,7 +6579,7 @@ still surfaces on the next checkpoint.
 def instantiated() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L273)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L353)
 
 Whether the underlying librdkafka producer has been created (it is
 created lazily on first use). ``False`` means nothing was ever
@@ -6567,7 +6593,7 @@ produced, so teardown flushes can be skipped entirely.
 def abort_transaction(timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L369)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L449)
 
 Attempt an abort if an active transaction.
 
@@ -7169,7 +7195,7 @@ between `Application` and `StreamingDataFrame` instances.
 def store_offset(topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L59)
 
 Store the offset of the processed message to the checkpoint.
 
@@ -7179,6 +7205,33 @@ Store the offset of the processed message to the checkpoint.
 - `partition`: partition number
 - `offset`: message offset
 
+<a id="quixstreams.processing.context.ProcessingContext.store_offset_reset"></a>
+
+#### ProcessingContext.store\_offset\_reset
+
+```python
+def store_offset_reset(topic: str, partition: int, offset: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L69)
+
+Record a recovery seek's next offset for a successful checkpoint.
+
+This does not count as processing a message or establish a rewind offset.
+The reset remains pending until state recovery and checkpointing finish.
+
+<a id="quixstreams.processing.context.ProcessingContext.discard_offset_reset"></a>
+
+#### ProcessingContext.discard\_offset\_reset
+
+```python
+def discard_offset_reset(topic: str, partition: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L77)
+
+Forget a pending reset when its partition is revoked or lost.
+
 <a id="quixstreams.processing.context.ProcessingContext.init_checkpoint"></a>
 
 #### ProcessingContext.init\_checkpoint
@@ -7187,7 +7240,7 @@ Store the offset of the processed message to the checkpoint.
 def init_checkpoint()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L81)
 
 Initialize a new checkpoint
 
@@ -7199,7 +7252,7 @@ Initialize a new checkpoint
 def commit_checkpoint(force: bool = False, revoking: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L98)
 
 Attempts finalizing the current Checkpoint only if the Checkpoint is "expired",
 
@@ -8008,6 +8061,9 @@ A base CSV sink that writes data from all assigned partitions to a single file.
 
 It's best to be used for local debugging.
 
+Newlines in serialized fields and the dialect's record terminator are
+written without platform newline translation.
+
 Column format:
     (key, value, timestamp, topic, partition, offset)
 
@@ -8471,7 +8527,7 @@ Serializes a `SinkBatch` into bytes in Parquet format.
 
 Each item in the batch is converted into a dictionary with "_timestamp",
 "_key", and the keys from the message value. If the message key is in
-bytes, it is decoded to a string.
+bytes, it is decoded to a string. Other keys are converted to strings.
 
 Missing fields in messages are filled with `None` to ensure all rows
 have the same columns.
@@ -8602,7 +8658,7 @@ Serializes a `SinkBatch` into bytes in JSON Lines format.
 
 Each item in the batch is converted into a JSON object with
 "_timestamp", "_key", and "_value" fields. If the message key is
-in bytes, it is decoded to a string.
+in bytes, it is decoded to a string. Other keys are converted to strings.
 
 **Arguments**:
 
@@ -14897,7 +14953,7 @@ their timestamps and grace periods, then calls the parent class's
 class TimestampedStorePartition(RocksDBStorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L280)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L282)
 
 Represents a single partition within a `TimestampedStore`.
 
@@ -14915,7 +14971,7 @@ opt out of the always-on per-write TTL stamp.
 class TimestampedStore(RocksDBStore)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L324)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L326)
 
 A RocksDB-backed state store implementation that manages key-value pairs
 associated with timestamps.
@@ -19957,7 +20013,13 @@ to poll Kafka or cannot deserialize a message.
 - `on_processing_error`: triggered when exception is raised within
 `StreamingDataFrame.process()`.
 - `on_producer_error`: triggered when `InternalProducer` fails to serialize
-or to produce a message to Kafka.
+or to produce a message to Kafka, or when Kafka reports a delivery error
+    for a message produced from a `StreamingDataFrame` (the callback
+    receives the `Row` of the failed message).
+    Delivery errors for changelog and repartition topics are never
+    passed to the callback. While a `Row` is being processed they are
+    still raised through `on_processing_error`, which may suppress
+    them.
 <br><br>***Quix Cloud Parameters***<br>
 - `quix_config_builder`: instance of `QuixKafkaConfigsBuilder` to be used
 instead of the default one.
@@ -19972,7 +20034,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L471)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L477)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -19993,7 +20055,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L503)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L509)
 
 Create a topic definition.
 
@@ -20065,7 +20127,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L583)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L589)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -20113,7 +20175,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L639)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L645)
 
 Stop the internal poll loop and the message processing.
 
@@ -20136,7 +20198,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer(transactional: bool = False) -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L705)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L711)
 
 Create and return a pre-configured Producer instance.
 
@@ -20175,7 +20237,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L773)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L779)
 
 Create and return a pre-configured Consumer instance.
 
@@ -20226,7 +20288,7 @@ Default - True
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L822)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L828)
 
 Clear the state of the application.
 
@@ -20238,7 +20300,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L828)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L834)
 
 Add a source to the application.
 
@@ -20265,7 +20327,7 @@ def run(dataframe: Optional[StreamingDataFrame] = None,
         metadata: bool = False) -> list[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L862)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L868)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -20337,7 +20399,7 @@ Default - `False`.
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1386)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1406)
 
 Immutable object holding the application configuration
 
@@ -20358,7 +20420,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1424)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1444)
 
 Included to ignore reading/setting values from the environment
 
@@ -20370,7 +20432,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1437)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1457)
 
 Update the application config and return a copy
 
@@ -20383,7 +20445,7 @@ def resolve_transactional_id(transactional_id: Optional[str],
                              prefix: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1463)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1483)
 
 Utility function to resolve the transactional.id based
 on existing config and provided prefix.
@@ -20792,6 +20854,8 @@ def __init__(path: Union[str, Path],
 A base CSV source that reads data from a CSV file and produces rows
 
 to the Kafka topic in JSON format.
+
+Quoted fields preserve embedded CR, LF, and CRLF characters.
 
 **Arguments**:
 
@@ -22974,7 +23038,7 @@ def get_store_transaction(
         store_name: str = DEFAULT_STATE_STORE_NAME) -> PartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L188)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L197)
 
 Get a PartitionTransaction for the given store, topic and partition.
 
@@ -22998,7 +23062,7 @@ instance of `PartitionTransaction`
 def close(*, revoking: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L213)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L222)
 
 Perform cleanup (when the checkpoint is empty) instead of committing.
 
@@ -23023,7 +23087,7 @@ enough to ride out a transient coordinator blip. See
 def commit(*, revoking: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L242)
 
 Commit the checkpoint.
 
@@ -23239,7 +23303,7 @@ def poll_row(timeout: Optional[float] = None,
              buffered: bool = False) -> Union[Row, list[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L198)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L225)
 
 Consumes a single message and deserialize it to Row or a list of Rows.
 
@@ -23269,7 +23333,7 @@ def trigger_backpressure(offsets_to_seek: dict[tuple[str, int], int],
                          resume_after: float)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L248)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L275)
 
 Pause all partitions for the certain period of time and seek the partitions
 provided in the `offsets_to_seek` dict.
@@ -23284,7 +23348,7 @@ This method is supposed to be called in case of backpressure from Sinks.
 def resume_backpressured()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L294)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L324)
 
 Resume consuming from assigned data partitions after the wait period has elapsed.
 
@@ -23660,7 +23724,7 @@ Only previously paused partitions are resumed.
 class InternalConsumerBuffer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L316)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L320)
 
 <a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.__init__"></a>
 
@@ -23670,7 +23734,7 @@ class InternalConsumerBuffer()
 def __init__(max_partition_buffer_size: int = 10000)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L317)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L321)
 
 A buffer to align messages across different topics by timestamps and consume them
 
@@ -23710,7 +23774,7 @@ to let other partitions to be consumed too.
 def assign_partitions(topic_partitions: list[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L349)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L353)
 
 Assign new partitions to the buffer.
 
@@ -23726,7 +23790,7 @@ Assign new partitions to the buffer.
 def revoke_partitions(topic_partitions: list[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L367)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L371)
 
 Drop the partitions from the buffer.
 
@@ -23744,7 +23808,7 @@ def feed(messages: Iterable[SuccessfulConfluentKafkaMessageProto],
          positions: Optional[dict[tuple[str, int], int]] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L378)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L382)
 
 Feed new batch of messages to the buffer.
 
@@ -23762,7 +23826,7 @@ Feed new batch of messages to the buffer.
 def pop() -> Optional[SuccessfulConfluentKafkaMessageProto]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L410)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L414)
 
 Pop the next message from the buffer in the timestamp order.
 
@@ -23778,7 +23842,7 @@ Pop the next message from the buffer in the timestamp order.
 def pause_full() -> list[tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L423)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L427)
 
 Pause the full partition buffers and return them as a list.
 
@@ -23790,7 +23854,7 @@ Pause the full partition buffers and return them as a list.
 def resume_empty() -> list[tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L432)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L436)
 
 Resume the empty partition buffers and return them as a list.
 
@@ -23802,9 +23866,21 @@ Resume the empty partition buffers and return them as a list.
 def clear(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L441)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L445)
 
 Clear the buffer for the given topic partition and keep it assigned.
+
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.resume_partition"></a>
+
+#### InternalConsumerBuffer.resume\_partition
+
+```python
+def resume_partition(topic: str, partition: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L453)
+
+Clear the buffer's paused flag after its Kafka partition is resumed.
 
 <a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.close"></a>
 
@@ -23814,7 +23890,7 @@ Clear the buffer for the given topic partition and keep it assigned.
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L449)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L459)
 
 Drop all partition buffers.
 
