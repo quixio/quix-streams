@@ -135,18 +135,19 @@ class S3FileSource(FileSource):
                 raise
 
     def get_file_list(self, filepath: Union[str, Path]) -> Iterable[Path]:
-        resp = self._client.list_objects(
+        pages = self._client.get_paginator("list_objects").paginate(
             Bucket=self._bucket,
             Prefix=str(filepath),
             Delimiter="/",
         )
-        for folder in resp.get("CommonPrefixes", []):
-            yield from self.get_file_list(folder["Prefix"])
+        for resp in pages:
+            for folder in resp.get("CommonPrefixes", []):
+                yield from self.get_file_list(folder["Prefix"])
 
-        for file in resp.get("Contents", []):
-            # Skip folder-like objects (0-byte objects that represent S3 folder prefixes)
-            if file["Size"] > 0:
-                yield Path(file["Key"])
+            for file in resp.get("Contents", []):
+                # Skip folder-like objects (0-byte objects that represent S3 folder prefixes)
+                if file["Size"] > 0:
+                    yield Path(file["Key"])
 
     def read_file(self, filepath: Path) -> BytesIO:
         data = self._client.get_object(Bucket=self._bucket, Key=str(filepath))[
@@ -156,11 +157,13 @@ class S3FileSource(FileSource):
 
     def file_partition_counter(self) -> int:
         self._init_client()  # allows connection callbacks to trigger off this
-        resp = self._client.list_objects(
-            Bucket=self._bucket, Prefix=f"{self._filepath}/", Delimiter="/"
-        )
-        self._close_client()  # close due to multiprocessing pickling limitations
-        return len(resp["CommonPrefixes"])
+        try:
+            pages = self._client.get_paginator("list_objects").paginate(
+                Bucket=self._bucket, Prefix=f"{self._filepath}/", Delimiter="/"
+            )
+            return sum(len(resp.get("CommonPrefixes", [])) for resp in pages)
+        finally:
+            self._close_client()  # close due to multiprocessing pickling limitations
 
     def stop(self):
         self._close_client()

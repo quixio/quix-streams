@@ -11,3 +11,5 @@ psycopg2-binary>=2.9.5,<3
 paho-mqtt>=2.1.0,<3
 pymysql>=1.0,<2
 mysql-replication>=1.0.17,<1.0.18
+boto3>=1.35.65,<2.0
+mypy-boto3-s3>=1.35.65,<2.0
