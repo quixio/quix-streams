@@ -84,8 +84,9 @@ def _wrap_assignment_errors(func):
 def raise_for_msg_error(
     msg: RawConfluentKafkaMessageProto,
 ) -> SuccessfulConfluentKafkaMessageProto:
-    if msg.error():
-        raise KafkaConsumerException(error=msg.error())
+    error = msg.error()
+    if error is not None:
+        raise KafkaConsumerException(error=error)
     return cast(SuccessfulConfluentKafkaMessageProto, msg)
 
 
@@ -304,7 +305,10 @@ class BaseConsumer:
         :rtype: Optional[Message]
         :raises RuntimeError: if called on a closed consumer
         """
-        return self._consumer.poll(timeout=timeout if timeout is not None else -1)
+        return cast(
+            Optional[RawConfluentKafkaMessageProto],
+            self._consumer.poll(timeout=timeout if timeout is not None else -1),
+        )
 
     def _subscribe(
         self,
@@ -331,7 +335,9 @@ class BaseConsumer:
         """
 
         @_wrap_assignment_errors
-        def _on_assign_wrapper(consumer: Consumer, partitions: List[TopicPartition]):
+        def _on_assign_wrapper(
+            consumer: ConfluentConsumer, partitions: List[TopicPartition]
+        ):
             for partition in partitions:
                 logger.debug(
                     'Assigning topic partition "%s[%s]"',
@@ -349,7 +355,9 @@ class BaseConsumer:
                 on_assign(consumer, partitions)
 
         @_wrap_assignment_errors
-        def _on_revoke_wrapper(consumer: Consumer, partitions: List[TopicPartition]):
+        def _on_revoke_wrapper(
+            consumer: ConfluentConsumer, partitions: List[TopicPartition]
+        ):
             for partition in partitions:
                 logger.debug(
                     'Revoking topic partition "%s[%s]"',
@@ -367,7 +375,9 @@ class BaseConsumer:
                 on_revoke(consumer, partitions)
 
         @_wrap_assignment_errors
-        def _on_lost_wrapper(consumer: Consumer, partitions: List[TopicPartition]):
+        def _on_lost_wrapper(
+            consumer: ConfluentConsumer, partitions: List[TopicPartition]
+        ):
             for partition in partitions:
                 logger.debug(
                     'Losing topic partition: topic="%s" partition="%s"',
@@ -734,8 +744,12 @@ class BaseConsumer:
         :param timeout: The maximum time in seconds to block waiting for message, event or callback.
             Default: `None` (infinite).
         """
-        return self._consumer.consume(
-            num_messages=num_messages, timeout=timeout if timeout is not None else -1
+        return cast(
+            List[RawConfluentKafkaMessageProto],
+            self._consumer.consume(
+                num_messages=num_messages,
+                timeout=timeout if timeout is not None else -1,
+            ),
         )
 
     @property

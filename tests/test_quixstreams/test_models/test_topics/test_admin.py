@@ -102,3 +102,60 @@ class TestTopicAdmin:
 
         with pytest.raises(CreateTopicFailure, match="Unknown topic config name"):
             topic_admin.create_topics([invalid_topic])
+
+    def test_create_topics_maps_none_partitions_to_broker_default(self, topic_admin):
+        """
+        TopicConfig allows Optional partitions/replication. NewTopic rejects None and
+        treats -1 as "use the broker default", which matches NewTopic(topic=name) when
+        create_config is omitted. Pin that mapping so a None create_config field does
+        not TypeError at the C bindings.
+        """
+        import quixstreams.models.topics.admin as admin_mod
+
+        captured = []
+        real_new_topic = admin_mod.NewTopic
+
+        def recording_new_topic(*args, **kwargs):
+            nt = real_new_topic(*args, **kwargs)
+            captured.append(nt)
+            return nt
+
+        topic = Topic(
+            name=str(uuid4()),
+            create_config=TopicConfig(
+                num_partitions=None,
+                replication_factor=None,
+                extra_config={},
+            ),
+        )
+
+        with (
+            patch.object(topic_admin, "list_topics", return_value={}),
+            patch.object(admin_mod, "NewTopic", side_effect=recording_new_topic),
+            # Skip waiting on broker finalization; we only assert the NewTopic values.
+            patch.object(topic_admin, "_finalize_create"),
+        ):
+            topic_admin.create_topics([topic])
+
+        assert len(captured) == 1
+        assert captured[0].num_partitions == -1
+        assert captured[0].replication_factor == -1
+
+    def test_create_topics_none_partitions_uses_broker_default(
+        self, topic_admin, kafka_container
+    ):
+        """
+        Against a real broker, creating with None partitions/replication must succeed
+        and land on the broker's default partition count (not raise TypeError).
+        """
+        topic = Topic(
+            name=str(uuid4()),
+            create_config=TopicConfig(
+                num_partitions=None,
+                replication_factor=None,
+                extra_config={},
+            ),
+        )
+        topic_admin.create_topics([topic])
+        meta = topic_admin.list_topics()[topic.name]
+        assert len(meta.partitions) >= 1

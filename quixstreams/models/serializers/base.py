@@ -1,5 +1,5 @@
 import abc
-from typing import Any, Union
+from typing import Any, Union, cast
 
 from confluent_kafka.serialization import (
     MessageField,
@@ -33,12 +33,12 @@ class SerializationContext(_SerializationContext):
     def __init__(
         self,
         topic: str,
-        field: str,
+        field: MessageField,
         headers: Union[KafkaHeaders, Headers] = None,
     ) -> None:
         self.topic = topic
         self.field = field
-        self.headers = headers
+        self.headers = cast(Any, headers)
 
 
 class Deserializer(abc.ABC):

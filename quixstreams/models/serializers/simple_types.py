@@ -1,5 +1,5 @@
 import functools
-from typing import Mapping, Union
+from typing import Mapping, Union, cast
 
 from confluent_kafka.serialization import (
     DoubleDeserializer as _DoubleDeserializer,
@@ -87,7 +87,7 @@ class StringDeserializer(Deserializer):
     def __call__(
         self, value: bytes, ctx: SerializationContext
     ) -> Union[str, Mapping[str, str]]:
-        return self._deserializer(value=value)
+        return cast(Union[str, Mapping[str, str]], self._deserializer(value=value))
 
 
 class IntegerDeserializer(Deserializer):
@@ -136,7 +136,7 @@ class StringSerializer(Serializer):
 
     @_wrap_serialization_error
     def __call__(self, value: str, ctx: SerializationContext) -> bytes:
-        return self._serializer(obj=value)
+        return cast(bytes, self._serializer(obj=value))
 
 
 class IntegerSerializer(Serializer):

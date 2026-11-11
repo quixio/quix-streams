@@ -425,9 +425,9 @@ class Checkpoint(BaseCheckpoint):
             except KafkaException as e:
                 raise CheckpointConsumerCommitError(e.args[0]) from None
 
-            for partition in partitions or []:
-                if partition.error:
-                    raise CheckpointConsumerCommitError(partition.error)
+            for committed in partitions or []:
+                if committed.error:
+                    raise CheckpointConsumerCommitError(committed.error)
 
         # Step 5. Flush state store partitions to the disk together with changelog
         # offsets.

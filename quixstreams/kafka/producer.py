@@ -3,7 +3,7 @@ import json
 import logging
 import time
 import uuid
-from typing import Callable, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from confluent_kafka import (
     KafkaError,
@@ -182,7 +182,7 @@ class Producer:
 
         """
 
-        kwargs = {
+        kwargs: Dict[str, Any] = {
             "partition": partition,
             "timestamp": timestamp,
             "headers": headers,
