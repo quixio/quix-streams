@@ -68,7 +68,7 @@ class JSONFormat(Format):
 
         Each item in the batch is converted into a JSON object with
         "_timestamp", "_key", and "_value" fields. If the message key is
-        in bytes, it is decoded to a string.
+        in bytes, it is decoded to a string. Other keys are converted to strings.
 
         :param batch: The `SinkBatch` to serialize.
         :return: The serialized batch in JSON Lines format, optionally
@@ -82,7 +82,7 @@ class JSONFormat(Format):
                         "_timestamp": item.timestamp,
                         "_key": item.key.decode()
                         if isinstance(item.key, bytes)
-                        else str(item),
+                        else str(item.key),
                         "_value": item.value,
                     }
                     for item in batch

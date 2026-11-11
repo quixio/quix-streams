@@ -74,7 +74,7 @@ class ParquetFormat(Format):
 
         Each item in the batch is converted into a dictionary with "_timestamp",
         "_key", and the keys from the message value. If the message key is in
-        bytes, it is decoded to a string.
+        bytes, it is decoded to a string. Other keys are converted to strings.
 
         Missing fields in messages are filled with `None` to ensure all rows
         have the same columns.
@@ -93,7 +93,9 @@ class ParquetFormat(Format):
         normalized_messages = [
             {
                 "_timestamp": item.timestamp,
-                "_key": item.key.decode() if isinstance(item.key, bytes) else str(item),
+                "_key": item.key.decode()
+                if isinstance(item.key, bytes)
+                else str(item.key),
                 **{column: item.value.get(column, None) for column in columns},
             }
             for item in batch
