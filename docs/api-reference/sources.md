@@ -663,6 +663,8 @@ A base CSV source that reads data from a CSV file and produces rows
 
 to the Kafka topic in JSON format.
 
+Quoted fields preserve embedded CR, LF, and CRLF characters.
+
 
 <br>
 ***Arguments:***
