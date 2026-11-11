@@ -479,7 +479,7 @@ class BaseConsumer:
             kwargs["offsets"] = offsets
         if message is not None:
             kwargs["message"] = message
-        return cast(Optional[List[TopicPartition]], self._consumer.commit(**kwargs))
+        return self._consumer.commit(**kwargs)
 
     def committed(
         self, partitions: List[TopicPartition], timeout: Optional[float] = None

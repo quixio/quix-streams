@@ -182,23 +182,22 @@ class Producer:
 
         """
 
+        kwargs: Dict[str, Any] = {
+            "partition": partition,
+            "timestamp": timestamp,
+            "headers": headers,
+            "on_delivery": on_delivery,
+        }
+
         # confluent_kafka doesn't like None for optional parameters
-        produce_kwargs: Dict[str, Any] = {}
-        if partition is not None:
-            produce_kwargs["partition"] = partition
-        if timestamp is not None:
-            produce_kwargs["timestamp"] = timestamp
-        if headers is not None:
-            produce_kwargs["headers"] = headers
-        if on_delivery is not None:
-            produce_kwargs["on_delivery"] = on_delivery
+        kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
         # Retry BufferError automatically 3 times before failing
         tried = 0
         while True:
             try:
                 tried += 1
-                self._producer.produce(topic, value, key, **produce_kwargs)
+                self._producer.produce(topic, value, key, **kwargs)
                 # Serve delivery callbacks after each produce to minimize a chance of
                 # BufferError
                 self._producer.poll(0)
