@@ -18,6 +18,9 @@ class CSVSink(BatchingSink):
         A base CSV sink that writes data from all assigned partitions to a single file.
         It's best to be used for local debugging.
 
+        Newlines in serialized fields and the dialect's record terminator are
+        written without platform newline translation.
+
         Column format:
             (key, value, timestamp, topic, partition, offset)
 
@@ -49,7 +52,7 @@ class CSVSink(BatchingSink):
             "partition",
             "offset",
         )
-        with open(self.path, "a") as f:
+        with open(self.path, "a", newline="") as f:
             writer = csv.DictWriter(f, dialect=self.dialect, fieldnames=fieldnames)
             if is_new:
                 writer.writeheader()

@@ -25,6 +25,8 @@ class CSVSource(Source):
         A base CSV source that reads data from a CSV file and produces rows
         to the Kafka topic in JSON format.
 
+        Quoted fields preserve embedded CR, LF, and CRLF characters.
+
         :param path: a path to the CSV file.
         :param name: a unique name for the Source.
             It is used as a part of the default topic name.
@@ -57,7 +59,7 @@ class CSVSource(Source):
 
     def run(self):
         # Start reading the file
-        with open(self.path, "r") as f:
+        with open(self.path, "r", newline="") as f:
             logger.info(f'Producing data from the file "{self.path}"')
             reader = csv.DictReader(f, dialect=self.dialect)
 
