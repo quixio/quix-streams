@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
+from concurrent.futures import ThreadPoolExecutor, wait
 from os import getenv
 from typing import Any, Callable, Optional
 
@@ -132,7 +132,7 @@ class KinesisSink(BaseSink):
 
     def flush(self) -> None:
         """
-        Flush all records bufferred so far.
+        Flush all records buffered so far.
 
         This method sends any outstanding records that have not yet been sent
         because the batch size was less than 500. It waits for all futures to
@@ -140,14 +140,21 @@ class KinesisSink(BaseSink):
         stream.
         """
         # Submit any remaining records
-        for tp, records in self._records.items():
-            self._submit(tp, records)
+        for tp in list(self._records):
+            self._submit(tp, self._records.pop(tp))
 
-        # Wait for all futures to complete
-        for futures in self._futures.values():
-            done, not_done = wait(futures, return_when=FIRST_EXCEPTION)
-            if not_done or any(f.exception() for f in done):
-                raise SinkBackpressureError(retry_after=5.0)
+        futures = [future for batch in self._futures.values() for future in batch]
+        self._futures.clear()
+        if not futures:
+            return
+
+        # Settle the entire checkpoint before allowing its records to be replayed.
+        done, _ = wait(futures)
+        if any(
+            future.exception() or future.result()["FailedRecordCount"] > 0
+            for future in done
+        ):
+            raise SinkBackpressureError(retry_after=5.0)
 
     def _submit(
         self, topic_partition: tuple[str, int], records: list[dict[str, str]]
