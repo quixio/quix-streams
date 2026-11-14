@@ -32,6 +32,7 @@ __all__ = (
 MIN_ELIGIBLE_TIMESTAMPS_CF_NAME = "__min-eligible-timestamps__"
 MIN_ELIGIBLE_TIMESTAMPS_KEY = b"__min_eligible_timestamps__"
 ZERO = int_to_bytes(0)
+_TIMESTAMPED_KEY_SUFFIX_SIZE = len(SEPARATOR) + len(encode_integer_pair(0, 0))
 
 
 class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
@@ -130,7 +131,7 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
             backwards=True,
         )
         for stored_key, stored_value in stored:
-            if stored_key in deletes:
+            if not self._is_key_for_prefix(stored_key, prefix) or stored_key in deletes:
                 continue
 
             if value is None or (cached_key and cached_key < stored_key):
@@ -225,11 +226,18 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
                 lower_bound=lower_bound, upper_bound=key
             )
             for stored_key, _ in stored:
-                keys_to_delete.append((stored_key, prefix))
+                if self._is_key_for_prefix(stored_key, prefix):
+                    keys_to_delete.append((stored_key, prefix))
 
         # Mark the expired keys as deleted in the update cache
         for key, prefix in keys_to_delete:
             self._update_cache.delete(key, prefix)
+
+    def _is_key_for_prefix(self, key: bytes, prefix: bytes) -> bool:
+        # Stored timestamped keys end with an encoded timestamp/counter pair.
+        # A sibling containing SEPARATOR can fall inside the byte range, but
+        # cannot have this prefix's exact fixed-width key length.
+        return len(key) == len(prefix) + _TIMESTAMPED_KEY_SUFFIX_SIZE
 
     def _ensure_bytes(self, prefix: Any) -> bytes:
         if isinstance(prefix, bytes):
