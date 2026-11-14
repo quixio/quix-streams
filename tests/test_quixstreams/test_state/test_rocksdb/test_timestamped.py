@@ -323,3 +323,35 @@ class TestTimestampedPartitionTransaction:
             assert read == ["5", "5", "6"]
             assert deleted == len(read)
             assert tx.get_interval(start=0, end=100, prefix=b"key") == ["7", "8"]
+
+
+@pytest.mark.parametrize("keep_duplicates", [False, True])
+def test_separator_prefix_reads_and_deletes_are_isolated(transaction, keep_duplicates):
+    with transaction(grace_ms=2**63 - 1, keep_duplicates=keep_duplicates) as tx:
+        tx.set_for_timestamp(timestamp=10, value="own", prefix=b"tenant")
+        tx.set_for_timestamp(timestamp=20, value="sibling", prefix=b"tenant|device")
+    with transaction(grace_ms=2**63 - 1, keep_duplicates=keep_duplicates) as tx:
+        assert tx.get_interval(0, 2**63 - 1, b"tenant") == ["own"]
+        assert tx.get_latest(2**63 - 2, b"tenant") == "own"
+        assert tx.delete_interval(0, 2**63 - 1, b"tenant") == 1
+    with transaction(grace_ms=2**63 - 1, keep_duplicates=keep_duplicates) as tx:
+        assert tx.get_interval(0, 2**63 - 1, b"tenant") == []
+        assert tx.get_interval(0, 2**63 - 1, b"tenant|device") == ["sibling"]
+
+
+@pytest.mark.parametrize("operation", ["latest", "delete", "limit", "expiry"])
+def test_separator_prefix_stored_operations(transaction, operation):
+    with transaction(grace_ms=2**63 - 1) as tx:
+        tx.set_for_timestamp(timestamp=10, value="own", prefix=b"tenant")
+        tx.set_for_timestamp(timestamp=20, value="sibling", prefix=b"tenant|device")
+    with transaction(grace_ms=1 if operation == "expiry" else 2**63 - 1) as tx:
+        if operation == "latest":
+            assert tx.get_latest(2**63 - 2, b"tenant") == "own"
+        elif operation == "delete":
+            assert tx.delete_interval(0, 2**63 - 1, b"tenant") == 1
+        elif operation == "limit":
+            assert tx.get_interval(2**62, 2**63 - 1, b"tenant", limit=1) == []
+        else:
+            tx.set_for_timestamp(timestamp=2**63 - 2, value="new", prefix=b"tenant")
+    with transaction(grace_ms=2**63 - 1) as tx:
+        assert tx.get_interval(0, 2**63 - 1, b"tenant|device") == ["sibling"]
