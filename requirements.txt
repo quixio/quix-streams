@@ -7,5 +7,5 @@ pydantic-settings>=2.3,<2.16
 jsonschema>=4.3.0
 jsonlines>=4,<5
 rich>=13,<16
-jsonpath_ng>=1.7.0,<2
+jsonpath_ng>=1.11.0,<2
 httpx>=0.28.1
