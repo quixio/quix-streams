@@ -474,6 +474,9 @@ A base CSV sink that writes data from all assigned partitions to a single file.
 
 It's best to be used for local debugging.
 
+Newlines in serialized fields and the dialect's record terminator are
+written without platform newline translation.
+
 Column format:
     (key, value, timestamp, topic, partition, offset)
 
@@ -1468,7 +1471,7 @@ Serializes a `SinkBatch` into bytes in JSON Lines format.
 
 Each item in the batch is converted into a JSON object with
 "_timestamp", "_key", and "_value" fields. If the message key is
-in bytes, it is decoded to a string.
+in bytes, it is decoded to a string. Other keys are converted to strings.
 
 
 <br>
@@ -1567,7 +1570,7 @@ Serializes a `SinkBatch` into bytes in Parquet format.
 
 Each item in the batch is converted into a dictionary with "_timestamp",
 "_key", and the keys from the message value. If the message key is in
-bytes, it is decoded to a string.
+bytes, it is decoded to a string. Other keys are converted to strings.
 
 Missing fields in messages are filled with `None` to ensure all rows
 have the same columns.
