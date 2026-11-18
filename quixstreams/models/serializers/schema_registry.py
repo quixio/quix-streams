@@ -15,8 +15,10 @@ __all__ = [
     "SchemaRegistrySerializationConfig",
 ]
 
-SubjectNameStrategy = Callable[[SerializationContext, str], str]
-ReferenceSubjectNameStrategy = Callable[[SerializationContext, SchemaReference], str]
+SubjectNameStrategy = Callable[[SerializationContext, str], Optional[str]]
+ReferenceSubjectNameStrategy = Callable[
+    [SerializationContext, SchemaReference], Optional[str]
+]
 
 
 class SchemaRegistryClientConfig(BaseSettings):

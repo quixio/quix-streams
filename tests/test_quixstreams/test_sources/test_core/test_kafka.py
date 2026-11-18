@@ -408,3 +408,43 @@ class TestQuixEnvironmentSource(Base):
         app.run()
 
         assert results == data
+
+
+class TestKafkaReplicatorSourceAssignOffset:
+    def test_on_assign_uses_offset_invalid_when_target_has_no_partition(self):
+        """
+        TopicPartition.offset is an int; assigning None TypeErrors at the C bindings.
+        librdkafka's unset sentinel is OFFSET_INVALID (-1001), which is also the
+        TopicPartition default. When the target cluster has no committed offset for a
+        source partition, on_assign must use that sentinel (not None).
+        """
+        from unittest.mock import MagicMock
+
+        from confluent_kafka import OFFSET_INVALID
+
+        from quixstreams.sources.core.kafka.kafka import KafkaReplicatorSource
+
+        source = object.__new__(KafkaReplicatorSource)
+        source._source_cluster_consumer = MagicMock()
+        source._target_cluster_consumer = MagicMock()
+        source._producer_topic = Topic(
+            "dest",
+            create_config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
+        source._config = MagicMock(request_timeout=1)
+
+        # Simulate committed() omitting a partition key entirely.
+        with patch.object(
+            KafkaReplicatorSource,
+            "_target_cluster_offsets",
+            return_value={0: 42},
+        ):
+            partitions = [
+                TopicPartition("src", 0),
+                TopicPartition("src", 1),
+            ]
+            source.on_assign(None, partitions)
+
+        assert partitions[0].offset == 42
+        assert partitions[1].offset == OFFSET_INVALID
+        source._source_cluster_consumer.assign.assert_called_once_with(partitions)

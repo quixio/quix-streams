@@ -1,14 +1,15 @@
 import logging
 import time
-from typing import TYPE_CHECKING, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Union, cast
 
-from confluent_kafka import Message, TopicPartition
+from confluent_kafka import OFFSET_INVALID, Message, TopicPartition
 
 from quixstreams.error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from quixstreams.kafka import AutoOffsetReset, ConnectionConfig, Consumer
 from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models.serializers import DeserializerType
 from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig
+from quixstreams.models.types import Headers
 from quixstreams.sources import (
     ClientConnectFailureCallback,
     ClientConnectSuccessCallback,
@@ -236,11 +237,14 @@ class KafkaReplicatorSource(Source):
 
     def produce_message(self, msg: Message):
         topic_name, partition, offset = msg.topic(), msg.partition(), msg.offset()
+        topic_name = cast(str, topic_name)
+        partition = cast(int, partition)
+        offset = cast(int, offset)
         self.checkpoint.store_offset(topic_name, partition, offset)
         self.produce(
             value=msg.value(),
             key=msg.key(),
-            headers=msg.headers(),
+            headers=cast(Optional[Headers], msg.headers()),
             timestamp=msg.timestamp()[1],
             partition=partition,
         )
@@ -264,7 +268,7 @@ class KafkaReplicatorSource(Source):
                 return None
             raise
 
-        return msg
+        return cast(Message, msg)
 
     def commit_checkpoint(self, force: bool = False) -> None:
         if not self.checkpoint.expired() and not force:
@@ -348,7 +352,9 @@ class KafkaReplicatorSource(Source):
     def on_assign(self, _, source_partitions: List[TopicPartition]) -> None:
         target_cluster_offset = self._target_cluster_offsets(source_partitions)
         for partition in source_partitions:
-            partition.offset = target_cluster_offset.get(partition.partition, None)
+            partition.offset = target_cluster_offset.get(
+                partition.partition, OFFSET_INVALID
+            )
             logger.debug(
                 "using offset %s for topic partition %s[%s]",
                 partition.offset,

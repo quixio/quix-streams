@@ -1,7 +1,7 @@
 import logging
 import pprint
 import time
-from asyncio import Future
+from concurrent.futures import Future
 from typing import Dict, List, Mapping, Optional, Union
 
 from confluent_kafka.admin import (
@@ -218,8 +218,16 @@ class TopicAdmin:
             else:
                 confl_new_topic = NewTopic(
                     topic=topic.name,
-                    num_partitions=topic.create_config.num_partitions,
-                    replication_factor=topic.create_config.replication_factor,
+                    num_partitions=(
+                        topic.create_config.num_partitions
+                        if topic.create_config.num_partitions is not None
+                        else -1
+                    ),
+                    replication_factor=(
+                        topic.create_config.replication_factor
+                        if topic.create_config.replication_factor is not None
+                        else -1
+                    ),
                     config=topic.create_config.extra_config,
                 )
             confl_new_topics.append(confl_new_topic)
