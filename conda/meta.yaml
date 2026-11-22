@@ -35,7 +35,7 @@ requirements:
     - pandas >=1.5.0,<4.0
     - elasticsearch >=8.17,<10
     - rich >=13,<16
-    - python-dateutil >=2.8.2,<3
+    - python-dateutil >=2.8.2,<5
     - httpx >=0.28.1
 
 test:

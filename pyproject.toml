@@ -46,7 +46,7 @@ all = [
     "pandas>=1.5.0,<4.0",
     "elasticsearch>=8.17,<10",
     "influxdb>=5.3,<6",
-    "python-dateutil>=2.8.2,<3",
+    "python-dateutil>=2.8.2,<5",
     "paho-mqtt>=2.1.0,<3",
     "pymysql>=1.0,<2",
     "mysql-replication>=1.0.17,<1.0.18"
@@ -68,7 +68,7 @@ neo4j = ["neo4j>=5.27.0,<7"]
 mongodb = ["pymongo>=4.11,<5"]
 pandas = ["pandas>=1.5.0,<4.0"]
 elasticsearch = ["elasticsearch>=8.17,<10"]
-tdengine = ["python-dateutil>=2.8.2,<3"]
+tdengine = ["python-dateutil>=2.8.2,<5"]
 mqtt = ["paho-mqtt>=2.1.0,<3"]
 mysql = ["pymysql>=1.0,<2", "mysql-replication>=1.0.17,<1.0.18"]
 
