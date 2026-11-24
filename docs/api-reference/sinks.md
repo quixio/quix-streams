@@ -474,6 +474,9 @@ A base CSV sink that writes data from all assigned partitions to a single file.
 
 It's best to be used for local debugging.
 
+Newlines in serialized fields and the dialect's record terminator are
+written without platform newline translation.
+
 Column format:
     (key, value, timestamp, topic, partition, offset)
 
@@ -501,6 +504,18 @@ Hive-partitioned Parquet files, with optional REST Catalog integration.
 
 Uses quixportal for unified blob storage access (Azure, AWS S3, GCP, MinIO, local).
 
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.CatalogRegistrationError"></a>
+
+### CatalogRegistrationError
+
+```python
+class CatalogRegistrationError(RuntimeError)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L47)
+
+The catalog did not register files that are already in storage.
+
 <a id="quixstreams.sinks.core.quix_ts_datalake_sink.silence_chatty_loggers"></a>
 
 <br><br>
@@ -511,7 +526,7 @@ Uses quixportal for unified blob storage access (Azure, AWS S3, GCP, MinIO, loca
 def silence_chatty_loggers() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L85)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L94)
 
 Mute per-request HTTP logging from the cloud-storage SDKs used by
 this sink (Azure SDK + adlfs, botocore/boto3 + s3transfer).
@@ -530,7 +545,7 @@ so the framework's logging setup does not reset these levels.
 class QuixTSDataLakeSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L99)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L108)
 
 Writes Kafka batches directly to blob storage as Hive-partitioned Parquet files,
 
@@ -626,7 +641,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 def s3_bucket() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L328)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L337)
 
 Get the S3 bucket name (extracted from quixportal config).
 
@@ -641,7 +656,7 @@ def add(value: Any, key: Any, timestamp: int, headers: Any, topic: str,
         partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L348)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L357)
 
 Accumulate the record, then refresh the per-key last-seen
 stamp via the tracker.
@@ -656,7 +671,7 @@ stamp via the tracker.
 def flush()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L364)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L373)
 
 Flush the parent batch, then run a timeout check.
 
@@ -670,7 +685,7 @@ Flush the parent batch, then run a timeout check.
 def on_paused()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L369)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L378)
 
 Inherit parent ``on_paused()`` — do **not** touch tracker state.
 
@@ -684,7 +699,7 @@ Inherit parent ``on_paused()`` — do **not** touch tracker state.
 def setup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L374)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L383)
 
 Initialize blob storage client and test connection.
 
@@ -699,7 +714,7 @@ Initialize blob storage client and test connection.
 def table_location() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L430)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L439)
 
 The table's folder as a full blob URI — what the catalog records as
 the table ``location``, and what every file path registered in the
@@ -715,7 +730,7 @@ manifest is prefixed with.
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L614)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L623)
 
 Write batch directly to blob storage.
 
@@ -729,7 +744,7 @@ Write batch directly to blob storage.
 def cleanup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L1645)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L1688)
 
 Cleanup resources when sink is stopped.
 
@@ -1468,7 +1483,7 @@ Serializes a `SinkBatch` into bytes in JSON Lines format.
 
 Each item in the batch is converted into a JSON object with
 "_timestamp", "_key", and "_value" fields. If the message key is
-in bytes, it is decoded to a string.
+in bytes, it is decoded to a string. Other keys are converted to strings.
 
 
 <br>
@@ -1567,7 +1582,7 @@ Serializes a `SinkBatch` into bytes in Parquet format.
 
 Each item in the batch is converted into a dictionary with "_timestamp",
 "_key", and the keys from the message value. If the message key is in
-bytes, it is decoded to a string.
+bytes, it is decoded to a string. Other keys are converted to strings.
 
 Missing fields in messages are filled with `None` to ensure all rows
 have the same columns.

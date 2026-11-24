@@ -455,7 +455,7 @@ Default - `None`
 class SchemaRegistryClientConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/schema_registry.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/schema_registry.py#L24)
 
 Configuration required to establish the connection with a Schema Registry.
 
@@ -485,7 +485,7 @@ stored within the PEM as well.
 class SchemaRegistrySerializationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/schema_registry.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/schema_registry.py#L50)
 
 Configuration that instructs Serializer how to handle communication with a
 
