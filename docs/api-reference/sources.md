@@ -663,6 +663,8 @@ A base CSV source that reads data from a CSV file and produces rows
 
 to the Kafka topic in JSON format.
 
+Quoted fields preserve embedded CR, LF, and CRLF characters.
+
 
 <br>
 ***Arguments:***
@@ -697,7 +699,7 @@ Default - `"excel"`.
 class KafkaReplicatorSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L28)
 
 Source implementation that replicates a topic from a Kafka broker to your application broker.
 
@@ -751,7 +753,7 @@ def __init__(
 ) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L57)
 
 
 <br>
