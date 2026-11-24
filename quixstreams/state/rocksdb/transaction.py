@@ -891,6 +891,9 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
     # Existing helpers (unchanged from pre-TTL behavior).
     # ------------------------------------------------------------------
 
+    def _is_key_for_prefix(self, key: bytes, prefix: bytes) -> bool:
+        return True
+
     def _get_items(
         self,
         start: int,
@@ -923,7 +926,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         merged_items: dict[bytes, bytes] = {}
         stop_at = None if backwards else limit
         for key, value in db_items:
-            if key in delete_cache:
+            if not self._is_key_for_prefix(key, prefix) or key in delete_cache:
                 continue
             merged_items[key] = value
             if stop_at is not None and len(merged_items) >= stop_at:
