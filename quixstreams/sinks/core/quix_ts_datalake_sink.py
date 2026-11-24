@@ -14,6 +14,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+import requests
+
 try:
     import pyarrow as pa
     import pyarrow.compute as pc
@@ -37,6 +39,13 @@ from ._quix_ts_datalake_catalog_client import QuixTSDataLakeCatalogClient
 from .stream_timeout_tracker import StreamTimeoutTracker
 
 logger = logging.getLogger(__name__)
+
+# Seconds between two attempts to register the same uploaded files.
+_REGISTRATION_RETRY_PAUSES = (2, 4, 8)
+
+
+class CatalogRegistrationError(RuntimeError):
+    """The catalog did not register files that are already in storage."""
 
 
 # Timestamp parts extracted from ``timestamp_column`` for Hive partitioning,
@@ -643,6 +652,10 @@ class QuixTSDataLakeSink(BatchingSink):
                     elapsed_ms,
                 )
                 return
+            except CatalogRegistrationError:
+                # The upload succeeded: writing the batch again would only
+                # leave a second copy of its rows in storage.
+                raise
             except Exception as exc:
                 attempts -= 1
                 if attempts == 0:
@@ -1594,20 +1607,50 @@ class QuixTSDataLakeSink(BatchingSink):
         body: Dict[str, Any] = {"files": file_entries}
         if self._batch_source:
             body["source"] = self._batch_source
-        response = self._catalog.post(
-            f"/namespaces/{self.namespace}/tables/{self.table_name}/manifest/add-files",
-            json=body,
-            timeout=10,
-        )
+        self._post_add_files(body)
+        logger.info(f"Registered {len(file_entries)} file(s) in catalog manifest")
+        self._notify_query_api(file_entries)
 
-        if response.status_code == 200:
-            logger.info(f"Registered {len(file_entries)} file(s) in catalog manifest")
-            self._notify_query_api(file_entries)
-        else:
-            raise RuntimeError(
-                f"Failed to register files in catalog manifest: "
-                f"{response.status_code} {response.text}"
+    def _post_add_files(self, body: Dict[str, Any]) -> None:
+        """Register the uploaded files, asking a busy or unreachable catalog again.
+
+        The files are already in storage, so only this call is repeated. A
+        refusal (4xx) is final: asking again cannot change it.
+
+        :raises CatalogRegistrationError: the catalog did not register the files.
+        """
+        catalog = self._catalog
+        if catalog is None:
+            raise CatalogRegistrationError(
+                "Failed to register files in catalog manifest: no catalog client"
             )
+        path = (
+            f"/namespaces/{self.namespace}/tables/{self.table_name}/manifest/add-files"
+        )
+        pauses = list(_REGISTRATION_RETRY_PAUSES)
+        while True:
+            try:
+                response = catalog.post(path, json=body, timeout=10)
+            except requests.RequestException as exc:
+                failure, retryable = f"{type(exc).__name__}: {exc}", True
+            else:
+                if response.status_code == 200:
+                    return
+                failure = f"{response.status_code} {response.text}"
+                retryable = response.status_code >= 500 or response.status_code == 429
+            if not retryable or not pauses:
+                raise CatalogRegistrationError(
+                    f"Failed to register files in catalog manifest: {failure}"
+                )
+            pause = pauses.pop(0)
+            logger.warning(
+                "Registering %d uploaded file(s) failed (%s) - asking the catalog "
+                "again in %ss, the files are not uploaded again",
+                len(body["files"]),
+                failure,
+                pause,
+            )
+            time.sleep(pause)
 
     def _notify_query_api(self, file_entries: List[Dict[str, Any]]) -> None:
         """Tell the query API which files were just registered.

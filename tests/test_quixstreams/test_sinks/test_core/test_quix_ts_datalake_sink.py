@@ -2780,3 +2780,118 @@ class TestStatsColumnsDeclaration:
         assert any(
             "Could not update properties" in r.getMessage() for r in caplog.records
         )
+
+
+# =============================================================================
+# A failed registration never uploads the batch again
+# =============================================================================
+
+
+class TestRegistrationRetry:
+    """The files are in storage before the catalog is asked. When that call
+    fails only the call is repeated: uploading the batch again under new names
+    left one more copy of its rows in storage per attempt."""
+
+    ADD_FILES = "/manifest/add-files"
+
+    @pytest.fixture(autouse=True)
+    def no_waiting(self):
+        with patch("quixstreams.sinks.core.quix_ts_datalake_sink.time.sleep"):
+            yield
+
+    @pytest.fixture
+    def sink(self, sink_factory, mock_catalog_client):
+        sink = sink_factory(catalog_url="http://catalog:8080", auto_discover=True)
+        sink._catalog = mock_catalog_client
+        return sink
+
+    def _answer_add_files(self, catalog, answers):
+        """Answer the add-files calls in order; every other POST succeeds."""
+        remaining = list(answers)
+
+        def post(path, **kwargs):
+            if not path.endswith(self.ADD_FILES):
+                return MagicMock(status_code=200)
+            answer = remaining.pop(0) if len(remaining) > 1 else remaining[0]
+            if isinstance(answer, Exception):
+                raise answer
+            return MagicMock(status_code=answer, text=f"answer {answer}")
+
+        catalog.post.side_effect = post
+
+    def _registered_paths(self, catalog):
+        return [
+            [f["file_path"] for f in call.kwargs["json"]["files"]]
+            for call in catalog.post.call_args_list
+            if call.args[0].endswith(self.ADD_FILES)
+        ]
+
+    @staticmethod
+    def _uploaded_data_files(blob):
+        return [
+            call.args[0]
+            for call in blob.put_object_async.call_args_list
+            if "/.vidx/" not in call.args[0]
+        ]
+
+    @pytest.mark.parametrize(
+        "first_answer",
+        [503, 500, 429, requests.ConnectionError("refused"), requests.Timeout("slow")],
+        ids=["503", "500", "429", "connection-error", "timeout"],
+    )
+    def test_a_busy_catalog_is_asked_again_for_the_same_files(
+        self, sink, sample_batch, mock_blob_client, mock_catalog_client, first_answer
+    ):
+        self._answer_add_files(mock_catalog_client, [first_answer, 200])
+
+        sink.write(sample_batch())
+
+        uploaded = self._uploaded_data_files(mock_blob_client)
+        assert len(uploaded) == 1, "the batch was uploaded again"
+        first, second = self._registered_paths(mock_catalog_client)
+        assert first == second == [f"s3://test-bucket/{uploaded[0]}"]
+
+    def test_a_catalog_that_stays_down_fails_without_uploading_again(
+        self, sink, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        self._answer_add_files(mock_catalog_client, [503])
+
+        with pytest.raises(RuntimeError, match="Failed to register files"):
+            sink.write(sample_batch())
+
+        assert len(self._uploaded_data_files(mock_blob_client)) == 1
+        attempts = self._registered_paths(mock_catalog_client)
+        assert len(attempts) == 4
+        assert all(paths == attempts[0] for paths in attempts)
+
+    def test_a_refused_registration_is_not_retried(
+        self, sink, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        self._answer_add_files(mock_catalog_client, [400])
+
+        with pytest.raises(RuntimeError, match="Failed to register files"):
+            sink.write(sample_batch())
+
+        assert len(self._uploaded_data_files(mock_blob_client)) == 1
+        assert len(self._registered_paths(mock_catalog_client)) == 1
+
+    def test_a_failed_upload_still_writes_the_batch_again(
+        self, sink, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        failed, done = MagicMock(), MagicMock()
+        failed.result.side_effect = RuntimeError("storage unavailable")
+        done.result.return_value = None
+        mock_blob_client.put_object_async.side_effect = lambda key, body: (
+            failed if mock_blob_client.put_object_async.call_count == 1 else done
+        )
+
+        sink.write(sample_batch())
+
+        assert len(self._uploaded_data_files(mock_blob_client)) == 2
+        assert len(self._registered_paths(mock_catalog_client)) == 1
+
+    def test_a_sink_without_a_catalog_cannot_register(self, sink):
+        sink._catalog = None
+
+        with pytest.raises(RuntimeError, match="no catalog client"):
+            sink._post_add_files({"files": []})
