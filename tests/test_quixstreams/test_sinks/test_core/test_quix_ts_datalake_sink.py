@@ -2889,3 +2889,9 @@ class TestRegistrationRetry:
 
         assert len(self._uploaded_data_files(mock_blob_client)) == 2
         assert len(self._registered_paths(mock_catalog_client)) == 1
+
+    def test_a_sink_without_a_catalog_cannot_register(self, sink):
+        sink._catalog = None
+
+        with pytest.raises(RuntimeError, match="no catalog client"):
+            sink._post_add_files({"files": []})

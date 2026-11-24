@@ -1619,13 +1619,18 @@ class QuixTSDataLakeSink(BatchingSink):
 
         :raises CatalogRegistrationError: the catalog did not register the files.
         """
+        catalog = self._catalog
+        if catalog is None:
+            raise CatalogRegistrationError(
+                "Failed to register files in catalog manifest: no catalog client"
+            )
         path = (
             f"/namespaces/{self.namespace}/tables/{self.table_name}/manifest/add-files"
         )
         pauses = list(_REGISTRATION_RETRY_PAUSES)
         while True:
             try:
-                response = self._catalog.post(path, json=body, timeout=10)
+                response = catalog.post(path, json=body, timeout=10)
             except requests.RequestException as exc:
                 failure, retryable = f"{type(exc).__name__}: {exc}", True
             else:
