@@ -392,8 +392,9 @@ class PostgreSQLSink(BatchingSink):
         if not rows:
             return
 
-        # Collect all column names from the first row
-        columns = list(rows[0].keys())
+        # Collect column names from every row: a value can be absent or None
+        # in the first row and present in a later one.
+        columns = list(dict.fromkeys(col for row in rows for col in row))
 
         query = sql.SQL("INSERT INTO {table} ({columns}) VALUES %s").format(
             table=sql.Identifier(self._schema_name, table_name),

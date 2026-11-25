@@ -703,6 +703,51 @@ def test_sink_without_metadata(
     assert rows == expected
 
 
+def test_sink_column_missing_from_first_row(
+    sink_app_factory,
+    postgres_sink_factory,
+    resource_source_factory,
+    postgres_connection,
+):
+    """A column absent or None in the first row keeps its values in later rows."""
+    data = [
+        {"event_time": 1752158109872, "hostname": "host_0", "resource": "CPU"},
+        {
+            "event_time": 1752158109873,
+            "hostname": "host_0",
+            "resource": "RAM",
+            "used_percent": None,
+        },
+        {
+            "event_time": 1752158109876,
+            "hostname": "host_1",
+            "resource": "CPU",
+            "used_percent": 56.22,
+        },
+    ]
+    app = sink_app_factory(
+        resource_source_factory(data),
+        postgres_sink_factory(include_metadata=False),
+    )
+    app.run(count=len(data))
+
+    query = sql.SQL("SELECT {cols} FROM {table} ORDER BY {order}").format(
+        cols=sql.SQL(", ").join(map(sql.Identifier, ["event_time", "used_percent"])),
+        table=sql.Identifier(DEFAULT_TABLE_NAME),
+        order=sql.Identifier("event_time"),
+    )
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(query)
+        rows = cursor.fetchall()
+    postgres_connection.commit()
+
+    assert rows == [
+        (1752158109872, None),
+        (1752158109873, None),
+        (1752158109876, 56.22),
+    ]
+
+
 def test_sink_with_metadata_default(
     sink_app_factory,
     postgres_sink_factory,
