@@ -290,15 +290,16 @@ class Topic:
             # should be processed as a separate message
             rows = []
             for item in value_deserialized:
+                row_timestamp_ms = timestamp_ms
                 if self._timestamp_extractor:
-                    timestamp_ms = self._timestamp_extractor(
+                    row_timestamp_ms = self._timestamp_extractor(
                         item, headers, timestamp_ms, TimestampType(timestamp_type)
                     )
                 rows.append(
                     Row(
                         value=item,
                         key=key_deserialized,
-                        timestamp=timestamp_ms,
+                        timestamp=row_timestamp_ms,
                         headers=headers,
                         context=message_context,
                     )
