@@ -256,7 +256,8 @@ class TestTopic:
                 [124],
             ),
             (
-                # Each split row gets the Kafka timestamp, not the previous row's
+                # The extractor receives the Kafka timestamp for every split row,
+                # not the previous row's result
                 JSONListDeserializer(),
                 json.dumps([{"ts": 456}, {}]).encode(),
                 None,
