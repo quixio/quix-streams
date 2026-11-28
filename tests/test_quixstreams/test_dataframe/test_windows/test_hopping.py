@@ -973,6 +973,47 @@ class TestHoppingWindow:
                 (key2, {"start": 100, "end": 110, "value": 14}),
             ]
 
+    @pytest.mark.parametrize(
+        "duration_ms, step_ms",
+        [(100, 30), (100, 70), (10, 3)],
+        ids=["100/30", "100/70", "10/3"],
+    )
+    def test_hopping_partition_expiration_duration_not_multiple_of_step(
+        self, hopping_window_definition_factory, state_manager, duration_ms, step_ms
+    ):
+        window_def = hopping_window_definition_factory(
+            duration_ms=duration_ms, step_ms=step_ms
+        )
+        window = window_def.count()
+        window.final(closing_strategy="partition")
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        timestamps = range(1000, 1401)
+        with store.start_partition_transaction(0) as tx:
+            closed = [
+                (result["start"], result["end"], result["value"])
+                for timestamp_ms in timestamps
+                for _, result in process(
+                    window,
+                    value=1,
+                    key=b"key",
+                    transaction=tx,
+                    timestamp_ms=timestamp_ms,
+                )[1]
+            ]
+
+        # Every window that ended by the last timestamp is closed, once, with all
+        # of its messages
+        assert closed == [
+            (
+                start,
+                start + duration_ms,
+                sum(start <= t < start + duration_ms for t in timestamps),
+            )
+            for start in range(0, 1401, step_ms)
+            if 1000 < start + duration_ms <= 1400
+        ]
+
     def test_hopping_key_expiration_to_partition(
         self, hopping_window_definition_factory, state_manager
     ):
