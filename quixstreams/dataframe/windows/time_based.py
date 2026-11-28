@@ -333,12 +333,15 @@ class FixedTimeWindow(TimeWindow):
         collect: bool,
         message_key: Any,
     ) -> Iterable[WindowKeyResult]:
+        step_ms = self._step_ms if self._step_ms else self._duration_ms
         for (
             window_start,
             window_end,
         ), aggregated, collected, prefix in transaction.expire_all_windows(
             max_end_time=max_expired_end,
-            step_ms=self._step_ms if self._step_ms else self._duration_ms,
+            step_ms=step_ms,
+            # Windows start on a multiple of the step, so they end this far past one
+            offset_ms=self._duration_ms % step_ms,
             collect=collect,
             delete=True,
         ):

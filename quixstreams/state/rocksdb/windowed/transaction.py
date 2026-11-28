@@ -523,6 +523,7 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         step_ms: int,
         delete: bool = True,
         collect: bool = False,
+        offset_ms: int = 0,
     ) -> Iterable[ExpiredWindowDetail]:
         """
         Get all expired windows for all prefix from RocksDB up to the specified `max_end_time` timestamp.
@@ -530,6 +531,8 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         :param max_end_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
         :param collect: If True, values will be collected into windows.
+        :param offset_ms: Window ends are `offset_ms` past a multiple of `step_ms`.
+            Non-zero for hopping windows whose duration is not a multiple of the step.
         """
         last_expired = self.get_latest_expired(prefix=b"")
 
@@ -537,7 +540,7 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         collected = []
 
         if last_expired:
-            windows = windows_to_expire(last_expired, max_end_time, step_ms)
+            windows = windows_to_expire(last_expired, max_end_time, step_ms, offset_ms)
             if not windows:
                 return
             last_expired = windows[-1]  # windows are ordered
@@ -562,7 +565,9 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
             # 1. It's a new window, iterating over all the keys is fast.
             # 2. The expiration strategy changed from key to partition. We need to expire all
             #    the old per-key windows.
-            last_expired = max(windows_to_expire(last_expired, max_end_time, step_ms))
+            last_expired = max(
+                windows_to_expire(last_expired, max_end_time, step_ms, offset_ms)
+            )
             for key in self.keys():
                 prefix, start, end = parse_window_key(key)
                 if end <= last_expired:
@@ -757,11 +762,14 @@ def windows_to_expire(
     last_expired: int,
     timestamp_ms: int,
     step_ms: int,
+    offset_ms: int = 0,
 ) -> list[int]:
     if not last_expired:
-        return [timestamp_ms - (timestamp_ms % step_ms)]
+        return [timestamp_ms - ((timestamp_ms - offset_ms) % step_ms)]
 
-    next_to_expire = last_expired + step_ms
+    # The first window end after `last_expired`. `last_expired` may be unaligned if
+    # it was stored before `offset_ms` was taken into account.
+    next_to_expire = last_expired + step_ms - ((last_expired - offset_ms) % step_ms)
     if next_to_expire > timestamp_ms:
         return []
 

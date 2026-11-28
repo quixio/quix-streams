@@ -438,6 +438,7 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         step_ms: int,
         delete: bool = True,
         collect: bool = False,
+        offset_ms: int = 0,
     ) -> Iterable[ExpiredWindowDetail[V]]:
         """
         Get all expired windows for all prefix from RocksDB up to the specified `max_start_time` timestamp.
@@ -448,6 +449,7 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         :param max_end_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
         :param collect: If True, values will be collected into windows.
+        :param offset_ms: Window ends are `offset_ms` past a multiple of `step_ms`.
         """
         ...
 
